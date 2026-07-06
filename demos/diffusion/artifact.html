@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Диффузия духов в комнате</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
+  canvas { position: fixed; top: 0; left: 0; display: block; }
+  #bg { z-index: 0; }
+  #fx { z-index: 1; }
+  #formula-panel {
+    position: fixed; left: 12px; bottom: 12px; z-index: 10;
+    width: 300px; padding: 14px;
+    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
+    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  #formula-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
+  #formula-katex { font-size: 18px; margin-bottom: 8px; }
+  #formula-nums { font-size: 12px; line-height: 1.6; color: var(--sim-muted, #8b95a3); font-variant-numeric: tabular-nums; }
+  #formula-nums b { color: var(--sim-text, #e8ecf1); font-weight: 600; }
+  #formula-note { font-size: 10.5px; margin-top: 8px; color: #5c6675; line-height: 1.4; }
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<canvas id="fx"></canvas>
+
+<div id="formula-panel">
+  <h2>Среднеквадратичное смещение</h2>
+  <div id="formula-katex">⟨x²⟩ = 2Dt</div>
+  <div id="formula-nums">
+    D (коэфф. диффузии) = <b id="valD">-</b> усл.ед./с<br>
+    t (с момента сброса) = <b id="valT">-</b> с<br>
+    2Dt (теория) = <b id="valTheor">-</b><br>
+    ⟨x²⟩ (измерено) = <b id="valMeas">-</b>
+  </div>
+  <div id="formula-note">Модель: случайное блуждание молекул духов от источника. Масштаб времени и длины подобран для наглядности (не в реальном масштабе диффузии в воздухе).</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- KaTeX (с деградацией в текст, если CDN недоступен) ----------
+  function renderFormula(el, tex) {
+    if (typeof katex !== 'undefined') {
+      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
+    }
+    el.textContent = tex;
+  }
+  renderFormula(document.getElementById('formula-katex'), '\\langle x^2 \\rangle = 2Dt');
+
+  // ---------- Canvas setup ----------
+  var bg = document.getElementById('bg');
+  var fx = document.getElementById('fx');
+  var bgCtx = bg.getContext('2d');
+  var fxCtx = fx.getContext('2d');
+
+  var W = 0, H = 0;
+  var room = { x: 0, y: 0, w: 0, h: 0 };
+  var SOURCE = { x: 0, y: 0 }; // абсолютные координаты источника (верхний левый угол комнаты)
+
+  function layout() {
+    var margin = Math.max(40, Math.min(W, H) * 0.05);
+    room.x = margin;
+    room.y = margin;
+    room.w = W - margin * 2;
+    room.h = H - margin * 2;
+    SOURCE.x = room.x + room.w * 0.09;
+    SOURCE.y = room.y + room.h * 0.09;
+  }
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    [bg, fx].forEach(function (c) {
+      c.width = Math.round(W * dpr);
+      c.height = Math.round(H * dpr);
+      c.style.width = W + 'px';
+      c.style.height = H + 'px';
+    });
+    bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    drawStatic();
+    fxCtx.clearRect(0, 0, W, H);
+  }
+
+  // ---------- Статичная сцена: комната вид сверху ----------
+  function drawStatic() {
+    bgCtx.clearRect(0, 0, W, H);
+    bgCtx.fillStyle = '#101318';
+    bgCtx.fillRect(0, 0, W, H);
+
+    // пол комнаты
+    bgCtx.fillStyle = '#12161d';
+    roundRect(bgCtx, room.x, room.y, room.w, room.h, 6);
+    bgCtx.fill();
+
+    // лёгкая сетка пола (вид сверху)
+    bgCtx.save();
+    bgCtx.beginPath();
+    roundRect(bgCtx, room.x, room.y, room.w, room.h, 6);
+    bgCtx.clip();
+    bgCtx.strokeStyle = 'rgba(140,160,190,0.05)';
+    bgCtx.lineWidth = 1;
+    var step = 42;
+    for (var gx = room.x; gx < room.x + room.w; gx += step) {
+      bgCtx.beginPath(); bgCtx.moveTo(gx, room.y); bgCtx.lineTo(gx, room.y + room.h); bgCtx.stroke();
+    }
+    for (var gy = room.y; gy < room.y + room.h; gy += step) {
+      bgCtx.beginPath(); bgCtx.moveTo(room.x, gy); bgCtx.lineTo(room.x + room.w, gy); bgCtx.stroke();
+    }
+    bgCtx.restore();
+
+    // стены
+    bgCtx.strokeStyle = '#3a4657';
+    bgCtx.lineWidth = 3;
+    roundRect(bgCtx, room.x, room.y, room.w, room.h, 6);
+    bgCtx.stroke();
+
+    // подпись комнаты
+    bgCtx.fillStyle = '#5c6675';
+    bgCtx.font = '13px system-ui, sans-serif';
+    bgCtx.fillText('комната (вид сверху)', room.x + 10, room.y + room.h - 12);
+
+    // источник духов — флакон (подпись рисуется поверх, на fx-слое, чтобы не тонуть в облаке)
+    drawBottle(bgCtx, SOURCE.x, SOURCE.y);
+  }
+
+  function drawSourceLabel(ctx) {
+    var text = 'Источник духов';
+    ctx.font = '13px system-ui, sans-serif';
+    var tx = SOURCE.x - 34, ty = SOURCE.y + 58;
+    var tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(16,19,24,0.72)';
+    roundRect(ctx, tx - 8, ty - 15, tw + 16, 22, 6);
+    ctx.fill();
+    ctx.fillStyle = '#e8ecf1';
+    ctx.fillText(text, tx, ty);
+  }
+
+  function drawBottle(ctx, x, y) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = '#caa6ff';
+    // корпус
+    roundRect(ctx, -6, -4, 12, 14, 3);
+    ctx.fill();
+    // горлышко/распылитель
+    ctx.fillStyle = '#8b95a3';
+    ctx.fillRect(-2, -9, 4, 6);
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // ---------- Физика ----------
+  var MAX_PARTICLES = 900;
+  var SPAWN_PER_FRAME = 6;
+  var STEP_K = 26; // калибровочный коэффициент шага случайного блуждания
+  var SQRT3 = Math.sqrt(3);
+
+  var tempC = 20;      // °C, слайдер
+  var molarMass = 100;  // г/моль, слайдер
+  var particles = [];
+  var running = true;
+  var t0 = performance.now();
+  var lastFrame = null;
+  var pulsePhase = 0;
+
+  function toKelvin(c) { return c + 273.15; }
+
+  // среднеквадратичный шаг на единицу sqrt(времени), px / sqrt(с)
+  function stepSigma0() {
+    var Tk = toKelvin(tempC);
+    return STEP_K * Math.sqrt(Tk / molarMass);
+  }
+
+  function diffusionCoeff() {
+    var s0 = stepSigma0();
+    return s0 * s0; // D = s0^2 (px^2 / с), т.к. Var(x) = s0^2 * t
+  }
+
+  function spawnParticle() {
+    return {
+      x: SOURCE.x + (Math.random() - 0.5) * 4,
+      y: SOURCE.y + (Math.random() - 0.5) * 4,
+      hue: 320 - Math.random() * 10,
+    };
+  }
+
+  function resetSim() {
+    particles = [];
+    t0 = performance.now();
+    lastFrame = null;
+    fxCtx.clearRect(0, 0, W, H);
+  }
+
+  function stepPhysics(dt) {
+    if (particles.length < MAX_PARTICLES) {
+      var n = Math.min(SPAWN_PER_FRAME, MAX_PARTICLES - particles.length);
+      for (var i = 0; i < n; i++) particles.push(spawnParticle());
+    }
+    var sigma = stepSigma0() * Math.sqrt(dt);
+    var minX = room.x + 3, maxX = room.x + room.w - 3;
+    var minY = room.y + 3, maxY = room.y + room.h - 3;
+    for (var p = 0; p < particles.length; p++) {
+      var pt = particles[p];
+      pt.x += (Math.random() * 2 - 1) * SQRT3 * sigma;
+      pt.y += (Math.random() * 2 - 1) * SQRT3 * sigma;
+      // отражение от стен комнаты
+      if (pt.x < minX) pt.x = minX + (minX - pt.x);
+      if (pt.x > maxX) pt.x = maxX - (pt.x - maxX);
+      if (pt.y < minY) pt.y = minY + (minY - pt.y);
+      if (pt.y > maxY) pt.y = maxY - (pt.y - maxY);
+      if (pt.x < minX) pt.x = minX;
+      if (pt.x > maxX) pt.x = maxX;
+      if (pt.y < minY) pt.y = minY;
+      if (pt.y > maxY) pt.y = maxY;
+    }
+  }
+
+  // цветовой градиент частиц: тёплый у источника -> холодный на удалении (по расстоянию)
+  function colorForParticle(pt) {
+    var dx = pt.x - SOURCE.x, dy = pt.y - SOURCE.y;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var diag = Math.sqrt(room.w * room.w + room.h * room.h);
+    var f = Math.min(1, dist / (diag * 0.55));
+    var hue = 320 - f * 100;   // 320 (розово-пурпурный) -> 220 (голубой)
+    var sat = 85 - f * 15;
+    var light = 68 - f * 12;
+    return 'hsla(' + hue + ',' + sat + '%,' + light + '%,0.9)';
+  }
+
+  function drawFrame(dt) {
+    // затухание предыдущего кадра (создаёт полупрозрачный след / облако концентрации)
+    fxCtx.globalCompositeOperation = 'destination-out';
+    fxCtx.fillStyle = 'rgba(0,0,0,0.045)';
+    fxCtx.fillRect(0, 0, W, H);
+
+    // мягкое свечение источника (аддитивное, пульсирует)
+    pulsePhase += dt * 1.6;
+    var pulse = 0.75 + 0.25 * Math.sin(pulsePhase);
+    var glowR = 46 * pulse;
+    var grad = fxCtx.createRadialGradient(SOURCE.x, SOURCE.y, 0, SOURCE.x, SOURCE.y, glowR);
+    grad.addColorStop(0, 'rgba(255,170,230,0.55)');
+    grad.addColorStop(1, 'rgba(255,170,230,0)');
+    fxCtx.globalCompositeOperation = 'lighter';
+    fxCtx.fillStyle = grad;
+    fxCtx.beginPath();
+    fxCtx.arc(SOURCE.x, SOURCE.y, glowR, 0, Math.PI * 2);
+    fxCtx.fill();
+
+    // частицы (аддитивное смешение — плотные зоны выглядят ярче = выше концентрация)
+    fxCtx.globalCompositeOperation = 'lighter';
+    for (var i = 0; i < particles.length; i++) {
+      var pt = particles[i];
+      fxCtx.fillStyle = colorForParticle(pt);
+      fxCtx.beginPath();
+      fxCtx.arc(pt.x, pt.y, 2.1, 0, Math.PI * 2);
+      fxCtx.fill();
+    }
+    fxCtx.globalCompositeOperation = 'source-over';
+    drawSourceLabel(fxCtx);
+  }
+
+  // ---------- HUD с формулой ----------
+  var elD = document.getElementById('valD');
+  var elT = document.getElementById('valT');
+  var elTheor = document.getElementById('valTheor');
+  var elMeas = document.getElementById('valMeas');
+
+  function updateHud() {
+    var D = diffusionCoeff();
+    var t = (performance.now() - t0) / 1000;
+    var theor = 2 * D * t;
+    var meas = 0;
+    if (particles.length > 0) {
+      var sum = 0;
+      for (var i = 0; i < particles.length; i++) {
+        var dx = particles[i].x - SOURCE.x;
+        sum += dx * dx;
+      }
+      meas = sum / particles.length;
+    }
+    elD.textContent = D.toFixed(1);
+    elT.textContent = t.toFixed(1);
+    elTheor.textContent = theor.toFixed(0);
+    elMeas.textContent = meas.toFixed(0);
+  }
+
+  // ---------- Главный цикл (dt-based, не завязан на FPS) ----------
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+    if (running) {
+      stepPhysics(dt);
+    } else {
+      pulsePhase += 0; // без изменений в паузе
+    }
+    drawFrame(running ? dt : 0.0001);
+    updateHud();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Диффузия духов в комнате');
+  SimUI.slider({
+    label: 'Температура', min: 0, max: 40, step: 1, value: tempC, unit: '°C',
+    onChange: function (v) { tempC = v; },
+  });
+  SimUI.slider({
+    label: 'Молярная масса', min: 50, max: 300, step: 5, value: molarMass, unit: 'г/моль',
+    onChange: function (v) { molarMass = v; },
+  });
+  SimUI.playPause({
+    onPlay: function () { running = true; },
+    onPause: function () { running = false; },
+    onReset: function () { resetSim(); },
+  });
+
+  // ---------- Инициализация ----------
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
