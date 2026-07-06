@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { plan, generateCandidate, verifyCandidate, type Ctx } from '@/lib/pipeline/stages';
 import type { PlanSpec, RenderReport } from '@/lib/types';
+import type { ChatMessage } from '@/lib/provider';
 
 const SPEC: PlanSpec = {
   title: 'Диффузия', subject: 'Физика', mode: '2d',
@@ -24,11 +25,11 @@ function ctx(over: Partial<Ctx> = {}): Ctx {
 
 describe('plan', () => {
   it('parses spec json and passes image part', async () => {
-    const genChat = vi.fn(async () => JSON.stringify(SPEC));
+    const genChat = vi.fn(async (_messages: ChatMessage[]) => JSON.stringify(SPEC));
     const c = ctx({ genChat });
     const spec = await plan(c, 'диффузия', 'data:image/png;base64,xxx');
     expect(spec.title).toBe('Диффузия');
-    const userMsg = genChat.mock.calls[0][0].at(-1);
+    const userMsg = genChat.mock.calls[0]![0].at(-1)!;
     expect(JSON.stringify(userMsg.content)).toContain('data:image/png');
   });
 });
