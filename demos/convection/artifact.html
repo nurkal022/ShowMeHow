@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Конвекция от батареи</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
+  canvas { position: fixed; top: 0; left: 0; display: block; }
+  #bg { z-index: 0; }
+  #fx { z-index: 1; }
+  #formula-panel {
+    position: fixed; left: 12px; bottom: 12px; z-index: 10;
+    width: 320px; padding: 14px;
+    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
+    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  #formula-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
+  #formula-katex { font-size: 17px; margin-bottom: 8px; }
+  #formula-nums { font-size: 12px; line-height: 1.6; color: var(--sim-muted, #8b95a3); font-variant-numeric: tabular-nums; }
+  #formula-nums b { color: var(--sim-text, #e8ecf1); font-weight: 600; }
+  #formula-note { font-size: 10.5px; margin-top: 8px; color: #5c6675; line-height: 1.4; }
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<canvas id="fx"></canvas>
+
+<div id="formula-panel">
+  <h2>Почему тёплый воздух поднимается</h2>
+  <div id="formula-katex">F_A = (\rho_{хол} - \rho_{тёпл})\, g\, V</div>
+  <div id="formula-nums">
+    Мощность батареи = <b id="valPower">-</b> %<br>
+    Открытость окна = <b id="valOpen">-</b> %<br>
+    t (симуляция) = <b id="valT">-</b> с
+  </div>
+  <div id="formula-note">
+    Нагретый воздух у батареи расширяется: его плотность ρ(T) падает (при
+    постоянном давлении ρ ∝ 1/T), поэтому архимедова сила выталкивает его
+    вверх. У холодного окна воздух, наоборот, плотнее и опускается —
+    возникает циркуляционная ячейка.
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- KaTeX (с деградацией в текст, если CDN недоступен) ----------
+  function renderFormula(el, tex) {
+    if (typeof katex !== 'undefined') {
+      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
+    }
+    el.textContent = tex;
+  }
+  renderFormula(document.getElementById('formula-katex'), 'F_A = (\\rho_{хол} - \\rho_{тёпл})\\, g\\, V');
+
+  // ---------- Canvas setup ----------
+  var bg = document.getElementById('bg');
+  var fx = document.getElementById('fx');
+  var bgCtx = bg.getContext('2d');
+  var fxCtx = fx.getContext('2d');
+
+  var W = 0, H = 0;
+  var room = { x: 0, y: 0, w: 0, h: 0 };
+  var battery = { x: 0, y: 0, w: 0, h: 0, cx: 0, cy: 0 };
+  var win = { x: 0, y: 0, w: 0, h: 0, cx: 0, cy: 0 };
+
+  function layout() {
+    var margin = Math.max(50, Math.min(W, H) * 0.07);
+    room.x = margin;
+    room.y = margin;
+    room.w = W - margin * 2;
+    room.h = H - margin * 2;
+
+    // SimUI-панель (справа-сверху) и панель формулы (слева-снизу) — фиксированные
+    // оверлеи поверх канваса; батарея/окно не должны прятаться под ними.
+    var simPanelEl = document.querySelector('.sim-panel');
+    var formulaEl = document.getElementById('formula-panel');
+    var simRect = simPanelEl ? simPanelEl.getBoundingClientRect() : null;
+    var formulaRect = formulaEl ? formulaEl.getBoundingClientRect() : null;
+    var gap = 18;
+
+    // батарея — слева-снизу, вплотную к левой стене, но выше панели формулы
+    battery.w = room.w * 0.15;
+    battery.h = room.h * 0.075;
+    battery.x = room.x + 2;
+    var batteryMaxY = room.y + room.h * 0.85 - battery.h;
+    if (formulaRect) batteryMaxY = Math.min(batteryMaxY, formulaRect.top - gap - battery.h);
+    battery.y = Math.max(room.y + room.h * 0.15, batteryMaxY);
+    battery.cx = battery.x + battery.w * 0.5;
+    battery.cy = battery.y + battery.h * 0.5;
+
+    // окно — справа-сверху, вплотную к правой стене, но ниже панели управления
+    win.w = room.w * 0.16;
+    win.h = room.h * 0.22;
+    win.x = room.x + room.w - win.w - 2;
+    var winMinY = room.y + room.h * 0.08;
+    if (simRect) winMinY = Math.max(winMinY, simRect.bottom + gap);
+    win.y = Math.min(winMinY, room.y + room.h - win.h - room.h * 0.05);
+    win.cx = win.x + win.w * 0.5;
+    win.cy = win.y + win.h * 0.5;
+  }
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    [bg, fx].forEach(function (c) {
+      c.width = Math.round(W * dpr);
+      c.height = Math.round(H * dpr);
+      c.style.width = W + 'px';
+      c.style.height = H + 'px';
+    });
+    bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    drawStatic();
+    fxCtx.clearRect(0, 0, W, H);
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // ---------- Параметры (слайдеры) ----------
+  var batteryPower = 65;  // %, слайдер
+  var windowOpen = 30;    // %, слайдер
+
+  // ---------- Аналитическое поле скоростей (стационарная циркуляционная ячейка) ----------
+  // Базовая ячейка через функцию тока на прямоугольнике комнаты (обнуляется на стенках).
+  var BASE_SPEED = 150;   // px/с при мощности батареи 100%
+  var PLUME_SPEED = 190;  // px/с — вертикальная струя над батареей при 100%
+  var DRAFT_SPEED = 210;  // px/с — нисходящий поток у окна при открытости 100%
+
+  function velocityField(x, y) {
+    var dx = x - room.x, dy = y - room.y;
+    var a = Math.PI / room.w, b = Math.PI / room.h;
+    var power = batteryPower / 100;
+    var open = windowOpen / 100;
+
+    // базовый вихрь: единая циркуляционная ячейка на прямоугольнике комнаты
+    // (обнуляется на стенках, что даёт мягкое "прилипание" потока к ним).
+    // Амплитуда задана напрямую в px/с (а не через d/dx функции тока — та
+    // версия давала множитель ~pi/room.w и делала базовый вихрь незаметно
+    // медленным на большой комнате).
+    var amp = BASE_SPEED * power;
+    var vx = Math.sin(a * dx) * Math.cos(b * dy) * amp;
+    var vy = -Math.cos(a * dx) * Math.sin(b * dy) * amp;
+
+    // подъёмная струя непосредственно над батареей
+    var sigmaPlume = room.w * 0.09;
+    var plumeF = Math.exp(-((x - battery.cx) * (x - battery.cx)) / (2 * sigmaPlume * sigmaPlume));
+    vy += -PLUME_SPEED * power * plumeF;
+
+    // нисходящий поток холодного воздуха от окна
+    var sigmaDraft = room.w * 0.10;
+    var draftF = Math.exp(-((x - win.cx) * (x - win.cx)) / (2 * sigmaDraft * sigmaDraft));
+    vy += DRAFT_SPEED * open * draftF;
+
+    return { vx: vx, vy: vy };
+  }
+
+  // целевая (равновесная) температура в точке: 0 = холодно (окно), 1 = жарко (батарея)
+  var T_NEUTRAL = 0.42;
+  function targetTemperature(x, y) {
+    var sigmaB = room.w * 0.16;
+    var db2 = (x - battery.cx) * (x - battery.cx) + (y - battery.cy) * (y - battery.cy);
+    var heat = (batteryPower / 100) * Math.exp(-db2 / (2 * sigmaB * sigmaB));
+
+    var sigmaW = room.w * 0.14;
+    var dw2 = (x - win.cx) * (x - win.cx) + (y - win.cy) * (y - win.cy);
+    var cool = (windowOpen / 100) * Math.exp(-dw2 / (2 * sigmaW * sigmaW));
+
+    var t = T_NEUTRAL + heat * 0.95 - cool * 0.95;
+    return Math.max(0, Math.min(1, t));
+  }
+
+  // 0 -> синий (холод), 1 -> красный (жара). Линейная интерполяция RGB, а не
+  // HSL-оттенка: путь HSL 220°->0° проходит через зелёный на середине шкалы,
+  // что выглядит как "нейтрально-зелёный", а не как тёплый/холодный воздух.
+  var COLD_RGB = { r: 70, g: 130, b: 225 };
+  var HOT_RGB = { r: 235, g: 66, b: 50 };
+  function tempColor(t, alpha) {
+    var r = COLD_RGB.r + (HOT_RGB.r - COLD_RGB.r) * t;
+    var g = COLD_RGB.g + (HOT_RGB.g - COLD_RGB.g) * t;
+    var b = COLD_RGB.b + (HOT_RGB.b - COLD_RGB.b) * t;
+    return 'rgba(' + r.toFixed(0) + ',' + g.toFixed(0) + ',' + b.toFixed(0) + ',' + alpha + ')';
+  }
+
+  // ---------- Статичная сцена: комната в разрезе (вид сбоку) ----------
+  function drawStatic() {
+    bgCtx.clearRect(0, 0, W, H);
+    bgCtx.fillStyle = '#101318';
+    bgCtx.fillRect(0, 0, W, H);
+
+    // пол/стены комнаты
+    bgCtx.fillStyle = '#12161d';
+    roundRect(bgCtx, room.x, room.y, room.w, room.h, 6);
+    bgCtx.fill();
+
+    bgCtx.strokeStyle = '#3a4657';
+    bgCtx.lineWidth = 3;
+    roundRect(bgCtx, room.x, room.y, room.w, room.h, 6);
+    bgCtx.stroke();
+
+    bgCtx.fillStyle = '#5c6675';
+    bgCtx.font = '13px system-ui, sans-serif';
+    bgCtx.fillText('комната в разрезе (вид сбоку)', room.x + 10, room.y + room.h - 12);
+
+    drawFieldArrows();
+    drawBattery();
+    drawWindow();
+  }
+
+  // лёгкие стрелки поля скоростей (статично, пересчитываются при смене слайдеров)
+  function drawFieldArrows() {
+    var cols = 11, rows = 7;
+    var maxSpeed = BASE_SPEED + PLUME_SPEED; // грубая нормировка длины стрелки
+    bgCtx.save();
+    bgCtx.beginPath();
+    roundRect(bgCtx, room.x, room.y, room.w, room.h, 6);
+    bgCtx.clip();
+    bgCtx.strokeStyle = 'rgba(140,160,190,0.22)';
+    bgCtx.fillStyle = 'rgba(140,160,190,0.22)';
+    bgCtx.lineWidth = 1.2;
+    for (var i = 1; i < cols; i++) {
+      for (var j = 1; j < rows; j++) {
+        var px = room.x + (room.w * i) / cols;
+        var py = room.y + (room.h * j) / rows;
+        var v = velocityField(px, py);
+        var speed = Math.sqrt(v.vx * v.vx + v.vy * v.vy);
+        if (speed < 1) continue;
+        var len = Math.min(20, 6 + (speed / maxSpeed) * 26);
+        var nx = v.vx / speed, ny = v.vy / speed;
+        var ex = px + nx * len, ey = py + ny * len;
+        bgCtx.beginPath();
+        bgCtx.moveTo(px, py);
+        bgCtx.lineTo(ex, ey);
+        bgCtx.stroke();
+        var ah = 4;
+        var ang = Math.atan2(ny, nx);
+        bgCtx.beginPath();
+        bgCtx.moveTo(ex, ey);
+        bgCtx.lineTo(ex - ah * Math.cos(ang - 0.5), ey - ah * Math.sin(ang - 0.5));
+        bgCtx.lineTo(ex - ah * Math.cos(ang + 0.5), ey - ah * Math.sin(ang + 0.5));
+        bgCtx.closePath();
+        bgCtx.fill();
+      }
+    }
+    bgCtx.restore();
+  }
+
+  function drawBattery() {
+    var glowR = 30 + 55 * (batteryPower / 100);
+    var grad = bgCtx.createRadialGradient(battery.cx, battery.cy, 0, battery.cx, battery.cy, glowR);
+    grad.addColorStop(0, 'rgba(255,90,60,' + (0.15 + 0.35 * (batteryPower / 100)) + ')');
+    grad.addColorStop(1, 'rgba(255,90,60,0)');
+    bgCtx.fillStyle = grad;
+    bgCtx.beginPath();
+    bgCtx.arc(battery.cx, battery.cy, glowR, 0, Math.PI * 2);
+    bgCtx.fill();
+
+    var heat = batteryPower / 100;
+    var r = 180 + heat * 60, g = 70 - heat * 30, bl = 60 - heat * 30;
+    bgCtx.fillStyle = 'rgb(' + Math.max(0, r).toFixed(0) + ',' + Math.max(0, g).toFixed(0) + ',' + Math.max(0, bl).toFixed(0) + ')';
+    roundRect(bgCtx, battery.x, battery.y, battery.w, battery.h, 4);
+    bgCtx.fill();
+    bgCtx.strokeStyle = '#5c2a20';
+    bgCtx.lineWidth = 1.5;
+    roundRect(bgCtx, battery.x, battery.y, battery.w, battery.h, 4);
+    bgCtx.stroke();
+    // рёбра радиатора
+    bgCtx.strokeStyle = 'rgba(20,10,8,0.35)';
+    bgCtx.lineWidth = 1;
+    var ribs = 6;
+    for (var i = 1; i < ribs; i++) {
+      var rx = battery.x + (battery.w * i) / ribs;
+      bgCtx.beginPath();
+      bgCtx.moveTo(rx, battery.y + 2);
+      bgCtx.lineTo(rx, battery.y + battery.h - 2);
+      bgCtx.stroke();
+    }
+
+    drawLabel('Батарея', battery.cx, battery.y - 10);
+  }
+
+  function drawWindow() {
+    var open = windowOpen / 100;
+    var glassCold = { r: 90, g: 150, b: 210 };
+    var glassNeutral = { r: 60, g: 75, b: 92 };
+    var cr = glassNeutral.r + (glassCold.r - glassNeutral.r) * open;
+    var cg = glassNeutral.g + (glassCold.g - glassNeutral.g) * open;
+    var cb = glassNeutral.b + (glassCold.b - glassNeutral.b) * open;
+
+    var glowR = 20 + 55 * open;
+    var grad = bgCtx.createRadialGradient(win.cx, win.cy, 0, win.cx, win.cy, glowR);
+    grad.addColorStop(0, 'rgba(120,170,230,' + (0.05 + 0.30 * open) + ')');
+    grad.addColorStop(1, 'rgba(120,170,230,0)');
+    bgCtx.fillStyle = grad;
+    bgCtx.beginPath();
+    bgCtx.arc(win.cx, win.cy, glowR, 0, Math.PI * 2);
+    bgCtx.fill();
+
+    bgCtx.fillStyle = 'rgb(' + cr.toFixed(0) + ',' + cg.toFixed(0) + ',' + cb.toFixed(0) + ')';
+    bgCtx.globalAlpha = 0.55;
+    roundRect(bgCtx, win.x, win.y, win.w, win.h, 3);
+    bgCtx.fill();
+    bgCtx.globalAlpha = 1;
+    bgCtx.strokeStyle = '#c7d3e0';
+    bgCtx.lineWidth = 2;
+    roundRect(bgCtx, win.x, win.y, win.w, win.h, 3);
+    bgCtx.stroke();
+    // переплёт окна
+    bgCtx.beginPath();
+    bgCtx.moveTo(win.x + win.w / 2, win.y);
+    bgCtx.lineTo(win.x + win.w / 2, win.y + win.h);
+    bgCtx.moveTo(win.x, win.y + win.h / 2);
+    bgCtx.lineTo(win.x + win.w, win.y + win.h / 2);
+    bgCtx.stroke();
+
+    drawLabel('Окно', win.cx, win.y - 10);
+  }
+
+  function drawLabel(text, cx, cy) {
+    bgCtx.font = '13px system-ui, sans-serif';
+    var tw = bgCtx.measureText(text).width;
+    bgCtx.fillStyle = 'rgba(16,19,24,0.72)';
+    roundRect(bgCtx, cx - tw / 2 - 8, cy - 15, tw + 16, 22, 6);
+    bgCtx.fill();
+    bgCtx.fillStyle = '#e8ecf1';
+    bgCtx.textAlign = 'center';
+    bgCtx.fillText(text, cx, cy);
+    bgCtx.textAlign = 'left';
+  }
+
+  // ---------- Частицы-трассеры ----------
+  var N_PARTICLES = 450;
+  var particles = [];
+  var running = true;
+  var simT = 0;
+  var lastFrame = null;
+
+  function spawnParticle() {
+    return {
+      x: room.x + 4 + Math.random() * (room.w - 8),
+      y: room.y + 4 + Math.random() * (room.h - 8),
+      temp: T_NEUTRAL,
+    };
+  }
+
+  function initParticles() {
+    particles = [];
+    for (var i = 0; i < N_PARTICLES; i++) particles.push(spawnParticle());
+  }
+
+  function resetSim() {
+    initParticles();
+    simT = 0;
+    lastFrame = null;
+    fxCtx.clearRect(0, 0, W, H);
+  }
+
+  // Скорость релаксации температуры частицы к локальной равновесной, 1/с.
+  // Нагрев у батареи — быстрый (частица заметно краснеет почти сразу),
+  // а остывание — медленное: частица сохраняет тепловую инерцию, пока её
+  // несёт потоком через комнату, и лишь постепенно синеет к окну/потолку.
+  // Если сделать обе скорости одинаковыми и быстрыми, цвет "прилипает" к
+  // полю мгновенно и циркуляция перестаёт читаться по цвету частиц.
+  var HEAT_RATE = 1.3;
+  var COOL_RATE = 0.3;
+
+  function stepPhysics(dt) {
+    var minX = room.x + 3, maxX = room.x + room.w - 3;
+    var minY = room.y + 3, maxY = room.y + room.h - 3;
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      var v = velocityField(p.x, p.y);
+      p.x += v.vx * dt;
+      p.y += v.vy * dt;
+      if (p.x < minX) p.x = minX;
+      if (p.x > maxX) p.x = maxX;
+      if (p.y < minY) p.y = minY;
+      if (p.y > maxY) p.y = maxY;
+      var target = targetTemperature(p.x, p.y);
+      var rate = target > p.temp ? HEAT_RATE : COOL_RATE;
+      p.temp += (target - p.temp) * Math.min(1, rate * dt);
+    }
+  }
+
+  function drawFrame() {
+    // затухание следа (частицы оставляют лёгкий полупрозрачный след своего пути)
+    fxCtx.globalCompositeOperation = 'destination-out';
+    fxCtx.fillStyle = 'rgba(0,0,0,0.16)';
+    fxCtx.fillRect(0, 0, W, H);
+    fxCtx.globalCompositeOperation = 'source-over';
+
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      fxCtx.fillStyle = tempColor(p.temp, 0.9);
+      fxCtx.beginPath();
+      fxCtx.arc(p.x, p.y, 2.3, 0, Math.PI * 2);
+      fxCtx.fill();
+    }
+  }
+
+  // ---------- HUD ----------
+  var elPower = document.getElementById('valPower');
+  var elOpen = document.getElementById('valOpen');
+  var elT = document.getElementById('valT');
+  function updateHud() {
+    elPower.textContent = batteryPower.toFixed(0);
+    elOpen.textContent = windowOpen.toFixed(0);
+    elT.textContent = simT.toFixed(1);
+  }
+
+  // ---------- Главный цикл (dt-based, не завязан на FPS) ----------
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+    if (running) {
+      stepPhysics(dt);
+      simT += dt;
+      drawFrame();
+    }
+    // в паузе fx-канвас не трогаем: картинка полностью замирает,
+    // симуляционное время (simT) также стоит на месте
+    updateHud();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Конвекция от батареи');
+  SimUI.slider({
+    label: 'Мощность батареи', min: 0, max: 100, step: 1, value: batteryPower, unit: '%',
+    onChange: function (v) { batteryPower = v; drawStatic(); },
+  });
+  SimUI.slider({
+    label: 'Открытость окна', min: 0, max: 100, step: 1, value: windowOpen, unit: '%',
+    onChange: function (v) { windowOpen = v; drawStatic(); },
+  });
+  SimUI.playPause({
+    onPlay: function () { running = true; },
+    onPause: function () { running = false; },
+    onReset: function () { resetSim(); },
+  });
+
+  // ---------- Инициализация ----------
+  // resize() ДО initParticles(): layout() должен посчитать реальные
+  // границы комнаты, иначе частицы стартуют в нулевом прямоугольнике.
+  window.addEventListener('resize', resize);
+  resize();
+  initParticles();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
