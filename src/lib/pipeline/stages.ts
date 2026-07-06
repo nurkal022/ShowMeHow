@@ -43,16 +43,19 @@ function toDataUrl(png: Buffer): string {
   return 'data:image/png;base64,' + png.toString('base64');
 }
 
+const STATIC_ANIMATION_ERROR = 'Анимация не идёт: кадры не меняются со временем';
+
 export async function verifyCandidate(
   ctx: Ctx, spec: PlanSpec, html: string, index: number,
 ): Promise<CandidateResult> {
   ctx.emit({ type: 'candidate', index, status: 'rendering' });
   let current = html;
   let report = await ctx.render(current);
-  for (let attempt = 0; !report.ok && attempt < 2; attempt++) {
+  for (let attempt = 0; (!report.ok || !report.animated) && attempt < 2; attempt++) {
     ctx.emit({ type: 'candidate', index, status: 'fixing' });
+    const errors = report.animated ? report.errors : [...report.errors, STATIC_ANIMATION_ERROR];
     try {
-      current = await fixArtifact(ctx, current, report.errors);
+      current = await fixArtifact(ctx, current, errors);
     } catch {
       break; // фиксер сам упал — кандидат выбывает
     }
@@ -69,10 +72,13 @@ export async function verifyCandidate(
   if (ctx.visionChat) {
     ctx.emit({ type: 'candidate', index, status: 'critiquing' });
     try {
+      const animationNote = report.animated
+        ? ''
+        : `\n\nВНИМАНИЕ: ${STATIC_ANIMATION_ERROR.toLowerCase()} даже после попыток починки.`;
       const out = await ctx.visionChat([
         { role: 'system', content: CRITIC_SYSTEM },
         { role: 'user', content: [
-          textPart('Спецификация:\n' + JSON.stringify(spec, null, 2)),
+          textPart('Спецификация:\n' + JSON.stringify(spec, null, 2) + animationNote),
           ...report.screenshots.map((s) => imagePart(toDataUrl(s))),
         ] },
       ]);

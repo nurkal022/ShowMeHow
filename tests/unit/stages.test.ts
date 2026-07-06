@@ -12,6 +12,7 @@ const SPEC: PlanSpec = {
 const HTML = '<!DOCTYPE html><html><head></head><body><canvas></canvas></body></html>';
 const okRender: RenderReport = { ok: true, errors: [], animated: true, screenshots: [Buffer.from('a')] };
 const badRender: RenderReport = { ok: false, errors: ['ReferenceError: x'], animated: false, screenshots: [] };
+const staticRender: RenderReport = { ok: true, errors: [], animated: false, screenshots: [Buffer.from('a')] };
 
 function ctx(over: Partial<Ctx> = {}): Ctx {
   return {
@@ -71,5 +72,35 @@ describe('verifyCandidate', () => {
     const r = await verifyCandidate(ctx({ visionChat: null }), SPEC, HTML, 0);
     expect(r.alive).toBe(true);
     expect(r.critic).toBeNull();
+  });
+
+  it('static animation is treated as fixable: retries until animated', async () => {
+    const render = vi.fn()
+      .mockResolvedValueOnce(staticRender)
+      .mockResolvedValueOnce(staticRender)
+      .mockResolvedValueOnce(okRender);
+    const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
+    const c = ctx({ render, genChat });
+    const r = await verifyCandidate(c, SPEC, HTML, 0);
+    expect(r.alive).toBe(true);
+    expect(r.render.animated).toBe(true);
+    expect(render).toHaveBeenCalledTimes(3);
+    expect(genChat).toHaveBeenCalledTimes(2); // два вызова фиксера
+    // фиксеру передали причину — статичную анимацию
+    const fixerCall = genChat.mock.calls[0]![0];
+    expect(JSON.stringify(fixerCall)).toContain('Анимация не идёт');
+  });
+
+  it('ok but persistently not animated after 2 fix attempts: stays alive, critic notified', async () => {
+    const render = vi.fn(async () => staticRender);
+    const visionChat = vi.fn(async (_messages: ChatMessage[]) => '{"physicsOk": true, "issues": []}');
+    const c = ctx({ render, visionChat });
+    const r = await verifyCandidate(c, SPEC, HTML, 0);
+    expect(r.alive).toBe(true);
+    expect(r.render.animated).toBe(false);
+    expect(render).toHaveBeenCalledTimes(3); // исходный + 2 починки
+    expect(visionChat).toHaveBeenCalledTimes(1);
+    const criticCall = visionChat.mock.calls[0]![0];
+    expect(JSON.stringify(criticCall)).toMatch(/анимация не идёт/i);
   });
 });

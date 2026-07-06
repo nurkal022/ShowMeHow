@@ -73,6 +73,15 @@ describe('runPipeline', () => {
     expect(events.some((e) => e.type === 'warning')).toBe(true);
   });
 
+  it('winner not animated after fix attempts: saved with animation warning', async () => {
+    const staticReport: RenderReport = { ok: true, errors: [], animated: false,
+      screenshots: [Buffer.from('png')] };
+    const { ctx, events } = fakeCtx({ renders: Array(20).fill(staticReport) });
+    const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'fast' });
+    expect(getMeta(meta.id).warning).toMatch(/анимация/i);
+    expect(events.some((e) => e.type === 'warning' && /анимация/i.test(e.message))).toBe(true);
+  });
+
   it('vision unavailable: standard mode degrades with warning', async () => {
     const { ctx, events } = fakeCtx();
     ctx.visionChat = null;

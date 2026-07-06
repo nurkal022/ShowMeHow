@@ -114,6 +114,12 @@ export async function runPipeline(
     best = alive[0];
   }
 
+  if (!best.render.animated) {
+    const msg = 'Анимация может быть статичной';
+    warnings.push(msg);
+    ctx.emit({ type: 'warning', message: msg });
+  }
+
   ctx.emit({ type: 'stage', stage: 'saving' });
   const meta = createSimulation({
     title: spec.title, prompt: input.prompt, subject: spec.subject,
