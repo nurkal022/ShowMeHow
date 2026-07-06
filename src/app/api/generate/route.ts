@@ -10,18 +10,40 @@ export async function POST(req: Request) {
   };
   const mode = resolveMode(bodyMode);
   const encoder = new TextEncoder();
+  // Клиент может отключиться (закрыть вкладку, уйти со страницы) до того, как
+  // пайплайн завершится. `closed` гасит дальнейшую отправку событий в мёртвый
+  // controller, но НЕ прерывает runPipeline — генерация должна доработать и
+  // сохранить симуляцию даже без слушателя на другом конце SSE.
+  let closed = false;
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (e: PipelineEvent) =>
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
+      const send = (e: PipelineEvent) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
+        } catch {
+          closed = true;
+        }
+      };
       try {
         const ctx = makeCtx(send);
         await runPipeline(ctx, { prompt, imageDataUrl, mode });
       } catch (e) {
         send({ type: 'error', message: e instanceof Error ? e.message : String(e) });
       } finally {
-        controller.close();
+        if (!closed) {
+          try {
+            controller.close();
+          } catch {
+            closed = true;
+          }
+        }
       }
+    },
+    cancel() {
+      // Клиент отключился — просто помечаем поток закрытым, runPipeline
+      // (запущенный в start()) продолжает работать до конца и сохраняет результат.
+      closed = true;
     },
   });
   return new Response(stream, {
