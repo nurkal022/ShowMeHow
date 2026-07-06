@@ -86,7 +86,17 @@ window.SimUI = (function () {
     window.addEventListener('sim-reset', function () { o.onReset(); });
     box.appendChild(b1); box.appendChild(b2); ensurePanel().appendChild(box);
   }
-  function title(t) { ensurePanel(t); }
+  function title(t) {
+    var p = ensurePanel(t);
+    var h = p.querySelector('h1');
+    if (h) {
+      h.textContent = t;
+    } else {
+      h = document.createElement('h1');
+      h.textContent = t;
+      p.insertBefore(h, p.firstChild);
+    }
+  }
   return { slider: slider, playPause: playPause, title: title };
 })();
 `;

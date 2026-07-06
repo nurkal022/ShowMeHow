@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { extractHtml, extractJson, instrument } from '@/lib/artifact';
+import { UIKIT_JS } from '@/lib/runtime';
 
 describe('extractHtml', () => {
   it('extracts fenced html block', () => {
@@ -13,6 +14,10 @@ describe('extractHtml', () => {
   it('throws when no html found', () => {
     expect(() => extractHtml('просто текст')).toThrow(/html/i);
   });
+  it('extracts html with uppercase closing tag', () => {
+    const doc = '<!DOCTYPE HTML><HTML><body>x</body></HTML>';
+    expect(extractHtml(doc)).toBe(doc);
+  });
 });
 
 describe('extractJson', () => {
@@ -24,6 +29,23 @@ describe('extractJson', () => {
   });
   it('throws on garbage', () => {
     expect(() => extractJson('нет json')).toThrow();
+  });
+  it('parses json with a closing brace inside a string value', () => {
+    const out = extractJson<{ text: string }>('{"text": "closing brace: } end"}');
+    expect(out.text).toBe('closing brace: } end');
+  });
+  it('parses json with nested brace-like text inside a string value', () => {
+    const out = extractJson<{ a: string }>('{"a": "{nested} {braces}"}');
+    expect(out.a).toBe('{nested} {braces}');
+  });
+});
+
+describe('UIKIT_JS SimUI.title()', () => {
+  it('is syntactically valid JS (parses without executing DOM code)', () => {
+    expect(() => new Function(UIKIT_JS)).not.toThrow();
+  });
+  it('makes title() order-independent by inserting/updating an <h1> on the existing panel', () => {
+    expect(UIKIT_JS).toContain('insertBefore');
   });
 });
 

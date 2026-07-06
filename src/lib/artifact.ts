@@ -7,7 +7,12 @@ export function extractHtml(llmOutput: string): string {
   if (fenced) return fenced[1].trim();
   const start = llmOutput.search(/<!DOCTYPE html|<html[\s>]/i);
   if (start === -1) throw new Error('no html document found in LLM output');
-  const end = llmOutput.lastIndexOf('</html>');
+  const closeRe = /<\/html>/gi;
+  let end = -1;
+  let match: RegExpExecArray | null;
+  while ((match = closeRe.exec(llmOutput)) !== null) {
+    end = match.index;
+  }
   if (end === -1) throw new Error('no closing </html> found in LLM output');
   return llmOutput.slice(start, end + '</html>'.length).trim();
 }
@@ -17,11 +22,26 @@ export function extractJson<T>(llmOutput: string): T {
   const source = fenced ? fenced[1] : llmOutput;
   const start = source.indexOf('{');
   if (start === -1) throw new Error('no JSON object found in LLM output');
-  // Ищем сбалансированную закрывающую скобку
+  // Ищем сбалансированную закрывающую скобку, игнорируя { } внутри строковых значений
   let depth = 0;
+  let inString = false;
   for (let i = start; i < source.length; i++) {
-    if (source[i] === '{') depth++;
-    if (source[i] === '}') depth--;
+    const ch = source[i];
+    if (inString) {
+      if (ch === '\\') {
+        i++; // skip escaped character
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+    }
     if (depth === 0) return JSON.parse(source.slice(start, i + 1));
   }
   throw new Error('unbalanced JSON in LLM output');
