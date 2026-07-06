@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Четырёхтактный двигатель внутреннего сгорания</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
+  #scene { position: fixed; top: 0; left: 0; display: block; z-index: 0; }
+
+  #stroke-banner {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 10; min-width: 260px; padding: 10px 22px; text-align: center;
+    background: color-mix(in srgb, #1a2029 88%, transparent);
+    border: 1px solid #2a3341; border-bottom: 3px solid var(--stroke-color, #4f8ff7);
+    border-radius: 12px; backdrop-filter: blur(6px);
+    box-shadow: 0 0 22px 0 color-mix(in srgb, var(--stroke-color, #4f8ff7) 35%, transparent);
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    transition: top 0.15s ease;
+  }
+  #stroke-banner .name { font-size: 22px; font-weight: 700; color: #e8ecf1; letter-spacing: 0.3px; }
+  #stroke-banner .idx { font-size: 12px; color: #8b95a3; margin-top: 2px; }
+
+  #formula-panel {
+    position: fixed; left: 12px; bottom: 12px; z-index: 10;
+    width: 320px; padding: 14px;
+    background: color-mix(in srgb, #1a2029 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
+    color: #e8ecf1; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  #formula-panel h2 { font-size: 13px; margin: 0 0 8px; color: #8b95a3; font-weight: 600; }
+  #formula-katex { font-size: 16px; margin-bottom: 8px; }
+  #formula-nums { font-size: 12px; line-height: 1.65; color: #8b95a3; font-variant-numeric: tabular-nums; }
+  #formula-nums b { color: #e8ecf1; font-weight: 600; }
+  #formula-note { font-size: 10.5px; margin-top: 8px; color: #5c6675; line-height: 1.4; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="stroke-banner">
+  <div class="name" id="strokeName">Впуск</div>
+  <div class="idx" id="strokeIdx">Такт 1 из 4 &middot; впускной клапан открыт</div>
+</div>
+
+<div id="formula-panel">
+  <h2>Как это работает</h2>
+  <div id="formula-katex">x = r\cos\theta + \sqrt{l^2 - r^2\sin^2\theta}</div>
+  <div id="formula-nums">
+    Кривошипно-шатунный механизм превращает вращение коленвала в
+    возвратно-поступательное движение поршня: x — положение поршня,
+    r — радиус кривошипа, l — длина шатуна, θ — угол поворота коленвала.<br><br>
+    Обороты = <b id="valRpm">-</b> об/мин<br>
+    Угол коленвала θ = <b id="valTheta">-</b>°<br>
+    Текущий такт = <b id="valStroke">-</b>
+  </div>
+  <div id="formula-note">Полный рабочий цикл (впуск → сжатие → рабочий ход → выпуск) занимает 2 оборота коленвала — 720°.</div>
+</div>
+
+<!--
+  Примечание про CDN three.js: пакет three@0.164.0 на jsdelivr больше не
+  публикует классическую глобальную сборку build/three.min.js (только
+  build/three.module.js / three.module.min.js — three.js убрал UMD-сборку
+  начиная примерно с r150, build/three.min.js отдаёт 404). Поэтому здесь
+  используется ES-модуль ТОЙ ЖЕ версии 0.164.0 с того же CDN через
+  <script type="module">; OrbitControls по-прежнему НЕ импортируется —
+  камера фиксирована с автоповоротом.
+-->
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.module.min.js';
+
+(function () {
+  'use strict';
+
+  // ---------- KaTeX (с деградацией в текст, если CDN недоступен) ----------
+  function renderFormula(el, tex) {
+    if (typeof katex !== 'undefined') {
+      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
+    }
+    el.textContent = tex;
+  }
+  renderFormula(document.getElementById('formula-katex'), 'x = r\\cos\\theta + \\sqrt{l^2 - r^2\\sin^2\\theta}');
+
+  // ---------- Renderer / scene / camera ----------
+  var canvas = document.getElementById('scene');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, preserveDrawingBuffer: true });
+  renderer.setClearColor(0x101318, 1);
+  renderer.shadowMap.enabled = false; // требование: без теней, лёгкий рендер
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.25;
+
+  var scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x101318, 7.5, 16);
+
+  var CENTER = new THREE.Vector3(0, 1.4, 0);
+  var camera = new THREE.PerspectiveCamera(48, 1, 0.1, 50);
+
+  function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h, true);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    layoutBanner();
+  }
+
+  // ---------- Панель такта: избегаем перекрытия с SimUI-панелью (справа сверху) ----------
+  var banner = document.getElementById('stroke-banner');
+  function layoutBanner() {
+    banner.style.top = '12px';
+    var simPanel = document.querySelector('.sim-panel');
+    if (!simPanel) return;
+    var simRect = simPanel.getBoundingClientRect();
+    var bannerRect = banner.getBoundingClientRect();
+    var overlap = bannerRect.left < simRect.right && bannerRect.right > simRect.left &&
+      bannerRect.top < simRect.bottom && bannerRect.bottom > simRect.top;
+    if (overlap) {
+      banner.style.top = (simRect.bottom + 14) + 'px';
+    }
+  }
+
+  // ---------- Освещение (2-3 источника, без теней) ----------
+  scene.add(new THREE.HemisphereLight(0x8fa6cf, 0x1a1410, 1.15));
+  var keyLight = new THREE.DirectionalLight(0xffffff, 1.55);
+  keyLight.position.set(3.5, 5.5, 4.5);
+  scene.add(keyLight);
+  var flashLight = new THREE.PointLight(0xffaa55, 0, 3.5, 2);
+  scene.add(flashLight);
+
+  // ---------- Геометрия кривошипно-шатунного механизма ----------
+  var R = 0.6;   // радиус кривошипа
+  var L = 1.7;   // длина шатуна (L > R — необходимое условие механизма)
+  var PISTON_MIN_Y = L - R; // НМТ (нижняя мёртвая точка)
+  var PISTON_MAX_Y = L + R; // ВМТ (верхняя мёртвая точка)
+  var PISTON_RADIUS = 0.85;
+  var PISTON_HEIGHT = 0.55;
+  var LINER_RADIUS = 0.95;
+  var LINER_BOTTOM_Y = PISTON_MIN_Y - 0.45;
+  var LINER_TOP_Y = PISTON_MAX_Y + 0.55;
+  var HEAD_BOTTOM_Y = LINER_TOP_Y;
+  var VALVE_SEAT_Y = LINER_TOP_Y - 0.05; // положение "закрытого" клапана (у седла)
+  var VALVE_MAX_LIFT = 0.4;
+  var VALVE_X = 0.4;
+
+  function pistonY(theta) {
+    var s = Math.sin(theta);
+    return R * Math.cos(theta) + Math.sqrt(Math.max(0, L * L - R * R * s * s));
+  }
+
+  // Группа мех-сборки центрирована так, чтобы плоскость коленвала (y=0) была её низом.
+  var rig = new THREE.Group();
+  scene.add(rig);
+
+  // Гильза цилиндра — полупрозрачная (депф-запись выключена, чтобы внутренние
+  // непрозрачные детали были видны сквозь стенку с любой стороны).
+  var linerGeo = new THREE.CylinderGeometry(LINER_RADIUS, LINER_RADIUS, LINER_TOP_Y - LINER_BOTTOM_Y, 40, 1, true);
+  var linerMat = new THREE.MeshStandardMaterial({
+    color: 0x9db4d8, emissive: 0x1c2c44, emissiveIntensity: 0.5,
+    transparent: true, opacity: 0.32, side: THREE.DoubleSide,
+    roughness: 0.2, metalness: 0.2, depthWrite: false,
+  });
+  var liner = new THREE.Mesh(linerGeo, linerMat);
+  liner.position.y = (LINER_BOTTOM_Y + LINER_TOP_Y) / 2;
+  rig.add(liner);
+
+  // Головка блока цилиндров
+  var headMat = new THREE.MeshStandardMaterial({ color: 0x707a86, roughness: 0.4, metalness: 0.5 });
+  var head = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 0.85, 40), headMat);
+  head.position.y = HEAD_BOTTOM_Y + 0.425;
+  rig.add(head);
+
+  // Свеча зажигания (статична)
+  var plugMat = new THREE.MeshStandardMaterial({ color: 0xd8dbe0, roughness: 0.4, metalness: 0.2 });
+  var plug = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.5, 12), plugMat);
+  plug.position.set(0, VALVE_SEAT_Y + 0.2, 0);
+  rig.add(plug);
+  var electrodeMat = new THREE.MeshStandardMaterial({ color: 0x333a44, roughness: 0.5, metalness: 0.6 });
+  var electrode = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.12, 6), electrodeMat);
+  electrode.position.set(0, VALVE_SEAT_Y - 0.02, 0);
+  rig.add(electrode);
+
+  // Клапаны: впускной (х<0, синий акцент) и выпускной (х>0, серый акцент)
+  function makeValve(colorClosed) {
+    var group = new THREE.Group();
+    var stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.05, 0.6, 10),
+      new THREE.MeshStandardMaterial({ color: 0x9aa3ad, roughness: 0.35, metalness: 0.7 }),
+    );
+    stem.position.y = 0.3;
+    group.add(stem);
+    var headMat2 = new THREE.MeshStandardMaterial({ color: colorClosed, roughness: 0.35, metalness: 0.6 });
+    var disc = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.06, 20), headMat2);
+    group.add(disc);
+    group.userData.mat = headMat2;
+    return group;
+  }
+  var intakeValve = makeValve(0x5a8fd6);
+  intakeValve.position.set(-VALVE_X, VALVE_SEAT_Y, 0);
+  rig.add(intakeValve);
+  var exhaustValve = makeValve(0x9aa3ad);
+  exhaustValve.position.set(VALVE_X, VALVE_SEAT_Y, 0);
+  rig.add(exhaustValve);
+  var INTAKE_COLOR_OPEN = new THREE.Color(0x9fc4ff);
+  var INTAKE_COLOR_CLOSED = new THREE.Color(0x5a8fd6);
+  var EXHAUST_COLOR_OPEN = new THREE.Color(0xffb27a);
+  var EXHAUST_COLOR_CLOSED = new THREE.Color(0x9aa3ad);
+
+  // Поршень
+  var pistonMat = new THREE.MeshStandardMaterial({ color: 0xb7bfca, roughness: 0.3, metalness: 0.65 });
+  var piston = new THREE.Mesh(new THREE.CylinderGeometry(PISTON_RADIUS, PISTON_RADIUS, PISTON_HEIGHT, 32), pistonMat);
+  rig.add(piston);
+  // пара колец поршня для наглядности
+  var ringMat = new THREE.MeshStandardMaterial({ color: 0x2a3341, roughness: 0.5, metalness: 0.3 });
+  var ring1 = new THREE.Mesh(new THREE.TorusGeometry(PISTON_RADIUS * 0.98, 0.02, 8, 24), ringMat);
+  var ring2 = ring1.clone();
+  piston.add(ring1); piston.add(ring2);
+  ring1.rotation.x = Math.PI / 2; ring1.position.y = PISTON_HEIGHT * 0.28;
+  ring2.rotation.x = Math.PI / 2; ring2.position.y = PISTON_HEIGHT * 0.05;
+
+  // Шатун и палец кривошипа (общий материал)
+  var rodMat = new THREE.MeshStandardMaterial({ color: 0x8b95a3, roughness: 0.4, metalness: 0.6 });
+  var rod = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, L, 14), rodMat);
+  rig.add(rod);
+  var crankWeb = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, R, 14), rodMat);
+  rig.add(crankWeb);
+  var crankPinMat = new THREE.MeshStandardMaterial({ color: 0x707c8c, roughness: 0.35, metalness: 0.7 });
+  var crankPin = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), crankPinMat);
+  rig.add(crankPin);
+
+  var mainShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.7, 20), rodMat);
+  mainShaft.rotation.x = Math.PI / 2;
+  rig.add(mainShaft);
+
+  // Земля/подставка — исключительно для визуальной привязки сцены
+  var ground = new THREE.Mesh(
+    new THREE.CircleGeometry(4, 40),
+    new THREE.MeshStandardMaterial({ color: 0x12161d, roughness: 1, metalness: 0 }),
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.35;
+  scene.add(ground);
+
+  // Вспышка воспламенения (рабочий ход)
+  var flashMat = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0 });
+  var flash = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 12), flashMat);
+  flash.position.set(0, LINER_TOP_Y - 0.35, 0);
+  rig.add(flash);
+
+  var UP = new THREE.Vector3(0, 1, 0);
+  function placeLink(mesh, a, b) {
+    mesh.position.copy(a).add(b).multiplyScalar(0.5);
+    var dir = b.clone().sub(a).normalize();
+    mesh.quaternion.setFromUnitVectors(UP, dir);
+  }
+
+  // ---------- Частицы (впуск — синие, выпуск — серые), ≤300 суммарно ----------
+  var MAX_P = 220;
+  var positions = new Float32Array(MAX_P * 3);
+  var colorsArr = new Float32Array(MAX_P * 3);
+  var pVel = new Float32Array(MAX_P * 3);
+  var pLife = new Float32Array(MAX_P);
+  var pMaxLife = new Float32Array(MAX_P);
+  var pBaseColor = new Float32Array(MAX_P * 3);
+  var pCursor = 0;
+
+  var pGeo = new THREE.BufferGeometry();
+  pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+  pGeo.setAttribute('color', new THREE.BufferAttribute(colorsArr, 3).setUsage(THREE.DynamicDrawUsage));
+  var pMat = new THREE.PointsMaterial({
+    size: 0.09, vertexColors: true, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  });
+  var pointCloud = new THREE.Points(pGeo, pMat);
+  rig.add(pointCloud);
+
+  function spawnParticle(origin, vel, life, r, g, b) {
+    var i = pCursor;
+    pCursor = (pCursor + 1) % MAX_P;
+    positions[i * 3] = origin.x + (Math.random() - 0.5) * 0.08;
+    positions[i * 3 + 1] = origin.y + (Math.random() - 0.5) * 0.08;
+    positions[i * 3 + 2] = origin.z + (Math.random() - 0.5) * 0.08;
+    pVel[i * 3] = vel.x; pVel[i * 3 + 1] = vel.y; pVel[i * 3 + 2] = vel.z;
+    pLife[i] = life; pMaxLife[i] = life;
+    pBaseColor[i * 3] = r; pBaseColor[i * 3 + 1] = g; pBaseColor[i * 3 + 2] = b;
+  }
+
+  function resetParticles() {
+    pLife.fill(0);
+    colorsArr.fill(0);
+    pGeo.attributes.color.needsUpdate = true;
+  }
+
+  function updateParticles(dt) {
+    for (var i = 0; i < MAX_P; i++) {
+      if (pLife[i] <= 0) continue;
+      pLife[i] -= dt;
+      if (pLife[i] <= 0) {
+        colorsArr[i * 3] = 0; colorsArr[i * 3 + 1] = 0; colorsArr[i * 3 + 2] = 0;
+        continue;
+      }
+      positions[i * 3] += pVel[i * 3] * dt;
+      positions[i * 3 + 1] += pVel[i * 3 + 1] * dt;
+      positions[i * 3 + 2] += pVel[i * 3 + 2] * dt;
+      var a = pLife[i] / pMaxLife[i];
+      colorsArr[i * 3] = pBaseColor[i * 3] * a;
+      colorsArr[i * 3 + 1] = pBaseColor[i * 3 + 1] * a;
+      colorsArr[i * 3 + 2] = pBaseColor[i * 3 + 2] * a;
+    }
+    pGeo.attributes.position.needsUpdate = true;
+    pGeo.attributes.color.needsUpdate = true;
+  }
+
+  // ---------- Такты ----------
+  var STROKES = [
+    { name: 'Впуск', sub: 'впускной клапан открыт', color: '#4f8ff7' },
+    { name: 'Сжатие', sub: 'оба клапана закрыты', color: '#c9a94f' },
+    { name: 'Рабочий ход', sub: 'воспламенение смеси', color: '#ff6a3d' },
+    { name: 'Выпуск', sub: 'выпускной клапан открыт', color: '#8b95a3' },
+  ];
+
+  function cycleState(theta) {
+    var TWO_PI = Math.PI * 2, FOUR_PI = Math.PI * 4;
+    var cyclePos = ((theta % FOUR_PI) + FOUR_PI) % FOUR_PI;
+    var strokeIndex = Math.min(3, Math.floor(cyclePos / Math.PI));
+    var strokeFrac = (cyclePos - strokeIndex * Math.PI) / Math.PI;
+    var crankPhys = ((theta % TWO_PI) + TWO_PI) % TWO_PI;
+    return { strokeIndex: strokeIndex, strokeFrac: strokeFrac, crankPhys: crankPhys };
+  }
+
+  // ---------- Состояние симуляции ----------
+  var rpm = 600;             // об/мин, слайдер
+  var theta = 0;             // накопленный угол поворота коленвала, рад
+  var running = true;
+  var lastFrame = null;
+  var orbitAngle = 0.4;
+  var intakeBudget = 0, exhaustBudget = 0;
+  var lastStrokeIndex = -1;
+  var strokeNameEl = document.getElementById('strokeName');
+  var strokeIdxEl = document.getElementById('strokeIdx');
+  var valRpm = document.getElementById('valRpm');
+  var valTheta = document.getElementById('valTheta');
+  var valStroke = document.getElementById('valStroke');
+
+  function resetSim() {
+    theta = 0;
+    lastFrame = null;
+    intakeBudget = 0; exhaustBudget = 0;
+    lastStrokeIndex = -1;
+    resetParticles();
+  }
+
+  function updateBanner(strokeIndex) {
+    if (strokeIndex === lastStrokeIndex) return;
+    lastStrokeIndex = strokeIndex;
+    var s = STROKES[strokeIndex];
+    banner.style.setProperty('--stroke-color', s.color);
+    banner.style.background = 'linear-gradient(180deg, color-mix(in srgb, ' + s.color +
+      ' 30%, transparent), color-mix(in srgb, #1a2029 90%, transparent))';
+    strokeNameEl.textContent = s.name;
+    strokeIdxEl.textContent = 'Такт ' + (strokeIndex + 1) + ' из 4 · ' + s.sub;
+  }
+
+  function stepPhysics(dt) {
+    var omega = (rpm * Math.PI * 2) / 60; // рад/с
+    theta += omega * dt;
+    orbitAngle += 0.15 * dt;
+
+    var st = cycleState(theta);
+    updateBanner(st.strokeIndex);
+
+    var py = pistonY(st.crankPhys);
+    piston.position.set(0, py, 0);
+
+    var crankPin3 = new THREE.Vector3(R * Math.sin(st.crankPhys), R * Math.cos(st.crankPhys), 0);
+    var pistonPin3 = new THREE.Vector3(0, py, 0);
+    var origin3 = new THREE.Vector3(0, 0, 0);
+    crankPin.position.copy(crankPin3);
+    placeLink(crankWeb, origin3, crankPin3);
+    placeLink(rod, crankPin3, pistonPin3);
+
+    // Клапаны: плавный (синусоидальный) кулачковый профиль, открыт только
+    // в течение "своего" такта.
+    var intakeLift = st.strokeIndex === 0 ? Math.sin(Math.PI * st.strokeFrac) * VALVE_MAX_LIFT : 0;
+    var exhaustLift = st.strokeIndex === 3 ? Math.sin(Math.PI * st.strokeFrac) * VALVE_MAX_LIFT : 0;
+    intakeValve.position.y = VALVE_SEAT_Y - intakeLift;
+    exhaustValve.position.y = VALVE_SEAT_Y - exhaustLift;
+    intakeValve.userData.mat.color.copy(INTAKE_COLOR_CLOSED).lerp(INTAKE_COLOR_OPEN, intakeLift / VALVE_MAX_LIFT);
+    exhaustValve.userData.mat.color.copy(EXHAUST_COLOR_CLOSED).lerp(EXHAUST_COLOR_OPEN, exhaustLift / VALVE_MAX_LIFT);
+
+    // Вспышка в начале рабочего хода (масштабируется по фазе такта, не по
+    // абсолютному времени — работает одинаково на любых оборотах).
+    var flashIntensity = st.strokeIndex === 2 ? Math.exp(-st.strokeFrac * 11) : 0;
+    flashMat.opacity = flashIntensity * 0.85;
+    flash.scale.setScalar(1 + flashIntensity * 1.6);
+    flashLight.intensity = flashIntensity * 7;
+
+    // Частицы впуска/выпуска: скорость эмиссии пропорциональна угловой
+    // скорости (частиц на радиан коленвала — постоянна, вне зависимости от об/мин).
+    var RATE_PER_RAD = 45;
+    if (st.strokeIndex === 0 && intakeLift > 0.01) {
+      intakeBudget += RATE_PER_RAD * omega * dt;
+      var ivPos = new THREE.Vector3(intakeValve.position.x, intakeValve.position.y - 0.15, intakeValve.position.z);
+      while (intakeBudget >= 1) {
+        intakeBudget -= 1;
+        var vx = (Math.random() - 0.5) * 0.6 + VALVE_X * 0.6;
+        spawnParticle(ivPos, new THREE.Vector3(-vx * 0.5, -2.2 - Math.random() * 0.6, (Math.random() - 0.5) * 0.6),
+          0.35 + Math.random() * 0.15, 0.35, 0.6, 1.0);
+      }
+    }
+    if (st.strokeIndex === 3 && exhaustLift > 0.01) {
+      exhaustBudget += RATE_PER_RAD * omega * dt;
+      var evPos = new THREE.Vector3(exhaustValve.position.x, exhaustValve.position.y - 0.15, exhaustValve.position.z);
+      while (exhaustBudget >= 1) {
+        exhaustBudget -= 1;
+        spawnParticle(evPos, new THREE.Vector3(0.8 + Math.random() * 0.6, 1.8 + Math.random() * 0.7, (Math.random() - 0.5) * 0.6),
+          0.4 + Math.random() * 0.15, 0.62, 0.62, 0.66);
+      }
+    }
+    updateParticles(dt);
+
+    valRpm.textContent = rpm.toFixed(0);
+    valTheta.textContent = (st.crankPhys * 180 / Math.PI).toFixed(0);
+    valStroke.textContent = STROKES[st.strokeIndex].name + ' (' + (st.strokeIndex + 1) + '/4)';
+  }
+
+  function updateCamera() {
+    var Rc = 5.4;
+    camera.position.set(
+      CENTER.x + Rc * Math.sin(orbitAngle),
+      CENTER.y + 0.55,
+      CENTER.z + Rc * Math.cos(orbitAngle),
+    );
+    camera.lookAt(CENTER);
+  }
+
+  // ---------- Главный цикл ----------
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+    if (running) {
+      stepPhysics(dt);
+    }
+    updateCamera();
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Четырёхтактный ДВС');
+  SimUI.slider({
+    label: 'Обороты', min: 60, max: 3000, step: 10, value: rpm, unit: 'об/мин',
+    onChange: function (v) { rpm = v; },
+  });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: function () { resetSim(); },
+  });
+
+  // ---------- Инициализация ----------
+  window.addEventListener('resize', resize);
+  resize();
+  stepPhysics(0); // выставить начальную позу (θ=0) до первого кадра
+  updateCamera();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
