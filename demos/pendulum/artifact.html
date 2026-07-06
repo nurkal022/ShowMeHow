@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Математический маятник</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
+  canvas.scene { position: fixed; top: 0; left: 0; display: block; }
+  #bg { z-index: 0; }
+  #fx { z-index: 1; }
+  #chart-panel {
+    position: fixed; right: 12px; top: 12px; z-index: 10;
+    width: 300px; padding: 12px 14px;
+    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
+    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  #chart-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
+  #chart-legend { display: flex; gap: 10px; font-size: 10.5px; color: var(--sim-muted, #8b95a3); margin-top: 6px; flex-wrap: wrap; }
+  #chart-legend span { display: inline-flex; align-items: center; gap: 4px; }
+  #chart-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  #formula-panel {
+    position: fixed; left: 12px; bottom: 12px; z-index: 10;
+    width: 300px; padding: 14px;
+    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
+    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  #formula-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
+  #formula-katex { font-size: 18px; margin-bottom: 8px; }
+  #formula-nums { font-size: 12px; line-height: 1.6; color: var(--sim-muted, #8b95a3); font-variant-numeric: tabular-nums; }
+  #formula-nums b { color: var(--sim-text, #e8ecf1); font-weight: 600; }
+  #formula-note { font-size: 10.5px; margin-top: 8px; color: #5c6675; line-height: 1.4; }
+</style>
+</head>
+<body>
+<canvas id="bg" class="scene"></canvas>
+<canvas id="fx" class="scene"></canvas>
+
+<div id="chart-panel">
+  <h2>Энергия во времени (окно 20 с)</h2>
+  <canvas id="energyChart" width="272" height="170"></canvas>
+  <div id="chart-legend">
+    <span><i style="background:#4f8ff7"></i>Eкин</span>
+    <span><i style="background:#f7b84f"></i>Eпот</span>
+    <span><i style="background:#7ee787"></i>Eполн</span>
+  </div>
+</div>
+
+<div id="formula-panel">
+  <h2>Период колебаний</h2>
+  <div id="formula-katex">T = 2\pi\sqrt{L/g}</div>
+  <div id="formula-nums">
+    L = <b id="valL">-</b> м, затухание b = <b id="valB">-</b><br>
+    T (расчёт) = <b id="valTheor">-</b> с<br>
+    T (измерено, переходы θ=0) = <b id="valMeas">-</b> с<br>
+    t (симуляция) = <b id="valT">-</b> с
+  </div>
+  <div id="formula-note">
+    Масса груза принята равной 1 кг (энергии — в Дж/кг). Интегрирование —
+    полунеявный метод Эйлера с фиксированным субшагом ~4 мс (накопитель времени),
+    что не даёт энергии нарастать при выключенном затухании.
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- KaTeX (с деградацией в текст, если CDN недоступен) ----------
+  function renderFormula(el, tex) {
+    if (typeof katex !== 'undefined') {
+      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
+    }
+    el.textContent = tex;
+  }
+  renderFormula(document.getElementById('formula-katex'), 'T = 2\\pi\\sqrt{L/g}');
+
+  // ---------- Canvas setup ----------
+  var bg = document.getElementById('bg');
+  var fx = document.getElementById('fx');
+  var bgCtx = bg.getContext('2d');
+  var fxCtx = fx.getContext('2d');
+
+  var W = 0, H = 0;
+  var pivot = { x: 0, y: 0 };
+  var PPM = 140; // пикселей на метр (пересчитывается при resize)
+
+  var chartPanel = document.getElementById('chart-panel');
+
+  // ---------- Позиционирование панели графика (избегаем перекрытия с SimUI) ----------
+  function layoutChartPanel() {
+    chartPanel.style.top = '12px';
+    var simPanel = document.querySelector('.sim-panel');
+    if (!simPanel) return;
+    var simRect = simPanel.getBoundingClientRect();
+    var panelRect = chartPanel.getBoundingClientRect();
+    var overlap = panelRect.left < simRect.right && panelRect.right > simRect.left &&
+      panelRect.top < simRect.bottom && panelRect.bottom > simRect.top;
+    if (overlap) chartPanel.style.top = (simRect.bottom + 14) + 'px';
+  }
+
+  // ---------- Геометрия сцены: точка подвеса вверху по центру области слева от графика ----------
+  function layout() {
+    var chartRect = chartPanel.getBoundingClientRect();
+    var leftAreaRight = Math.max(W * 0.35, chartRect.left - 24);
+    pivot.x = leftAreaRight * 0.5;
+    pivot.y = Math.max(70, H * 0.12);
+    var availH = H - pivot.y - 40;
+    PPM = Math.max(60, Math.min(220, availH / 3.3)); // хватает места для L до 3м
+  }
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    [bg, fx].forEach(function (c) {
+      c.width = Math.round(W * dpr);
+      c.height = Math.round(H * dpr);
+      c.style.width = W + 'px';
+      c.style.height = H + 'px';
+    });
+    bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layoutChartPanel();
+    layout();
+    drawStatic();
+    fxCtx.clearRect(0, 0, W, H);
+  }
+
+  // ---------- Статичная сцена: крепление и линия равновесия ----------
+  function drawStatic() {
+    bgCtx.clearRect(0, 0, W, H);
+    bgCtx.fillStyle = '#101318';
+    bgCtx.fillRect(0, 0, W, H);
+
+    var ceilingY = Math.max(0, pivot.y - 8);
+    bgCtx.fillStyle = '#1a2029';
+    bgCtx.fillRect(0, 0, W, ceilingY);
+    bgCtx.strokeStyle = '#2a3341';
+    bgCtx.lineWidth = 2;
+    bgCtx.beginPath();
+    bgCtx.moveTo(0, ceilingY);
+    bgCtx.lineTo(W, ceilingY);
+    bgCtx.stroke();
+
+    // штриховка кронштейна над точкой подвеса
+    bgCtx.strokeStyle = 'rgba(140,160,190,0.35)';
+    bgCtx.lineWidth = 1.4;
+    var hatchN = 7, hatchSpan = 46;
+    for (var i = -hatchN; i <= hatchN; i++) {
+      var hx = pivot.x + i * (hatchSpan / hatchN);
+      bgCtx.beginPath();
+      bgCtx.moveTo(hx, ceilingY);
+      bgCtx.lineTo(hx - 8, ceilingY - 10);
+      bgCtx.stroke();
+    }
+
+    // вертикальная пунктирная линия положения равновесия (θ=0)
+    bgCtx.save();
+    bgCtx.setLineDash([5, 6]);
+    bgCtx.strokeStyle = 'rgba(140,160,190,0.28)';
+    bgCtx.lineWidth = 1.4;
+    bgCtx.beginPath();
+    bgCtx.moveTo(pivot.x, pivot.y);
+    bgCtx.lineTo(pivot.x, H - 20);
+    bgCtx.stroke();
+    bgCtx.restore();
+
+    bgCtx.fillStyle = '#5c6675';
+    bgCtx.font = '13px system-ui, sans-serif';
+    bgCtx.fillText('маятник (боковой вид)', 14, H - 14);
+  }
+
+  // ---------- Физика: θ'' = -(g/L)sinθ - bθ' ----------
+  var G = 9.81;
+  var L = 1.5;        // м, слайдер "Длина нити"
+  var ampDeg0 = 45;    // °, слайдер "Начальная амплитуда" — применяется только при сбросе
+  var damping = 0.05;  // слайдер "Затухание"
+
+  var theta = ampDeg0 * Math.PI / 180;
+  var omega = 0;
+  var thetaPrev = theta;
+
+  var FIXED_H = 0.004; // фиксированный субшаг интегрирования, с
+  var accumulator = 0;
+  var running = true;
+  var simT = 0;
+  var lastFrame = null;
+
+  var lastPosCrossT = null; // время последнего перехода θ через 0 в сторону возрастания
+  var measuredPeriod = null;
+
+  function energies() {
+    var v = L * omega; // тангенциальная скорость груза, м/с (масса = 1 кг)
+    var Ek = 0.5 * v * v;
+    var Ep = G * L * (1 - Math.cos(theta));
+    return { Ek: Ek, Ep: Ep, Et: Ek + Ep };
+  }
+
+  function substep() {
+    // полунеявный (симплектический) метод Эйлера: сначала скорость, потом угол
+    // на уже обновлённой скорости — это и даёт отсутствие векового роста энергии.
+    var alpha = -(G / L) * Math.sin(theta) - damping * omega;
+    omega += alpha * FIXED_H;
+    thetaPrev = theta;
+    theta += omega * FIXED_H;
+    simT += FIXED_H;
+    if (thetaPrev < 0 && theta >= 0) {
+      if (lastPosCrossT !== null) measuredPeriod = simT - lastPosCrossT;
+      lastPosCrossT = simT;
+    }
+  }
+
+  function stepPhysics(dt) {
+    accumulator += dt;
+    if (accumulator > 0.25) accumulator = 0.25; // защита от "спирали смерти"
+    while (accumulator >= FIXED_H) {
+      substep();
+      accumulator -= FIXED_H;
+    }
+  }
+
+  function resetSim() {
+    theta = ampDeg0 * Math.PI / 180;
+    omega = 0;
+    thetaPrev = theta;
+    accumulator = 0;
+    simT = 0;
+    lastFrame = null;
+    lastPosCrossT = null;
+    measuredPeriod = null;
+    lastChartT = -1;
+    chartData.length = 0;
+    resetChart();
+    fxCtx.clearRect(0, 0, W, H);
+  }
+
+  // ---------- Отрисовка маятника (нить, груз, лёгкий след) ----------
+  function bobPos() {
+    // геометрия зависит только от текущих θ, L и PPM — при смене длины на лету
+    // угол/скорость не трогаются, поэтому "телепорта" положения не возникает,
+    // груз просто оказывается на другом радиусе от той же точки подвеса.
+    return { x: pivot.x + Math.sin(theta) * L * PPM, y: pivot.y + Math.cos(theta) * L * PPM };
+  }
+
+  function drawFrame() {
+    // лёгкое затухание предыдущего кадра -> едва заметный след траектории груза
+    fxCtx.globalCompositeOperation = 'destination-out';
+    fxCtx.fillStyle = 'rgba(0,0,0,0.06)';
+    fxCtx.fillRect(0, 0, W, H);
+    fxCtx.globalCompositeOperation = 'source-over';
+
+    var bob = bobPos();
+
+    fxCtx.strokeStyle = '#8b95a3';
+    fxCtx.lineWidth = 2;
+    fxCtx.beginPath();
+    fxCtx.moveTo(pivot.x, pivot.y);
+    fxCtx.lineTo(bob.x, bob.y);
+    fxCtx.stroke();
+
+    fxCtx.fillStyle = '#e8ecf1';
+    fxCtx.beginPath();
+    fxCtx.arc(pivot.x, pivot.y, 4, 0, Math.PI * 2);
+    fxCtx.fill();
+
+    var grad = fxCtx.createRadialGradient(bob.x - 5, bob.y - 5, 2, bob.x, bob.y, 16);
+    grad.addColorStop(0, '#8fb4ff');
+    grad.addColorStop(1, '#3a66c9');
+    fxCtx.fillStyle = grad;
+    fxCtx.beginPath();
+    fxCtx.arc(bob.x, bob.y, 14, 0, Math.PI * 2);
+    fxCtx.fill();
+    fxCtx.strokeStyle = '#1c3a7a';
+    fxCtx.lineWidth = 1.5;
+    fxCtx.stroke();
+  }
+
+  // ---------- Chart.js: Eкин, Eпот, Eполн от времени (скользящее окно 20с) ----------
+  var chartData = []; // {t, Ek, Ep, Et}
+  var WINDOW_S = 20;
+  var CHART_DT = 0.1; // обновление графика не чаще ~10Гц
+  var lastChartT = -1;
+  var energyChart = null;
+
+  function initChart() {
+    var ctx = document.getElementById('energyChart').getContext('2d');
+    energyChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [
+          { label: 'Eкин', data: [], borderColor: '#4f8ff7', backgroundColor: 'transparent', borderWidth: 1.6, pointRadius: 0, tension: 0.15 },
+          { label: 'Eпот', data: [], borderColor: '#f7b84f', backgroundColor: 'transparent', borderWidth: 1.6, pointRadius: 0, tension: 0.15 },
+          { label: 'Eполн', data: [], borderColor: '#7ee787', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.15 },
+        ],
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        normalized: true,
+        parsing: false,
+        interaction: { intersect: false },
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          x: { type: 'linear', ticks: { color: '#5c6675', font: { size: 9 }, maxTicksLimit: 5 }, grid: { color: 'rgba(140,160,190,0.08)' } },
+          y: { ticks: { color: '#5c6675', font: { size: 9 }, maxTicksLimit: 5 }, grid: { color: 'rgba(140,160,190,0.08)' }, beginAtZero: true },
+        },
+      },
+    });
+  }
+
+  function resetChart() {
+    if (!energyChart) return;
+    energyChart.data.datasets[0].data = [];
+    energyChart.data.datasets[1].data = [];
+    energyChart.data.datasets[2].data = [];
+    energyChart.update('none');
+  }
+
+  function pushChartPoint(t, e) {
+    chartData.push({ t: t, Ek: e.Ek, Ep: e.Ep, Et: e.Et });
+    var cutoff = t - WINDOW_S;
+    while (chartData.length && chartData[0].t < cutoff) chartData.shift();
+    var d0 = [], d1 = [], d2 = [];
+    for (var i = 0; i < chartData.length; i++) {
+      d0.push({ x: chartData[i].t, y: chartData[i].Ek });
+      d1.push({ x: chartData[i].t, y: chartData[i].Ep });
+      d2.push({ x: chartData[i].t, y: chartData[i].Et });
+    }
+    energyChart.data.datasets[0].data = d0;
+    energyChart.data.datasets[1].data = d1;
+    energyChart.data.datasets[2].data = d2;
+    var minX = chartData.length ? chartData[0].t : 0;
+    energyChart.options.scales.x.min = minX;
+    energyChart.options.scales.x.max = minX + WINDOW_S;
+    energyChart.update('none');
+  }
+
+  // ---------- HUD ----------
+  var elL = document.getElementById('valL');
+  var elB = document.getElementById('valB');
+  var elTheor = document.getElementById('valTheor');
+  var elMeas = document.getElementById('valMeas');
+  var elT = document.getElementById('valT');
+
+  function updateHud() {
+    elL.textContent = L.toFixed(2);
+    elB.textContent = damping.toFixed(2);
+    elTheor.textContent = (2 * Math.PI * Math.sqrt(L / G)).toFixed(2);
+    elMeas.textContent = measuredPeriod !== null ? measuredPeriod.toFixed(2) : '—';
+    elT.textContent = simT.toFixed(1);
+  }
+
+  // ---------- Главный цикл (dt-based, не завязан на FPS) ----------
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+    if (running) {
+      stepPhysics(dt);
+      drawFrame();
+      if (simT - lastChartT >= CHART_DT) {
+        lastChartT = simT;
+        pushChartPoint(simT, energies());
+      }
+    }
+    // в паузе fx-канвас и график не трогаем: и картинка, и время (simT) замирают
+    updateHud();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Математический маятник');
+  SimUI.slider({
+    label: 'Длина нити', min: 0.5, max: 3, step: 0.05, value: L, unit: 'м',
+    onChange: function (v) { L = v; }, // геометрия пересчитывается по θ,L,PPM — угол не трогаем
+  });
+  SimUI.slider({
+    label: 'Начальная амплитуда', min: 5, max: 90, step: 1, value: ampDeg0, unit: '°',
+    onChange: function (v) { ampDeg0 = v; }, // применится при следующем сбросе
+  });
+  SimUI.slider({
+    label: 'Затухание', min: 0, max: 0.5, step: 0.01, value: damping, unit: '',
+    onChange: function (v) { damping = v; },
+  });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: function () { resetSim(); },
+  });
+
+  // ---------- Инициализация ----------
+  window.addEventListener('resize', resize);
+  initChart();
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
