@@ -24,7 +24,7 @@ function artifactPath(id: string): string {
 }
 
 export function createSimulation(
-  input: { title: string; prompt: string; subject: string; tags: string[]; warning?: string },
+  input: { title: string; prompt: string; subject: string; tags: string[]; warning?: string; demo?: string },
   html: string,
 ): SimulationMeta {
   const now = new Date().toISOString();

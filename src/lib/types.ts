@@ -26,6 +26,8 @@ export interface SimulationMeta {
   updatedAt: string; // ISO
   /** Предупреждение, если пайплайн деградировал (нет vision / все кандидаты сломаны) */
   warning?: string;
+  /** slug вшитой демки, если симуляция установлена из demos/ (для идемпотентности install) */
+  demo?: string;
 }
 
 export interface SimParameter {
