@@ -5,3 +5,5 @@ evals/results/
 test-results/
 .superpowers/
 *.tsbuildinfo
+e2e/.data/
+playwright-report/
