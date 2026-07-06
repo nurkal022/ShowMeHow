@@ -4,6 +4,12 @@ import crypto from 'node:crypto';
 import { dataDir } from './settings';
 import type { SimulationMeta } from './types';
 
+function assertSafe(segment: string): void {
+  if (!/^[A-Za-z0-9_.-]+$/.test(segment) || segment === '.' || segment === '..') {
+    throw new Error('invalid path segment');
+  }
+}
+
 function simsRoot(): string {
   return path.join(dataDir(), 'simulations');
 }
@@ -30,10 +36,12 @@ export function createSimulation(
 }
 
 export function getMeta(id: string): SimulationMeta {
+  assertSafe(id);
   return JSON.parse(fs.readFileSync(metaPath(id), 'utf8'));
 }
 
 export function getArtifact(id: string): string {
+  assertSafe(id);
   return fs.readFileSync(artifactPath(id), 'utf8');
 }
 
@@ -52,30 +60,47 @@ function touch(id: string): void {
 }
 
 export function updateArtifact(id: string, html: string): void {
+  assertSafe(id);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  fs.renameSync(artifactPath(id), path.join(simDir(id), 'history', `${stamp}.html`));
+  const historyDir = path.join(simDir(id), 'history');
+  let historyFile = path.join(historyDir, `${stamp}.html`);
+
+  // Handle collision: if file exists, append numeric suffix until unique
+  let suffix = 2;
+  while (fs.existsSync(historyFile)) {
+    historyFile = path.join(historyDir, `${stamp}-${suffix}.html`);
+    suffix++;
+  }
+
+  fs.renameSync(artifactPath(id), historyFile);
   fs.writeFileSync(artifactPath(id), html);
   touch(id);
 }
 
 export function listHistory(id: string): string[] {
+  assertSafe(id);
   return fs.readdirSync(path.join(simDir(id), 'history')).sort().reverse();
 }
 
 export function restoreVersion(id: string, name: string): void {
+  assertSafe(id);
+  assertSafe(name);
   const restored = fs.readFileSync(path.join(simDir(id), 'history', name), 'utf8');
   updateArtifact(id, restored);
 }
 
 export function deleteSimulation(id: string): void {
+  assertSafe(id);
   fs.rmSync(simDir(id), { recursive: true, force: true });
 }
 
 export function saveThumbnail(id: string, png: Buffer): void {
+  assertSafe(id);
   fs.writeFileSync(path.join(simDir(id), 'thumbnail.png'), png);
 }
 
 export function getThumbnailPath(id: string): string | null {
+  assertSafe(id);
   const p = path.join(simDir(id), 'thumbnail.png');
   return fs.existsSync(p) ? p : null;
 }

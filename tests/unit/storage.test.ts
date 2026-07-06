@@ -46,4 +46,22 @@ describe('storage', () => {
     saveThumbnail(meta.id, Buffer.from([137, 80]));
     expect(getThumbnailPath(meta.id)).toMatch(/thumbnail\.png$/);
   });
+
+  it('updateArtifact in tight loop preserves all versions (no timestamp collision)', () => {
+    const meta = createSimulation(input, '<html>v1</html>');
+    updateArtifact(meta.id, '<html>v2</html>');
+    updateArtifact(meta.id, '<html>v3</html>');
+    updateArtifact(meta.id, '<html>v4</html>');
+    expect(listHistory(meta.id)).toHaveLength(3);
+  });
+
+  it('getMeta rejects path traversal in id', () => {
+    expect(() => getMeta('../evil')).toThrow(/invalid path segment/);
+  });
+
+  it('restoreVersion rejects path traversal in name', () => {
+    const meta = createSimulation(input, '<html>v1</html>');
+    updateArtifact(meta.id, '<html>v2</html>');
+    expect(() => restoreVersion(meta.id, '../../etc/passwd')).toThrow(/invalid path segment/);
+  });
 });
