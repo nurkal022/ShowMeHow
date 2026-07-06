@@ -47,10 +47,16 @@ export function getArtifact(id: string): string {
 
 export function listSimulations(): SimulationMeta[] {
   if (!fs.existsSync(simsRoot())) return [];
-  return fs.readdirSync(simsRoot())
-    .filter((d) => fs.existsSync(metaPath(d)))
-    .map((d) => getMeta(d))
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const metas: SimulationMeta[] = [];
+  for (const d of fs.readdirSync(simsRoot())) {
+    if (!fs.existsSync(metaPath(d))) continue;
+    try {
+      metas.push(getMeta(d));
+    } catch {
+      // повреждённый meta.json не должен ронять всю библиотеку — пропускаем запись
+    }
+  }
+  return metas.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 function touch(id: string): void {

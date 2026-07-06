@@ -55,7 +55,7 @@ export default function Library() {
             <p className="muted">{s.subject} · {new Date(s.updatedAt).toLocaleDateString('ru')}</p>
             {s.warning && <p className="warn">⚠ {s.warning}</p>}
             <div className="card-actions">
-              <a href={`/present/${s.id}`} target="_blank">▶ Показать</a>
+              <a href={`/present/${s.id}`} target="_blank" rel="noopener noreferrer">▶ Показать</a>
               <a href={`/api/simulations/${s.id}/export`}>⬇ Экспорт</a>
               <button onClick={() => remove(s.id)}>Удалить</button>
             </div>

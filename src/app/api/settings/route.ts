@@ -8,7 +8,10 @@ export async function GET() {
   const s = loadSettings();
   return NextResponse.json({
     ...s,
-    providers: s.providers.map((p) => ({ ...p, apiKey: MASK + p.apiKey.slice(-4) })),
+    providers: s.providers.map((p) => ({
+      ...p,
+      apiKey: p.apiKey.length > 4 ? MASK + p.apiKey.slice(-4) : MASK,
+    })),
   });
 }
 

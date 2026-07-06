@@ -23,6 +23,14 @@ describe('settings api', () => {
     expect(body.providers[0].apiKey).toBe('••••1234');
   });
 
+  it('GET masks short keys without leaking them', async () => {
+    const shortKeyProfile = { ...profile, id: 'p2', apiKey: 'abcd' };
+    saveSettings({ activeProviderId: 'p2', providers: [shortKeyProfile], qualityMode: 'max' });
+    const res = await getSettings();
+    const body = await res.json();
+    expect(body.providers[0].apiKey).toBe('••••');
+  });
+
   it('PUT with masked key keeps original', async () => {
     saveSettings({ activeProviderId: 'p1', providers: [profile], qualityMode: 'max' });
     const req = new Request('http://t/api/settings', { method: 'PUT',

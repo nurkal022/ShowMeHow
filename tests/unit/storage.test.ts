@@ -64,4 +64,13 @@ describe('storage', () => {
     updateArtifact(meta.id, '<html>v2</html>');
     expect(() => restoreVersion(meta.id, '../../etc/passwd')).toThrow(/invalid path segment/);
   });
+
+  it('listSimulations skips entries with corrupt meta.json instead of throwing', () => {
+    const meta = createSimulation(input, '<html>v1</html>');
+    const corruptDir = path.join(process.env.SHOWMEHOW_DATA_DIR!, 'simulations', 'corrupt-id');
+    fs.mkdirSync(corruptDir, { recursive: true });
+    fs.writeFileSync(path.join(corruptDir, 'meta.json'), '{ not valid json');
+    const list = listSimulations();
+    expect(list.map((m) => m.id)).toEqual([meta.id]);
+  });
 });
