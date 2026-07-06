@@ -17,6 +17,7 @@ export default function Workbench() {
   const [mode, setMode] = useState<QualityMode>('max');
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -50,10 +51,39 @@ export default function Workbench() {
       }
       const { html } = await res.json();
       setSimId(id); setHtml(html); setPhase('ready');
+      loadHistory(id);
     } catch (err) {
       setError('Не удалось загрузить симуляцию: '
         + (err instanceof Error ? err.message : String(err)));
       setPhase('error');
+    }
+  }
+
+  async function loadHistory(id: string) {
+    try {
+      const res = await fetch(`/api/simulations/${id}/history`);
+      if (res.ok) setHistory(await res.json());
+    } catch {
+      // история версий не критична — просто не показываем список
+    }
+  }
+
+  async function restoreVersion(name: string) {
+    if (!simId) return;
+    try {
+      const res = await fetch(`/api/simulations/${simId}/history`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const body = await res.json();
+      if (res.ok) {
+        setHtml(body.html);
+        loadHistory(simId);
+      } else {
+        setError(body.error ?? `Ошибка сервера (${res.status})`);
+      }
+    } catch (err) {
+      setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
     }
   }
 
@@ -117,7 +147,7 @@ export default function Workbench() {
         body: JSON.stringify({ instruction }),
       });
       const body = await res.json();
-      if (res.ok) { setHtml(body.html); setPhase('ready'); }
+      if (res.ok) { setHtml(body.html); setPhase('ready'); loadHistory(simId); }
       else { setError(body.error ?? `Ошибка сервера (${res.status})`); setPhase('error'); }
     } catch (err) {
       setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
@@ -152,6 +182,7 @@ export default function Workbench() {
         {hasSim && phase !== 'generating' && (
           <button className="link-btn" onClick={() => {
             setPhase('idle'); setSimId(null); setHtml(null); setEvents([]); setError(null);
+            setHistory([]);
           }}>+ начать новую</button>
         )}
         <ProgressFeed events={events} />
@@ -190,8 +221,21 @@ export default function Workbench() {
         <PreviewFrame html={html} />
         {simId && (
           <div className="preview-actions">
-            <a href={`/present/${simId}`} target="_blank">▶ Режим презентации</a>
+            <a href={`/present/${simId}`} target="_blank" rel="noopener noreferrer">▶ Режим презентации</a>
             <a href={`/api/simulations/${simId}/export`}>⬇ Экспорт HTML</a>
+            {history.length > 0 && (
+              <details className="history-dropdown">
+                <summary>История версий ({history.length})</summary>
+                <ul>
+                  {history.map((name) => (
+                    <li key={name}>
+                      <span>{name}</span>
+                      <button onClick={() => restoreVersion(name)}>Восстановить</button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
           </div>
         )}
       </section>

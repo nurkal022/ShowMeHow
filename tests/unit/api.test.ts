@@ -5,8 +5,9 @@ import path from 'node:path';
 import { GET as getSettings, PUT as putSettings } from '@/app/api/settings/route';
 import { GET as listSims } from '@/app/api/simulations/route';
 import { GET as getSim, DELETE as delSim } from '@/app/api/simulations/[id]/route';
+import { GET as getHistory, POST as postHistory } from '@/app/api/simulations/[id]/history/route';
 import { saveSettings, loadSettings } from '@/lib/settings';
-import { createSimulation } from '@/lib/storage';
+import { createSimulation, updateArtifact } from '@/lib/storage';
 
 beforeEach(() => {
   process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-'));
@@ -54,5 +55,50 @@ describe('simulations api', () => {
     expect(one.html).toBe('<html>x</html>');
     await delSim(new Request('http://t'), { params: Promise.resolve({ id: meta.id }) });
     expect(await (await listSims()).json()).toHaveLength(0);
+  });
+});
+
+describe('history api', () => {
+  it('lists history after an update and restores a version round-trip', async () => {
+    const meta = createSimulation(
+      { title: 'т', prompt: 'п', subject: 'Физика', tags: [] }, '<html>v1</html>');
+    updateArtifact(meta.id, '<html>v2</html>');
+    const params = Promise.resolve({ id: meta.id });
+
+    const list = await (await getHistory(new Request('http://t'), { params })).json();
+    expect(list).toHaveLength(1);
+
+    const res = await postHistory(
+      new Request('http://t', { method: 'POST', body: JSON.stringify({ name: list[0] }) }),
+      { params },
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.html).toBe('<html>v1</html>');
+  });
+
+  it('GET returns 404 for an unknown simulation id', async () => {
+    const res = await getHistory(new Request('http://t'),
+      { params: Promise.resolve({ id: 'does-not-exist' }) });
+    expect(res.status).toBe(404);
+  });
+
+  it('POST returns 400 for a path-traversal name', async () => {
+    const meta = createSimulation(
+      { title: 'т', prompt: 'п', subject: 'Физика', tags: [] }, '<html>v1</html>');
+    updateArtifact(meta.id, '<html>v2</html>');
+    const res = await postHistory(
+      new Request('http://t', { method: 'POST', body: JSON.stringify({ name: '../../etc/passwd' }) }),
+      { params: Promise.resolve({ id: meta.id }) },
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('POST returns 404 for an unknown simulation id', async () => {
+    const res = await postHistory(
+      new Request('http://t', { method: 'POST', body: JSON.stringify({ name: 'whatever.html' }) }),
+      { params: Promise.resolve({ id: 'does-not-exist' }) },
+    );
+    expect(res.status).toBe(404);
   });
 });
