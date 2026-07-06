@@ -26,52 +26,88 @@ export default function Workbench() {
   }, []);
 
   async function openSimulation(id: string) {
-    const res = await fetch(`/api/simulations/${id}`);
-    if (!res.ok) return;
-    const { html } = await res.json();
-    setSimId(id); setHtml(html); setPhase('ready');
+    try {
+      const res = await fetch(`/api/simulations/${id}`);
+      if (!res.ok) {
+        setError('Не удалось загрузить симуляцию');
+        setPhase('error');
+        return;
+      }
+      const { html } = await res.json();
+      setSimId(id); setHtml(html); setPhase('ready');
+    } catch (err) {
+      setError('Не удалось загрузить симуляцию: '
+        + (err instanceof Error ? err.message : String(err)));
+      setPhase('error');
+    }
   }
 
   async function consumeSSE(res: Response) {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const parts = buf.split('\n\n');
-      buf = parts.pop()!;
-      for (const part of parts) {
-        if (!part.startsWith('data: ')) continue;
-        const e = JSON.parse(part.slice(6)) as PipelineEvent;
-        setEvents((prev) => [...prev, e]);
-        if (e.type === 'done') { await openSimulation(e.simulationId); }
-        if (e.type === 'error') { setError(e.message); setPhase('error'); }
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop()!;
+        for (const part of parts) {
+          if (!part.startsWith('data: ')) continue;
+          const e = JSON.parse(part.slice(6)) as PipelineEvent;
+          setEvents((prev) => [...prev, e]);
+          if (e.type === 'done') { await openSimulation(e.simulationId); }
+          if (e.type === 'error') { setError(e.message); setPhase('error'); }
+        }
       }
+    } catch (err) {
+      setError('Ошибка при получении событий: '
+        + (err instanceof Error ? err.message : String(err)));
+      setPhase('error');
     }
   }
 
-  async function generate() {
+  async function generate(text: string) {
     setPhase('generating'); setEvents([]); setError(null); setHtml(null);
-    const res = await fetch('/api/generate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, imageDataUrl: image ?? undefined, mode }),
-    });
-    await consumeSSE(res);
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text, imageDataUrl: image ?? undefined, mode }),
+      });
+      if (!res.ok) {
+        let message = `Ошибка сервера (${res.status})`;
+        try {
+          const body = await res.json();
+          if (body?.error) message = String(body.error);
+        } catch { /* тело не JSON — оставляем сообщение со статусом */ }
+        setError(message);
+        setPhase('error');
+        return;
+      }
+      await consumeSSE(res);
+    } catch (err) {
+      setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
+      setPhase('error');
+    }
   }
 
   async function refine(instruction: string) {
     if (!simId) return;
-    setPhase('generating');
+    setPhase('generating'); setError(null);
     setEvents([{ type: 'stage', stage: 'refining' }]);
-    const res = await fetch(`/api/simulations/${simId}/refine`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instruction }),
-    });
-    const body = await res.json();
-    if (res.ok) { setHtml(body.html); setPhase('ready'); }
-    else { setError(body.error); setPhase('error'); }
+    try {
+      const res = await fetch(`/api/simulations/${simId}/refine`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction }),
+      });
+      const body = await res.json();
+      if (res.ok) { setHtml(body.html); setPhase('ready'); }
+      else { setError(body.error ?? `Ошибка сервера (${res.status})`); setPhase('error'); }
+    } catch (err) {
+      setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
+      setPhase('error');
+    }
   }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -86,23 +122,27 @@ export default function Workbench() {
     const text = prompt.trim();
     if (!text || phase === 'generating') return;
     setPrompt('');
-    if (phase === 'ready' && simId) refine(text);
-    else generate();
+    // Пока открыта симуляция (simId есть) — любой запрос это доработка,
+    // даже после ошибки; новая генерация только после «+ начать новую».
+    if (simId) refine(text);
+    else generate(text);
   }
+
+  const hasSim = simId !== null;
 
   return (
     <div className="workbench">
       <aside className="chat-pane">
-        <h2>{phase === 'ready' ? 'Доработка' : 'Новая симуляция'}</h2>
-        {phase === 'ready' && (
+        <h2>{hasSim ? 'Доработка' : 'Новая симуляция'}</h2>
+        {hasSim && phase !== 'generating' && (
           <button className="link-btn" onClick={() => {
-            setPhase('idle'); setSimId(null); setHtml(null); setEvents([]);
+            setPhase('idle'); setSimId(null); setHtml(null); setEvents([]); setError(null);
           }}>+ начать новую</button>
         )}
         <ProgressFeed events={events} />
         {error && <div className="error-box">{error}</div>}
         <div className="composer">
-          {phase !== 'ready' && (
+          {!hasSim && (
             <div className="composer-row">
               <select value={mode} onChange={(e) => setMode(e.target.value as QualityMode)}>
                 <option value="max">Максимум (3-6 мин)</option>
@@ -121,13 +161,13 @@ export default function Workbench() {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
             }}
-            placeholder={phase === 'ready'
+            placeholder={hasSim
               ? 'Что изменить? Например: сделай частицы медленнее'
               : 'Опишите симуляцию. Например: диффузия молекул духов в комнате'}
             rows={3}
           />
           <button className="primary" disabled={phase === 'generating'} onClick={submit}>
-            {phase === 'generating' ? 'Работаю…' : phase === 'ready' ? 'Доработать' : 'Создать'}
+            {phase === 'generating' ? 'Работаю…' : hasSim ? 'Доработать' : 'Создать'}
           </button>
         </div>
       </aside>
