@@ -1,12 +1,14 @@
 import { makeCtx, runPipeline } from '@/lib/pipeline/run';
+import { resolveMode } from '@/lib/settings';
 import type { PipelineEvent, QualityMode } from '@/lib/types';
 
 export const maxDuration = 600;
 
 export async function POST(req: Request) {
-  const { prompt, imageDataUrl, mode = 'max' } = (await req.json()) as {
+  const { prompt, imageDataUrl, mode: bodyMode } = (await req.json()) as {
     prompt: string; imageDataUrl?: string; mode?: QualityMode;
   };
+  const mode = resolveMode(bodyMode);
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {

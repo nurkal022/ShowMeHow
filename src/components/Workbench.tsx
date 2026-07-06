@@ -25,6 +25,21 @@ export default function Workbench() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    // Подтягиваем сохранённый по умолчанию режим качества из настроек, не блокируя
+    // интерфейс: пока запрос не завершился (или упал), остаётся дефолт 'max'.
+    (async () => {
+      try {
+        const res = await fetch('/api/settings');
+        if (!res.ok) return;
+        const s = await res.json();
+        if (s?.qualityMode) setMode(s.qualityMode);
+      } catch {
+        // настройки недоступны — остаёмся на дефолтном режиме
+      }
+    })();
+  }, []);
+
   async function openSimulation(id: string) {
     try {
       const res = await fetch(`/api/simulations/${id}`);

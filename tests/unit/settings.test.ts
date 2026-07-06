@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadSettings, saveSettings, activeProvider, dataDir } from '@/lib/settings';
+import { loadSettings, saveSettings, activeProvider, dataDir, resolveMode } from '@/lib/settings';
 
 describe('settings', () => {
   beforeEach(() => {
@@ -30,5 +30,25 @@ describe('settings', () => {
 
   it('activeProvider is null when id not found', () => {
     expect(activeProvider(loadSettings())).toBeNull();
+  });
+});
+
+describe('resolveMode', () => {
+  beforeEach(() => {
+    process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-'));
+  });
+
+  it('uses explicit body mode when provided', () => {
+    saveSettings({ ...loadSettings(), qualityMode: 'fast' });
+    expect(resolveMode('standard')).toBe('standard');
+  });
+
+  it('falls back to saved qualityMode when body mode is undefined', () => {
+    saveSettings({ ...loadSettings(), qualityMode: 'standard' });
+    expect(resolveMode(undefined)).toBe('standard');
+  });
+
+  it('falls back to default max when nothing is saved', () => {
+    expect(resolveMode(undefined)).toBe('max');
   });
 });

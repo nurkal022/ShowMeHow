@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Settings, ProviderProfile } from './types';
+import type { Settings, ProviderProfile, QualityMode } from './types';
 
 export function dataDir(): string {
   return process.env.SHOWMEHOW_DATA_DIR ?? path.join(process.cwd(), 'data');
@@ -22,4 +22,12 @@ export function saveSettings(s: Settings): void {
 
 export function activeProvider(s: Settings = loadSettings()): ProviderProfile | null {
   return s.providers.find((p) => p.id === s.activeProviderId) ?? null;
+}
+
+/**
+ * Резолвит режим качества для запроса: явный `mode` в теле запроса побеждает,
+ * иначе используем сохранённый пользователем qualityMode из настроек.
+ */
+export function resolveMode(bodyMode: QualityMode | undefined): QualityMode {
+  return bodyMode ?? loadSettings().qualityMode;
 }
