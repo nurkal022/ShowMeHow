@@ -1,0 +1,49 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  createSimulation, getMeta, getArtifact, listSimulations, updateArtifact,
+  listHistory, restoreVersion, deleteSimulation, saveThumbnail, getThumbnailPath,
+} from '@/lib/storage';
+
+describe('storage', () => {
+  beforeEach(() => {
+    process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-'));
+  });
+
+  const input = { title: 'Диффузия', prompt: 'диффузия духов', subject: 'Физика', tags: ['газы'] };
+
+  it('create → get → list', () => {
+    const meta = createSimulation(input, '<html>v1</html>');
+    expect(meta.id).toBeTruthy();
+    expect(getMeta(meta.id).title).toBe('Диффузия');
+    expect(getArtifact(meta.id)).toBe('<html>v1</html>');
+    expect(listSimulations().map((m) => m.id)).toEqual([meta.id]);
+  });
+
+  it('updateArtifact keeps history and restore works', () => {
+    const meta = createSimulation(input, '<html>v1</html>');
+    updateArtifact(meta.id, '<html>v2</html>');
+    expect(getArtifact(meta.id)).toBe('<html>v2</html>');
+    const hist = listHistory(meta.id);
+    expect(hist).toHaveLength(1);
+    restoreVersion(meta.id, hist[0]);
+    expect(getArtifact(meta.id)).toBe('<html>v1</html>');
+    expect(listHistory(meta.id)).toHaveLength(2); // v2 ушла в историю
+  });
+
+  it('delete removes simulation', () => {
+    const meta = createSimulation(input, '<html/>');
+    deleteSimulation(meta.id);
+    expect(listSimulations()).toEqual([]);
+    expect(() => getMeta(meta.id)).toThrow();
+  });
+
+  it('thumbnail save/get', () => {
+    const meta = createSimulation(input, '<html/>');
+    expect(getThumbnailPath(meta.id)).toBeNull();
+    saveThumbnail(meta.id, Buffer.from([137, 80]));
+    expect(getThumbnailPath(meta.id)).toMatch(/thumbnail\.png$/);
+  });
+});
