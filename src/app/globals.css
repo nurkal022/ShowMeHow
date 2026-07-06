@@ -10,3 +10,35 @@ body { margin: 0; background: var(--bg); color: var(--text); }
 .topnav a { color: var(--muted); text-decoration: none; }
 .topnav a:hover { color: var(--text); }
 .brand { font-weight: 700; margin-right: 12px; }
+
+.workbench { display: flex; height: calc(100vh - 45px); }
+.chat-pane { width: 380px; min-width: 380px; display: flex; flex-direction: column;
+  gap: 10px; padding: 16px; background: var(--panel); overflow-y: auto;
+  border-right: 1px solid #232a35; }
+.chat-pane h2 { margin: 0; font-size: 16px; }
+.preview-pane { flex: 1; display: flex; flex-direction: column; }
+.preview-frame { flex: 1; width: 100%; border: none; background: #101318; }
+.preview-empty { flex: 1; display: grid; place-items: center; color: var(--muted); }
+.preview-actions { display: flex; gap: 16px; padding: 8px 16px;
+  background: var(--panel); border-top: 1px solid #232a35; }
+.preview-actions a { color: var(--accent); text-decoration: none; }
+.composer { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.composer-row { display: flex; gap: 8px; }
+.composer textarea, .composer select, .composer button {
+  background: #10151d; color: var(--text); border: 1px solid #2a3341;
+  border-radius: var(--radius); padding: 8px; font: inherit; }
+.composer button { cursor: pointer; }
+.composer button.primary { background: var(--accent); border-color: var(--accent);
+  color: #fff; font-weight: 600; }
+.composer button:disabled { opacity: .6; cursor: default; }
+.progress-feed { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.progress-line { color: var(--muted); }
+.progress-cands { display: flex; flex-direction: column; gap: 6px; }
+.cand-chip { background: #10151d; border: 1px solid #2a3341; border-radius: 8px;
+  padding: 6px 8px; font-size: 12px; }
+.cand-shot { display: block; width: 100%; margin-top: 6px; border-radius: 6px; }
+.progress-scores { font-size: 11px; color: var(--muted); white-space: pre-wrap; }
+.error-box { background: #3a1d1c; border: 1px solid var(--danger); color: #f2b8b5;
+  border-radius: var(--radius); padding: 10px; font-size: 13px; }
+.link-btn { background: none; border: none; color: var(--accent); cursor: pointer;
+  padding: 0; text-align: left; font-size: 13px; }

@@ -1,3 +1,10 @@
+import { Suspense } from 'react';
+import Workbench from '@/components/Workbench';
+
 export default function Home() {
-  return <p>ShowMeHow</p>;
+  return (
+    <Suspense>
+      <Workbench />
+    </Suspense>
+  );
 }
