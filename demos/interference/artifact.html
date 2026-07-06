@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Интерференция волн от двух источников</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0e14; }
+  #field {
+    position: fixed; top: 0; left: 0; display: block;
+    image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;
+    z-index: 0;
+  }
+  #fx { position: fixed; top: 0; left: 0; display: block; z-index: 1; }
+  #info-panel {
+    position: fixed; left: 12px; bottom: 12px; z-index: 10;
+    width: 300px; padding: 14px;
+    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
+    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  #info-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
+  #formula-katex { font-size: 17px; margin-bottom: 8px; }
+  #info-nums { font-size: 12px; line-height: 1.65; color: var(--sim-muted, #8b95a3); font-variant-numeric: tabular-nums; }
+  #info-nums b { color: var(--sim-text, #e8ecf1); font-weight: 600; }
+  #legend { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 10.5px; color: var(--sim-muted, #8b95a3); }
+  #legend .bar { flex: 1; height: 8px; border-radius: 4px;
+    background: linear-gradient(90deg, #38bdf8, #0a0e14, #ff9f40); }
+</style>
+</head>
+<body>
+<canvas id="field"></canvas>
+<canvas id="fx"></canvas>
+
+<div id="info-panel">
+  <h2>Условие максимумов</h2>
+  <div id="formula-katex">\Delta d = m\lambda</div>
+  <div id="info-nums">
+    Частота f = <b id="valF">-</b> Гц, скорость волны c = <b id="valC">-</b> см/с<br>
+    Длина волны λ = c/f = <b id="valLambda">-</b> см<br>
+    Расстояние между источниками d = <b id="valD">-</b> см
+  </div>
+  <div id="legend">
+    <span>впадина</span><div class="bar"></div><span>гребень</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- KaTeX (с деградацией в текст, если CDN недоступен) ----------
+  function renderFormula(el, tex) {
+    if (typeof katex !== 'undefined') {
+      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
+    }
+    el.textContent = tex;
+  }
+  renderFormula(document.getElementById('formula-katex'), '\\Delta d = m\\lambda,\\quad m = 0, \\pm1, \\pm2,\\ldots');
+
+  // ---------- Низкоразрешённое поле (ImageData) ----------
+  var SIM_W = 320, SIM_H = 240; // фиксированное разрешение расчёта, <= 320x240
+  var PPU = 4; // пикселей симуляции на 1 см мира
+  var WORLD_W = SIM_W / PPU; // 80 см
+  var WORLD_H = SIM_H / PPU; // 60 см
+  var EPS = 1.5; // см, сглаживание сингулярности у источника
+  var C_SPEED = 10; // см/с, скорость волны (постоянна — k и ω меняются согласованно)
+  var AMP_NORM = 1.0; // опорная амплитуда для цветовой нормировки
+
+  var field = document.getElementById('field');
+  field.width = SIM_W;
+  field.height = SIM_H;
+  var fieldCtx = field.getContext('2d', { willReadFrequently: false });
+  var imgData = fieldCtx.createImageData(SIM_W, SIM_H);
+  var pixels = imgData.data; // Uint8ClampedArray, переиспользуется каждый кадр — без аллокаций
+
+  // Геометрия: расстояния до источников и обратные корни (Float32Array, без аллокаций в кадре)
+  var N = SIM_W * SIM_H;
+  var r1 = new Float32Array(N);
+  var r2 = new Float32Array(N);
+  var invR1 = new Float32Array(N);
+  var invR2 = new Float32Array(N);
+
+  var src1 = { x: 0, y: 0 }; // мировые координаты источников, см
+  var src2 = { x: 0, y: 0 };
+
+  function rebuildGeometry(d) {
+    var cx = WORLD_W / 2, cy = WORLD_H / 2;
+    src1.x = cx - d / 2; src1.y = cy;
+    src2.x = cx + d / 2; src2.y = cy;
+    var p = 0;
+    for (var y = 0; y < SIM_H; y++) {
+      var wy = y / PPU;
+      for (var x = 0; x < SIM_W; x++, p++) {
+        var wx = x / PPU;
+        var dx1 = wx - src1.x, dy1 = wy - src1.y;
+        var dx2 = wx - src2.x, dy2 = wy - src2.y;
+        var rr1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+        var rr2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+        r1[p] = rr1; r2[p] = rr2;
+        invR1[p] = 1 / Math.sqrt(rr1 + EPS);
+        invR2[p] = 1 / Math.sqrt(rr2 + EPS);
+      }
+    }
+  }
+
+  // ---------- Цветовая карта: тёмный фон -> синий (впадина) / оранжевый (гребень) ----------
+  var BG = [10, 14, 20];
+  var NEG = [56, 189, 248];
+  var POS = [255, 159, 64];
+
+  function renderField(phase, k) {
+    var p4 = 0;
+    for (var p = 0; p < N; p++, p4 += 4) {
+      var u = Math.sin(k * r1[p] - phase) * invR1[p] + Math.sin(k * r2[p] - phase) * invR2[p];
+      var t = u / AMP_NORM;
+      if (t > 1) t = 1; else if (t < -1) t = -1;
+      // Компрессия (sqrt) поднимает контраст слабых (дальних) участков, не убирая затухание.
+      var tc = t >= 0 ? Math.sqrt(t) : -Math.sqrt(-t);
+      var r, g, b;
+      if (tc >= 0) {
+        r = BG[0] + (POS[0] - BG[0]) * tc;
+        g = BG[1] + (POS[1] - BG[1]) * tc;
+        b = BG[2] + (POS[2] - BG[2]) * tc;
+      } else {
+        var a = -tc;
+        r = BG[0] + (NEG[0] - BG[0]) * a;
+        g = BG[1] + (NEG[1] - BG[1]) * a;
+        b = BG[2] + (NEG[2] - BG[2]) * a;
+      }
+      pixels[p4] = r; pixels[p4 + 1] = g; pixels[p4 + 2] = b; pixels[p4 + 3] = 255;
+    }
+    fieldCtx.putImageData(imgData, 0, 0);
+  }
+
+  // ---------- Оверлей (источники, подписи) — отдельный canvas в полном разрешении ----------
+  var fx = document.getElementById('fx');
+  var fxCtx = fx.getContext('2d');
+  var W = 0, H = 0;
+
+  function worldToScreen(wx, wy) {
+    return { x: (wx / WORLD_W) * W, y: (wy / WORLD_H) * H };
+  }
+
+  function drawMarkers() {
+    fxCtx.clearRect(0, 0, W, H);
+    [ { p: src1, label: 'Источник 1' }, { p: src2, label: 'Источник 2' } ].forEach(function (s) {
+      var pt = worldToScreen(s.p.x, s.p.y);
+      var grad = fxCtx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 10);
+      grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      fxCtx.fillStyle = grad;
+      fxCtx.beginPath(); fxCtx.arc(pt.x, pt.y, 10, 0, Math.PI * 2); fxCtx.fill();
+      fxCtx.fillStyle = '#0a0e14';
+      fxCtx.beginPath(); fxCtx.arc(pt.x, pt.y, 4, 0, Math.PI * 2); fxCtx.fill();
+      fxCtx.strokeStyle = '#e8ecf1'; fxCtx.lineWidth = 1.5; fxCtx.stroke();
+      fxCtx.font = '13px system-ui, sans-serif';
+      fxCtx.fillStyle = '#e8ecf1';
+      fxCtx.textAlign = 'center';
+      fxCtx.fillText(s.label, pt.x, pt.y - 16);
+    });
+    fxCtx.textAlign = 'left';
+  }
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth; H = window.innerHeight;
+    field.style.width = W + 'px'; field.style.height = H + 'px';
+    fx.width = Math.round(W * dpr); fx.height = Math.round(H * dpr);
+    fx.style.width = W + 'px'; fx.style.height = H + 'px';
+    fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawMarkers();
+  }
+
+  // ---------- Параметры (слайдеры) и состояние ----------
+  var freq = 1.0;   // Гц, слайдер "Частота"
+  var dist = 40;    // см, слайдер "Расстояние между источниками"
+  var phase = 0;    // накопленная фаза ωt, радианы
+  var running = true;
+  var lastFrame = null;
+
+  function currentLambda() { return C_SPEED / freq; }
+  function currentK() { return (2 * Math.PI) / currentLambda(); }
+  function currentOmega() { return 2 * Math.PI * freq; }
+
+  function stepPhysics(dt) {
+    phase += currentOmega() * dt;
+  }
+
+  function resetSim() {
+    // Фаза 0 и дефолтные внутренние параметры поля; слайдеры (частота, расстояние) не трогаем.
+    phase = 0;
+    lastFrame = null;
+  }
+
+  // ---------- HUD ----------
+  var elF = document.getElementById('valF');
+  var elC = document.getElementById('valC');
+  var elLambda = document.getElementById('valLambda');
+  var elD = document.getElementById('valD');
+
+  function updateHud() {
+    elF.textContent = freq.toFixed(2);
+    elC.textContent = C_SPEED.toFixed(0);
+    elLambda.textContent = currentLambda().toFixed(1);
+    elD.textContent = dist.toFixed(0);
+  }
+
+  // ---------- Главный цикл (dt-based) ----------
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+    if (running) {
+      stepPhysics(dt);
+      renderField(phase, currentK());
+    }
+    // в паузе поле не пересчитывается: и картинка, и фаза замирают
+    updateHud();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Интерференция волн от двух источников');
+  SimUI.slider({
+    label: 'Частота', min: 0.3, max: 2.5, step: 0.05, value: freq, unit: 'Гц',
+    onChange: function (v) { freq = v; }, // c = const, k и ω меняются согласованно через λ=c/f
+  });
+  SimUI.slider({
+    label: 'Расстояние между источниками', min: 8, max: 60, step: 1, value: dist, unit: 'см',
+    onChange: function (v) { dist = v; rebuildGeometry(dist); drawMarkers(); },
+  });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: function () { resetSim(); },
+  });
+
+  // ---------- Инициализация ----------
+  window.addEventListener('resize', resize);
+  rebuildGeometry(dist);
+  resize();
+  renderField(phase, currentK());
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
