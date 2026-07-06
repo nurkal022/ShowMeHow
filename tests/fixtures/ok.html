@@ -1,0 +1,11 @@
+<!DOCTYPE html><html><head><title>ok</title></head><body>
+<canvas id="c" width="400" height="300"></canvas>
+<script>
+  const ctx = document.getElementById('c').getContext('2d');
+  let x = 0;
+  (function loop() {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 400, 300);
+    ctx.fillStyle = '#4f8ff7'; ctx.fillRect((x += 2) % 400, 100, 40, 40);
+    requestAnimationFrame(loop);
+  })();
+</script></body></html>
