@@ -1,0 +1,34 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { loadSettings, saveSettings, activeProvider, dataDir } from '@/lib/settings';
+
+describe('settings', () => {
+  beforeEach(() => {
+    process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-'));
+  });
+
+  it('returns defaults when file missing', () => {
+    const s = loadSettings();
+    expect(s.qualityMode).toBe('max');
+    expect(s.providers).toEqual([]);
+    expect(s.activeProviderId).toBeNull();
+  });
+
+  it('round-trips settings', () => {
+    const s = loadSettings();
+    s.providers.push({ id: 'p1', name: 'test', baseURL: 'http://x', apiKey: 'k',
+      generationModel: 'm', visionModel: 'mv' });
+    s.activeProviderId = 'p1';
+    saveSettings(s);
+    const loaded = loadSettings();
+    expect(loaded.activeProviderId).toBe('p1');
+    expect(activeProvider(loaded)?.name).toBe('test');
+    expect(fs.existsSync(path.join(dataDir(), 'settings.json'))).toBe(true);
+  });
+
+  it('activeProvider is null when id not found', () => {
+    expect(activeProvider(loadSettings())).toBeNull();
+  });
+});
