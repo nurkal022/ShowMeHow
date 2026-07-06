@@ -128,6 +128,14 @@ describe('runPipeline', () => {
     };
     const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
     expect(getArtifact(meta.id)).toContain('showmehow-runtime');
+    // Дискриминация от guard 1: без `?? ZERO_SCORES` minScore(undefined) кидает ВНЕ
+    // внутреннего try, попадает во внешний catch, и пайплайн деградирует с предупреждением
+    // «Судья недоступен» без рефайна. Проверяем, что этого НЕ произошло:
+    expect(getMeta(meta.id).warning ?? '').not.toMatch(/судья недоступен/i);
+    // ...и что рефайн реально состоялся: план(1) + 3 кандидата(3) + 1 рефайн(1) = 5
+    // (нулевые баллы < порога 8 → круг 1; rescore возвращает GOOD ≥ 8 → стоп).
+    expect(ctx.genChat).toHaveBeenCalledTimes(5);
+    expect(events.filter((e) => e.type === 'scores')).toHaveLength(2);
   });
 });
 
