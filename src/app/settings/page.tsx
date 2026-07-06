@@ -41,6 +41,20 @@ export default function SettingsPage() {
       providers: [...prev.providers, { ...EMPTY, id: crypto.randomUUID() }],
     });
   }
+  function removeProvider(i: number) {
+    setS((prev) => {
+      if (!prev) return prev;
+      const removed = prev.providers[i];
+      const filtered = prev.providers.filter((_, j) => j !== i);
+      return {
+        ...prev,
+        providers: filtered,
+        activeProviderId: removed.id === prev.activeProviderId
+          ? filtered[0]?.id ?? null
+          : prev.activeProviderId,
+      };
+    });
+  }
   async function save() {
     try {
       const res = await fetch('/api/settings', {
@@ -78,7 +92,7 @@ export default function SettingsPage() {
         <fieldset key={p.id} className="provider">
           <label className="radio">
             <input type="radio" name="active" checked={s.activeProviderId === p.id}
-              onChange={() => setS({ ...s, activeProviderId: p.id })} /> активный
+              onChange={() => setS((prev) => prev && { ...prev, activeProviderId: p.id })} /> активный
           </label>
           <label className="field"><span>Название</span>
             <input value={p.name} onChange={(e) => patchProvider(i, { name: e.target.value })} /></label>
@@ -93,8 +107,7 @@ export default function SettingsPage() {
           <label className="field"><span>Vision-модель (пусто = нет)</span>
             <input value={p.visionModel}
               onChange={(e) => patchProvider(i, { visionModel: e.target.value })} /></label>
-          <button className="danger" onClick={() => setS({ ...s,
-            providers: s.providers.filter((_, j) => j !== i) })}>Удалить провайдера</button>
+          <button className="danger" onClick={() => removeProvider(i)}>Удалить провайдера</button>
         </fieldset>
       ))}
       <div className="settings-actions">
