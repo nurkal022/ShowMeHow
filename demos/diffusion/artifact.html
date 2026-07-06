@@ -89,6 +89,7 @@
     layout();
     drawStatic();
     fxCtx.clearRect(0, 0, W, H);
+    drawSourceLabel(fxCtx); // подпись видна сразу и после resize в паузе
   }
 
   // ---------- Статичная сцена: комната вид сверху ----------
@@ -170,7 +171,7 @@
 
   // ---------- Физика ----------
   var MAX_PARTICLES = 900;
-  var SPAWN_PER_FRAME = 6;
+  var SPAWN_RATE = 360; // частиц в секунду (не зависит от FPS)
   var STEP_K = 26; // калибровочный коэффициент шага случайного блуждания
   var SQRT3 = Math.sqrt(3);
 
@@ -178,7 +179,8 @@
   var molarMass = 100;  // г/моль, слайдер
   var particles = [];
   var running = true;
-  var t0 = performance.now();
+  var simT = 0;         // накопленное симуляционное время, с (стоит в паузе)
+  var spawnBudget = 0;  // дробный бюджет эмиссии частиц
   var lastFrame = null;
   var pulsePhase = 0;
 
@@ -191,8 +193,9 @@
   }
 
   function diffusionCoeff() {
+    // Var(x) по оси = s0^2 * t; стандартная 1D-конвенция <x^2> = 2Dt => D = s0^2 / 2
     var s0 = stepSigma0();
-    return s0 * s0; // D = s0^2 (px^2 / с), т.к. Var(x) = s0^2 * t
+    return s0 * s0 / 2; // px^2/с
   }
 
   function spawnParticle() {
@@ -205,14 +208,18 @@
 
   function resetSim() {
     particles = [];
-    t0 = performance.now();
+    simT = 0;
+    spawnBudget = 0;
     lastFrame = null;
     fxCtx.clearRect(0, 0, W, H);
+    drawSourceLabel(fxCtx); // чтобы подпись не исчезала при сбросе в паузе
   }
 
   function stepPhysics(dt) {
     if (particles.length < MAX_PARTICLES) {
-      var n = Math.min(SPAWN_PER_FRAME, MAX_PARTICLES - particles.length);
+      spawnBudget += SPAWN_RATE * dt;
+      var n = Math.min(Math.floor(spawnBudget), MAX_PARTICLES - particles.length);
+      spawnBudget -= n;
       for (var i = 0; i < n; i++) particles.push(spawnParticle());
     }
     var sigma = stepSigma0() * Math.sqrt(dt);
@@ -286,7 +293,7 @@
 
   function updateHud() {
     var D = diffusionCoeff();
-    var t = (performance.now() - t0) / 1000;
+    var t = simT; // симуляционное время: в паузе стоит вместе с частицами
     var theor = 2 * D * t;
     var meas = 0;
     if (particles.length > 0) {
@@ -310,10 +317,11 @@
     lastFrame = now;
     if (running) {
       stepPhysics(dt);
-    } else {
-      pulsePhase += 0; // без изменений в паузе
+      simT += dt;
+      drawFrame(dt);
     }
-    drawFrame(running ? dt : 0.0001);
+    // в паузе fx-канвас не трогаем вовсе: без затухания следа и без
+    // аддитивного накопления яркости — картинка полностью замирает
     updateHud();
     requestAnimationFrame(loop);
   }
