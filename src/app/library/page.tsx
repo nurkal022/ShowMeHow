@@ -6,6 +6,7 @@ export default function Library() {
   const [sims, setSims] = useState<SimulationMeta[]>([]);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
+  const [installing, setInstalling] = useState(false);
 
   async function load() {
     try {
@@ -32,6 +33,20 @@ export default function Library() {
     }
   }
 
+  async function installDemos() {
+    setInstalling(true);
+    try {
+      const resp = await fetch('/api/demos', { method: 'POST' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      await load();
+    } catch (err) {
+      setError('Ошибка установки примеров');
+      console.error(err);
+    } finally {
+      setInstalling(false);
+    }
+  }
+
   const shown = sims.filter((s) =>
     (s.title + s.prompt + s.subject + s.tags.join(' ')).toLowerCase()
       .includes(q.toLowerCase()));
@@ -43,7 +58,15 @@ export default function Library() {
         <input placeholder="Поиск…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {error && <p className="error-box">{error}</p>}
-      {shown.length === 0 && <p className="muted">Пока пусто — создайте первую симуляцию.</p>}
+      {sims.length === 0 && (
+        <div className="empty-library">
+          <p className="muted">Пока пусто — создайте первую симуляцию или установите готовые примеры.</p>
+          <button onClick={installDemos} disabled={installing}>
+            {installing ? 'Устанавливаю…' : 'Установить 10 примеров'}
+          </button>
+        </div>
+      )}
+      {sims.length > 0 && shown.length === 0 && <p className="muted">Ничего не найдено.</p>}
       <div className="cards">
         {shown.map((s) => (
           <div key={s.id} className="card">
