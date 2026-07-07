@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { extractHtml, extractJson, instrument } from '@/lib/artifact';
+import { extractHtml, extractJson, findForbiddenUrls, instrument } from '@/lib/artifact';
 import { UIKIT_JS } from '@/lib/runtime';
+import { CDN_WHITELIST } from '@/lib/pipeline/prompts';
 
 describe('extractHtml', () => {
   it('extracts fenced html block', () => {
@@ -60,5 +61,59 @@ describe('instrument', () => {
   it('prepends runtime when no head tag', () => {
     const out = instrument('<html><body>x</body></html>');
     expect(out).toContain('showmehow-runtime');
+  });
+});
+
+describe('findForbiddenUrls', () => {
+  const allowed = Object.values(CDN_WHITELIST);
+
+  it('clean html with no external resources -> []', () => {
+    const html = '<!DOCTYPE html><html><head></head><body><canvas></canvas></body></html>';
+    expect(findForbiddenUrls(html, allowed)).toEqual([]);
+  });
+
+  it('finds a forbidden CDN url in src/href attributes', () => {
+    const html = '<script src="https://evil.example.com/x.js"></script>';
+    expect(findForbiddenUrls(html, allowed)).toEqual(['https://evil.example.com/x.js']);
+  });
+
+  it('whitelisted url is not flagged', () => {
+    const html = `<script src="${CDN_WHITELIST.p5}"></script>`;
+    expect(findForbiddenUrls(html, allowed)).toEqual([]);
+  });
+
+  it('ignores relative paths and data: urls', () => {
+    const html = '<img src="/local.png"><img src="data:image/png;base64,AAAA">';
+    expect(findForbiddenUrls(html, allowed)).toEqual([]);
+  });
+
+  it('catches ES-module static import of a forbidden url', () => {
+    const html = `<script type="module">import * as X from 'https://evil.example.com/x.js';</script>`;
+    expect(findForbiddenUrls(html, allowed)).toEqual(['https://evil.example.com/x.js']);
+  });
+
+  it('allows ES-module import of the whitelisted three.js module build', () => {
+    const html = `<script type="module">import * as THREE from '${CDN_WHITELIST.three}';</script>`;
+    expect(findForbiddenUrls(html, allowed)).toEqual([]);
+  });
+
+  it('catches dynamic import() of a forbidden url', () => {
+    const html = `<script>import("https://evil.example.com/mod.js").then(()=>{});</script>`;
+    expect(findForbiddenUrls(html, allowed)).toEqual(['https://evil.example.com/mod.js']);
+  });
+
+  it('blocks a three.js file outside the whitelisted build/ directory', () => {
+    const html = '<script type="module">import { OrbitControls } from ' +
+      "'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/controls/OrbitControls.js';</script>";
+    expect(findForbiddenUrls(html, allowed)).toEqual(
+      ['https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/controls/OrbitControls.js'],
+    );
+  });
+
+  it('allows katex fonts under the same directory as katex.min.css', () => {
+    const fontUrl = 'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/fonts/KaTeX_Main-Regular.woff2';
+    const html = `<style>@font-face{src:url('${fontUrl}');}</style><link href="${fontUrl}">`;
+    // href= attribute form is what the scanner recognizes
+    expect(findForbiddenUrls(html, allowed)).toEqual([]);
   });
 });

@@ -1,9 +1,9 @@
-import type { CandidateResult, PipelineEvent, PlanSpec } from '../types';
+import type { CandidateResult, PipelineEvent, PlanSpec, RenderReport } from '../types';
 import type { ChatFn } from '../provider';
 import { textPart, imagePart } from '../provider';
 import type { RenderFn } from '../renderer';
-import { extractHtml, extractJson, instrument } from '../artifact';
-import { PLANNER_SYSTEM, generatorSystem, FIXER_SYSTEM, CRITIC_SYSTEM } from './prompts';
+import { extractHtml, extractJson, findForbiddenUrls, instrument } from '../artifact';
+import { PLANNER_SYSTEM, generatorSystem, FIXER_SYSTEM, CRITIC_SYSTEM, CDN_WHITELIST } from './prompts';
 
 export interface Ctx {
   genChat: ChatFn;
@@ -44,6 +44,15 @@ function toDataUrl(png: Buffer): string {
 }
 
 const STATIC_ANIMATION_ERROR = 'Анимация не идёт: кадры не меняются со временем';
+const CDN_ALLOWED = Object.values(CDN_WHITELIST);
+
+/** Ранг качества рендера: сломан(0) < ok+статика(1) < ok+анимация(2). */
+function rank(report: RenderReport): 0 | 1 | 2 {
+  if (!report.ok) return 0;
+  return report.animated ? 2 : 1;
+}
+
+interface Ranked { html: string; report: RenderReport }
 
 export async function verifyCandidate(
   ctx: Ctx, spec: PlanSpec, html: string, index: number,
@@ -51,15 +60,27 @@ export async function verifyCandidate(
   ctx.emit({ type: 'candidate', index, status: 'rendering' });
   let current = html;
   let report = await ctx.render(current);
-  for (let attempt = 0; (!report.ok || !report.animated) && attempt < 2; attempt++) {
+  // best-so-far: если попытки починки только ухудшают результат, в конце возвращаем лучшую
+  // из виденных версий, а не последнюю сломанную.
+  let best: Ranked = { html: current, report };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const forbidden = findForbiddenUrls(current, CDN_ALLOWED);
+    if (report.ok && report.animated && forbidden.length === 0) break;
     ctx.emit({ type: 'candidate', index, status: 'fixing' });
-    const errors = report.animated ? report.errors : [...report.errors, STATIC_ANIMATION_ERROR];
+    const errors = [...report.errors];
+    if (report.ok && !report.animated) errors.push(STATIC_ANIMATION_ERROR);
+    if (forbidden.length) errors.push(`Запрещённые внешние ресурсы: ${forbidden.join(', ')}`);
     try {
       current = await fixArtifact(ctx, current, errors);
     } catch {
-      break; // фиксер сам упал — кандидат выбывает
+      break; // фиксер сам упал — используем лучшее из уже отрендеренного
     }
     report = await ctx.render(current);
+    if (rank(report) > rank(best.report)) best = { html: current, report };
+  }
+  if (rank(report) < rank(best.report)) {
+    current = best.html;
+    report = best.report;
   }
   if (!report.ok) {
     ctx.emit({ type: 'candidate', index, status: 'failed' });

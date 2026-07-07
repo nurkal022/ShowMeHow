@@ -103,4 +103,44 @@ describe('verifyCandidate', () => {
     const criticCall = visionChat.mock.calls[0]![0];
     expect(JSON.stringify(criticCall)).toMatch(/анимация не идёт/i);
   });
+
+  it('best-so-far: fixes that make things worse are discarded, best (pre-fix) version wins', async () => {
+    // исходный рендер — ok+статика (ранг 1); обе попытки починки ломают кандидата (ранг 0).
+    const render = vi.fn()
+      .mockResolvedValueOnce(staticRender)
+      .mockResolvedValueOnce(badRender)
+      .mockResolvedValueOnce(badRender);
+    const visionChat = vi.fn(async (_messages: ChatMessage[]) => '{"physicsOk": true, "issues": []}');
+    const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
+    const c = ctx({ render, visionChat, genChat });
+    const r = await verifyCandidate(c, SPEC, HTML, 0);
+    expect(r.alive).toBe(true);
+    expect(r.html).toBe(HTML); // версия до фиксов, а не последняя (сломанная) попытка
+    expect(r.render.ok).toBe(true);
+    expect(r.render.animated).toBe(false);
+    expect(render).toHaveBeenCalledTimes(3);
+    expect(genChat).toHaveBeenCalledTimes(2); // обе попытки починки выполнены
+    // критик уведомлён о статичности победившей (best-so-far) версии
+    expect(visionChat).toHaveBeenCalledTimes(1);
+    const criticCall = visionChat.mock.calls[0]![0];
+    expect(JSON.stringify(criticCall)).toMatch(/анимация не идёт/i);
+  });
+
+  it('CDN violation triggers the fixer with a "Запрещённые внешние ресурсы" message', async () => {
+    const htmlWithForbidden = HTML.replace(
+      '<canvas>',
+      '<script src="https://evil.example.com/x.js"></script><canvas>',
+    );
+    const render = vi.fn(async () => okRender);
+    const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
+    const c = ctx({ render, genChat });
+    const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0);
+    expect(r.alive).toBe(true);
+    expect(genChat).toHaveBeenCalledTimes(1); // один вызов фиксера
+    const fixerCall = genChat.mock.calls[0]![0];
+    expect(JSON.stringify(fixerCall)).toContain('Запрещённые внешние ресурсы');
+    expect(JSON.stringify(fixerCall)).toContain('evil.example.com');
+    // фикс вернул чистый HTML (без запрещённых ссылок) -> ещё один рендер, но не более
+    expect(render).toHaveBeenCalledTimes(2);
+  });
 });

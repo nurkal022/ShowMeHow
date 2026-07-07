@@ -1,7 +1,9 @@
 import { UIKIT_DOC } from '../runtime';
 
 export const CDN_WHITELIST: Record<string, string> = {
-  three: 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.min.js',
+  // three@0.164.0 больше не публикует классическую глобальную сборку build/three.min.js
+  // (только ES-модуль build/three.module.min.js) — build/three.min.js отдаёт 404 на jsdelivr.
+  three: 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.module.min.js',
   p5: 'https://cdn.jsdelivr.net/npm/p5@1.9.3/lib/p5.min.js',
   matter: 'https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js',
   chart: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js',
@@ -33,6 +35,95 @@ export const STYLE_HINTS = [
   'Акцент на ИНТЕРАКТИВНОСТЬ: максимум откликов на действия пользователя, курсором можно вмешиваться в симуляцию (добавлять частицы, двигать объекты).',
 ];
 
+// Каркас (~60 строк) выведен из структуры реальных одобренных демок (demos/*/artifact.html):
+// doctype → head (KaTeX по необходимости) → canvas на всё окно → константы физики →
+// state + resetSim() → SimUI.title/slider/playPause → dt-clamp цикл, где simT/картинка
+// замирают на паузе → resize → info-панель с текущими величинами.
+export const EXAMPLE_SKELETON = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Название симуляции</title>
+<!-- KaTeX подключай, только если в сцене реально есть формулы -->
+<link rel="stylesheet" href="${CDN_WHITELIST.katexCss}">
+<script src="${CDN_WHITELIST.katexJs}"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  canvas { position: fixed; top: 0; left: 0; display: block; }
+  #info { position: fixed; left: 12px; bottom: 12px; z-index: 10; width: 300px;
+    padding: 12px; background: color-mix(in srgb, var(--sim-panel) 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; font-size: 12px; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="info">
+  <div id="formula"></div>
+  Значение: <b id="valX">—</b>
+</div>
+<script>
+(function () {
+  // ---------- Константы физики (единицы измерения в комментариях) ----------
+  var G = 9.8;    // м/с^2
+  var PPM = 100;  // пикселей на метр, пересчитывается в resize()
+
+  // ---------- Состояние + сброс (используется и SimUI.playPause.onReset) ----------
+  var state = {};
+  function resetSim() { state = { t: 0, x: 0, v: 0 }; }
+  resetSim();
+
+  // ---------- Канвас ----------
+  var canvas = document.getElementById('scene');
+  var ctx2d = canvas.getContext('2d');
+  function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+
+  // ---------- Физический шаг: чистая функция от dt, без привязки к FPS ----------
+  function physics(dt) {
+    state.v += -G * dt;
+    state.x += state.v * dt;
+    state.t += dt;
+  }
+
+  // ---------- Отрисовка кадра (сцена по мотивам spec.visualPlan) ----------
+  function draw() {
+    ctx2d.fillStyle = '#101318';
+    ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+    document.getElementById('valX').textContent = state.x.toFixed(2);
+  }
+
+  // ---------- Главный цикл: dt-clamp, в паузе simT и картинка замирают ----------
+  var running = true, lastFrame = null;
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000); // clamp — защита от долгих вкладок
+    lastFrame = now;
+    if (running) physics(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- SimUI: заголовок, слайдер на каждый spec.parameters, play/pause/reset ----------
+  SimUI.title('Название симуляции');
+  SimUI.slider({
+    label: 'Параметр', min: 0, max: 100, step: 1, value: 20, unit: '',
+    onChange: function (v) { /* применить к константе/состоянию */ },
+  });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: function () { resetSim(); },
+  });
+
+  // ---------- Инициализация ----------
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>`;
+
 export function generatorSystem(styleHint: string): string {
   return `Ты — эксперт по учебным визуализациям (уровень лучших примеров Claude Artifacts).
 Напиши ОДИН самодостаточный HTML-файл с интерактивной симуляцией по спецификации.
@@ -48,11 +139,20 @@ ${cdnList}
 - Каждый параметр из spec.parameters — слайдер SimUI.slider с теми же label/min/max/step/value/unit.
 - Обязательно SimUI.playPause: пауза останавливает анимацию, сброс возвращает начальное состояние.
 - Физика обязана следовать spec.physics: те же уравнения, разумные величины, единицы.
-- Для three.js: renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true}).
+- Для three.js: глобальной сборки нет, подключай ТОЛЬКО через ES-модуль —
+  \`<script type="module">\` c \`import * as THREE from '${CDN_WHITELIST.three}';\`
+  в начале скрипта; renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true}).
 - Анимация через requestAnimationFrame с dt-шагом (не привязывайся к FPS).
 - Код чистый и организованный: константы физики сверху с комментариями, функции короткие.
 - Русский язык во всех подписях. Формулы — KaTeX, если уместны.
-- Никаких заглушек и TODO: всё работает сразу.`;
+- Никаких заглушек и TODO: всё работает сразу.
+
+Каркас качественной симуляции (следуй структуре):
+\`\`\`html
+${EXAMPLE_SKELETON}
+\`\`\`
+Это скелет структуры (doctype→head→canvas→константы→state/resetSim→SimUI→dt-цикл→resize),
+а не готовая физика — содержимое physics()/draw()/слайдеров подставь по своей спецификации.`;
 }
 
 export const FIXER_SYSTEM = `Ты чинишь сломанный HTML-артефакт симуляции. Тебе дают полный

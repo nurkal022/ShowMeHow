@@ -47,6 +47,32 @@ export function extractJson<T>(llmOutput: string): T {
   throw new Error('unbalanced JSON in LLM output');
 }
 
+const ATTR_URL_RE = /(?:src|href)\s*=\s*["']([^"']+)["']/gi;
+const IMPORT_FROM_RE = /import\s+[^'";]*from\s*["']([^"']+)["']/gi;
+const IMPORT_CALL_RE = /import\s*\(\s*["']([^"']+)["']\s*\)/gi;
+
+/**
+ * Находит абсолютные http(s) URL в src=/href= атрибутах и в ES-module import (`import ... from
+ * "http..."` / `import("http...")`), которые не разрешены whitelist'ом. Разрешённый префикс —
+ * директория (без имени файла) каждого whitelist-URL: строгое совпадение по origin+path,
+ * без допуска на весь пакет (см. CDN_WHITELIST.three — только build/, не весь three@версия/).
+ * data: и относительные пути игнорируются.
+ */
+export function findForbiddenUrls(html: string, allowed: string[]): string[] {
+  const allowedPrefixes = allowed.map((u) => u.slice(0, u.lastIndexOf('/') + 1));
+  const isAllowed = (url: string) => allowedPrefixes.some((p) => url.startsWith(p));
+  const urls = new Set<string>();
+  for (const re of [ATTR_URL_RE, IMPORT_FROM_RE, IMPORT_CALL_RE]) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      const url = m[1];
+      if (/^https?:\/\//i.test(url)) urls.add(url);
+    }
+  }
+  return [...urls].filter((u) => !isAllowed(u));
+}
+
 export function instrument(html: string): string {
   if (html.includes(MARKER)) return html;
   const runtime = `${MARKER}<script>${HARNESS_JS}</script>` +
