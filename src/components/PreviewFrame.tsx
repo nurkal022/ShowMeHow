@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface SimError { id: number; message: string }
 
@@ -7,6 +7,7 @@ let nextId = 0;
 
 export default function PreviewFrame({ html }: { html: string | null }) {
   const [errors, setErrors] = useState<SimError[]>([]);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     setErrors([]);
@@ -14,6 +15,9 @@ export default function PreviewFrame({ html }: { html: string | null }) {
 
   useEffect(() => {
     function onMessage(e: MessageEvent) {
+      // Игнорируем сообщения не из нашего iframe — window слушает все message-события на
+      // странице, включая от посторонних источников (расширения, другие фреймы).
+      if (e.source !== iframeRef.current?.contentWindow) return;
       if (e.data?.type !== 'sim-error') return;
       const message = String(e.data.message ?? '');
       setErrors((prev) => [...prev, { id: nextId++, message }].slice(-3));
@@ -32,6 +36,7 @@ export default function PreviewFrame({ html }: { html: string | null }) {
   return (
     <div className="preview-wrap">
       <iframe
+        ref={iframeRef}
         className="preview-frame"
         sandbox="allow-scripts"
         srcDoc={html}

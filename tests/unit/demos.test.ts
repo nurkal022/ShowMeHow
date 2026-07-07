@@ -100,4 +100,18 @@ describe('demos', () => {
     expect(second.skipped).toEqual(['test-demo']);
     expect(listSimulations()).toHaveLength(1);
   });
+
+  it('concurrent installDemos calls share one run: no duplicate installs', async () => {
+    writeDemo(demosDir, 'test-demo');
+    writeDemo(demosDir, 'another-demo');
+    const [first, second] = await Promise.all([installDemos(fakeRender), installDemos(fakeRender)]);
+    expect(first).toEqual(second);
+    expect(first.installed.sort()).toEqual(['another-demo', 'test-demo']);
+    expect(first.skipped).toEqual([]);
+    expect(listSimulations()).toHaveLength(2);
+    // после завершения in-flight запуск сбрасывается — следующий вызов не переиспользует старый промис
+    const third = await installDemos(fakeRender);
+    expect(third.installed).toEqual([]);
+    expect(third.skipped.sort()).toEqual(['another-demo', 'test-demo']);
+  });
 });

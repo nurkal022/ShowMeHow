@@ -45,6 +45,27 @@ describe('settings api', () => {
     expect(s.qualityMode).toBe('fast');
   });
 
+  it('PUT with an invalid shape (bad qualityMode) returns 400 and leaves the file unchanged', async () => {
+    saveSettings({ activeProviderId: 'p1', providers: [profile], qualityMode: 'max' });
+    const req = new Request('http://t/api/settings', { method: 'PUT',
+      body: JSON.stringify({ activeProviderId: 'p1', qualityMode: 'weird', providers: [profile] }) });
+    const res = await putSettings(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Некорректный формат настроек');
+    expect(loadSettings().qualityMode).toBe('max');
+  });
+
+  it('PUT with malformed JSON body returns 400', async () => {
+    saveSettings({ activeProviderId: 'p1', providers: [profile], qualityMode: 'max' });
+    const req = new Request('http://t/api/settings', { method: 'PUT', body: '{ not valid json' });
+    const res = await putSettings(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Некорректный формат настроек');
+    expect(loadSettings().qualityMode).toBe('max');
+  });
+
   it('PUT with a masked key for an id absent from current settings returns 400', async () => {
     saveSettings({ activeProviderId: 'p1', providers: [profile], qualityMode: 'max' });
     const req = new Request('http://t/api/settings', { method: 'PUT',

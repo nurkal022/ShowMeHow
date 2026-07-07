@@ -10,7 +10,7 @@ const DEFAULTS: Settings = { activeProviderId: null, providers: [], qualityMode:
 
 const QUALITY_MODES: QualityMode[] = ['fast', 'standard', 'max'];
 
-function isValidShape(v: unknown): v is Settings {
+export function isValidShape(v: unknown): v is Settings {
   if (typeof v !== 'object' || v === null) return false;
   const s = v as Record<string, unknown>;
   return Array.isArray(s.providers)

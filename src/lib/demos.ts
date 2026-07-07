@@ -47,8 +47,22 @@ export function listBundledDemos(): DemoEntry[] {
   return demos;
 }
 
-export async function installDemos(
+let installPromise: Promise<{ installed: string[]; skipped: string[] }> | null = null;
+
+/**
+ * Конкурентные вызовы (например, несколько вкладок, открытых одновременно на старте)
+ * должны разделять один запуск установки демок, а не гонять listBundledDemos()/createSimulation()
+ * параллельно и рисковать дублями в библиотеке.
+ */
+export function installDemos(
   render: RenderFn = renderArtifact,
+): Promise<{ installed: string[]; skipped: string[] }> {
+  installPromise ??= runInstallDemos(render).finally(() => { installPromise = null; });
+  return installPromise;
+}
+
+async function runInstallDemos(
+  render: RenderFn,
 ): Promise<{ installed: string[]; skipped: string[] }> {
   const installed: string[] = [];
   const skipped: string[] = [];

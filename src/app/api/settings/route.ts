@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { loadSettings, saveSettings } from '@/lib/settings';
-import type { Settings } from '@/lib/types';
+import { loadSettings, saveSettings, isValidShape } from '@/lib/settings';
 
 const MASK = '••••';
 
@@ -16,7 +15,16 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-  const incoming = (await req.json()) as Settings;
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Некорректный формат настроек' }, { status: 400 });
+  }
+  if (!isValidShape(body)) {
+    return NextResponse.json({ error: 'Некорректный формат настроек' }, { status: 400 });
+  }
+  const incoming = body;
   const current = loadSettings();
   for (const p of incoming.providers) {
     if (p.apiKey.startsWith(MASK) && !current.providers.some((c) => c.id === p.id)) {
