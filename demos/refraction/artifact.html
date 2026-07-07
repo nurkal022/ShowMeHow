@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Преломление света и полное внутреннее отражение</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f16; }
+  canvas.scene { position: fixed; top: 0; left: 0; display: block; }
+  #bg { z-index: 0; }
+  #fx { z-index: 1; }
+  #formula-panel {
+    position: fixed; left: 12px; bottom: 12px; z-index: 10;
+    width: 310px; padding: 14px;
+    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
+    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  #formula-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
+  #formula-katex { font-size: 16px; margin-bottom: 4px; }
+  #formula-katex2 { font-size: 15px; margin-bottom: 8px; color: var(--sim-muted, #8b95a3); }
+  #formula-nums { font-size: 12px; line-height: 1.65; color: var(--sim-muted, #8b95a3); font-variant-numeric: tabular-nums; }
+  #formula-nums b { color: var(--sim-text, #e8ecf1); font-weight: 600; }
+  #tir-badge {
+    position: fixed; top: 24px; left: 50%; transform: translateX(-50%) translateY(-6px);
+    z-index: 20; padding: 10px 22px; border-radius: 10px;
+    background: color-mix(in srgb, #3a0f0f 88%, transparent);
+    border: 1px solid #ff6b4f; color: #ffb199;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size: 20px; font-weight: 700; letter-spacing: 0.02em;
+    text-shadow: 0 0 12px rgba(255, 107, 79, 0.65);
+    box-shadow: 0 0 24px rgba(255, 107, 79, 0.25);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  #tir-badge.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<canvas id="bg" class="scene"></canvas>
+<canvas id="fx" class="scene"></canvas>
+
+<div id="tir-badge">Полное внутреннее отражение</div>
+
+<div id="formula-panel">
+  <h2>Закон Снеллиуса</h2>
+  <div id="formula-katex">n_1 \sin\theta_1 = n_2 \sin\theta_2</div>
+  <div id="formula-katex2">\theta_{кр} = \arcsin(n_2/n_1)</div>
+  <div id="formula-nums">
+    n₁ = <b id="valN1">-</b>, n₂ = <b id="valN2">1.00</b> (воздух)<br>
+    θ₁ = <b id="valT1">-</b>°, θ₂ = <b id="valT2">-</b><br>
+    θ<sub>кр</sub> = <b id="valTc">-</b>°<br>
+    Отражение (Френель) R ≈ <b id="valR">-</b>%
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- KaTeX (с деградацией в текст, если CDN недоступен) ----------
+  function renderFormula(el, tex) {
+    if (typeof katex !== 'undefined') {
+      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
+    }
+    el.textContent = tex;
+  }
+  renderFormula(document.getElementById('formula-katex'), 'n_1 \\sin\\theta_1 = n_2 \\sin\\theta_2');
+  renderFormula(document.getElementById('formula-katex2'), '\\theta_{\\text{кр}} = \\arcsin(n_2/n_1)');
+
+  // ---------- Canvas setup ----------
+  var bg = document.getElementById('bg');
+  var fx = document.getElementById('fx');
+  var bgCtx = bg.getContext('2d');
+  var fxCtx = fx.getContext('2d');
+
+  var W = 0, H = 0;
+  var O = { x: 0, y: 0 }; // точка на границе раздела сред
+  var RAY_LEN = 200;      // px, длина лучей (масштабируется при resize)
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    [bg, fx].forEach(function (c) {
+      c.width = Math.round(W * dpr);
+      c.height = Math.round(H * dpr);
+      c.style.width = W + 'px';
+      c.style.height = H + 'px';
+    });
+    bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    O.x = W * 0.5;
+    O.y = H * 0.46;
+    RAY_LEN = Math.max(140, Math.min(W, H) * 0.26);
+    drawStatic();
+  }
+
+  // ---------- Статичная сцена: две среды и подписи ----------
+  function mediumColor(n1) {
+    // от лёгкой водной синевы (n1=1.0) к более густому "стеклянному" оттенку (n1=2.0)
+    var t = (n1 - 1.0) / 1.0;
+    var r = 30 + t * 40, g = 80 + t * 30, b = 140 + t * 60;
+    return 'rgba(' + r.toFixed(0) + ',' + g.toFixed(0) + ',' + b.toFixed(0) + ',' + (0.16 + t * 0.14).toFixed(2) + ')';
+  }
+
+  function drawStatic() {
+    bgCtx.clearRect(0, 0, W, H);
+    bgCtx.fillStyle = '#0b0f16';
+    bgCtx.fillRect(0, 0, W, H);
+
+    // воздух сверху — лёгкий градиент
+    var airGrad = bgCtx.createLinearGradient(0, 0, 0, O.y);
+    airGrad.addColorStop(0, '#0e1420');
+    airGrad.addColorStop(1, '#0b0f16');
+    bgCtx.fillStyle = airGrad;
+    bgCtx.fillRect(0, 0, W, O.y);
+
+    // среда снизу (вода/стекло)
+    bgCtx.fillStyle = mediumColor(n1);
+    bgCtx.fillRect(0, O.y, W, H - O.y);
+
+    // граница раздела
+    bgCtx.strokeStyle = 'rgba(232,236,241,0.55)';
+    bgCtx.lineWidth = 1.5;
+    bgCtx.beginPath();
+    bgCtx.moveTo(0, O.y);
+    bgCtx.lineTo(W, O.y);
+    bgCtx.stroke();
+
+    bgCtx.font = '13px system-ui, sans-serif';
+    bgCtx.fillStyle = '#8b95a3';
+    bgCtx.fillText('Воздух, n₂ = 1.00', 16, Math.max(20, O.y - 14));
+    bgCtx.fillText('Вода / стекло, n₁ = ' + n1.toFixed(2), 16, O.y + 22);
+  }
+
+  // ---------- Параметры (слайдеры) ----------
+  var DEFAULT_ANGLE = 30;  // °, угол падения
+  var DEFAULT_N1 = 1.33;   // показатель преломления нижней среды
+  var angleDeg = DEFAULT_ANGLE;
+  var n1 = DEFAULT_N1;
+  var n2 = 1.0;
+
+  var running = true;
+  var lastFrame = null;
+
+  // ---------- Геометрия / оптика ----------
+  var geo = {
+    theta1: 0, theta2: 0, thetaC: 0, tir: false, R: 0,
+    S: { x: 0, y: 0 },        // источник падающего луча
+    Pref: { x: 0, y: 0 },     // конец отражённого луча
+    Ptr: { x: 0, y: 0 },      // конец преломлённого луча (если есть)
+  };
+
+  function computeOptics() {
+    var t1 = angleDeg * Math.PI / 180;
+    var sinT2 = (n1 / n2) * Math.sin(t1);
+    var tir = sinT2 > 1;
+    var cosT1 = Math.cos(t1);
+    var R;
+    var t2 = 0;
+    if (!tir) {
+      t2 = Math.asin(Math.min(1, sinT2));
+      var cosT2 = Math.cos(t2);
+      // упрощённая формула Френеля (s-поляризация, нормальное падение как частный случай)
+      var num = n1 * cosT1 - n2 * cosT2;
+      var den = n1 * cosT1 + n2 * cosT2;
+      R = Math.pow(num / den, 2);
+    } else {
+      R = 1;
+    }
+    var thetaC = Math.asin(Math.min(1, n2 / n1));
+
+    geo.theta1 = t1;
+    geo.theta2 = t2;
+    geo.thetaC = thetaC;
+    geo.tir = tir;
+    geo.R = R;
+
+    geo.S.x = O.x - RAY_LEN * Math.sin(t1);
+    geo.S.y = O.y + RAY_LEN * Math.cos(t1);
+
+    geo.Pref.x = O.x + RAY_LEN * Math.sin(t1);
+    geo.Pref.y = O.y + RAY_LEN * Math.cos(t1);
+
+    if (!tir) {
+      geo.Ptr.x = O.x + RAY_LEN * Math.sin(t2);
+      geo.Ptr.y = O.y - RAY_LEN * Math.cos(t2);
+    }
+  }
+
+  // ---------- Фотоны-искорки (dt-based, бегут вдоль лучей) ----------
+  var PHOTON_SPEED = 170; // px/с
+  var PER_SEGMENT = 5;
+  var photons = { incident: [], reflected: [], refracted: [] };
+  function initPhotons() {
+    ['incident', 'reflected', 'refracted'].forEach(function (seg) {
+      photons[seg] = [];
+      for (var i = 0; i < PER_SEGMENT; i++) photons[seg].push(i / PER_SEGMENT);
+    });
+  }
+  initPhotons();
+
+  function advancePhotons(dt, segLenIncident, segLenReflected, segLenRefracted) {
+    function step(arr, len) {
+      if (!len) return;
+      var d = (PHOTON_SPEED * dt) / len;
+      for (var i = 0; i < arr.length; i++) {
+        arr[i] += d;
+        if (arr[i] > 1) arr[i] -= Math.floor(arr[i]);
+      }
+    }
+    step(photons.incident, segLenIncident);
+    step(photons.reflected, segLenReflected);
+    step(photons.refracted, segLenRefracted);
+  }
+
+  function dist(a, b) { var dx = b.x - a.x, dy = b.y - a.y; return Math.sqrt(dx * dx + dy * dy); }
+  function lerp(a, b, t) { return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; }
+
+  function drawPhotonDot(p, alpha, color) {
+    fxCtx.save();
+    fxCtx.globalAlpha = alpha;
+    var grad = fxCtx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 7);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    fxCtx.fillStyle = grad;
+    fxCtx.beginPath();
+    fxCtx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+    fxCtx.fill();
+    fxCtx.fillStyle = color;
+    fxCtx.beginPath();
+    fxCtx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+    fxCtx.fill();
+    fxCtx.restore();
+  }
+
+  // ---------- Отрисовка луча со стрелкой на конце ----------
+  function drawRay(from, to, opacity, width, color) {
+    fxCtx.save();
+    fxCtx.globalAlpha = opacity;
+    fxCtx.strokeStyle = color;
+    fxCtx.lineWidth = width;
+    fxCtx.lineCap = 'round';
+    fxCtx.shadowColor = color;
+    fxCtx.shadowBlur = 8 * opacity;
+    fxCtx.beginPath();
+    fxCtx.moveTo(from.x, from.y);
+    fxCtx.lineTo(to.x, to.y);
+    fxCtx.stroke();
+
+    var ang = Math.atan2(to.y - from.y, to.x - from.x);
+    var ah = 9;
+    fxCtx.shadowBlur = 0;
+    fxCtx.fillStyle = color;
+    fxCtx.beginPath();
+    fxCtx.moveTo(to.x, to.y);
+    fxCtx.lineTo(to.x - ah * Math.cos(ang - 0.4), to.y - ah * Math.sin(ang - 0.4));
+    fxCtx.lineTo(to.x - ah * Math.cos(ang + 0.4), to.y - ah * Math.sin(ang + 0.4));
+    fxCtx.closePath();
+    fxCtx.fill();
+    fxCtx.restore();
+  }
+
+  // ---------- Дуга угла с подписью ----------
+  function drawAngleArc(centerAngle1, centerAngle2, label, color) {
+    var r = 42;
+    var a0 = Math.min(centerAngle1, centerAngle2);
+    var a1 = Math.max(centerAngle1, centerAngle2);
+    fxCtx.save();
+    fxCtx.strokeStyle = color;
+    fxCtx.lineWidth = 1.6;
+    fxCtx.globalAlpha = 0.85;
+    fxCtx.beginPath();
+    fxCtx.arc(O.x, O.y, r, a0, a1);
+    fxCtx.stroke();
+    fxCtx.restore();
+
+    var mid = (a0 + a1) / 2;
+    var lx = O.x + (r + 16) * Math.cos(mid);
+    var ly = O.y + (r + 16) * Math.sin(mid);
+    fxCtx.save();
+    fxCtx.font = '15px system-ui, sans-serif';
+    fxCtx.fillStyle = color;
+    fxCtx.textAlign = 'center';
+    fxCtx.textBaseline = 'middle';
+    fxCtx.fillText(label, lx, ly);
+    fxCtx.restore();
+  }
+
+  // ---------- Нормаль (пунктир) ----------
+  function drawNormal() {
+    fxCtx.save();
+    fxCtx.setLineDash([5, 6]);
+    fxCtx.strokeStyle = 'rgba(140,160,190,0.45)';
+    fxCtx.lineWidth = 1.4;
+    fxCtx.beginPath();
+    fxCtx.moveTo(O.x, O.y - RAY_LEN - 30);
+    fxCtx.lineTo(O.x, O.y + RAY_LEN + 30);
+    fxCtx.stroke();
+    fxCtx.restore();
+    fxCtx.save();
+    fxCtx.font = '11px system-ui, sans-serif';
+    fxCtx.fillStyle = 'rgba(140,160,190,0.7)';
+    fxCtx.fillText('нормаль', O.x + 6, O.y - RAY_LEN - 16);
+    fxCtx.restore();
+  }
+
+  var COLOR_INCIDENT = '#ffd76a';
+  var COLOR_REFLECTED = '#7ee787';
+  var COLOR_REFRACTED = '#4f8ff7';
+
+  function drawFrame() {
+    fxCtx.clearRect(0, 0, W, H);
+
+    drawNormal();
+
+    var reflOpacity = Math.max(0.16, Math.min(1, 0.16 + 0.84 * geo.R));
+    var trOpacity = geo.tir ? 0 : Math.max(0.25, Math.min(1, 1 - geo.R));
+
+    // падающий луч (источник -> O)
+    drawRay(geo.S, O, 1, 3, COLOR_INCIDENT);
+    // отражённый луч (O -> Pref) — интенсивность растёт к критическому углу, максимум при ПВО
+    drawRay(O, geo.Pref, reflOpacity, geo.tir ? 3.4 : 2.2, COLOR_REFLECTED);
+    // преломлённый луч (O -> Ptr), исчезает при ПВО
+    if (!geo.tir) drawRay(O, geo.Ptr, trOpacity, 3, COLOR_REFRACTED);
+
+    // дуги углов
+    var downNormalAngle = Math.PI / 2;
+    var upNormalAngle = -Math.PI / 2;
+    var incidentDirAngle = Math.atan2(geo.S.y - O.y, geo.S.x - O.x);
+    drawAngleArc(downNormalAngle, incidentDirAngle, 'θ₁', COLOR_INCIDENT);
+    if (!geo.tir) {
+      var refractedDirAngle = Math.atan2(geo.Ptr.y - O.y, geo.Ptr.x - O.x);
+      drawAngleArc(upNormalAngle, refractedDirAngle, 'θ₂', COLOR_REFRACTED);
+    }
+
+    // точка на границе
+    fxCtx.save();
+    fxCtx.fillStyle = '#e8ecf1';
+    fxCtx.beginPath();
+    fxCtx.arc(O.x, O.y, 3, 0, Math.PI * 2);
+    fxCtx.fill();
+    fxCtx.restore();
+
+    // фотоны-искорки
+    var i;
+    for (i = 0; i < photons.incident.length; i++) {
+      drawPhotonDot(lerp(geo.S, O, photons.incident[i]), 1, COLOR_INCIDENT);
+    }
+    for (i = 0; i < photons.reflected.length; i++) {
+      drawPhotonDot(lerp(O, geo.Pref, photons.reflected[i]), reflOpacity, COLOR_REFLECTED);
+    }
+    if (!geo.tir) {
+      for (i = 0; i < photons.refracted.length; i++) {
+        drawPhotonDot(lerp(O, geo.Ptr, photons.refracted[i]), trOpacity, COLOR_REFRACTED);
+      }
+    }
+  }
+
+  // ---------- HUD ----------
+  var elN1 = document.getElementById('valN1');
+  var elN2 = document.getElementById('valN2');
+  var elT1 = document.getElementById('valT1');
+  var elT2 = document.getElementById('valT2');
+  var elTc = document.getElementById('valTc');
+  var elR = document.getElementById('valR');
+  var tirBadge = document.getElementById('tir-badge');
+
+  function updateHud() {
+    elN1.textContent = n1.toFixed(2);
+    elN2.textContent = n2.toFixed(2);
+    elT1.textContent = angleDeg.toFixed(0);
+    elT2.textContent = geo.tir ? 'нет (ПВО)' : (geo.theta2 * 180 / Math.PI).toFixed(1) + '°';
+    elTc.textContent = (geo.thetaC * 180 / Math.PI).toFixed(1);
+    elR.textContent = (geo.R * 100).toFixed(1);
+    tirBadge.classList.toggle('show', geo.tir);
+  }
+
+  // ---------- Главный цикл (dt-based) ----------
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+
+    computeOptics();
+
+    if (running) {
+      var lenInc = dist(geo.S, O);
+      var lenRefl = dist(O, geo.Pref);
+      var lenTr = geo.tir ? 0 : dist(O, geo.Ptr);
+      advancePhotons(dt, lenInc, lenRefl, lenTr);
+    }
+
+    drawFrame();
+    updateHud();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Преломление и полное внутреннее отражение');
+  var angleSlider = SimUI.slider({
+    label: 'Угол падения', min: 0, max: 89, step: 1, value: angleDeg, unit: '°',
+    onChange: function (v) { angleDeg = v; },
+  });
+  var n1Slider = SimUI.slider({
+    label: 'Показатель преломления n₁', min: 1.0, max: 2.0, step: 0.01, value: n1, unit: '',
+    onChange: function (v) { n1 = v; drawStatic(); },
+  });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: function () {
+      angleDeg = DEFAULT_ANGLE;
+      n1 = DEFAULT_N1;
+      angleSlider.value = DEFAULT_ANGLE;
+      angleSlider.dispatchEvent(new Event('input'));
+      n1Slider.value = DEFAULT_N1;
+      n1Slider.dispatchEvent(new Event('input'));
+      initPhotons();
+      drawStatic();
+    },
+  });
+
+  // ---------- Инициализация ----------
+  window.addEventListener('resize', resize);
+  resize();
+  computeOptics();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
