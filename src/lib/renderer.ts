@@ -21,13 +21,18 @@ let browserPromise: Promise<Browser> | null = null;
 
 function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
-    browserPromise = launcher()
+    // `p` is the exact promise stored in the singleton for THIS launch.
+    // Both cleanup paths below compare against it, so a stale event from an
+    // old browser (e.g. `disconnected` firing late after closeBrowser()
+    // already let a new launch populate the cache) can never evict a newer,
+    // healthy browser.
+    const p: Promise<Browser> = launcher()
       .then((browser) => {
         // Self-heal: if the browser process dies later (crash, OOM-killed,
         // manually closed), drop the cached promise so the next render
         // launches a fresh browser instead of reusing a dead one forever.
         browser.on('disconnected', () => {
-          browserPromise = null;
+          if (browserPromise === p) browserPromise = null;
         });
         return browser;
       })
@@ -35,9 +40,10 @@ function getBrowser(): Promise<Browser> {
         // Un-wedge the singleton: a failed launch must not permanently
         // poison future calls, so drop the cached rejected promise while
         // still propagating the failure to this caller.
-        browserPromise = null;
+        if (browserPromise === p) browserPromise = null;
         throw e;
       });
+    browserPromise = p;
   }
   return browserPromise;
 }

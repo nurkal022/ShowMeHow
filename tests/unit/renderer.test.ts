@@ -106,4 +106,64 @@ describe('renderArtifact', () => {
       await closeBrowser();
     }
   });
+
+  it('ignores a stale disconnected handler: browser A\'s late event must not evict cached browser B', async () => {
+    let launchCount = 0;
+    const disconnectedCbs: Array<() => void> = [];
+
+    function fakePage() {
+      return {
+        on: () => {},
+        setContent: async () => {},
+        waitForTimeout: async () => {},
+        screenshot: async () => Buffer.from([launchCount]),
+        close: async () => {},
+      };
+    }
+    function fakeBrowser() {
+      return {
+        on: (event: string, cb: () => void) => {
+          if (event === 'disconnected') disconnectedCbs.push(cb);
+        },
+        newPage: async () => fakePage(),
+        close: async () => {},
+      };
+    }
+
+    await closeBrowser();
+    __setLauncherForTests(async () => {
+      launchCount++;
+      return fakeBrowser() as never;
+    });
+    try {
+      // Launch browser A.
+      await renderArtifact('<html></html>', { shotTimes: [10] });
+      expect(launchCount).toBe(1);
+      expect(disconnectedCbs).toHaveLength(1);
+      const cbA = disconnectedCbs[0];
+
+      // closeBrowser() nulls the cache; the next render launches browser B.
+      await closeBrowser();
+      await renderArtifact('<html></html>', { shotTimes: [10] });
+      expect(launchCount).toBe(2);
+
+      // A real chromium would now fire A's 'disconnected' (close() -> event,
+      // possibly delayed). That stale handler must NOT evict the cache entry
+      // that already points at B.
+      cbA();
+
+      const r = await renderArtifact('<html></html>', { shotTimes: [10] });
+      expect(r.ok).toBe(true);
+      expect(launchCount).toBe(2); // still B — no spurious relaunch
+
+      // Sanity: B's own handler still self-heals.
+      expect(disconnectedCbs).toHaveLength(2);
+      disconnectedCbs[1]();
+      await renderArtifact('<html></html>', { shotTimes: [10] });
+      expect(launchCount).toBe(3);
+    } finally {
+      __setLauncherForTests(null);
+      await closeBrowser();
+    }
+  });
 });
