@@ -46,9 +46,13 @@ function toDataUrl(png: Buffer): string {
 const STATIC_ANIMATION_ERROR = 'Анимация не идёт: кадры не меняются со временем';
 const CDN_ALLOWED = Object.values(CDN_WHITELIST);
 
-/** Ранг качества рендера: сломан(0) < ok+статика(1) < ok+анимация(2). */
-function rank(report: RenderReport): 0 | 1 | 2 {
-  if (!report.ok) return 0;
+/**
+ * Ранг качества версии: заражённая запрещённым CDN или сломанная (0) < ok+статика (1) <
+ * ok+анимация (2). Заражённость важнее красоты рендера: версия с запрещённым URL никогда
+ * не может обойти чистую в best-so-far, каким бы хорошим ни был её рендер.
+ */
+function rank(html: string, report: RenderReport): 0 | 1 | 2 {
+  if (!report.ok || findForbiddenUrls(html, CDN_ALLOWED).length > 0) return 0;
   return report.animated ? 2 : 1;
 }
 
@@ -76,13 +80,14 @@ export async function verifyCandidate(
       break; // фиксер сам упал — используем лучшее из уже отрендеренного
     }
     report = await ctx.render(current);
-    if (rank(report) > rank(best.report)) best = { html: current, report };
+    if (rank(current, report) > rank(best.html, best.report)) best = { html: current, report };
   }
-  if (rank(report) < rank(best.report)) {
+  if (rank(current, report) < rank(best.html, best.report)) {
     current = best.html;
     report = best.report;
   }
-  if (!report.ok) {
+  // Заражённый запрещёнными URL финалист не может уйти в библиотеку, даже если рендер прошёл.
+  if (!report.ok || findForbiddenUrls(current, CDN_ALLOWED).length > 0) {
     ctx.emit({ type: 'candidate', index, status: 'failed' });
     return { html: current, render: report, critic: null, alive: false };
   }

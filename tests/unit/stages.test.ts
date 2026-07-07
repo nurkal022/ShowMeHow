@@ -143,4 +143,34 @@ describe('verifyCandidate', () => {
     // фикс вернул чистый HTML (без запрещённых ссылок) -> ещё один рендер, но не более
     expect(render).toHaveBeenCalledTimes(2);
   });
+
+  it('tainted (forbidden-url) candidate never wins best-so-far, even if it rendered best', async () => {
+    // исходник — ok+animated, НО с запрещённым CDN; починки убирают URL, но ломают рендер.
+    // best-so-far НЕ должен вернуть заражённую версию с alive:true — whitelist важнее ранга.
+    const htmlWithForbidden = HTML.replace(
+      '<canvas>',
+      '<script src="https://evil.example.com/x.js"></script><canvas>',
+    );
+    const render = vi.fn()
+      .mockResolvedValueOnce(okRender)   // заражённый, но красивый
+      .mockResolvedValueOnce(badRender)  // фикс 1: чистый, но сломан
+      .mockResolvedValueOnce(badRender); // фикс 2: чистый, но сломан
+    const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
+    const c = ctx({ render, genChat });
+    const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0);
+    expect(r.alive).toBe(false);
+    expect(r.html).not.toContain('evil.example.com');
+  });
+
+  it('tainted candidate with no clean alternative (fixer dies) fails, not alive', async () => {
+    const htmlWithForbidden = HTML.replace(
+      '<canvas>',
+      '<script src="https://evil.example.com/x.js"></script><canvas>',
+    );
+    const render = vi.fn(async () => okRender); // рендер «успешен», но HTML заражён
+    const genChat = vi.fn(async () => { throw new Error('provider down'); });
+    const c = ctx({ render, genChat });
+    const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0);
+    expect(r.alive).toBe(false); // whitelist-нарушение не может уйти в библиотеку
+  });
 });
