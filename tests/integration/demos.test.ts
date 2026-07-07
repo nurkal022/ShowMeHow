@@ -4,18 +4,16 @@ import { renderArtifact, closeBrowser } from '@/lib/renderer';
 import { instrument } from '@/lib/artifact';
 
 // Гейт качества демок: читает НАСТОЯЩУЮ папку demos/ (без переопределения
-// SHOWMEHOW_DEMOS_DIR) — демки добавляются постепенно задачами 3-12. Пока
-// демок нет, тест пропускается; ложное срабатывание "нет демок" не должно
-// заваливать сборку до того, как демки появятся.
+// SHOWMEHOW_DEMOS_DIR). Все 10 демок из спеки уже на месте (задачи 3-12) —
+// гейт теперь обязан заваливать сборку, если демок стало меньше 10.
 const demos = listBundledDemos();
 
 describe('demos quality gate (real demos/ dir)', () => {
   afterAll(() => closeBrowser());
 
-  if (demos.length === 0) {
-    it.skip('no bundled demos yet — skipping quality gate', () => {});
-    return;
-  }
+  it('has at least 10 bundled demos', () => {
+    expect(demos.length).toBeGreaterThanOrEqual(10);
+  });
 
   for (const demo of demos) {
     it(
