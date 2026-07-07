@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Электрическое поле двух зарядов</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #090b10; cursor: crosshair; }
+  canvas.scene { position: fixed; top: 0; left: 0; display: block; }
+  #bg { z-index: 0; }
+  #lines { z-index: 1; }
+  #fx { z-index: 2; }
+  #formula-panel {
+    position: fixed; left: 12px; bottom: 12px; z-index: 10;
+    width: 330px; padding: 14px;
+    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
+    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  #formula-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
+  #f-coulomb { font-size: 16px; margin-bottom: 4px; }
+  #f-coulomb2 { font-size: 14px; margin-bottom: 8px; color: var(--sim-muted, #8b95a3); }
+  #formula-nums { font-size: 12px; line-height: 1.7; color: var(--sim-muted, #8b95a3); font-variant-numeric: tabular-nums; }
+  #formula-nums b { color: var(--sim-text, #e8ecf1); font-weight: 600; }
+  #formula-nums .probe-c { color: #7ee787; }
+</style>
+</head>
+<body>
+<canvas id="bg" class="scene"></canvas>
+<canvas id="lines" class="scene"></canvas>
+<canvas id="fx" class="scene"></canvas>
+
+<div id="formula-panel">
+  <h2>Закон Кулона</h2>
+  <div id="f-coulomb">F = k\dfrac{|q_1 q_2|}{r^2}</div>
+  <div id="f-coulomb2">\vec F = k\dfrac{q_1 q_2}{r^2}\hat r, \quad k \approx 8{,}99\times10^{9}\ \tfrac{\text{Н·м}^2}{\text{Кл}^2}</div>
+  <div id="formula-nums">
+    q₁ = <b id="valQ1">-</b>, q₂ = <b id="valQ2">-</b>, r₁₂ = <b id="valR12">-</b><br>
+    Сила между зарядами F₁₂ = <b id="valF12">-</b>
+    <div class="probe-c" style="margin-top:6px; padding-top:6px; border-top:1px dashed #2a3341;">
+      Пробный заряд q₀ = +1 мкКл (следует за курсором)<br>
+      r₁ = <b id="valRp1">-</b>, r₂ = <b id="valRp2">-</b><br>
+      Напряжённость E = <b id="valE">-</b><br>
+      Сила на пробный заряд F = <b id="valF0">-</b>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- KaTeX (с деградацией в текст) ----------
+  function renderFormula(el, tex) {
+    if (typeof katex !== 'undefined') {
+      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
+    }
+    el.textContent = tex;
+  }
+  renderFormula(document.getElementById('f-coulomb'), 'F = k\\dfrac{|q_1 q_2|}{r^2}');
+  renderFormula(document.getElementById('f-coulomb2'),
+    '\\vec F = k\\dfrac{q_1 q_2}{r^2}\\hat r, \\quad k \\approx 8{,}99\\times10^{9}\\ \\tfrac{\\text{Н·м}^2}{\\text{Кл}^2}');
+
+  // ---------- Canvas setup ----------
+  var bg = document.getElementById('bg');
+  var linesCanvas = document.getElementById('lines');
+  var fx = document.getElementById('fx');
+  var bgCtx = bg.getContext('2d');
+  var linesCtx = linesCanvas.getContext('2d');
+  var fxCtx = fx.getContext('2d');
+
+  var W = 0, H = 0, DPR = 1;
+
+  // ---------- Физические константы ----------
+  var K_COULOMB = 8.99e9;      // Н·м²/Кл²
+  var Q_TEST = 1e-6;           // Кл, пробный заряд +1 мкКл
+  var METERS_SEP = 0.6;        // физическое расстояние между зарядами по умолчанию (условно), м
+  var PX_PER_M = 500;          // пересчитывается при resize
+
+  // ---------- Заряды ----------
+  var DEFAULT_Q1 = 3, DEFAULT_Q2 = -3; // мкКл
+  var charges = [
+    { x: 0, y: 0, q: DEFAULT_Q1, radius: 0, capturePx: 0 },
+    { x: 0, y: 0, q: DEFAULT_Q2, radius: 0, capturePx: 0 },
+  ];
+
+  function chargeGeometry(c) {
+    c.radius = 12 + Math.min(Math.abs(c.q), 5) * 3.2;
+    c.capturePx = c.radius + 7;
+  }
+  chargeGeometry(charges[0]);
+  chargeGeometry(charges[1]);
+
+  // ---------- Пробный заряд ----------
+  var testCharge = { x: 0, y: 0 };
+  var mouseActive = false;
+
+  function defaultTestPos(sep) {
+    return {
+      x: W / 2 + sep * 0.14,
+      y: H / 2 - Math.min(W, H) * 0.17,
+    };
+  }
+
+  function layout() {
+    var sep = Math.max(160, Math.min(W, H) * 0.42);
+    charges[0].x = W / 2 - sep / 2; charges[0].y = H / 2;
+    charges[1].x = W / 2 + sep / 2; charges[1].y = H / 2;
+    PX_PER_M = sep / METERS_SEP;
+    if (!mouseActive) {
+      var p = defaultTestPos(sep);
+      testCharge.x = p.x; testCharge.y = p.y;
+    }
+  }
+
+  function resize() {
+    DPR = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    [bg, linesCanvas, fx].forEach(function (c) {
+      c.width = Math.round(W * DPR);
+      c.height = Math.round(H * DPR);
+      c.style.width = W + 'px';
+      c.style.height = H + 'px';
+    });
+    bgCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    linesCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    fxCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    layout();
+    drawBackground();
+    linesDirty = true;
+  }
+
+  function drawBackground() {
+    bgCtx.clearRect(0, 0, W, H);
+    var g = bgCtx.createRadialGradient(W / 2, H / 2, 10, W / 2, H / 2, Math.max(W, H) * 0.75);
+    g.addColorStop(0, '#10141d');
+    g.addColorStop(1, '#090b10');
+    bgCtx.fillStyle = g;
+    bgCtx.fillRect(0, 0, W, H);
+  }
+
+  // ---------- Поле от зарядов (направление трассировки, экранные единицы) ----------
+  function fieldAt(x, y, ignoreCapture) {
+    var Ex = 0, Ey = 0;
+    for (var i = 0; i < charges.length; i++) {
+      var c = charges[i];
+      if (Math.abs(c.q) < 0.05) continue;
+      var dx = x - c.x, dy = y - c.y;
+      var minR = ignoreCapture ? 4 : c.capturePx * 0.6;
+      var r2 = dx * dx + dy * dy;
+      if (r2 < minR * minR) r2 = minR * minR;
+      var r = Math.sqrt(r2);
+      var invR3 = 1 / (r2 * r);
+      Ex += c.q * dx * invR3;
+      Ey += c.q * dy * invR3;
+    }
+    return { x: Ex, y: Ey };
+  }
+
+  function fieldMag(x, y) {
+    var e = fieldAt(x, y, false);
+    return Math.sqrt(e.x * e.x + e.y * e.y);
+  }
+
+  function normalize(v) {
+    var m = Math.sqrt(v.x * v.x + v.y * v.y);
+    if (m < 1e-9) return null;
+    return { x: v.x / m, y: v.y / m };
+  }
+
+  // ---------- Трассировка силовой линии (метод средней точки, RK2) ----------
+  var STEP_PX = 5;
+  var MAX_STEPS = 900;
+
+  function traceLine(x0, y0, dirSign, bounds) {
+    var pts = [{ x: x0, y: y0 }];
+    var x = x0, y = y0;
+    var captured = null;
+    for (var i = 0; i < MAX_STEPS; i++) {
+      var e1 = fieldAt(x, y, false);
+      var d1 = normalize(e1);
+      if (!d1) break;
+      d1.x *= dirSign; d1.y *= dirSign;
+      var mx = x + d1.x * STEP_PX * 0.5, my = y + d1.y * STEP_PX * 0.5;
+      var e2 = fieldAt(mx, my, false);
+      var d2 = normalize(e2);
+      if (!d2) d2 = d1; else { d2.x *= dirSign; d2.y *= dirSign; }
+      x += d2.x * STEP_PX;
+      y += d2.y * STEP_PX;
+      pts.push({ x: x, y: y });
+      for (var j = 0; j < charges.length; j++) {
+        var c = charges[j];
+        if (Math.abs(c.q) < 0.05) continue;
+        var dx = x - c.x, dy = y - c.y;
+        if (dx * dx + dy * dy < c.capturePx * c.capturePx) { captured = c; break; }
+      }
+      if (captured) break;
+      if (x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY) break;
+    }
+    return { points: pts, captured: captured };
+  }
+
+  // ---------- Построение и кэширование силовых линий ----------
+  var fieldLines = [];
+  var linesDirty = true;
+
+  function seedAngles(count) {
+    var out = [];
+    for (var i = 0; i < count; i++) out.push((i / count) * Math.PI * 2 + 0.0173);
+    return out;
+  }
+
+  function buildFieldLines() {
+    fieldLines = [];
+    var bounds = { minX: -50, maxX: W + 50, minY: -50, maxY: H + 50 };
+    var positives = charges.filter(function (c) { return c.q > 0.05; });
+    var negatives = charges.filter(function (c) { return c.q < -0.05; });
+
+    function seedFrom(list, dirSign, arrowFlip) {
+      list.forEach(function (c) {
+        var count = Math.round(16 + (Math.min(Math.abs(c.q), 5) / 5) * 8);
+        var r0 = c.radius + 4;
+        var angles = seedAngles(count);
+        angles.forEach(function (ang) {
+          var sx = c.x + Math.cos(ang) * r0;
+          var sy = c.y + Math.sin(ang) * r0;
+          var res = traceLine(sx, sy, dirSign, bounds);
+          if (res.points.length > 3) {
+            fieldLines.push({ points: res.points, sign: dirSign > 0 ? 1 : -1, arrowFlip: !!arrowFlip, source: c });
+          }
+        });
+      });
+    }
+
+    if (positives.length > 0) {
+      // Обычный случай: линии выходят из положительных зарядов и либо
+      // приходят в отрицательные, либо уходят за границу экрана.
+      seedFrom(positives, 1, false);
+    } else if (negatives.length > 0) {
+      // Оба заряда отрицательны (или единственный ненулевой — отрицательный):
+      // трассируем от зарядов "назад" (против направления E, которое течёт
+      // внутрь), а стрелки разворачиваем, чтобы они по-прежнему указывали
+      // истинное направление поля — к заряду.
+      seedFrom(negatives, -1, true);
+    }
+    renderLinesToCache();
+    precomputeLineMeta();
+  }
+
+  var FIELD_T_K = 0.0018;
+
+  function colorForLine(sign, t) {
+    var hue = sign > 0 ? 18 : 206;
+    var light = 32 + t * 42;
+    return 'hsl(' + hue + ',88%,' + light.toFixed(0) + '%)';
+  }
+
+  function drawArrowAt(ctx, p, ang, color) {
+    var s = 6.5;
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.moveTo(s, 0);
+    ctx.lineTo(-s * 0.7, s * 0.55);
+    ctx.lineTo(-s * 0.7, -s * 0.55);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function renderLinesToCache() {
+    linesCtx.clearRect(0, 0, W, H);
+    fieldLines.forEach(function (line) {
+      var pts = line.points;
+      var n = pts.length;
+      if (n < 2) return;
+      var chunk = 6;
+      for (var i = 0; i < n - 1; i += chunk) {
+        var end = Math.min(i + chunk, n - 1);
+        var mid = pts[Math.floor((i + end) / 2)];
+        var mag = fieldMag(mid.x, mid.y);
+        var t = mag / (mag + FIELD_T_K);
+        linesCtx.strokeStyle = colorForLine(line.sign, t);
+        linesCtx.globalAlpha = 0.88;
+        linesCtx.lineWidth = 1.6;
+        linesCtx.beginPath();
+        linesCtx.moveTo(pts[i].x, pts[i].y);
+        for (var k = i + 1; k <= end; k++) linesCtx.lineTo(pts[k].x, pts[k].y);
+        linesCtx.stroke();
+      }
+      // стрелочки направления
+      var spacing = Math.max(26, Math.floor(n / 4));
+      for (var a = spacing; a < n - 2; a += spacing) {
+        var p0 = pts[a - 1], p1 = pts[a + 1];
+        var tx = p1.x - p0.x, ty = p1.y - p0.y;
+        if (line.arrowFlip) { tx = -tx; ty = -ty; }
+        var ang = Math.atan2(ty, tx);
+        var magHere = fieldMag(pts[a].x, pts[a].y);
+        var tt = magHere / (magHere + FIELD_T_K);
+        drawArrowAt(linesCtx, pts[a], ang, colorForLine(line.sign, Math.max(tt, 0.45)));
+      }
+    });
+    linesCtx.globalAlpha = 1;
+  }
+
+  // ---------- Метаданные для бегущих штрихов ----------
+  function precomputeLineMeta() {
+    fieldLines.forEach(function (line) {
+      line.n = line.points.length;
+      line.dashCount = Math.max(2, Math.min(4, Math.floor(line.n / 40)));
+      line.spacingIdx = Math.max(1, Math.floor(line.n / Math.max(1, line.dashCount)));
+    });
+  }
+
+  // ---------- Состояние ----------
+  var running = true;
+  var lastFrame = null;
+  var simTime = 0;
+
+  function recomputeIfDirty() {
+    if (linesDirty) {
+      buildFieldLines();
+      linesDirty = false;
+    }
+  }
+
+  // ---------- Сила на пробный заряд ----------
+  function forceOnProbe() {
+    var Ex = 0, Ey = 0;
+    var rp = [];
+    for (var i = 0; i < charges.length; i++) {
+      var c = charges[i];
+      var dx = testCharge.x - c.x, dy = testCharge.y - c.y;
+      var rPx = Math.max(Math.sqrt(dx * dx + dy * dy), c.radius * 0.75);
+      rp.push(rPx / PX_PER_M);
+      if (Math.abs(c.q) < 1e-6) continue;
+      var qC = c.q * 1e-6;
+      var rM = rPx / PX_PER_M;
+      var Emag = K_COULOMB * Math.abs(qC) / (rM * rM);
+      var sign = qC >= 0 ? 1 : -1;
+      var ux = dx / rPx, uy = dy / rPx;
+      Ex += sign * Emag * ux;
+      Ey += sign * Emag * uy;
+    }
+    return { Ex: Ex, Ey: Ey, Fx: Q_TEST * Ex, Fy: Q_TEST * Ey, r: rp };
+  }
+
+  function forceBetweenCharges() {
+    var dx = charges[1].x - charges[0].x, dy = charges[1].y - charges[0].y;
+    var rPx = Math.sqrt(dx * dx + dy * dy);
+    var rM = rPx / PX_PER_M;
+    var q1 = charges[0].q * 1e-6, q2 = charges[1].q * 1e-6;
+    var F = K_COULOMB * Math.abs(q1 * q2) / (rM * rM);
+    return { r: rM, F: F };
+  }
+
+  function formatForce(f) {
+    if (!isFinite(f)) return '-';
+    if (f >= 1) return f.toFixed(3) + ' Н';
+    if (f >= 1e-3) return (f * 1e3).toFixed(2) + ' мН';
+    return (f * 1e6).toFixed(2) + ' мкН';
+  }
+
+  function formatField(e) {
+    if (!isFinite(e)) return '-';
+    if (e >= 1000) return (e / 1000).toFixed(2) + ' кВ/м';
+    return e.toFixed(1) + ' В/м';
+  }
+
+  // ---------- Пульсирующее свечение заряда ----------
+  function drawGlow(ctx, cx, cy, r, color) {
+    ctx.save();
+    var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawCharge(c, idx) {
+    var isOff = Math.abs(c.q) < 0.05;
+    var pulse = 1 + (isOff ? 0 : 0.09 * Math.sin(simTime * 2.6 + idx * 1.7));
+    var color = isOff ? '#5a6472' : (c.q > 0 ? '#ff6a4f' : '#4fa7ff');
+    var glowColor = isOff ? 'rgba(120,130,145,0.25)' : (c.q > 0 ? 'rgba(255,106,79,0.55)' : 'rgba(79,167,255,0.55)');
+    if (!isOff) drawGlow(fxCtx, c.x, c.y, (c.radius + 20) * pulse, glowColor);
+    fxCtx.save();
+    fxCtx.fillStyle = color;
+    fxCtx.beginPath();
+    fxCtx.arc(c.x, c.y, c.radius * pulse, 0, Math.PI * 2);
+    fxCtx.fill();
+    fxCtx.strokeStyle = 'rgba(255,255,255,0.35)';
+    fxCtx.lineWidth = 1.5;
+    fxCtx.stroke();
+    fxCtx.fillStyle = '#0b0d12';
+    fxCtx.font = '700 ' + Math.max(14, c.radius * 0.9).toFixed(0) + 'px system-ui, sans-serif';
+    fxCtx.textAlign = 'center';
+    fxCtx.textBaseline = 'middle';
+    fxCtx.fillText(c.q > 0 ? '+' : (c.q < 0 ? '−' : '0'), c.x, c.y + 1);
+    fxCtx.restore();
+    fxCtx.save();
+    fxCtx.font = '12px system-ui, sans-serif';
+    fxCtx.fillStyle = '#8b95a3';
+    fxCtx.textAlign = 'center';
+    fxCtx.fillText((idx === 0 ? 'q₁ = ' : 'q₂ = ') + c.q.toFixed(1) + ' мкКл', c.x, c.y + c.radius + 18);
+    fxCtx.restore();
+  }
+
+  function drawDashes() {
+    var speedIdx = 26; // "индексов пути" в секунду
+    var phase = simTime * speedIdx;
+    fieldLines.forEach(function (line) {
+      var pts = line.points, n = line.n;
+      if (!n || n < 4) return;
+      for (var k = 0; k < line.dashCount; k++) {
+        var idxF = (phase + k * line.spacingIdx) % n;
+        if (idxF < 0) idxF += n;
+        var i0 = Math.floor(idxF);
+        var i1 = Math.min(i0 + 1, n - 1);
+        var frac = idxF - i0;
+        var p0 = pts[i0], p1 = pts[i1];
+        var px = p0.x + (p1.x - p0.x) * frac;
+        var py = p0.y + (p1.y - p0.y) * frac;
+        var mag = fieldMag(px, py);
+        var t = mag / (mag + FIELD_T_K);
+        fxCtx.save();
+        fxCtx.globalAlpha = 0.9;
+        fxCtx.fillStyle = line.sign > 0 ? '#ffe0a3' : '#c9ecff';
+        fxCtx.beginPath();
+        fxCtx.arc(px, py, 1.6 + t * 1.4, 0, Math.PI * 2);
+        fxCtx.fill();
+        fxCtx.restore();
+      }
+    });
+  }
+
+  function drawProbe() {
+    var f = forceOnProbe();
+    var Fmag = Math.sqrt(f.Fx * f.Fx + f.Fy * f.Fy);
+    var dir = Fmag > 1e-15 ? { x: f.Fx / Fmag, y: f.Fy / Fmag } : { x: 0, y: 0 };
+    var L = 24 + 92 * Math.tanh(Fmag / 0.25);
+
+    // маркер пробного заряда
+    fxCtx.save();
+    drawGlow(fxCtx, testCharge.x, testCharge.y, 16, 'rgba(126,231,135,0.55)');
+    fxCtx.fillStyle = '#7ee787';
+    fxCtx.beginPath();
+    fxCtx.arc(testCharge.x, testCharge.y, 6, 0, Math.PI * 2);
+    fxCtx.fill();
+    fxCtx.strokeStyle = 'rgba(255,255,255,0.5)';
+    fxCtx.lineWidth = 1.2;
+    fxCtx.stroke();
+    fxCtx.fillStyle = '#06110a';
+    fxCtx.font = '700 9px system-ui, sans-serif';
+    fxCtx.textAlign = 'center';
+    fxCtx.textBaseline = 'middle';
+    fxCtx.fillText('+', testCharge.x, testCharge.y + 1);
+    fxCtx.restore();
+
+    // вектор силы
+    if (Fmag > 1e-15) {
+      var tx = testCharge.x + dir.x * L, ty = testCharge.y + dir.y * L;
+      fxCtx.save();
+      fxCtx.strokeStyle = '#7ee787';
+      fxCtx.fillStyle = '#7ee787';
+      fxCtx.lineWidth = 2.4;
+      fxCtx.shadowColor = '#7ee787';
+      fxCtx.shadowBlur = 6;
+      fxCtx.beginPath();
+      fxCtx.moveTo(testCharge.x, testCharge.y);
+      fxCtx.lineTo(tx, ty);
+      fxCtx.stroke();
+      var ang = Math.atan2(ty - testCharge.y, tx - testCharge.x);
+      var ah = 8;
+      fxCtx.shadowBlur = 0;
+      fxCtx.beginPath();
+      fxCtx.moveTo(tx, ty);
+      fxCtx.lineTo(tx - ah * Math.cos(ang - 0.4), ty - ah * Math.sin(ang - 0.4));
+      fxCtx.lineTo(tx - ah * Math.cos(ang + 0.4), ty - ah * Math.sin(ang + 0.4));
+      fxCtx.closePath();
+      fxCtx.fill();
+      fxCtx.restore();
+      fxCtx.save();
+      fxCtx.font = '12px system-ui, sans-serif';
+      fxCtx.fillStyle = '#7ee787';
+      fxCtx.fillText('F = ' + formatForce(Fmag), tx + 8, ty);
+      fxCtx.restore();
+    }
+    return f;
+  }
+
+  function drawFrame() {
+    fxCtx.clearRect(0, 0, W, H);
+    charges.forEach(drawCharge);
+    drawDashes();
+    return drawProbe();
+  }
+
+  // ---------- HUD ----------
+  var elQ1 = document.getElementById('valQ1');
+  var elQ2 = document.getElementById('valQ2');
+  var elR12 = document.getElementById('valR12');
+  var elF12 = document.getElementById('valF12');
+  var elRp1 = document.getElementById('valRp1');
+  var elRp2 = document.getElementById('valRp2');
+  var elE = document.getElementById('valE');
+  var elF0 = document.getElementById('valF0');
+
+  function updateHud(probe) {
+    elQ1.textContent = charges[0].q.toFixed(1) + ' мкКл';
+    elQ2.textContent = charges[1].q.toFixed(1) + ' мкКл';
+    var fb = forceBetweenCharges();
+    elR12.textContent = fb.r.toFixed(3) + ' м';
+    elF12.textContent = formatForce(fb.F);
+    elRp1.textContent = probe.r[0].toFixed(3) + ' м';
+    elRp2.textContent = probe.r[1].toFixed(3) + ' м';
+    var Emag = Math.sqrt(probe.Ex * probe.Ex + probe.Ey * probe.Ey);
+    elE.textContent = formatField(Emag);
+    var Fmag = Math.sqrt(probe.Fx * probe.Fx + probe.Fy * probe.Fy);
+    elF0.textContent = formatForce(Fmag);
+  }
+
+  // ---------- Мышь ----------
+  window.addEventListener('mousemove', function (e) {
+    mouseActive = true;
+    testCharge.x = e.clientX;
+    testCharge.y = e.clientY;
+  });
+
+  // ---------- Главный цикл (dt-based, пауза морозит пульсацию/штрихи) ----------
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+    if (running) simTime += dt;
+
+    recomputeIfDirty();
+    var probe = drawFrame();
+    updateHud(probe);
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Электрическое поле двух зарядов');
+  var q1Slider = SimUI.slider({
+    label: 'Заряд q₁', min: -5, max: 5, step: 0.5, value: DEFAULT_Q1, unit: 'мкКл',
+    onChange: function (v) { charges[0].q = v; chargeGeometry(charges[0]); linesDirty = true; },
+  });
+  var q2Slider = SimUI.slider({
+    label: 'Заряд q₂', min: -5, max: 5, step: 0.5, value: DEFAULT_Q2, unit: 'мкКл',
+    onChange: function (v) { charges[1].q = v; chargeGeometry(charges[1]); linesDirty = true; },
+  });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: function () {
+      q1Slider.value = DEFAULT_Q1;
+      q1Slider.dispatchEvent(new Event('input'));
+      q2Slider.value = DEFAULT_Q2;
+      q2Slider.dispatchEvent(new Event('input'));
+      mouseActive = false;
+      layout();
+      linesDirty = true;
+    },
+  });
+
+  // ---------- Инициализация ----------
+  window.addEventListener('resize', resize);
+  resize();
+  buildFieldLines();
+  linesDirty = false;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
