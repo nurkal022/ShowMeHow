@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { listHistory, restoreVersion, getArtifact } from '@/lib/storage';
+import { listHistory, restoreVersion, getArtifact, saveThumbnail } from '@/lib/storage';
+import { renderArtifact } from '@/lib/renderer';
 
 type P = { params: Promise<{ id: string }> };
 
@@ -22,7 +23,15 @@ export async function POST(req: Request, { params }: P) {
   const { name } = (await req.json()) as { name: string };
   try {
     restoreVersion(id, name);
-    return NextResponse.json({ html: getArtifact(id) });
+    const html = getArtifact(id);
+    try {
+      const report = await renderArtifact(html);
+      const shot = report.screenshots[1] ?? report.screenshots[0];
+      if (shot) saveThumbnail(id, shot);
+    } catch {
+      // рендер thumbnail упал — restore всё равно успешен, просто не обновляем превью
+    }
+    return NextResponse.json({ html });
   } catch (e) {
     if (isInvalidSegment(e)) {
       return NextResponse.json({ error: 'invalid path segment' }, { status: 400 });

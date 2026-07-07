@@ -87,7 +87,7 @@ export type PipelineEvent =
   | { type: 'candidate'; index: number;
       status: 'generating' | 'rendering' | 'fixing' | 'critiquing' | 'ok' | 'failed' }
   | { type: 'screenshot'; index: number; dataUrl: string }
-  | { type: 'scores'; scores: RubricScores[]; winnerIndex: number }
+  | { type: 'scores'; scores: RubricScores[]; winnerIndex: number; candidateIndices: number[] }
   | { type: 'warning'; message: string }
   | { type: 'done'; simulationId: string }
   | { type: 'error'; message: string };

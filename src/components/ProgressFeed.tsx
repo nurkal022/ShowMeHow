@@ -25,8 +25,9 @@ export default function ProgressFeed({ events }: { events: PipelineEvent[] }) {
     if (e.type === 'warning') lines.push('⚠️ ' + e.message);
     if (e.type === 'scores')
       scores = e.scores.map((s, i) =>
-        `К${i}: физика ${s.physics} / наглядность ${s.clarity} / ` +
-        `интерактив ${s.interactivity} / эстетика ${s.aesthetics}`).join('\n');
+        `Кандидат ${(e.candidateIndices[i] ?? i) + 1}: физика ${s.physics} / ` +
+        `наглядность ${s.clarity} / интерактив ${s.interactivity} / ` +
+        `эстетика ${s.aesthetics}`).join('\n');
   }
   return (
     <div className="progress-feed">

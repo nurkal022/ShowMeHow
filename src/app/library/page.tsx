@@ -71,8 +71,10 @@ export default function Library() {
         {shown.map((s) => (
           <div key={s.id} className="card">
             <a href={`/?id=${s.id}`}>
-              <img src={`/api/simulations/${s.id}/thumbnail`} alt=""
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              <div className="card-thumb">
+                <img src={`/api/simulations/${s.id}/thumbnail`} alt=""
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              </div>
               <h3>{s.title}</h3>
             </a>
             <p className="muted">{s.subject} · {new Date(s.updatedAt).toLocaleDateString('ru')}</p>

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { PipelineEvent, QualityMode } from '@/lib/types';
+import { historyLabel } from '@/lib/history-label';
 import ProgressFeed from './ProgressFeed';
 import PreviewFrame from './PreviewFrame';
 
@@ -91,6 +92,7 @@ export default function Workbench() {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
+    let sawTerminal = false;
     try {
       for (;;) {
         const { done, value } = await reader.read();
@@ -102,9 +104,13 @@ export default function Workbench() {
           if (!part.startsWith('data: ')) continue;
           const e = JSON.parse(part.slice(6)) as PipelineEvent;
           setEvents((prev) => [...prev, e]);
-          if (e.type === 'done') { await openSimulation(e.simulationId); }
-          if (e.type === 'error') { setError(e.message); setPhase('error'); }
+          if (e.type === 'done') { sawTerminal = true; await openSimulation(e.simulationId); }
+          if (e.type === 'error') { sawTerminal = true; setError(e.message); setPhase('error'); }
         }
+      }
+      if (!sawTerminal) {
+        setError('Поток прервался, попробуйте ещё раз');
+        setPhase('error');
       }
     } catch (err) {
       setError('Ошибка при получении событий: '
@@ -229,7 +235,7 @@ export default function Workbench() {
                 <ul>
                   {history.map((name) => (
                     <li key={name}>
-                      <span>{name}</span>
+                      <span>{historyLabel(name)}</span>
                       <button onClick={() => restoreVersion(name)}>Восстановить</button>
                     </li>
                   ))}

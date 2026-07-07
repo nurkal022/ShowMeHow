@@ -59,10 +59,42 @@ describe('runPipeline', () => {
   });
 
   it('max mode: refines until threshold met', async () => {
-    const { ctx } = fakeCtx({ firstScores: WEAK }); // первый суд: physics=6 < 8
+    const { ctx, events } = fakeCtx({ firstScores: WEAK }); // первый суд: physics=6 < 8
     await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
     // genChat: план + 3 кандидата + 1 рефайн = 5
     expect(ctx.genChat).toHaveBeenCalledTimes(5);
+    const scoreEvents = events.filter((e) => e.type === 'scores');
+    // все 3 кандидата живы → первый scores-евент маппит все три исходных индекса
+    expect(scoreEvents[0]).toMatchObject({ candidateIndices: [0, 1, 2] });
+    // рефайн-раунд пересчитывает победителя (индекс 0) — его исходный индекс сохраняется
+    expect(scoreEvents[1]).toMatchObject({ candidateIndices: [0] });
+  });
+
+  it('scores event maps alive positions to original candidate indices '
+    + 'when the middle candidate dies', async () => {
+    const events: PipelineEvent[] = [];
+    const dead = '```html\n<html><body>DEADCAND</body></html>\n```';
+    const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
+    const ctx: Ctx = {
+      genChat: vi.fn(async (msgs) => {
+        const sys = String(msgs[0].content);
+        if (sys.includes('методист')) return JSON.stringify(SPEC);
+        if (sys.includes('НАГЛЯДНОСТЬ')) return dead; // второй style hint → всегда мёртвый кандидат
+        const user = String(msgs[1]?.content ?? '');
+        if (user.includes('DEADCAND')) return dead; // фиксер тоже не спасает
+        return '```html\n' + HTML + '\n```';
+      }),
+      visionChat: vi.fn(async (msgs) => {
+        const sys = String(msgs[0].content);
+        if (!sys.includes('судья качества')) return '{"physicsOk": true, "issues": []}';
+        return JSON.stringify({ winnerIndex: 0, scores: [GOOD, GOOD], feedback: '' });
+      }),
+      render: vi.fn(async (html: string) => (html.includes('DEADCAND') ? badRender : okRender)),
+      emit: (e) => events.push(e),
+    };
+    await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
+    const scoresEvent = events.find((e) => e.type === 'scores');
+    expect(scoresEvent).toMatchObject({ candidateIndices: [0, 2] });
   });
 
   it('all candidates broken: saves best-effort with warning', async () => {

@@ -60,8 +60,13 @@ export async function runPipeline(
     }),
   );
 
-  const alive = candidates.filter((c): c is CandidateResult => !!c && c.alive);
+  const alive: CandidateResult[] = [];
+  const aliveIndices: number[] = [];
+  candidates.forEach((c, i) => {
+    if (c && c.alive) { alive.push(c); aliveIndices.push(i); }
+  });
   let best: CandidateResult;
+  let bestOrigIndex = 0;
   let feedback = '';
 
   if (alive.length === 0) {
@@ -75,8 +80,12 @@ export async function runPipeline(
     ctx.emit({ type: 'stage', stage: 'judging' });
     try {
       const verdict = await judge(ctx, spec, alive);
-      ctx.emit({ type: 'scores', scores: verdict.scores, winnerIndex: verdict.winnerIndex });
+      ctx.emit({
+        type: 'scores', scores: verdict.scores, winnerIndex: verdict.winnerIndex,
+        candidateIndices: aliveIndices,
+      });
       best = alive[verdict.winnerIndex];
+      bestOrigIndex = aliveIndices[verdict.winnerIndex] ?? aliveIndices[0];
       feedback = verdict.feedback;
       // judge может вернуть массив scores короче числа кандидатов (сломанный JSON от модели);
       // подстраховываемся нулевым объектом, чтобы minScore() ниже не упал на undefined.
@@ -95,7 +104,10 @@ export async function runPipeline(
           best = verified;
           current = re.scores;
           feedback = re.feedback;
-          ctx.emit({ type: 'scores', scores: [re.scores], winnerIndex: 0 });
+          ctx.emit({
+            type: 'scores', scores: [re.scores], winnerIndex: 0,
+            candidateIndices: [bestOrigIndex],
+          });
         } catch {
           // рефайн или пересуд упал (например, судья вернул не-JSON) — не валим пайплайн,
           // просто останавливаемся на текущем лучшем кандидате.
