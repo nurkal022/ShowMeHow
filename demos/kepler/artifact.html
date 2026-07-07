@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Орбиты планет и законы Кеплера</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #05070d; }
+  canvas.scene { position: fixed; top: 0; left: 0; display: block; }
+  #formula-panel {
+    position: fixed; left: 12px; bottom: 12px; z-index: 10;
+    width: 340px; padding: 14px;
+    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
+    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  #formula-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
+  #f-law2 { font-size: 16px; margin-bottom: 8px; }
+  #f-vp { font-size: 13px; margin-bottom: 10px; color: var(--sim-muted, #8b95a3); }
+  #formula-nums { font-size: 12px; line-height: 1.75; color: var(--sim-muted, #8b95a3); font-variant-numeric: tabular-nums; }
+  #formula-nums b { color: var(--sim-text, #e8ecf1); font-weight: 600; }
+  #formula-nums .peri-c { color: #ffb14f; }
+  #formula-nums .aph-c { color: #6fd3ff; }
+  #sareas { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #2a3341; }
+  #debug-export { display: none; }
+</style>
+</head>
+<body>
+<canvas id="bg" class="scene"></canvas>
+<canvas id="fx" class="scene"></canvas>
+
+<div id="formula-panel">
+  <h2>Второй закон Кеплера (закон площадей)</h2>
+  <div id="f-law2">\frac{dA}{dt} = \frac{L}{2m} = \text{const}</div>
+  <div id="f-vp">v_p = \sqrt{\dfrac{GM(1+e)}{a(1-e)}}</div>
+  <div id="formula-nums">
+    Эксцентриситет e = <b id="valE">-</b>, большая полуось a = <b id="valA">-</b><br>
+    Перигелий: r = <b class="peri-c" id="valRp">-</b>, скорость v = <b class="peri-c" id="valVp">-</b><br>
+    Афелий: r = <b class="aph-c" id="valRa">-</b>, скорость v = <b class="aph-c" id="valVa">-</b><br>
+    Текущая скорость планеты: <b id="valVnow">-</b><br>
+    Период обращения: T = <b id="valT">-</b>
+    <div id="sareas">
+      Площадь сектора за Δt = T/8:<br>
+      S₁ (перигелий) ≈ <b class="peri-c" id="valS1">-</b><br>
+      S₂ (афелий) ≈ <b class="aph-c" id="valS2">-</b><br>
+      <b id="valEqual">S₁ ≈ S₂</b> — расхождение <b id="valDiff">-</b>%
+    </div>
+  </div>
+</div>
+
+<div id="debug-export"
+     data-sim-time="0" data-e="0" data-first-peri-r="" data-last-peri-r=""
+     data-first-aph-r="" data-last-aph-r="" data-peri-count="0" data-aph-count="0"
+     data-s1="" data-s2="" data-sector-diff-pct=""></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- KaTeX ----------
+  function renderFormula(el, tex) {
+    if (typeof katex !== 'undefined') {
+      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
+    }
+    el.textContent = tex;
+  }
+  renderFormula(document.getElementById('f-law2'), '\\frac{dA}{dt} = \\frac{L}{2m} = \\text{const}');
+  renderFormula(document.getElementById('f-vp'), 'v_p = \\sqrt{\\dfrac{GM(1+e)}{a(1-e)}}');
+
+  // ---------- Canvas ----------
+  var bg = document.getElementById('bg');
+  var fx = document.getElementById('fx');
+  var bgCtx = bg.getContext('2d');
+  var fxCtx = fx.getContext('2d');
+
+  var W = 0, H = 0;
+  var focus = { x: 0, y: 0 };
+  var scale = 100; // px per world unit
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    [bg, fx].forEach(function (c) {
+      c.width = Math.round(W * dpr);
+      c.height = Math.round(H * dpr);
+      c.style.width = W + 'px';
+      c.style.height = H + 'px';
+    });
+    bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    focus.x = W * 0.44;
+    focus.y = H * 0.48;
+    var usable = Math.min(W, H) * 0.36;
+    scale = usable / (A_WORLD * (1 + E_MAX));
+    drawStaticBackground();
+  }
+
+  function worldToScreen(x, y) {
+    return { x: focus.x + x * scale, y: focus.y - y * scale };
+  }
+
+  // ---------- Физические константы сцены ----------
+  var A_WORLD = 1.0;      // большая полуось (мировые единицы), фиксирована при смене e
+  var E_MAX = 0.8;
+  var T_BASE = 12.0;      // период обращения (симуляционные секунды) при timeScale = 1x
+  var N_MEAN = 2 * Math.PI / T_BASE;
+  var GM = N_MEAN * N_MEAN * A_WORLD * A_WORLD * A_WORLD;
+  var H_STEP = T_BASE / 2500; // фиксированный шаг интегратора (сим-секунды)
+  var DT_SWEEP = T_BASE / 8;  // окно заметания сектора
+
+  // ---------- Звёздный фон (статичный) ----------
+  var bgStars = [];
+  function initBgStars() {
+    bgStars = [];
+    var n = 140;
+    for (var i = 0; i < n; i++) {
+      bgStars.push({ x: Math.random(), y: Math.random(), r: Math.random() * 1.3 + 0.3, a: Math.random() * 0.6 + 0.2 });
+    }
+  }
+  initBgStars();
+
+  function drawStaticBackground() {
+    bgCtx.clearRect(0, 0, W, H);
+    var grad = bgCtx.createRadialGradient(focus.x, focus.y, 10, focus.x, focus.y, Math.max(W, H) * 0.75);
+    grad.addColorStop(0, '#0c1220');
+    grad.addColorStop(1, '#05070d');
+    bgCtx.fillStyle = grad;
+    bgCtx.fillRect(0, 0, W, H);
+    bgCtx.save();
+    for (var i = 0; i < bgStars.length; i++) {
+      var s = bgStars[i];
+      bgCtx.globalAlpha = s.a;
+      bgCtx.fillStyle = '#cfe0ff';
+      bgCtx.beginPath();
+      bgCtx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+      bgCtx.fill();
+    }
+    bgCtx.restore();
+  }
+
+  // ---------- Состояние орбиты ----------
+  var e = 0.5;         // эксцентриситет (слайдер)
+  var timeScale = 1.0; // множитель времени (слайдер)
+  var running = true;
+  var lastFrame = null;
+  var accumulator = 0;
+
+  var pos = { x: 0, y: 0 };
+  var vel = { x: 0, y: 0 };
+  var simTime = 0;
+  var prevVr = 0;
+
+  var orbitPathWorld = []; // статичная эллиптическая траектория (мировые координаты)
+  var trail = [];          // затухающий след недавних позиций {x,y,t}
+  var TRAIL_MAX_AGE = 3.5; // сим-секунды
+
+  // Заметание секторов (закон площадей)
+  var dtSweepState = {
+    peri: { capturing: false, lastLap: -1, pts: [], displayPts: [], area: 0 },
+    aph: { capturing: false, lastLap: -1, pts: [], displayPts: [], area: 0 },
+  };
+
+  // История событий перигелия/афелия (для self-check дрейфа орбиты)
+  var periHistory = [];
+  var aphHistory = [];
+
+  function rP() { return A_WORLD * (1 - e); }
+  function rA() { return A_WORLD * (1 + e); }
+  function vP() { return Math.sqrt(GM * (1 + e) / (A_WORLD * (1 - e))); }
+  function vA() { return Math.sqrt(GM * (1 - e) / (A_WORLD * (1 + e))); }
+
+  function buildOrbitPath() {
+    orbitPathWorld = [];
+    var N = 240;
+    for (var i = 0; i <= N; i++) {
+      var theta = (i / N) * Math.PI * 2;
+      var r = A_WORLD * (1 - e * e) / (1 + e * Math.cos(theta));
+      orbitPathWorld.push({ x: r * Math.cos(theta), y: r * Math.sin(theta) });
+    }
+  }
+
+  function resetOrbit() {
+    pos.x = rP(); pos.y = 0;
+    vel.x = 0; vel.y = vP(); // движение против часовой стрелки
+    simTime = 0;
+    prevVr = 0;
+    accumulator = 0;
+    trail = [];
+    periHistory = [];
+    aphHistory = [];
+    dtSweepState.peri = { capturing: false, lastLap: -1, pts: [], displayPts: [], area: 0 };
+    dtSweepState.aph = { capturing: false, lastLap: -1, pts: [], displayPts: [], area: 0 };
+    buildOrbitPath();
+  }
+
+  function shoelaceFan(pts) {
+    var A = 0;
+    for (var i = 0; i < pts.length - 1; i++) {
+      A += 0.5 * Math.abs(pts[i].x * pts[i + 1].y - pts[i + 1].x * pts[i].y);
+    }
+    return A;
+  }
+
+  function trackSector(state, t0) {
+    var shifted = simTime - t0;
+    if (shifted < 0) return;
+    var lap = Math.floor(shifted / T_BASE);
+    if (lap !== state.lastLap) {
+      state.lastLap = lap;
+      state.pts = [{ x: pos.x, y: pos.y }];
+      state.capturing = true;
+    }
+    var phase = shifted - lap * T_BASE;
+    if (state.capturing) {
+      if (phase < DT_SWEEP) {
+        state.pts.push({ x: pos.x, y: pos.y });
+      } else {
+        state.capturing = false;
+        state.area = shoelaceFan(state.pts);
+        state.displayPts = state.pts;
+      }
+    }
+  }
+
+  // ---------- Один шаг интегратора (полунеявный Эйлер) ----------
+  function physicsStep(h) {
+    var r2 = pos.x * pos.x + pos.y * pos.y;
+    var r = Math.sqrt(r2);
+    var r3 = r2 * r;
+    var ax = -GM * pos.x / r3;
+    var ay = -GM * pos.y / r3;
+    vel.x += ax * h;
+    vel.y += ay * h;
+    pos.x += vel.x * h;
+    pos.y += vel.y * h;
+    simTime += h;
+
+    var rNow = Math.sqrt(pos.x * pos.x + pos.y * pos.y);
+    var vr = (pos.x * vel.x + pos.y * vel.y) / rNow;
+    if (prevVr < 0 && vr >= 0) {
+      periHistory.push(rNow);
+      if (periHistory.length > 400) periHistory.shift();
+    }
+    if (prevVr > 0 && vr <= 0) {
+      aphHistory.push(rNow);
+      if (aphHistory.length > 400) aphHistory.shift();
+    }
+    prevVr = vr;
+
+    trackSector(dtSweepState.peri, 0);
+    trackSector(dtSweepState.aph, T_BASE / 2);
+
+    trail.push({ x: pos.x, y: pos.y, t: simTime });
+    while (trail.length && simTime - trail[0].t > TRAIL_MAX_AGE) trail.shift();
+  }
+
+  // ---------- Отрисовка ----------
+  function drawGlow(cx, cy, r, color) {
+    fxCtx.save();
+    var g = fxCtx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    fxCtx.fillStyle = g;
+    fxCtx.beginPath();
+    fxCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    fxCtx.fill();
+    fxCtx.restore();
+  }
+
+  function drawSector(state, fillColor, strokeColor) {
+    var pts = state.displayPts;
+    if (!pts || pts.length < 2) return;
+    fxCtx.save();
+    fxCtx.beginPath();
+    var f = worldToScreen(0, 0);
+    fxCtx.moveTo(f.x, f.y);
+    for (var i = 0; i < pts.length; i++) {
+      var s = worldToScreen(pts[i].x, pts[i].y);
+      fxCtx.lineTo(s.x, s.y);
+    }
+    fxCtx.closePath();
+    fxCtx.fillStyle = fillColor;
+    fxCtx.fill();
+    fxCtx.strokeStyle = strokeColor;
+    fxCtx.lineWidth = 1.5;
+    fxCtx.stroke();
+    fxCtx.restore();
+  }
+
+  function drawFrame(nowSec) {
+    fxCtx.clearRect(0, 0, W, H);
+
+    // статичная орбита (тонкая линия)
+    fxCtx.save();
+    fxCtx.strokeStyle = 'rgba(140,160,200,0.35)';
+    fxCtx.lineWidth = 1.4;
+    fxCtx.beginPath();
+    for (var i = 0; i < orbitPathWorld.length; i++) {
+      var s = worldToScreen(orbitPathWorld[i].x, orbitPathWorld[i].y);
+      if (i === 0) fxCtx.moveTo(s.x, s.y); else fxCtx.lineTo(s.x, s.y);
+    }
+    fxCtx.stroke();
+    fxCtx.restore();
+
+    // сектора закона площадей
+    drawSector(dtSweepState.peri, 'rgba(255,177,79,0.30)', 'rgba(255,177,79,0.85)');
+    drawSector(dtSweepState.aph, 'rgba(111,211,255,0.30)', 'rgba(111,211,255,0.85)');
+
+    // перигелий / афелий — маркеры и подписи
+    var pP = worldToScreen(rP(), 0);
+    var pA = worldToScreen(-rA(), 0);
+    fxCtx.save();
+    fxCtx.fillStyle = '#ffb14f';
+    fxCtx.beginPath(); fxCtx.arc(pP.x, pP.y, 3.5, 0, Math.PI * 2); fxCtx.fill();
+    fxCtx.font = '12px system-ui, sans-serif';
+    fxCtx.fillText('Перигелий', pP.x + 8, pP.y - 8);
+    fxCtx.fillStyle = '#6fd3ff';
+    fxCtx.beginPath(); fxCtx.arc(pA.x, pA.y, 3.5, 0, Math.PI * 2); fxCtx.fill();
+    fxCtx.fillText('Афелий', pA.x + 8, pA.y - 8);
+    fxCtx.restore();
+
+    // затухающий след
+    fxCtx.save();
+    for (var j = 0; j < trail.length; j++) {
+      var tp = trail[j];
+      var age = simTime - tp.t;
+      var alpha = Math.max(0, 1 - age / TRAIL_MAX_AGE) * 0.55;
+      if (alpha <= 0) continue;
+      var sp = worldToScreen(tp.x, tp.y);
+      fxCtx.fillStyle = 'rgba(255,255,255,' + alpha.toFixed(3) + ')';
+      fxCtx.beginPath();
+      fxCtx.arc(sp.x, sp.y, 1.6, 0, Math.PI * 2);
+      fxCtx.fill();
+    }
+    fxCtx.restore();
+
+    // звезда в фокусе (свечение + пульсация)
+    var pulse = 1 + 0.06 * Math.sin(nowSec * 2.2);
+    drawGlow(focus.x, focus.y, 46 * pulse, 'rgba(255,214,120,0.55)');
+    fxCtx.save();
+    fxCtx.fillStyle = '#fff3d6';
+    fxCtx.beginPath();
+    fxCtx.arc(focus.x, focus.y, 10 * pulse, 0, Math.PI * 2);
+    fxCtx.fill();
+    fxCtx.restore();
+
+    // планета
+    var pp = worldToScreen(pos.x, pos.y);
+    drawGlow(pp.x, pp.y, 16, 'rgba(120,180,255,0.55)');
+    fxCtx.save();
+    fxCtx.fillStyle = '#bcd8ff';
+    fxCtx.beginPath();
+    fxCtx.arc(pp.x, pp.y, 6, 0, Math.PI * 2);
+    fxCtx.fill();
+    fxCtx.restore();
+
+    // вектор скорости
+    var vLen = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+    if (vLen > 1e-6) {
+      var arrowScale = 0.55 * scale;
+      var maxLen = 90;
+      var L = Math.min(maxLen, vLen * arrowScale);
+      var dx = (vel.x / vLen) * L;
+      var dy = -(vel.y / vLen) * L;
+      var tx = pp.x + dx, ty = pp.y + dy;
+      fxCtx.save();
+      fxCtx.strokeStyle = '#7ee787';
+      fxCtx.fillStyle = '#7ee787';
+      fxCtx.lineWidth = 2;
+      fxCtx.beginPath();
+      fxCtx.moveTo(pp.x, pp.y);
+      fxCtx.lineTo(tx, ty);
+      fxCtx.stroke();
+      var ang = Math.atan2(ty - pp.y, tx - pp.x);
+      var ah = 7;
+      fxCtx.beginPath();
+      fxCtx.moveTo(tx, ty);
+      fxCtx.lineTo(tx - ah * Math.cos(ang - 0.4), ty - ah * Math.sin(ang - 0.4));
+      fxCtx.lineTo(tx - ah * Math.cos(ang + 0.4), ty - ah * Math.sin(ang + 0.4));
+      fxCtx.closePath();
+      fxCtx.fill();
+      fxCtx.restore();
+    }
+  }
+
+  // ---------- HUD ----------
+  var elE = document.getElementById('valE');
+  var elA = document.getElementById('valA');
+  var elRp = document.getElementById('valRp');
+  var elVp = document.getElementById('valVp');
+  var elRa = document.getElementById('valRa');
+  var elVa = document.getElementById('valVa');
+  var elVnow = document.getElementById('valVnow');
+  var elT = document.getElementById('valT');
+  var elS1 = document.getElementById('valS1');
+  var elS2 = document.getElementById('valS2');
+  var elDiff = document.getElementById('valDiff');
+  var elEqual = document.getElementById('valEqual');
+  var dbg = document.getElementById('debug-export');
+
+  function updateHud() {
+    elE.textContent = e.toFixed(2);
+    elA.textContent = A_WORLD.toFixed(2);
+    elRp.textContent = rP().toFixed(3);
+    elVp.textContent = vP().toFixed(3);
+    elRa.textContent = rA().toFixed(3);
+    elVa.textContent = vA().toFixed(3);
+    var vNow = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+    elVnow.textContent = vNow.toFixed(3);
+    elT.textContent = T_BASE.toFixed(1) + ' с (при 1x)';
+
+    var s1 = dtSweepState.peri.area, s2 = dtSweepState.aph.area;
+    if (s1 && s2) {
+      elS1.textContent = s1.toFixed(5);
+      elS2.textContent = s2.toFixed(5);
+      var diff = Math.abs(s1 - s2) / ((s1 + s2) / 2) * 100;
+      elDiff.textContent = diff.toFixed(2);
+      elEqual.textContent = 'S₁ ≈ S₂';
+    } else {
+      elS1.textContent = '-'; elS2.textContent = '-'; elDiff.textContent = '-';
+    }
+
+    // экспорт для численного self-check (page.evaluate / data-атрибуты)
+    dbg.dataset.simTime = simTime.toFixed(3);
+    dbg.dataset.e = e.toFixed(3);
+    dbg.dataset.firstPeriR = periHistory.length ? periHistory[0].toFixed(6) : '';
+    dbg.dataset.lastPeriR = periHistory.length ? periHistory[periHistory.length - 1].toFixed(6) : '';
+    dbg.dataset.firstAphR = aphHistory.length ? aphHistory[0].toFixed(6) : '';
+    dbg.dataset.lastAphR = aphHistory.length ? aphHistory[aphHistory.length - 1].toFixed(6) : '';
+    dbg.dataset.periCount = String(periHistory.length);
+    dbg.dataset.aphCount = String(aphHistory.length);
+    dbg.dataset.s1 = s1 ? s1.toFixed(6) : '';
+    dbg.dataset.s2 = s2 ? s2.toFixed(6) : '';
+    dbg.dataset.sectorDiffPct = (s1 && s2) ? (Math.abs(s1 - s2) / ((s1 + s2) / 2) * 100).toFixed(3) : '';
+  }
+
+  // Отладочный хук для внешней проверки (Playwright page.evaluate)
+  window.__kepler = {
+    getDebug: function () {
+      return {
+        simTime: simTime, e: e,
+        periHistory: periHistory.slice(), aphHistory: aphHistory.slice(),
+        s1: dtSweepState.peri.area, s2: dtSweepState.aph.area,
+      };
+    },
+    setTimeScale: function (v) { timeScale = v; },
+  };
+
+  // ---------- Главный цикл ----------
+  function loop(now) {
+    var nowSec = now / 1000;
+    if (lastFrame == null) lastFrame = now;
+    var dtWall = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+
+    if (running) {
+      accumulator += dtWall * timeScale;
+      var maxSteps = 4000; // защита от "спирали смерти" при долгой заморозке вкладки
+      var n = 0;
+      while (accumulator >= H_STEP && n < maxSteps) {
+        physicsStep(H_STEP);
+        accumulator -= H_STEP;
+        n++;
+      }
+    }
+
+    drawFrame(nowSec);
+    updateHud();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Орбиты планет и законы Кеплера');
+  var eSlider = SimUI.slider({
+    label: 'Эксцентриситет орбиты', min: 0, max: 0.8, step: 0.05, value: e, unit: '',
+    onChange: function (v) { e = v; resetOrbit(); },
+  });
+  var speedSlider = SimUI.slider({
+    label: 'Скорость времени', min: 0.5, max: 10, step: 0.5, value: timeScale, unit: 'x',
+    onChange: function (v) { timeScale = v; },
+  });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: function () {
+      resetOrbit();
+    },
+  });
+
+  // ---------- Инициализация ----------
+  resetOrbit();
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
