@@ -17,7 +17,7 @@
 - [x] PreviewFrame: слушать postMessage `sim-error` из артефакта и показывать ошибки превью.
 - [x] Workbench: если SSE-поток закрылся без done/error — выводить ошибку, не зависать в «Работаю…».
 - [x] Индексация кандидатов в событиях: chips и scores используют разные индексы, если кандидат выбыл.
-- [ ] Сброс «битой картинки» до onError (aspect-ratio placeholder).
+- [x] Сброс «битой картинки» до onError (aspect-ratio placeholder) — .card-thumb контейнер, T15.
 
 ## Мелочи API/кода
 - [x] export/DELETE/thumbnail: 404/400 вместо 500 на неизвестный/невалидный id.
