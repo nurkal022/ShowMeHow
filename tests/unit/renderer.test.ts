@@ -53,4 +53,57 @@ describe('renderArtifact', () => {
     const r2 = await renderArtifact(fx('ok.html'), { shotTimes: [200] });
     expect(r2.ok).toBe(true);
   }, 30000);
+
+  it('self-heals when the cached browser disconnects: next renderArtifact re-launches', async () => {
+    let launchCount = 0;
+    let disconnectedCb: (() => void) | undefined;
+
+    function fakePage() {
+      return {
+        on: () => {},
+        setContent: async () => {},
+        waitForTimeout: async () => {},
+        screenshot: async () => Buffer.from([launchCount]),
+        close: async () => {},
+      };
+    }
+    function fakeBrowser() {
+      return {
+        on: (event: string, cb: () => void) => {
+          if (event === 'disconnected') disconnectedCb = cb;
+        },
+        newPage: async () => fakePage(),
+        close: async () => {},
+      };
+    }
+
+    // Drop any browser cached by earlier tests so the fake launcher below
+    // is actually exercised on the next getBrowser() call.
+    await closeBrowser();
+    __setLauncherForTests(async () => {
+      launchCount++;
+      return fakeBrowser() as never;
+    });
+    try {
+      const r1 = await renderArtifact('<html></html>', { shotTimes: [10] });
+      expect(r1.ok).toBe(true);
+      expect(launchCount).toBe(1);
+
+      // A second render before any disconnect must reuse the cached browser.
+      await renderArtifact('<html></html>', { shotTimes: [10] });
+      expect(launchCount).toBe(1);
+
+      // Simulate the browser process dying.
+      expect(disconnectedCb).toBeTypeOf('function');
+      disconnectedCb!();
+
+      // Next render must self-heal by launching a fresh browser.
+      const r3 = await renderArtifact('<html></html>', { shotTimes: [10] });
+      expect(r3.ok).toBe(true);
+      expect(launchCount).toBe(2);
+    } finally {
+      __setLauncherForTests(null);
+      await closeBrowser();
+    }
+  });
 });

@@ -21,13 +21,23 @@ let browserPromise: Promise<Browser> | null = null;
 
 function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
-    browserPromise = launcher().catch((e) => {
-      // Un-wedge the singleton: a failed launch must not permanently
-      // poison future calls, so drop the cached rejected promise while
-      // still propagating the failure to this caller.
-      browserPromise = null;
-      throw e;
-    });
+    browserPromise = launcher()
+      .then((browser) => {
+        // Self-heal: if the browser process dies later (crash, OOM-killed,
+        // manually closed), drop the cached promise so the next render
+        // launches a fresh browser instead of reusing a dead one forever.
+        browser.on('disconnected', () => {
+          browserPromise = null;
+        });
+        return browser;
+      })
+      .catch((e) => {
+        // Un-wedge the singleton: a failed launch must not permanently
+        // poison future calls, so drop the cached rejected promise while
+        // still propagating the failure to this caller.
+        browserPromise = null;
+        throw e;
+      });
   }
   return browserPromise;
 }

@@ -31,6 +31,24 @@ interface ChatOpts {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+const NON_RETRYABLE_STATUSES = new Set([400, 401, 403, 404, 422]);
+
+/**
+ * Client errors (4xx like bad request/auth/not-found/unprocessable) will
+ * never succeed on retry, so we fail fast on those. Everything else
+ * (429 rate-limit, 5xx, network errors with no status) is transient and
+ * worth retrying.
+ */
+export function isRetryable(e: unknown): boolean {
+  if (e && typeof e === 'object' && 'status' in e) {
+    const status = (e as { status?: unknown }).status;
+    if (typeof status === 'number' && NON_RETRYABLE_STATUSES.has(status)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export async function chatWithClient(
   client: OpenAI,
   model: string,
@@ -49,6 +67,7 @@ export async function chatWithClient(
       return text;
     } catch (e) {
       lastErr = e;
+      if (!isRetryable(e)) throw e;
       if (attempt < retries - 1) await sleep(1000 * 2 ** attempt);
     }
   }
