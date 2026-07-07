@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -47,12 +47,22 @@ describe('storage', () => {
     expect(getThumbnailPath(meta.id)).toMatch(/thumbnail\.png$/);
   });
 
-  it('updateArtifact in tight loop preserves all versions (no timestamp collision)', () => {
-    const meta = createSimulation(input, '<html>v1</html>');
-    updateArtifact(meta.id, '<html>v2</html>');
-    updateArtifact(meta.id, '<html>v3</html>');
-    updateArtifact(meta.id, '<html>v4</html>');
-    expect(listHistory(meta.id)).toHaveLength(3);
+  it('updateArtifact with a frozen clock preserves all versions via numeric suffixes', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-07T03:49:12.345Z'));
+    try {
+      const meta = createSimulation(input, '<html>v1</html>');
+      updateArtifact(meta.id, '<html>v2</html>');
+      updateArtifact(meta.id, '<html>v3</html>');
+      updateArtifact(meta.id, '<html>v4</html>');
+      const hist = listHistory(meta.id);
+      expect(hist).toHaveLength(3);
+      // все три версии выпали на одну и ту же метку времени -> суффиксы -2, -3
+      const stamp = '2026-07-07T03-49-12-345Z';
+      expect(hist.sort()).toEqual([`${stamp}-2.html`, `${stamp}-3.html`, `${stamp}.html`].sort());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('getMeta rejects path traversal in id', () => {

@@ -37,8 +37,9 @@ for (const p of prompts) {
 await closeBrowser();
 
 const agg = aggregate(rows);
+const today = new Date().toISOString().slice(0, 10);
 const lines = [
-  `# Eval ${new Date().toISOString().slice(0, 10)}`,
+  `# Eval ${today}`,
   '',
   `Средние: ${fmt(agg.avg)}`,
   `Порог пройден (все ≥ 8): ${(agg.passRate * 100).toFixed(0)}%`,
@@ -46,7 +47,7 @@ const lines = [
   ...rows.map((r) => `- ${r.scores ? '✅' : '❌'} ${r.prompt}` +
     (r.scores ? ` — ${fmt(r.scores)}` : ` — ${r.error}`)),
 ];
-const out = path.join('evals', 'results', `${new Date().toISOString().slice(0, 10)}.md`);
+const out = path.join('evals', 'results', `${today}.md`);
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, lines.join('\n'));
 console.log('Отчёт:', out);

@@ -81,12 +81,11 @@
   var DEFAULT_T = 300;         // K
 
   // ---------- Геометрия сосуда ----------
-  var box = { left: 0, width: 0, bottom: 0, heightMax: 0, heightMin: 0 };
+  var box = { left: 0, width: 0, bottom: 0, heightMax: 0 };
 
   function computeGeometry() {
     box.width = Math.max(240, Math.min(480, W * 0.34));
     box.heightMax = Math.max(200, Math.min(360, H * 0.5));
-    box.heightMin = box.heightMax * 0.3;
     box.left = W * 0.5 - box.width / 2;
     box.bottom = Math.min(H - 40, H * 0.78);
   }
@@ -221,6 +220,8 @@
     }
     pistonY = newPistonY;
 
+    // 2D-модель: «давление» = импульс/(время·длина границы), т.е. сила на единицу длины,
+    // а не на единицу площади — размерность честная (в 2D периметр играет роль площади в 3D).
     var perimeter = 2 * (box.width + currentHeight);
     var instant = frameImpulse / (perimeter * dt);
     var alpha = 1 - Math.exp(-dt / PRESSURE_TAU);

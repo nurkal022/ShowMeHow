@@ -77,10 +77,29 @@ export function instrument(html: string): string {
   if (html.includes(MARKER)) return html;
   const runtime = `${MARKER}<script>${HARNESS_JS}</script>` +
     `<style>${UIKIT_CSS}</style><script>${UIKIT_JS}</script>`;
+
   const headMatch = html.match(/<head[^>]*>/i);
   if (headMatch) {
     const idx = html.indexOf(headMatch[0]) + headMatch[0].length;
     return html.slice(0, idx) + runtime + html.slice(idx);
   }
+
+  // Нет <head> — вставляем сразу после открывающего <html...>, чтобы runtime
+  // выполнился раньше остального содержимого документа.
+  const htmlMatch = html.match(/<html[^>]*>/i);
+  if (htmlMatch) {
+    const idx = html.indexOf(htmlMatch[0]) + htmlMatch[0].length;
+    return html.slice(0, idx) + runtime + html.slice(idx);
+  }
+
+  // Нет и <html> — вставляем после doctype, чтобы runtime не оказался раньше него
+  // (некоторые браузеры уходят в quirks mode, если что-то предшествует doctype).
+  const doctypeMatch = html.match(/<!doctype[^>]*>/i);
+  if (doctypeMatch) {
+    const idx = html.indexOf(doctypeMatch[0]) + doctypeMatch[0].length;
+    return html.slice(0, idx) + runtime + html.slice(idx);
+  }
+
+  // Нет ничего из вышеперечисленного — просто добавляем в начало.
   return runtime + html;
 }

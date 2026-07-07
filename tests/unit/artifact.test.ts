@@ -58,9 +58,31 @@ describe('instrument', () => {
     expect(once.indexOf('showmehow-runtime')).toBeLessThan(once.indexOf('<title>'));
     expect(instrument(once)).toBe(once);
   });
-  it('prepends runtime when no head tag', () => {
-    const out = instrument('<html><body>x</body></html>');
+  it('injects after <html...> when there is no <head>', () => {
+    const out = instrument('<!DOCTYPE html><html lang="ru"><body>x</body></html>');
     expect(out).toContain('showmehow-runtime');
+    // после открывающего <html...>, перед остальным содержимым
+    expect(out.indexOf('showmehow-runtime')).toBeGreaterThan(out.indexOf('<html'));
+    expect(out.indexOf('showmehow-runtime')).toBeLessThan(out.indexOf('<body>'));
+  });
+  it('injects after doctype when there is neither <head> nor <html>', () => {
+    const out = instrument('<!DOCTYPE html>\n<body>x</body>');
+    expect(out).toContain('showmehow-runtime');
+    expect(out.indexOf('<!DOCTYPE')).toBe(0);
+    expect(out.indexOf('showmehow-runtime')).toBeGreaterThan(out.indexOf('<!DOCTYPE html>'));
+    expect(out.indexOf('showmehow-runtime')).toBeLessThan(out.indexOf('<body>'));
+  });
+  it('prepends runtime when there is no doctype, no html, no head', () => {
+    const out = instrument('<body>x</body>');
+    expect(out).toContain('showmehow-runtime');
+    // рантайм-маркер начинается с <!--, поэтому сам HTML-комментарий стоит на позиции 0
+    expect(out.indexOf('<!--showmehow-runtime-->')).toBe(0);
+    expect(out.indexOf('<body>')).toBeGreaterThan(out.indexOf('showmehow-runtime'));
+  });
+  it('never places the runtime before the doctype', () => {
+    const out = instrument('<!DOCTYPE html><body>x</body>');
+    expect(out.indexOf('<!DOCTYPE')).toBe(0);
+    expect(out.indexOf('showmehow-runtime')).toBeGreaterThan(0);
   });
 });
 

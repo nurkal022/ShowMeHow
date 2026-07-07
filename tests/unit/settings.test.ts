@@ -31,6 +31,20 @@ describe('settings', () => {
   it('activeProvider is null when id not found', () => {
     expect(activeProvider(loadSettings())).toBeNull();
   });
+
+  it('falls back to defaults on corrupt JSON in settings.json', () => {
+    fs.writeFileSync(path.join(dataDir(), 'settings.json'), '{ not valid json');
+    const s = loadSettings();
+    expect(s).toEqual({ activeProviderId: null, providers: [], qualityMode: 'max' });
+  });
+
+  it('falls back to defaults when qualityMode has an invalid value', () => {
+    fs.mkdirSync(dataDir(), { recursive: true });
+    fs.writeFileSync(path.join(dataDir(), 'settings.json'),
+      JSON.stringify({ activeProviderId: null, providers: [], qualityMode: 'weird' }));
+    const s = loadSettings();
+    expect(s).toEqual({ activeProviderId: null, providers: [], qualityMode: 'max' });
+  });
 });
 
 describe('resolveMode', () => {

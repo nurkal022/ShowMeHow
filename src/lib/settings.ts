@@ -8,11 +8,31 @@ export function dataDir(): string {
 
 const DEFAULTS: Settings = { activeProviderId: null, providers: [], qualityMode: 'max' };
 
+const QUALITY_MODES: QualityMode[] = ['fast', 'standard', 'max'];
+
+function isValidShape(v: unknown): v is Settings {
+  if (typeof v !== 'object' || v === null) return false;
+  const s = v as Record<string, unknown>;
+  return Array.isArray(s.providers)
+    && typeof s.qualityMode === 'string' && QUALITY_MODES.includes(s.qualityMode as QualityMode)
+    && (s.activeProviderId === null || typeof s.activeProviderId === 'string');
+}
+
 export function loadSettings(): Settings {
   const file = path.join(dataDir(), 'settings.json');
   if (!fs.existsSync(file)) return structuredClone(DEFAULTS);
-  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-  return { ...structuredClone(DEFAULTS), ...raw };
+  try {
+    const raw: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const merged = { ...structuredClone(DEFAULTS), ...(raw as object) };
+    if (!isValidShape(merged)) {
+      console.warn('settings.json has an invalid shape, falling back to defaults');
+      return structuredClone(DEFAULTS);
+    }
+    return merged;
+  } catch (e) {
+    console.warn('failed to parse settings.json, falling back to defaults:', e);
+    return structuredClone(DEFAULTS);
+  }
 }
 
 export function saveSettings(s: Settings): void {

@@ -92,9 +92,9 @@ body { margin: 0; background: var(--bg); color: var(--text); }
 .settings .field span { color: var(--muted); }
 .settings input, .settings select { background: var(--panel); border: 1px solid #2a3341;
   color: var(--text); border-radius: var(--radius); padding: 8px 10px; font: inherit; }
-.provider { border: 1px solid #232a35; border-radius: 12px; padding: 14px;
+.settings .provider { border: 1px solid #232a35; border-radius: 12px; padding: 14px;
   display: flex; flex-direction: column; gap: 10px; background: var(--panel); }
-.radio { font-size: 13px; color: var(--muted); }
+.settings .radio { font-size: 13px; color: var(--muted); }
 .settings-actions { display: flex; gap: 12px; }
 .settings button { background: var(--panel); color: var(--text); border: 1px solid #2a3341;
   border-radius: var(--radius); padding: 8px 14px; cursor: pointer; }

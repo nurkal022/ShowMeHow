@@ -18,6 +18,12 @@ export async function GET() {
 export async function PUT(req: Request) {
   const incoming = (await req.json()) as Settings;
   const current = loadSettings();
+  for (const p of incoming.providers) {
+    if (p.apiKey.startsWith(MASK) && !current.providers.some((c) => c.id === p.id)) {
+      return NextResponse.json(
+        { error: `unknown provider id for masked apiKey: ${p.id}` }, { status: 400 });
+    }
+  }
   incoming.providers = incoming.providers.map((p) => {
     if (p.apiKey.startsWith(MASK)) {
       const old = current.providers.find((c) => c.id === p.id);
