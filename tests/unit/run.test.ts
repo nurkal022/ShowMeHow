@@ -146,6 +146,56 @@ describe('runPipeline', () => {
     expect(events.some((e) => e.type === 'warning')).toBe(true);
   });
 
+  it('all candidates broken: prefers a non-tainted broken candidate over a CDN-tainted one', async () => {
+    const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
+    const TAINTED_HTML = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
+      + '<script src="https://evil.example.com/bad.js"></script></body></html>';
+    const events: PipelineEvent[] = [];
+    const ctx: Ctx = {
+      genChat: vi.fn(async (msgs) => {
+        const sys = String(msgs[0].content);
+        if (sys.includes('методист')) return JSON.stringify(SPEC);
+        if (sys.includes('чинишь')) {
+          // фиксер: возвращаем html как есть (заражённость/чистота сохраняется, рендер по-прежнему падает)
+          const user = String(msgs[1]?.content ?? '');
+          const m = user.match(/```html\n([\s\S]*?)\n```/);
+          return '```html\n' + (m ? m[1] : HTML) + '\n```';
+        }
+        if (sys.includes('НАГЛЯДНОСТЬ')) return '```html\n' + HTML + '\n```'; // кандидат 1: чистый
+        return '```html\n' + TAINTED_HTML + '\n```'; // кандидат 0: заражённый
+      }),
+      visionChat: vi.fn(async () => '{"physicsOk": true, "issues": []}'),
+      render: vi.fn(async () => badRender),
+      emit: (e) => events.push(e),
+    };
+    const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'standard' });
+    expect(getArtifact(meta.id)).not.toContain('evil.example.com');
+    expect(getMeta(meta.id).warning).toMatch(/ошибк/i);
+  });
+
+  it('all candidates broken and all CDN-tainted: rejects instead of saving a tainted artifact', async () => {
+    const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
+    const TAINTED_HTML = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
+      + '<script src="https://evil.example.com/bad.js"></script></body></html>';
+    const ctx: Ctx = {
+      genChat: vi.fn(async (msgs) => {
+        const sys = String(msgs[0].content);
+        if (sys.includes('методист')) return JSON.stringify(SPEC);
+        if (sys.includes('чинишь')) {
+          const user = String(msgs[1]?.content ?? '');
+          const m = user.match(/```html\n([\s\S]*?)\n```/);
+          return '```html\n' + (m ? m[1] : TAINTED_HTML) + '\n```';
+        }
+        return '```html\n' + TAINTED_HTML + '\n```';
+      }),
+      visionChat: vi.fn(async () => '{"physicsOk": true, "issues": []}'),
+      render: vi.fn(async () => badRender),
+      emit: () => {},
+    };
+    await expect(runPipeline(ctx, { prompt: 'маятник', mode: 'standard' }))
+      .rejects.toThrow(/запрещённые внешние ресурсы/i);
+  });
+
   it('guard: scores array shorter than candidates does not crash', async () => {
     const events: PipelineEvent[] = [];
     let judgeCall = 0;
@@ -188,6 +238,46 @@ describe('refineExisting', () => {
     await refineExisting(ctx, meta.id, 'сделай медленнее');
     expect(getArtifact(meta.id)).toContain('showmehow-runtime');
     expect(listHistory(meta.id)).toHaveLength(1);
+  });
+
+  it('scans refined html for forbidden CDN urls: fixer cleans it -> artifact updated', async () => {
+    const meta = createSimulation(
+      { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
+    const TAINTED = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
+      + '<script src="https://evil.example.com/bad.js"></script></body></html>';
+    const ctx: Ctx = {
+      genChat: vi.fn(async (msgs) => {
+        const sys = String(msgs[0].content);
+        if (sys.includes('улучшаешь')) return '```html\n' + TAINTED + '\n```';
+        if (sys.includes('чинишь')) return '```html\n' + HTML + '\n```'; // фиксер вычищает CDN
+        return '```html\n' + HTML + '\n```';
+      }),
+      visionChat: vi.fn(async () => '{"physicsOk": true, "issues": []}'),
+      render: vi.fn(async () => okRender),
+      emit: () => {},
+    };
+    await refineExisting(ctx, meta.id, 'сделай медленнее');
+    expect(getArtifact(meta.id)).not.toContain('evil.example.com');
+  });
+
+  it('scans refined html for forbidden CDN urls: fixer fails to clean -> rejects, artifact unchanged', async () => {
+    const meta = createSimulation(
+      { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
+    const TAINTED = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
+      + '<script src="https://evil.example.com/bad.js"></script></body></html>';
+    const ctx: Ctx = {
+      genChat: vi.fn(async (msgs) => {
+        const sys = String(msgs[0].content);
+        if (sys.includes('улучшаешь')) return '```html\n' + TAINTED + '\n```';
+        return '```html\n' + TAINTED + '\n```'; // фиксер не спасает — остаётся заражённым
+      }),
+      visionChat: vi.fn(async () => '{"physicsOk": true, "issues": []}'),
+      render: vi.fn(async () => okRender),
+      emit: () => {},
+    };
+    await expect(refineExisting(ctx, meta.id, 'сделай медленнее'))
+      .rejects.toThrow(/запрещённые внешние ресурсы/i);
+    expect(getArtifact(meta.id)).toBe('<html>old</html>');
   });
 });
 

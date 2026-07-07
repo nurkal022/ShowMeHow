@@ -6,12 +6,13 @@ import { activeProvider } from '../settings';
 import { bindChat } from '../provider';
 import { renderArtifact } from '../renderer';
 import { createSimulation, saveThumbnail, getArtifact, updateArtifact } from '../storage';
-import { extractHtml, instrument } from '../artifact';
-import { REFINER_SYSTEM, STYLE_HINTS } from './prompts';
+import { extractHtml, findForbiddenUrls, instrument } from '../artifact';
+import { REFINER_SYSTEM, STYLE_HINTS, CDN_WHITELIST } from './prompts';
 import { plan, generateCandidate, verifyCandidate, fixArtifact, type Ctx } from './stages';
 import { judge, rescore } from './judge';
 
 const ZERO_SCORES: RubricScores = { physics: 0, clarity: 0, interactivity: 0, aesthetics: 0 };
+const CDN_ALLOWED = Object.values(CDN_WHITELIST);
 
 export const MODES: Record<QualityMode, {
   candidates: number; useJudge: boolean; maxRefine: number; threshold: number;
@@ -70,12 +71,20 @@ export async function runPipeline(
   let feedback = '';
 
   if (alive.length === 0) {
-    const broken = candidates.find((c) => !!c);
-    if (!broken) throw new Error('Не удалось сгенерировать ни одного кандидата.');
+    const brokenCandidates = candidates.filter((c): c is CandidateResult => !!c);
+    if (brokenCandidates.length === 0) {
+      throw new Error('Не удалось сгенерировать ни одного кандидата.');
+    }
+    // Заражённая CDN-артефактом версия не может уйти в библиотеку даже как best-effort —
+    // среди сломанных кандидатов предпочитаем чистого; если чистых нет, отказываемся сохранять.
+    const clean = brokenCandidates.find(
+      (c) => findForbiddenUrls(c.html, CDN_ALLOWED).length === 0,
+    );
+    if (!clean) throw new Error('Все кандидаты содержат запрещённые внешние ресурсы.');
     const msg = 'Все кандидаты завершились с ошибками — сохранён лучший как есть.';
     warnings.push(msg);
     ctx.emit({ type: 'warning', message: msg });
-    best = broken;
+    best = clean;
   } else if (mode.useJudge && ctx.visionChat && alive.length > 0) {
     ctx.emit({ type: 'stage', stage: 'judging' });
     try {
@@ -157,11 +166,18 @@ export async function refineExisting(ctx: Ctx, id: string, instruction: string):
   ctx.emit({ type: 'stage', stage: 'refining' });
   let refined = await refineHtml(ctx, html, instruction);
   let report = await ctx.render(refined);
-  for (let attempt = 0; !report.ok && attempt < 2; attempt++) {
-    refined = await fixArtifact(ctx, refined, report.errors);
+  let forbidden = findForbiddenUrls(refined, CDN_ALLOWED);
+  for (let attempt = 0; (!report.ok || forbidden.length > 0) && attempt < 2; attempt++) {
+    const errors = [...report.errors];
+    if (forbidden.length) errors.push(`Запрещённые внешние ресурсы: ${forbidden.join(', ')}`);
+    refined = await fixArtifact(ctx, refined, errors);
     report = await ctx.render(refined);
+    forbidden = findForbiddenUrls(refined, CDN_ALLOWED);
   }
   if (!report.ok) throw new Error('Правка сломала симуляцию: ' + report.errors.join('; '));
+  if (forbidden.length > 0) {
+    throw new Error('Правка внесла запрещённые внешние ресурсы: ' + forbidden.join(', '));
+  }
   updateArtifact(id, refined);
   const shot = report.screenshots[1] ?? report.screenshots[0];
   if (shot) saveThumbnail(id, shot);
