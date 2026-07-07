@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Осмос через полупроницаемую мембрану</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f16; }
+  canvas.scene { position: fixed; top: 0; left: 0; display: block; }
+  #info-panel {
+    position: fixed; left: 12px; bottom: 12px; z-index: 10;
+    width: 320px; padding: 14px;
+    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
+    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
+    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  #info-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
+  #formula-katex { font-size: 17px; margin-bottom: 8px; }
+  #info-nums { font-size: 12px; line-height: 1.7; color: var(--sim-muted, #8b95a3); font-variant-numeric: tabular-nums; }
+  #info-nums b { color: var(--sim-text, #e8ecf1); font-weight: 600; }
+  #info-nums .row { display: flex; justify-content: space-between; gap: 10px; }
+  #legend { display: flex; gap: 14px; margin-top: 10px; font-size: 11px; color: var(--sim-muted, #8b95a3); }
+  #legend span { display: flex; align-items: center; gap: 5px; }
+  #legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .dot-water { background: #5ec8ff; }
+  .dot-solute { background: #ff9f40; }
+  .vessel-label {
+    position: fixed; top: 14px; z-index: 5; color: var(--sim-muted, #8b95a3);
+    font-family: system-ui, sans-serif; font-size: 13px; text-align: center; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="scene" class="scene"></canvas>
+
+<div id="label-left" class="vessel-label">Чистая вода</div>
+<div id="label-right" class="vessel-label">Раствор</div>
+
+<div id="info-panel" data-role="hud"
+     data-water-left="0" data-water-right="0" data-solute-count="0"
+     data-flux-lr="0" data-flux-rl="0" data-net-flux="0"
+     data-level-left-px="0" data-level-right-px="0"
+     data-concentration="0" data-osmotic-pressure="0" data-elapsed="0">
+  <h2>Осмотическое давление</h2>
+  <div id="formula-katex">\pi = cRT</div>
+  <div id="info-nums">
+    <div class="row"><span>Вода слева / справа</span><b id="valWater">-</b></div>
+    <div class="row"><span>Уровень слева / справа</span><b id="valLevel">-</b></div>
+    <div class="row"><span>Прошло воды →</span><b id="valFluxLR">-</b></div>
+    <div class="row"><span>Прошло воды ←</span><b id="valFluxRL">-</b></div>
+    <div class="row"><span>Чистый поток</span><b id="valNet">-</b></div>
+    <div class="row"><span>c (моль/л), T (К)</span><b id="valCT">-</b></div>
+    <div class="row"><span>π (атм)</span><b id="valPi">-</b></div>
+  </div>
+  <div id="legend">
+    <span><i class="dot-water"></i>вода (мелкие)</span>
+    <span><i class="dot-solute"></i>вещество (крупные)</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- KaTeX (с деградацией в текст, если CDN недоступен) ----------
+  function renderFormula(el, tex) {
+    if (typeof katex !== 'undefined') {
+      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
+    }
+    el.textContent = tex;
+  }
+  renderFormula(document.getElementById('formula-katex'), '\\pi = cRT');
+
+  // ---------- Canvas ----------
+  var canvas = document.getElementById('scene');
+  var ctx = canvas.getContext('2d');
+  var W = 0, H = 0;
+
+  // ---------- Константы модели (условные единицы демо) ----------
+  var WATER_PER_SIDE_INIT = 100;   // частиц воды на отсек в начале
+  var SOLUTE_MAX = 80;              // частиц вещества при концентрации 100%
+  var WATER_RADIUS = 2.5;
+  var SOLUTE_RADIUS = 6;
+  var WATER_SPEED_BASE = 95;        // px/с при T=25°C
+  var SOLUTE_SPEED_BASE = 55;       // тяжелее — медленнее
+  var ANGLE_JITTER = 2.6;           // рад/с — случайное блуждание направления
+  var PORE_COUNT = 7;
+  var PORE_HALF_HEIGHT = 11;        // допуск по y для выравнивания с порой
+  var PASS_OFFSET = 3;              // доп. отступ после успешного прохода (не ретриггерить)
+  var P_BASE = 0.85;                // вероятность прохода воды через открытую пору за контакт
+  var BLOCK_STRIP_X = 130;          // ширина полосы у мембраны (со стороны раствора), где меряем concentration
+  var BLOCK_SAT = 26;               // число solute-частиц в полосе, при котором проход почти полностью блокируется
+  var LEVEL_MIN_FRAC = 0.15, LEVEL_MID_FRAC = 0.525, LEVEL_MAX_FRAC = 0.9;
+  var LEVEL_SMOOTH_RATE = 70;       // px/с — сглаживание видимого уровня
+  var SUBSTEPS = 2;
+
+  var DEFAULT_CONCENTRATION = 50;  // %
+  var DEFAULT_TEMP = 25;           // °C
+
+  var R_CONST = 0.0821;            // л·атм/(моль·К)
+  var C_MAX_MOL = 1.0;             // моль/л при концентрации слайдера = 100%
+
+  // ---------- Геометрия сосуда ----------
+  var vessel = { left: 0, width: 0, bottom: 0, top: 0, height: 0 };
+  var membraneX = 0, vesselRight = 0;
+  var pores = []; // [{y}]
+  var pxPerWaterParticle = 1;
+  var baseHeight = 0, minHeight = 0, maxHeight = 0;
+  var labelLeftEl = document.getElementById('label-left');
+  var labelRightEl = document.getElementById('label-right');
+
+  function computeGeometry() {
+    vessel.width = Math.max(360, Math.min(760, W * 0.62));
+    vessel.height = Math.max(240, Math.min(420, H * 0.62));
+    vessel.left = W / 2 - vessel.width / 2;
+    vessel.bottom = Math.min(H - 60, H * 0.82);
+    vessel.top = vessel.bottom - vessel.height;
+    membraneX = vessel.left + vessel.width / 2;
+    vesselRight = vessel.left + vessel.width;
+
+    pores = [];
+    for (var i = 0; i < PORE_COUNT; i++) {
+      pores.push({ y: vessel.top + (i + 0.5) * (vessel.height / PORE_COUNT) });
+    }
+
+    baseHeight = vessel.height * LEVEL_MID_FRAC;
+    minHeight = vessel.height * LEVEL_MIN_FRAC;
+    maxHeight = vessel.height * LEVEL_MAX_FRAC;
+    pxPerWaterParticle = (maxHeight - baseHeight) / WATER_PER_SIDE_INIT;
+
+    labelLeftEl.style.left = (vessel.left + vessel.width / 4) + 'px';
+    labelLeftEl.style.transform = 'translateX(-50%)';
+    labelRightEl.style.left = (vessel.left + vessel.width * 3 / 4) + 'px';
+    labelRightEl.style.transform = 'translateX(-50%)';
+  }
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    computeGeometry();
+    // не даём уровням/частицам вылезти за пределы нового сосуда
+    if (particles) {
+      currentHeightLeft = Math.min(currentHeightLeft, maxHeight);
+      currentHeightRight = Math.min(currentHeightRight, maxHeight);
+      clampAllIntoVessel();
+    }
+  }
+
+  // ---------- Состояние симуляции ----------
+  var particles = null;
+  var running = true;
+  var lastFrame = null;
+  var concentrationPct = DEFAULT_CONCENTRATION;
+  var temperatureC = DEFAULT_TEMP;
+  var fluxLR = 0, fluxRL = 0;
+  var elapsed = 0;
+
+  var currentHeightLeft = 0, currentHeightRight = 0;
+
+  function speedFactor() {
+    return Math.sqrt((temperatureC + 273) / 298);
+  }
+
+  function soluteCountFor(pct) {
+    return Math.round(SOLUTE_MAX * pct / 100);
+  }
+
+  function randomAngle() { return Math.random() * Math.PI * 2; }
+
+  function spawnWaterParticle(side) {
+    var top = side === 0 ? (vessel.bottom - currentHeightLeft) : (vessel.bottom - currentHeightRight);
+    var xMin = side === 0 ? vessel.left + WATER_RADIUS : membraneX + WATER_RADIUS;
+    var xMax = side === 0 ? membraneX - WATER_RADIUS : vesselRight - WATER_RADIUS;
+    var ang = randomAngle();
+    var speed = WATER_SPEED_BASE * speedFactor();
+    return {
+      kind: 'water', side: side,
+      x: xMin + Math.random() * Math.max(1, xMax - xMin),
+      y: top + WATER_RADIUS + Math.random() * Math.max(1, (side === 0 ? currentHeightLeft : currentHeightRight) - 2 * WATER_RADIUS),
+      vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
+    };
+  }
+
+  function spawnSoluteParticle() {
+    var top = vessel.bottom - currentHeightRight;
+    var ang = randomAngle();
+    var speed = SOLUTE_SPEED_BASE * speedFactor();
+    return {
+      kind: 'solute', side: 1,
+      x: membraneX + SOLUTE_RADIUS + Math.random() * Math.max(1, (vesselRight - membraneX) - 2 * SOLUTE_RADIUS),
+      y: top + SOLUTE_RADIUS + Math.random() * Math.max(1, currentHeightRight - 2 * SOLUTE_RADIUS),
+      vx: Math.cos(ang) * speed, vy: Math.sin(ang) * speed,
+    };
+  }
+
+  function spawnAll() {
+    currentHeightLeft = baseHeight;
+    currentHeightRight = baseHeight;
+    var arr = [];
+    var i;
+    for (i = 0; i < WATER_PER_SIDE_INIT; i++) arr.push(spawnWaterParticle(0));
+    for (i = 0; i < WATER_PER_SIDE_INIT; i++) arr.push(spawnWaterParticle(1));
+    var nSolute = soluteCountFor(concentrationPct);
+    for (i = 0; i < nSolute; i++) arr.push(spawnSoluteParticle());
+    fluxLR = 0; fluxRL = 0; elapsed = 0;
+    return arr;
+  }
+
+  function currentSoluteCount() {
+    var n = 0;
+    for (var i = 0; i < particles.length; i++) if (particles[i].kind === 'solute') n++;
+    return n;
+  }
+
+  function adjustSoluteCount() {
+    if (!particles) return;
+    var target = soluteCountFor(concentrationPct);
+    var have = currentSoluteCount();
+    if (have < target) {
+      for (var i = 0; i < target - have; i++) particles.push(spawnSoluteParticle());
+    } else if (have > target) {
+      var toRemove = have - target;
+      for (var j = particles.length - 1; j >= 0 && toRemove > 0; j--) {
+        if (particles[j].kind === 'solute') { particles.splice(j, 1); toRemove--; }
+      }
+    }
+  }
+
+  function clampAllIntoVessel() {
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      var r = p.kind === 'water' ? WATER_RADIUS : SOLUTE_RADIUS;
+      var top = p.side === 0 ? vessel.bottom - currentHeightLeft : vessel.bottom - currentHeightRight;
+      p.y = Math.min(vessel.bottom - r, Math.max(top + r, p.y));
+      if (p.side === 0) {
+        p.x = Math.min(membraneX - r, Math.max(vessel.left + r, p.x));
+      } else {
+        p.x = Math.min(vesselRight - r, Math.max(membraneX + r, p.x));
+      }
+    }
+  }
+
+  // ---------- Физический шаг ----------
+  function countWater() {
+    var l = 0, r = 0;
+    for (var i = 0; i < particles.length; i++) {
+      if (particles[i].kind === 'water') { if (particles[i].side === 0) l++; else r++; }
+    }
+    return { left: l, right: r };
+  }
+
+  // Локальная концентрация вещества у мембраны со стороны раствора: доля
+  // частиц solute в узкой полосе шириной BLOCK_STRIP_X, прижатой к мембране
+  // справа. Чем она выше — тем сильнее блокируются поры для воды,
+  // идущей ИЗ раствора обратно в чистую воду (эффект "затора" у входа).
+  function nearMembraneBlockFactor() {
+    var count = 0;
+    var xMax = membraneX + BLOCK_STRIP_X;
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      if (p.kind === 'solute' && p.x <= xMax) count++;
+    }
+    var conc = Math.min(1, count / BLOCK_SAT);
+    return Math.max(0.03, 1 - conc); // небольшой пол, чтобы проход никогда не был буквально нулевым
+  }
+
+  function findAlignedPore(y, topLeftY, topRightY) {
+    var best = -1, bestDist = PORE_HALF_HEIGHT;
+    for (var i = 0; i < pores.length; i++) {
+      var py = pores[i].y;
+      // пора должна быть "мокрой" (ниже уровня жидкости) с ОБЕИХ сторон
+      if (py <= topLeftY || py <= topRightY) continue;
+      var d = Math.abs(y - py);
+      if (d < bestDist) { bestDist = d; best = i; }
+    }
+    return best;
+  }
+
+  function resolveOne(p, dt, topLeftY, topRightY, blockFactor) {
+    var kind = p.kind;
+    var r = kind === 'water' ? WATER_RADIUS : SOLUTE_RADIUS;
+    var speed = (kind === 'water' ? WATER_SPEED_BASE : SOLUTE_SPEED_BASE) * speedFactor();
+
+    var ang = Math.atan2(p.vy, p.vx) + (Math.random() - 0.5) * ANGLE_JITTER * dt;
+    p.vx = Math.cos(ang) * speed;
+    p.vy = Math.sin(ang) * speed;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+
+    // пол
+    if (p.y + r > vessel.bottom) { p.y = vessel.bottom - r; if (p.vy > 0) p.vy = -p.vy; }
+    // собственный уровень жидкости (свободная поверхность)
+    var ownTop = p.side === 0 ? topLeftY : topRightY;
+    if (p.y - r < ownTop) { p.y = ownTop + r; if (p.vy < 0) p.vy = -p.vy; }
+
+    if (p.side === 0) {
+      if (p.x - r < vessel.left) { p.x = vessel.left + r; if (p.vx < 0) p.vx = -p.vx; }
+    } else {
+      if (p.x + r > vesselRight) { p.x = vesselRight - r; if (p.vx > 0) p.vx = -p.vx; }
+    }
+
+    if (kind === 'solute') {
+      if (p.x - r < membraneX) { p.x = membraneX + r; if (p.vx < 0) p.vx = -p.vx; }
+      return;
+    }
+
+    // вода: контакт с мембраной
+    if (p.side === 0 && p.x + r > membraneX) {
+      var poreL = findAlignedPore(p.y, topLeftY, topRightY);
+      if (poreL >= 0 && Math.random() < P_BASE) {
+        p.side = 1; p.x = membraneX + r + PASS_OFFSET; fluxLR++;
+      } else {
+        p.x = membraneX - r; if (p.vx > 0) p.vx = -p.vx;
+      }
+    } else if (p.side === 1 && p.x - r < membraneX) {
+      var poreR = findAlignedPore(p.y, topLeftY, topRightY);
+      if (poreR >= 0 && Math.random() < P_BASE * blockFactor) {
+        p.side = 0; p.x = membraneX - r - PASS_OFFSET; fluxRL++;
+      } else {
+        p.x = membraneX + r; if (p.vx < 0) p.vx = -p.vx;
+      }
+    }
+  }
+
+  function step(dtFull) {
+    if (dtFull <= 0) return;
+    var w = countWater();
+    var targetLeft = Math.max(minHeight, Math.min(maxHeight, baseHeight + (w.left - WATER_PER_SIDE_INIT) * pxPerWaterParticle));
+    var targetRight = Math.max(minHeight, Math.min(maxHeight, baseHeight + (w.right - WATER_PER_SIDE_INIT) * pxPerWaterParticle));
+    var maxDelta = LEVEL_SMOOTH_RATE * dtFull;
+    currentHeightLeft += Math.max(-maxDelta, Math.min(maxDelta, targetLeft - currentHeightLeft));
+    currentHeightRight += Math.max(-maxDelta, Math.min(maxDelta, targetRight - currentHeightRight));
+
+    var topLeftY = vessel.bottom - currentHeightLeft;
+    var topRightY = vessel.bottom - currentHeightRight;
+    var blockFactor = nearMembraneBlockFactor();
+
+    var sdt = dtFull / SUBSTEPS;
+    for (var s = 0; s < SUBSTEPS; s++) {
+      for (var i = 0; i < particles.length; i++) {
+        resolveOne(particles[i], sdt, topLeftY, topRightY, blockFactor);
+      }
+    }
+    elapsed += dtFull;
+  }
+
+  // ---------- Отрисовка ----------
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b0f16';
+    ctx.fillRect(0, 0, W, H);
+
+    var topLeftY = vessel.bottom - currentHeightLeft;
+    var topRightY = vessel.bottom - currentHeightRight;
+
+    // жидкость: слева
+    ctx.fillStyle = 'rgba(79,143,247,0.20)';
+    ctx.fillRect(vessel.left, topLeftY, vessel.width / 2, currentHeightLeft);
+    // жидкость: справа (чуть теплее оттенок — раствор)
+    ctx.fillStyle = 'rgba(120,150,220,0.22)';
+    ctx.fillRect(membraneX, topRightY, vessel.width / 2, currentHeightRight);
+
+    // стенки сосуда
+    ctx.strokeStyle = 'rgba(232,236,241,0.7)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(vessel.left, vessel.top);
+    ctx.lineTo(vessel.left, vessel.bottom);
+    ctx.lineTo(vesselRight, vessel.bottom);
+    ctx.lineTo(vesselRight, vessel.top);
+    ctx.stroke();
+
+    // уровни (линии-полоски)
+    ctx.strokeStyle = '#5ec8ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(vessel.left, topLeftY); ctx.lineTo(membraneX, topLeftY); ctx.stroke();
+    ctx.strokeStyle = '#9fb4ff';
+    ctx.beginPath(); ctx.moveTo(membraneX, topRightY); ctx.lineTo(vesselRight, topRightY); ctx.stroke();
+
+    // частицы
+    var i, p;
+    for (i = 0; i < particles.length; i++) {
+      p = particles[i];
+      ctx.beginPath();
+      if (p.kind === 'water') {
+        ctx.fillStyle = '#5ec8ff';
+        ctx.arc(p.x, p.y, WATER_RADIUS, 0, Math.PI * 2);
+      } else {
+        ctx.fillStyle = '#ff9f40';
+        ctx.arc(p.x, p.y, SOLUTE_RADIUS, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    }
+
+    // мембрана (сплошные сегменты между порами — поры видны как разрывы)
+    var segStart = vessel.top;
+    ctx.fillStyle = '#4a5568';
+    var sorted = pores.slice().sort(function (a, b) { return a.y - b.y; });
+    for (i = 0; i <= sorted.length; i++) {
+      var segEnd = i < sorted.length ? sorted[i].y - PORE_HALF_HEIGHT : vessel.bottom;
+      if (segEnd > segStart) ctx.fillRect(membraneX - 3, segStart, 6, segEnd - segStart);
+      if (i < sorted.length) segStart = sorted[i].y + PORE_HALF_HEIGHT;
+    }
+    // обводка пор для наглядности
+    ctx.strokeStyle = 'rgba(139,149,163,0.55)';
+    ctx.lineWidth = 1.5;
+    for (i = 0; i < pores.length; i++) {
+      ctx.beginPath();
+      ctx.moveTo(membraneX - 8, pores[i].y - PORE_HALF_HEIGHT);
+      ctx.lineTo(membraneX - 8, pores[i].y + PORE_HALF_HEIGHT);
+      ctx.moveTo(membraneX + 8, pores[i].y - PORE_HALF_HEIGHT);
+      ctx.lineTo(membraneX + 8, pores[i].y + PORE_HALF_HEIGHT);
+      ctx.stroke();
+    }
+
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = '#8b95a3';
+    ctx.fillText('мембрана с порами', membraneX - 46, vessel.top - 10);
+  }
+
+  // ---------- HUD ----------
+  var hud = document.getElementById('info-panel');
+  var elWater = document.getElementById('valWater');
+  var elLevel = document.getElementById('valLevel');
+  var elFluxLR = document.getElementById('valFluxLR');
+  var elFluxRL = document.getElementById('valFluxRL');
+  var elNet = document.getElementById('valNet');
+  var elCT = document.getElementById('valCT');
+  var elPi = document.getElementById('valPi');
+
+  function updateHud() {
+    var w = countWater();
+    var cM = (concentrationPct / 100) * C_MAX_MOL;
+    var tK = 273 + temperatureC;
+    var pi = cM * R_CONST * tK;
+
+    elWater.textContent = w.left + ' / ' + w.right;
+    elLevel.textContent = currentHeightLeft.toFixed(0) + ' / ' + currentHeightRight.toFixed(0) + ' px';
+    elFluxLR.textContent = fluxLR;
+    elFluxRL.textContent = fluxRL;
+    elNet.textContent = (fluxLR - fluxRL >= 0 ? '+' : '') + (fluxLR - fluxRL) + ' →';
+    elCT.textContent = cM.toFixed(2) + ', ' + tK.toFixed(0);
+    elPi.textContent = pi.toFixed(2);
+
+    hud.setAttribute('data-water-left', String(w.left));
+    hud.setAttribute('data-water-right', String(w.right));
+    hud.setAttribute('data-solute-count', String(currentSoluteCount()));
+    hud.setAttribute('data-flux-lr', String(fluxLR));
+    hud.setAttribute('data-flux-rl', String(fluxRL));
+    hud.setAttribute('data-net-flux', String(fluxLR - fluxRL));
+    hud.setAttribute('data-level-left-px', currentHeightLeft.toFixed(2));
+    hud.setAttribute('data-level-right-px', currentHeightRight.toFixed(2));
+    hud.setAttribute('data-concentration', String(concentrationPct));
+    hud.setAttribute('data-osmotic-pressure', pi.toFixed(3));
+    hud.setAttribute('data-elapsed', elapsed.toFixed(2));
+  }
+
+  // ---------- Главный цикл ----------
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+
+    if (running) step(dt);
+    draw();
+    updateHud();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Осмос через полупроницаемую мембрану');
+  SimUI.slider({
+    label: 'Концентрация раствора', min: 0, max: 100, step: 1, value: DEFAULT_CONCENTRATION, unit: '%',
+    onChange: function (v) { concentrationPct = v; adjustSoluteCount(); },
+  });
+  SimUI.slider({
+    label: 'Температура', min: 0, max: 60, step: 1, value: DEFAULT_TEMP, unit: '°C',
+    onChange: function (v) { temperatureC = v; },
+  });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: function () {
+      // слайдеры не трогаем — пересобираем сцену заново при текущей концентрации
+      particles = spawnAll();
+    },
+  });
+
+  // ---------- Инициализация ----------
+  window.addEventListener('resize', resize);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  computeGeometry();
+  particles = spawnAll();
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
