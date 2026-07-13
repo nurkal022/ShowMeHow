@@ -60,6 +60,8 @@ body { margin: 0; background: var(--bg); color: var(--text); }
   border-radius: var(--radius); padding: 10px; font-size: 13px; }
 .link-btn { background: none; border: none; color: var(--accent); cursor: pointer;
   padding: 0; text-align: left; font-size: 13px; }
+.link-btn.danger { color: var(--danger); }
+.link-btn:disabled { opacity: .6; cursor: default; }
 
 .library { padding: 24px; max-width: 1100px; margin: 0 auto; }
 .library-head { display: flex; justify-content: space-between; align-items: center; }

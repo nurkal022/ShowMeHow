@@ -8,6 +8,12 @@ import PreviewFrame from './PreviewFrame';
 
 type Phase = 'idle' | 'generating' | 'ready' | 'error';
 
+// Дефолтное число кандидатов по режиму (зеркалит MODES[mode].candidates из
+// pipeline/run.ts — не импортируем тот модуль сюда, он тянет серверные зависимости
+// вроде fs/renderer, которые не должны попадать в клиентский бандл).
+const CAND_DEFAULT: Record<QualityMode, number> = { fast: 1, standard: 2, max: 3 };
+const ACTIVE_JOB_KEY = 'showmehow-active-job';
+
 export default function Workbench() {
   const search = useSearchParams();
   const [phase, setPhase] = useState<Phase>('idle');
@@ -16,14 +22,66 @@ export default function Workbench() {
   const [simId, setSimId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [mode, setMode] = useState<QualityMode>('max');
+  const [candidates, setCandidates] = useState<number>(CAND_DEFAULT.max);
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  function onModeChange(next: QualityMode) {
+    setMode(next);
+    // Смена режима сбрасывает пользовательский выбор числа кандидатов на дефолт режима.
+    setCandidates(CAND_DEFAULT[next]);
+  }
+
+  function clearActiveJob() {
+    localStorage.removeItem(ACTIVE_JOB_KEY);
+    setJobId(null);
+    setCancelling(false);
+  }
+
   useEffect(() => {
-    const id = search.get('id');
-    if (id) openSimulation(id);
+    // Порядок при монтировании: активный (running) job важнее ?id= — он восстанавливается
+    // из localStorage и переподключается по SSE; ?id= обрабатывается только если такого
+    // job нет (или он уже завершился и был вычищен).
+    const activeJobId = localStorage.getItem(ACTIVE_JOB_KEY);
+    if (!activeJobId) {
+      const id = search.get('id');
+      if (id) openSimulation(id);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch(`/api/jobs/${activeJobId}`);
+        if (!res.ok) {
+          // 404 (job исчез) или иная ошибка сервера — реплей всё равно невозможен.
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+          return;
+        }
+        const job = await res.json();
+        if (job.status === 'running') {
+          setJobId(activeJobId);
+          await connectToJob(activeJobId);
+        } else if (job.status === 'done') {
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+          if (job.simulationId) await openSimulation(job.simulationId);
+        } else if (job.status === 'cancelled') {
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+          setError('Генерация отменена');
+          setPhase('idle');
+        } else {
+          // error
+          localStorage.removeItem(ACTIVE_JOB_KEY);
+          setError(job.error ?? 'Ошибка генерации');
+          setPhase('error');
+        }
+      } catch {
+        // Сеть недоступна прямо сейчас — оставляем ключ; при следующей загрузке
+        // страницы попробуем переподключиться снова.
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -35,11 +93,12 @@ export default function Workbench() {
         const res = await fetch('/api/settings');
         if (!res.ok) return;
         const s = await res.json();
-        if (s?.qualityMode) setMode(s.qualityMode);
+        if (s?.qualityMode) onModeChange(s.qualityMode);
       } catch {
         // настройки недоступны — остаёмся на дефолтном режиме
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function openSimulation(id: string) {
@@ -88,7 +147,7 @@ export default function Workbench() {
     }
   }
 
-  async function consumeSSE(res: Response) {
+  async function consumeJobStream(res: Response) {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
@@ -104,12 +163,30 @@ export default function Workbench() {
           if (!part.startsWith('data: ')) continue;
           const e = JSON.parse(part.slice(6)) as PipelineEvent;
           setEvents((prev) => [...prev, e]);
-          if (e.type === 'done') { sawTerminal = true; await openSimulation(e.simulationId); }
-          if (e.type === 'error') { sawTerminal = true; setError(e.message); setPhase('error'); }
+          if (e.type === 'done') {
+            sawTerminal = true;
+            clearActiveJob();
+            await openSimulation(e.simulationId);
+          }
+          if (e.type === 'error') {
+            sawTerminal = true;
+            clearActiveJob();
+            setError(e.message);
+            setPhase('error');
+          }
+          if (e.type === 'cancelled') {
+            sawTerminal = true;
+            clearActiveJob();
+            setError('Генерация отменена');
+            setPhase('idle');
+          }
         }
       }
       if (!sawTerminal) {
-        setError('Поток прервался, попробуйте ещё раз');
+        // Strand-guard: поток закрылся без терминального события. НЕ чистим ключ —
+        // job может ещё работать на сервере (например, сеть моргнула); при следующем
+        // монтировании мы переподключимся и, если job жив, реплей восстановит прогресс.
+        setError('Поток прервался, попробуйте перезагрузить страницу');
         setPhase('error');
       }
     } catch (err) {
@@ -119,12 +196,30 @@ export default function Workbench() {
     }
   }
 
+  async function connectToJob(id: string) {
+    setPhase('generating');
+    try {
+      const res = await fetch(`/api/jobs/${id}/stream`);
+      if (!res.ok) {
+        // Job исчез (404) или сервер вернул ошибку — чистим ключ, реплей невозможен.
+        clearActiveJob();
+        setError('Задание не найдено');
+        setPhase('error');
+        return;
+      }
+      await consumeJobStream(res);
+    } catch (err) {
+      setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
+      setPhase('error');
+    }
+  }
+
   async function generate(text: string) {
-    setPhase('generating'); setEvents([]); setError(null); setHtml(null);
+    setPhase('generating'); setEvents([]); setError(null); setHtml(null); setCancelling(false);
     try {
       const res = await fetch('/api/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, imageDataUrl: image ?? undefined, mode }),
+        body: JSON.stringify({ prompt: text, imageDataUrl: image ?? undefined, mode, candidates }),
       });
       if (!res.ok) {
         let message = `Ошибка сервера (${res.status})`;
@@ -136,10 +231,25 @@ export default function Workbench() {
         setPhase('error');
         return;
       }
-      await consumeSSE(res);
+      const { jobId: newJobId } = await res.json();
+      localStorage.setItem(ACTIVE_JOB_KEY, newJobId);
+      setJobId(newJobId);
+      await connectToJob(newJobId);
     } catch (err) {
       setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
       setPhase('error');
+    }
+  }
+
+  async function cancelJob() {
+    if (!jobId || cancelling) return;
+    setCancelling(true);
+    try {
+      await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST' });
+    } catch {
+      // Отмена best-effort: если запрос не дошёл, пользователь может нажать ещё раз
+      // (requestCancel идемпотентен); статус придёт по SSE, если сервер всё же получил её.
+      setCancelling(false);
     }
   }
 
@@ -188,20 +298,42 @@ export default function Workbench() {
         {hasSim && phase !== 'generating' && (
           <button className="link-btn" onClick={() => {
             setPhase('idle'); setSimId(null); setHtml(null); setEvents([]); setError(null);
-            setHistory([]);
+            setHistory([]); clearActiveJob();
           }}>+ начать новую</button>
         )}
         <ProgressFeed events={events} />
         {error && <div className="error-box">{error}</div>}
+        {phase === 'generating' && jobId && (
+          <button
+            className="link-btn danger"
+            disabled={cancelling}
+            onClick={cancelJob}
+          >
+            {cancelling ? 'Отменяю…' : '✕ Отменить'}
+          </button>
+        )}
         <div className="composer">
           {!hasSim && (
             <div className="composer-row">
-              <select value={mode} onChange={(e) => setMode(e.target.value as QualityMode)}>
+              <select
+                value={mode}
+                disabled={phase === 'generating'}
+                onChange={(e) => onModeChange(e.target.value as QualityMode)}
+              >
                 <option value="max">Максимум (3-6 мин)</option>
                 <option value="standard">Стандарт (1-3 мин)</option>
                 <option value="fast">Быстрый (~1 мин)</option>
               </select>
-              <button onClick={() => fileRef.current?.click()}>
+              <select
+                value={candidates}
+                disabled={phase === 'generating'}
+                onChange={(e) => setCandidates(Number(e.target.value))}
+              >
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>Кандидатов: {n}</option>
+                ))}
+              </select>
+              <button disabled={phase === 'generating'} onClick={() => fileRef.current?.click()}>
                 {image ? '🖼 картинка ✓' : '🖼 картинка'}
               </button>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
