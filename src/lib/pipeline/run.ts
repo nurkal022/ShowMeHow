@@ -180,8 +180,10 @@ export async function runPipeline(
             const before = current;
             try {
               const refined = await refineHtml(ctx, best.html, feedback);
+              // Индекс — оригинальный индекс победителя: candidate/screenshot-события
+              // доводки должны обновлять КАРТОЧКУ победителя в UI, а не кандидата 0.
               const verified = await verifyCandidate(
-                ctx, spec, refined, 0, styleNames[bestOrigIndex] ?? styleNames[0],
+                ctx, spec, refined, bestOrigIndex, styleNames[bestOrigIndex] ?? styleNames[0],
               );
               if (!verified.alive) {
                 // доводка сломала — оставляем предыдущее

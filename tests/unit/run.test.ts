@@ -176,6 +176,47 @@ describe('runPipeline', () => {
     expect(verdictEvent).toMatchObject({ candidateIndices: [0, 2] });
   });
 
+  it('refine-phase candidate/screenshot events carry the winner\'s ORIGINAL index '
+    + '(dead middle candidate, winner orig-index 2)', async () => {
+    const events: PipelineEvent[] = [];
+    const dead = '```html\n<html><body>DEADCAND</body></html>\n```';
+    const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
+    let judgeCall = 0;
+    const ctx: Ctx = {
+      genChat: vi.fn(async (msgs) => {
+        const sys = String(msgs[0].content);
+        if (sys.includes('методист')) return JSON.stringify(SPEC);
+        if (sys.includes('НАГЛЯДНОСТЬ')) return dead; // средний кандидат (1) — мёртвый
+        const user = String(msgs[1]?.content ?? '');
+        if (user.includes('DEADCAND')) return dead; // фиксер не спасает
+        return '```html\n' + HTML + '\n```';
+      }),
+      visionChat: vi.fn(async (msgs) => {
+        const sys = String(msgs[0].content);
+        if (!sys.includes('судья качества')) return '{"physicsOk": true, "issues": []}';
+        // Первый суд: живые [0, 2]; winnerIndex 1 → оригинальный индекс 2; слабые баллы
+        // у победителя запускают доводку. Пересуд (rescore) возвращает GOOD — стоп.
+        if (judgeCall++ === 0) {
+          return JSON.stringify({ winnerIndex: 1, scores: [GOOD, WEAK], feedback: 'улучшить' });
+        }
+        return JSON.stringify({ winnerIndex: 0, scores: [GOOD], feedback: '' });
+      }),
+      render: vi.fn(async (html: string) => (html.includes('DEADCAND') ? badRender : okRender)),
+      emit: (e) => events.push(e),
+    };
+    await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
+    expect(events.filter((e) => e.type === 'refine-round')).toHaveLength(1);
+    // все candidate/screenshot-события ПОСЛЕ старта доводки — про карточку победителя (2),
+    // а не про кандидата 0: иначе UI перерисовывал бы чужую карточку.
+    const refineStart = events.findIndex(
+      (e) => e.type === 'stage' && e.stage === 'refining' && e.status === 'start');
+    expect(refineStart).toBeGreaterThan(-1);
+    const refinePhase = events.slice(refineStart)
+      .filter((e) => e.type === 'candidate' || e.type === 'screenshot');
+    expect(refinePhase.length).toBeGreaterThan(0);
+    for (const e of refinePhase) expect(e).toMatchObject({ index: 2 });
+  });
+
   it('all candidates broken: saves best-effort with warning', async () => {
     const bad: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
     const { ctx, events } = fakeCtx({ renders: Array(20).fill(bad) });
