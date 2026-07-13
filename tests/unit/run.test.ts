@@ -113,6 +113,42 @@ describe('runPipeline', () => {
     expect(judgeCalls).toHaveLength(0); // суд так и не был вызван
   });
 
+  it('CancelledError: cancel during candidate generation still emits generating stage end', async () => {
+    const { ctx, events } = fakeCtx();
+    // Сигнал становится true ИЗНУТРИ генерации: первый вызов генератора взводит флаг,
+    // так что checkCancelled следующего кандидата (внутри Promise.all-спана) бросает.
+    let generatorCalled = false;
+    const origGen = ctx.genChat;
+    ctx.genChat = vi.fn(async (msgs) => {
+      const sys = String(msgs[0].content);
+      if (sys.includes('эксперт по учебным визуализациям')) generatorCalled = true;
+      return origGen(msgs);
+    });
+    await expect(runPipeline(ctx, { prompt: 'маятник', mode: 'standard' }, () => generatorCalled))
+      .rejects.toThrow(CancelledError);
+    // start не должен остаться висящим: end обязателен даже при отмене посреди этапа
+    expect(events).toContainEqual(
+      { type: 'stage', stage: 'generating', status: 'start', at: expect.any(Number) });
+    expect(events).toContainEqual(
+      { type: 'stage', stage: 'generating', status: 'end', at: expect.any(Number) });
+    expect(events.some((e) => e.type === 'done')).toBe(false);
+  });
+
+  it('CancelledError: cancel before a refine round still emits refining stage end', async () => {
+    const { ctx, events } = fakeCtx();
+    // Судья отработал (feedback непустой → standard пойдёт в круг доводки),
+    // сигнал становится true сразу после judge-verdict — отмена ловится
+    // проверкой перед кругом, уже ВНУТРИ refining-спана (после start).
+    const signal = () => events.some((e) => e.type === 'judge-verdict');
+    await expect(runPipeline(ctx, { prompt: 'маятник', mode: 'standard' }, signal))
+      .rejects.toThrow(CancelledError);
+    expect(events).toContainEqual(
+      { type: 'stage', stage: 'refining', status: 'start', at: expect.any(Number) });
+    expect(events).toContainEqual(
+      { type: 'stage', stage: 'refining', status: 'end', at: expect.any(Number) });
+    expect(events.some((e) => e.type === 'done')).toBe(false);
+  });
+
   it('judge-verdict event maps alive positions to original candidate indices '
     + 'when the middle candidate dies', async () => {
     const events: PipelineEvent[] = [];

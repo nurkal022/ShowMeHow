@@ -90,21 +90,27 @@ export async function runPipeline(
   const styleNames = Array.from({ length: count }, (_, i) => STYLE_NAMES[i % STYLE_NAMES.length]);
 
   emitStage(ctx, 'generating', 'start');
-  const candidates = await Promise.all(
-    hints.map(async (hint, index) => {
-      checkCancelled();
-      const styleName = styleNames[index];
-      ctx.emit({ type: 'candidate', index, status: 'generating', styleHint: styleName });
-      try {
-        const html = await generateCandidate(ctx, spec, hint);
-        return await verifyCandidate(ctx, spec, html, index, styleName);
-      } catch {
-        ctx.emit({ type: 'candidate', index, status: 'failed', styleHint: styleName });
-        return null;
-      }
-    }),
-  );
-  emitStage(ctx, 'generating', 'end');
+  let candidates: (CandidateResult | null)[];
+  try {
+    candidates = await Promise.all(
+      hints.map(async (hint, index) => {
+        checkCancelled();
+        const styleName = styleNames[index];
+        ctx.emit({ type: 'candidate', index, status: 'generating', styleHint: styleName });
+        try {
+          const html = await generateCandidate(ctx, spec, hint);
+          return await verifyCandidate(ctx, spec, html, index, styleName);
+        } catch {
+          ctx.emit({ type: 'candidate', index, status: 'failed', styleHint: styleName });
+          return null;
+        }
+      }),
+    );
+  } finally {
+    // Отмена (checkCancelled внутри Promise.all-спана) не должна оставлять висящий
+    // stage-start: end эмитится всегда, иначе чип таймлайна пульсировал бы вечно.
+    emitStage(ctx, 'generating', 'end');
+  }
 
   const alive: CandidateResult[] = [];
   const aliveIndices: number[] = [];
@@ -160,37 +166,44 @@ export async function runPipeline(
       // подстраховываемся нулевым объектом, чтобы minScore() ниже не упал на undefined.
       let current = verdict.scores[verdict.winnerIndex] ?? { ...ZERO_SCORES };
 
-      if (mode.maxRefine > 0) emitStage(ctx, 'refining', 'start');
-      for (let round = 0; round < mode.maxRefine; round++) {
-        const belowThreshold = mode.threshold > 0 && minScore(current) < mode.threshold;
-        const firstStandardRound = mode.threshold === 0 && round === 0 && !!feedback;
-        if (!belowThreshold && !firstStandardRound) break;
-        checkCancelled();
-        const before = current;
+      if (mode.maxRefine > 0) {
+        emitStage(ctx, 'refining', 'start');
+        // finally: отмена (checkCancelled перед кругом или проброшенный CancelledError
+        // из круга) не должна оставлять висящий refining-start без end.
         try {
-          const refined = await refineHtml(ctx, best.html, feedback);
-          const verified = await verifyCandidate(
-            ctx, spec, refined, 0, styleNames[bestOrigIndex] ?? styleNames[0],
-          );
-          if (!verified.alive) {
-            // доводка сломала — оставляем предыдущее
-            ctx.emit({ type: 'refine-round', round: round + 1, before, after: null });
-            break;
+          for (let round = 0; round < mode.maxRefine; round++) {
+            const belowThreshold = mode.threshold > 0 && minScore(current) < mode.threshold;
+            const firstStandardRound = mode.threshold === 0 && round === 0 && !!feedback;
+            if (!belowThreshold && !firstStandardRound) break;
+            checkCancelled();
+            const before = current;
+            try {
+              const refined = await refineHtml(ctx, best.html, feedback);
+              const verified = await verifyCandidate(
+                ctx, spec, refined, 0, styleNames[bestOrigIndex] ?? styleNames[0],
+              );
+              if (!verified.alive) {
+                // доводка сломала — оставляем предыдущее
+                ctx.emit({ type: 'refine-round', round: round + 1, before, after: null });
+                break;
+              }
+              const re = await rescore(ctx, spec, verified);
+              best = verified;
+              current = re.scores;
+              feedback = re.feedback;
+              ctx.emit({ type: 'refine-round', round: round + 1, before, after: current });
+            } catch (e) {
+              if (e instanceof CancelledError) throw e;
+              // рефайн или пересуд упал (например, судья вернул не-JSON) — не валим пайплайн,
+              // просто останавливаемся на текущем лучшем кандидате.
+              ctx.emit({ type: 'refine-round', round: round + 1, before, after: null });
+              break;
+            }
           }
-          const re = await rescore(ctx, spec, verified);
-          best = verified;
-          current = re.scores;
-          feedback = re.feedback;
-          ctx.emit({ type: 'refine-round', round: round + 1, before, after: current });
-        } catch (e) {
-          if (e instanceof CancelledError) throw e;
-          // рефайн или пересуд упал (например, судья вернул не-JSON) — не валим пайплайн,
-          // просто останавливаемся на текущем лучшем кандидате.
-          ctx.emit({ type: 'refine-round', round: round + 1, before, after: null });
-          break;
+        } finally {
+          emitStage(ctx, 'refining', 'end');
         }
       }
-      if (mode.maxRefine > 0) emitStage(ctx, 'refining', 'end');
     }
   } else {
     best = alive[0];
