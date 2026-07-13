@@ -3,6 +3,7 @@ import type {
   CandidateResult, RubricScores,
 } from '../types';
 import { minScore } from '../types';
+import { CANDIDATE_DEFAULTS } from '../candidate-defaults';
 import { activeProvider } from '../settings';
 import { bindChat } from '../provider';
 import { renderArtifact } from '../renderer';
@@ -18,9 +19,9 @@ const CDN_ALLOWED = Object.values(CDN_WHITELIST);
 export const MODES: Record<QualityMode, {
   candidates: number; useJudge: boolean; maxRefine: number; threshold: number;
 }> = {
-  fast: { candidates: 1, useJudge: false, maxRefine: 0, threshold: 0 },
-  standard: { candidates: 2, useJudge: true, maxRefine: 1, threshold: 0 },
-  max: { candidates: 3, useJudge: true, maxRefine: 3, threshold: 8 },
+  fast: { candidates: CANDIDATE_DEFAULTS.fast, useJudge: false, maxRefine: 0, threshold: 0 },
+  standard: { candidates: CANDIDATE_DEFAULTS.standard, useJudge: true, maxRefine: 1, threshold: 0 },
+  max: { candidates: CANDIDATE_DEFAULTS.max, useJudge: true, maxRefine: 3, threshold: 8 },
 };
 
 /** Кооперативная отмена: runPipeline бросает это между этапами, если signal() вернул true. */

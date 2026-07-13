@@ -2,16 +2,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { PipelineEvent, QualityMode } from '@/lib/types';
+import { CANDIDATE_DEFAULTS } from '@/lib/candidate-defaults';
 import { historyLabel } from '@/lib/history-label';
 import ProgressFeed from './ProgressFeed';
 import PreviewFrame from './PreviewFrame';
 
 type Phase = 'idle' | 'generating' | 'ready' | 'error';
 
-// Дефолтное число кандидатов по режиму (зеркалит MODES[mode].candidates из
-// pipeline/run.ts — не импортируем тот модуль сюда, он тянет серверные зависимости
-// вроде fs/renderer, которые не должны попадать в клиентский бандл).
-const CAND_DEFAULT: Record<QualityMode, number> = { fast: 1, standard: 2, max: 3 };
 const ACTIVE_JOB_KEY = 'showmehow-active-job';
 
 export default function Workbench() {
@@ -22,18 +19,23 @@ export default function Workbench() {
   const [simId, setSimId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [mode, setMode] = useState<QualityMode>('max');
-  const [candidates, setCandidates] = useState<number>(CAND_DEFAULT.max);
+  const [candidates, setCandidates] = useState<number>(CANDIDATE_DEFAULTS.max);
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [jobId, setJobId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Strict Mode в dev монтирует компонент дважды — mount-эффект должен отработать
+  // ровно один раз, иначе реплей job-стрима запустится параллельно и продублирует события.
+  const didInit = useRef(false);
+  // jobId, к стриму которого мы сейчас подключены (защита от повторного connect к тому же job).
+  const connectedJobRef = useRef<string | null>(null);
 
   function onModeChange(next: QualityMode) {
     setMode(next);
     // Смена режима сбрасывает пользовательский выбор числа кандидатов на дефолт режима.
-    setCandidates(CAND_DEFAULT[next]);
+    setCandidates(CANDIDATE_DEFAULTS[next]);
   }
 
   function clearActiveJob() {
@@ -43,6 +45,11 @@ export default function Workbench() {
   }
 
   useEffect(() => {
+    // Guard от двойного вызова эффекта в React Strict Mode: без него dev-режим
+    // открыл бы ДВА параллельных SSE-подключения к job и каждый реплей-кадр
+    // попадал бы в state дважды.
+    if (didInit.current) return;
+    didInit.current = true;
     // Порядок при монтировании: активный (running) job важнее ?id= — он восстанавливается
     // из localStorage и переподключается по SSE; ?id= обрабатывается только если такого
     // job нет (или он уже завершился и был вычищен).
@@ -197,7 +204,14 @@ export default function Workbench() {
   }
 
   async function connectToJob(id: string) {
+    // Идемпотентность по jobId: если к этому job уже открыт стрим, второй вызов
+    // (двойной эффект, случайный повторный клик) не открывает параллельное подключение.
+    if (connectedJobRef.current === id) return;
+    connectedJobRef.current = id;
     setPhase('generating');
+    // Реплей всегда начинается с чистого листа: даже неожиданный реконнект
+    // не может продублировать уже показанные события.
+    setEvents([]);
     try {
       const res = await fetch(`/api/jobs/${id}/stream`);
       if (!res.ok) {
@@ -211,6 +225,10 @@ export default function Workbench() {
     } catch (err) {
       setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
       setPhase('error');
+    } finally {
+      // Стрим завершился (терминально или обрывом) — разрешаем будущий реконнект
+      // к этому же job (например, после strand-guard и перезагрузки состояния).
+      if (connectedJobRef.current === id) connectedJobRef.current = null;
     }
   }
 
