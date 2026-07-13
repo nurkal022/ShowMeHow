@@ -4,7 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import type { PipelineEvent, QualityMode } from '@/lib/types';
 import { CANDIDATE_DEFAULTS } from '@/lib/candidate-defaults';
 import { historyLabel } from '@/lib/history-label';
-import ProgressFeed from './ProgressFeed';
+import ProgressView from './progress/ProgressView';
 import PreviewFrame from './PreviewFrame';
 
 type Phase = 'idle' | 'generating' | 'ready' | 'error';
@@ -178,13 +178,14 @@ export default function Workbench() {
           if (e.type === 'error') {
             sawTerminal = true;
             clearActiveJob();
-            setError(e.message);
+            // Сообщение об ошибке уже показывает ProgressView (баннер .error-box
+            // внутри неё, из того же события) — здесь только разблокируем композер.
             setPhase('error');
           }
           if (e.type === 'cancelled') {
             sawTerminal = true;
             clearActiveJob();
-            setError('Генерация отменена');
+            // Баннер отмены рисует ProgressView из этого же события — не дублируем.
             setPhase('idle');
           }
         }
@@ -271,19 +272,28 @@ export default function Workbench() {
     }
   }
 
+  // Доработка существующей симуляции идёт мимо job-пайплайна (прямой POST без событий
+  // суда/кандидатов) — единственный интересный чип таймлайна здесь «Доводка». Стартовое
+  // событие эмитим сразу; end — по завершении запроса (все три исхода), иначе чип
+  // «Доводка» пульсировал бы бесконечно даже после того, как результат уже показан.
   async function refine(instruction: string) {
     if (!simId) return;
     setPhase('generating'); setError(null);
     setEvents([{ type: 'stage', stage: 'refining', status: 'start', at: Date.now() }]);
+    function closeRefiningStage() {
+      setEvents((prev) => [...prev, { type: 'stage', stage: 'refining', status: 'end', at: Date.now() }]);
+    }
     try {
       const res = await fetch(`/api/simulations/${simId}/refine`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instruction }),
       });
       const body = await res.json();
+      closeRefiningStage();
       if (res.ok) { setHtml(body.html); setPhase('ready'); loadHistory(simId); }
       else { setError(body.error ?? `Ошибка сервера (${res.status})`); setPhase('error'); }
     } catch (err) {
+      closeRefiningStage();
       setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
       setPhase('error');
     }
@@ -319,7 +329,7 @@ export default function Workbench() {
             setHistory([]); clearActiveJob();
           }}>+ начать новую</button>
         )}
-        <ProgressFeed events={events} />
+        <ProgressView events={events} />
         {error && <div className="error-box">{error}</div>}
         {phase === 'generating' && jobId && (
           <button
