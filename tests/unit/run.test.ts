@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runPipeline, refineExisting, MODES } from '@/lib/pipeline/run';
+import { runPipeline, refineExisting, MODES, resolveCandidates, CancelledError } from '@/lib/pipeline/run';
 import type { Ctx } from '@/lib/pipeline/stages';
 import { getArtifact, getMeta, listHistory, createSimulation } from '@/lib/storage';
 import type { PipelineEvent, RenderReport } from '@/lib/types';
+import { STYLE_NAMES } from '@/lib/pipeline/prompts';
 
 const SPEC = { title: 'Маятник', subject: 'Физика', mode: '2d', learningGoals: ['x'],
   physics: 'F=ma', parameters: [], visualPlan: 'v' };
@@ -63,14 +64,56 @@ describe('runPipeline', () => {
     await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
     // genChat: план + 3 кандидата + 1 рефайн = 5
     expect(ctx.genChat).toHaveBeenCalledTimes(5);
-    const scoreEvents = events.filter((e) => e.type === 'scores');
-    // все 3 кандидата живы → первый scores-евент маппит все три исходных индекса
-    expect(scoreEvents[0]).toMatchObject({ candidateIndices: [0, 1, 2] });
-    // рефайн-раунд пересчитывает победителя (индекс 0) — его исходный индекс сохраняется
-    expect(scoreEvents[1]).toMatchObject({ candidateIndices: [0] });
+    const judgeEvents = events.filter((e) => e.type === 'judge-verdict');
+    // единственный judge-verdict — от начального суда, маппит все три исходных индекса
+    expect(judgeEvents).toHaveLength(1);
+    expect(judgeEvents[0]).toMatchObject({ candidateIndices: [0, 1, 2], feedback: 'улучшить' });
+    // рефайн-раунд несёт before/after вместо повторного judge-verdict
+    const refineEvents = events.filter((e) => e.type === 'refine-round');
+    expect(refineEvents).toHaveLength(1);
+    expect(refineEvents[0]).toMatchObject({ round: 1, before: WEAK, after: GOOD });
   });
 
-  it('scores event maps alive positions to original candidate indices '
+  it('emits plan-ready with a PlanSummary derived from the plan spec', async () => {
+    const { ctx, events } = fakeCtx();
+    await runPipeline(ctx, { prompt: 'маятник', mode: 'fast' });
+    const planReady = events.find((e) => e.type === 'plan-ready');
+    expect(planReady).toMatchObject({
+      type: 'plan-ready',
+      spec: {
+        title: 'Маятник', subject: 'Физика', mode: '2d', physics: 'F=ma',
+        goals: ['x'], parameters: [],
+      },
+    });
+  });
+
+  it('candidates=5: generates 5 candidates, styleHints cycled from STYLE_NAMES', async () => {
+    const { ctx, events } = fakeCtx();
+    await runPipeline(ctx, { prompt: 'маятник', mode: 'max', candidates: 5 });
+    const genEvents = events.filter(
+      (e): e is Extract<PipelineEvent, { type: 'candidate' }> =>
+        e.type === 'candidate' && e.status === 'generating',
+    );
+    expect(genEvents).toHaveLength(5);
+    expect(genEvents.map((e) => e.styleHint)).toEqual(STYLE_NAMES);
+  });
+
+  it('CancelledError: signal true right before judging aborts, nothing saved', async () => {
+    const { ctx, events } = fakeCtx();
+    // сигнал становится true ровно к моменту проверки "перед судом" (сразу после
+    // конца этапа generating), но не раньше — план и кандидаты успевают отработать.
+    const signal = () => events.some(
+      (e) => e.type === 'stage' && e.stage === 'generating' && e.status === 'end',
+    );
+    await expect(runPipeline(ctx, { prompt: 'маятник', mode: 'standard' }, signal))
+      .rejects.toThrow(CancelledError);
+    expect(events.some((e) => e.type === 'done')).toBe(false);
+    const judgeCalls = (ctx.visionChat as ReturnType<typeof vi.fn>).mock.calls
+      .filter(([msgs]) => String(msgs[0].content).includes('судья качества'));
+    expect(judgeCalls).toHaveLength(0); // суд так и не был вызван
+  });
+
+  it('judge-verdict event maps alive positions to original candidate indices '
     + 'when the middle candidate dies', async () => {
     const events: PipelineEvent[] = [];
     const dead = '```html\n<html><body>DEADCAND</body></html>\n```';
@@ -93,8 +136,8 @@ describe('runPipeline', () => {
       emit: (e) => events.push(e),
     };
     await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
-    const scoresEvent = events.find((e) => e.type === 'scores');
-    expect(scoresEvent).toMatchObject({ candidateIndices: [0, 2] });
+    const verdictEvent = events.find((e) => e.type === 'judge-verdict');
+    expect(verdictEvent).toMatchObject({ candidateIndices: [0, 2] });
   });
 
   it('all candidates broken: saves best-effort with warning', async () => {
@@ -226,7 +269,29 @@ describe('runPipeline', () => {
     // ...и что рефайн реально состоялся: план(1) + 3 кандидата(3) + 1 рефайн(1) = 5
     // (нулевые баллы < порога 8 → круг 1; rescore возвращает GOOD ≥ 8 → стоп).
     expect(ctx.genChat).toHaveBeenCalledTimes(5);
-    expect(events.filter((e) => e.type === 'scores')).toHaveLength(2);
+    // 1 начальный judge-verdict + 1 refine-round (не повторный judge-verdict)
+    expect(events.filter((e) => e.type === 'judge-verdict')).toHaveLength(1);
+    expect(events.filter((e) => e.type === 'refine-round')).toHaveLength(1);
+  });
+});
+
+describe('resolveCandidates', () => {
+  it('clamps 0 up to 1', () => {
+    expect(resolveCandidates('fast', 0)).toBe(1);
+  });
+
+  it('clamps 9 down to 5', () => {
+    expect(resolveCandidates('fast', 9)).toBe(5);
+  });
+
+  it('undefined falls back to the mode default', () => {
+    expect(resolveCandidates('fast')).toBe(1);
+    expect(resolveCandidates('standard')).toBe(2);
+    expect(resolveCandidates('max')).toBe(3);
+  });
+
+  it('passes through valid values unchanged', () => {
+    expect(resolveCandidates('max', 4)).toBe(4);
   });
 });
 

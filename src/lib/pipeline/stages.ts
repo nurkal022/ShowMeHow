@@ -59,9 +59,9 @@ function rank(html: string, report: RenderReport): 0 | 1 | 2 {
 interface Ranked { html: string; report: RenderReport }
 
 export async function verifyCandidate(
-  ctx: Ctx, spec: PlanSpec, html: string, index: number,
+  ctx: Ctx, spec: PlanSpec, html: string, index: number, styleName: string,
 ): Promise<CandidateResult> {
-  ctx.emit({ type: 'candidate', index, status: 'rendering' });
+  ctx.emit({ type: 'candidate', index, status: 'rendering', styleHint: styleName });
   let current = html;
   let report = await ctx.render(current);
   // best-so-far: если попытки починки только ухудшают результат, в конце возвращаем лучшую
@@ -70,7 +70,7 @@ export async function verifyCandidate(
   for (let attempt = 0; attempt < 2; attempt++) {
     const forbidden = findForbiddenUrls(current, CDN_ALLOWED);
     if (report.ok && report.animated && forbidden.length === 0) break;
-    ctx.emit({ type: 'candidate', index, status: 'fixing' });
+    ctx.emit({ type: 'candidate', index, status: 'fixing', styleHint: styleName });
     const errors = [...report.errors];
     if (report.ok && !report.animated) errors.push(STATIC_ANIMATION_ERROR);
     if (forbidden.length) errors.push(`Запрещённые внешние ресурсы: ${forbidden.join(', ')}`);
@@ -88,7 +88,7 @@ export async function verifyCandidate(
   }
   // Заражённый запрещёнными URL финалист не может уйти в библиотеку, даже если рендер прошёл.
   if (!report.ok || findForbiddenUrls(current, CDN_ALLOWED).length > 0) {
-    ctx.emit({ type: 'candidate', index, status: 'failed' });
+    ctx.emit({ type: 'candidate', index, status: 'failed', styleHint: styleName });
     return { html: current, render: report, critic: null, alive: false };
   }
   if (report.screenshots[0]) {
@@ -96,7 +96,7 @@ export async function verifyCandidate(
   }
   let critic = null;
   if (ctx.visionChat) {
-    ctx.emit({ type: 'candidate', index, status: 'critiquing' });
+    ctx.emit({ type: 'candidate', index, status: 'critiquing', styleHint: styleName });
     try {
       const animationNote = report.animated
         ? ''
@@ -113,6 +113,11 @@ export async function verifyCandidate(
       critic = null; // критик упал — не валим кандидата
     }
   }
-  ctx.emit({ type: 'candidate', index, status: 'ok' });
+  if (critic) {
+    ctx.emit({
+      type: 'critic-verdict', index, physicsOk: critic.physicsOk, issues: critic.issues,
+    });
+  }
+  ctx.emit({ type: 'candidate', index, status: 'ok', styleHint: styleName });
   return { html: current, render: report, critic, alive: true };
 }

@@ -146,7 +146,7 @@ export default function Workbench() {
   async function refine(instruction: string) {
     if (!simId) return;
     setPhase('generating'); setError(null);
-    setEvents([{ type: 'stage', stage: 'refining' }]);
+    setEvents([{ type: 'stage', stage: 'refining', status: 'start', at: Date.now() }]);
     try {
       const res = await fetch(`/api/simulations/${simId}/refine`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },

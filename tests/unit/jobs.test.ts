@@ -30,7 +30,7 @@ describe('jobs store', () => {
 
   it('appendEvent persists to disk (file matches in-memory job)', () => {
     const job = createJob(REQUEST);
-    appendEvent(job.id, { type: 'stage', stage: 'planning' });
+    appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 });
     const file = path.join(process.env.SHOWMEHOW_DATA_DIR!, 'jobs', `${job.id}.json`);
     const onDisk = JSON.parse(fs.readFileSync(file, 'utf8'));
     expect(onDisk).toEqual(getJob(job.id));
@@ -55,16 +55,16 @@ describe('jobs store', () => {
 
   it('subscribe receives only events appended after subscription; unsubscribe stops delivery', () => {
     const job = createJob(REQUEST);
-    appendEvent(job.id, { type: 'stage', stage: 'planning' });
+    appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 });
 
     const received: string[] = [];
     const unsubscribe = subscribe(job.id, (e) => received.push(e.type));
 
-    appendEvent(job.id, { type: 'stage', stage: 'generating' });
+    appendEvent(job.id, { type: 'stage', stage: 'generating', status: 'start', at: 2 });
     expect(received).toEqual(['stage']);
 
     unsubscribe();
-    appendEvent(job.id, { type: 'stage', stage: 'judging' });
+    appendEvent(job.id, { type: 'stage', stage: 'judging', status: 'start', at: 3 });
     expect(received).toEqual(['stage']);
   });
 
@@ -88,7 +88,7 @@ describe('jobs store', () => {
 
   it('orphaned running job on disk (memory cleared) → error "Сервер был перезапущен", re-persisted', () => {
     const job = createJob(REQUEST);
-    appendEvent(job.id, { type: 'stage', stage: 'planning' });
+    appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 });
     __clearForTests();
 
     const recovered = getJob(job.id)!;

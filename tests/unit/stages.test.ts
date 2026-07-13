@@ -45,7 +45,7 @@ describe('generateCandidate', () => {
 
 describe('verifyCandidate', () => {
   it('happy path: render ok, critic ok', async () => {
-    const r = await verifyCandidate(ctx(), SPEC, HTML, 0);
+    const r = await verifyCandidate(ctx(), SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(r.critic?.physicsOk).toBe(true);
   });
@@ -55,7 +55,7 @@ describe('verifyCandidate', () => {
       .mockResolvedValueOnce(badRender)
       .mockResolvedValueOnce(okRender);
     const c = ctx({ render });
-    const r = await verifyCandidate(c, SPEC, HTML, 0);
+    const r = await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(render).toHaveBeenCalledTimes(2);
     expect(c.genChat).toHaveBeenCalledTimes(1); // один вызов фиксера
@@ -63,15 +63,50 @@ describe('verifyCandidate', () => {
 
   it('gives up after 2 fix attempts', async () => {
     const render = vi.fn(async () => badRender);
-    const r = await verifyCandidate(ctx({ render }), SPEC, HTML, 0);
+    const r = await verifyCandidate(ctx({ render }), SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(false);
     expect(render).toHaveBeenCalledTimes(3); // исходный + 2 починки
   });
 
   it('skips critic when vision unavailable', async () => {
-    const r = await verifyCandidate(ctx({ visionChat: null }), SPEC, HTML, 0);
+    const r = await verifyCandidate(ctx({ visionChat: null }), SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(r.critic).toBeNull();
+  });
+
+  it('stamps styleName into every candidate event', async () => {
+    const c = ctx();
+    await verifyCandidate(c, SPEC, HTML, 2, 'Схема');
+    const candEvents = (c.emit as ReturnType<typeof vi.fn>).mock.calls
+      .map(([e]) => e)
+      .filter((e) => e.type === 'candidate');
+    expect(candEvents.length).toBeGreaterThan(0);
+    for (const e of candEvents) {
+      expect(e.index).toBe(2);
+      expect(e.styleHint).toBe('Схема');
+    }
+  });
+
+  it('emits critic-verdict after a live critic runs', async () => {
+    const visionChat = vi.fn(async () =>
+      '{"physicsOk": false, "issues": ["стрелка направлена не туда"]}');
+    const c = ctx({ visionChat });
+    await verifyCandidate(c, SPEC, HTML, 1, 'Наглядность');
+    const verdictEvents = (c.emit as ReturnType<typeof vi.fn>).mock.calls
+      .map(([e]) => e)
+      .filter((e) => e.type === 'critic-verdict');
+    expect(verdictEvents).toEqual([
+      { type: 'critic-verdict', index: 1, physicsOk: false, issues: ['стрелка направлена не туда'] },
+    ]);
+  });
+
+  it('no critic-verdict emitted when vision is unavailable', async () => {
+    const c = ctx({ visionChat: null });
+    await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
+    const verdictEvents = (c.emit as ReturnType<typeof vi.fn>).mock.calls
+      .map(([e]) => e)
+      .filter((e) => e.type === 'critic-verdict');
+    expect(verdictEvents).toHaveLength(0);
   });
 
   it('static animation is treated as fixable: retries until animated', async () => {
@@ -81,7 +116,7 @@ describe('verifyCandidate', () => {
       .mockResolvedValueOnce(okRender);
     const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
     const c = ctx({ render, genChat });
-    const r = await verifyCandidate(c, SPEC, HTML, 0);
+    const r = await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(r.render.animated).toBe(true);
     expect(render).toHaveBeenCalledTimes(3);
@@ -95,7 +130,7 @@ describe('verifyCandidate', () => {
     const render = vi.fn(async () => staticRender);
     const visionChat = vi.fn(async (_messages: ChatMessage[]) => '{"physicsOk": true, "issues": []}');
     const c = ctx({ render, visionChat });
-    const r = await verifyCandidate(c, SPEC, HTML, 0);
+    const r = await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(r.render.animated).toBe(false);
     expect(render).toHaveBeenCalledTimes(3); // исходный + 2 починки
@@ -113,7 +148,7 @@ describe('verifyCandidate', () => {
     const visionChat = vi.fn(async (_messages: ChatMessage[]) => '{"physicsOk": true, "issues": []}');
     const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
     const c = ctx({ render, visionChat, genChat });
-    const r = await verifyCandidate(c, SPEC, HTML, 0);
+    const r = await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(r.html).toBe(HTML); // версия до фиксов, а не последняя (сломанная) попытка
     expect(r.render.ok).toBe(true);
@@ -134,7 +169,7 @@ describe('verifyCandidate', () => {
     const render = vi.fn(async () => okRender);
     const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
     const c = ctx({ render, genChat });
-    const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0);
+    const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(genChat).toHaveBeenCalledTimes(1); // один вызов фиксера
     const fixerCall = genChat.mock.calls[0]![0];
@@ -157,7 +192,7 @@ describe('verifyCandidate', () => {
       .mockResolvedValueOnce(badRender); // фикс 2: чистый, но сломан
     const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
     const c = ctx({ render, genChat });
-    const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0);
+    const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0, 'Реализм');
     expect(r.alive).toBe(false);
     expect(r.html).not.toContain('evil.example.com');
   });
@@ -170,7 +205,7 @@ describe('verifyCandidate', () => {
     const render = vi.fn(async () => okRender); // рендер «успешен», но HTML заражён
     const genChat = vi.fn(async () => { throw new Error('provider down'); });
     const c = ctx({ render, genChat });
-    const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0);
+    const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0, 'Реализм');
     expect(r.alive).toBe(false); // whitelist-нарушение не может уйти в библиотеку
   });
 });

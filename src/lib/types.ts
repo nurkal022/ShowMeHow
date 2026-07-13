@@ -82,12 +82,29 @@ export interface CandidateResult {
   alive: boolean;              // прошёл рендер (возможно после починки)
 }
 
+export type PipelineStage =
+  'planning' | 'generating' | 'critiquing' | 'judging' | 'refining' | 'saving';
+
+export interface PlanSummary {
+  title: string;
+  subject: string;
+  mode: '2d' | '3d';
+  physics: string;
+  parameters: { label: string; unit: string }[];
+  goals: string[];
+}
+
 export type PipelineEvent =
-  | { type: 'stage'; stage: string; detail?: string }
+  | { type: 'stage'; stage: PipelineStage; status: 'start' | 'end'; at: number }
+  | { type: 'plan-ready'; spec: PlanSummary }
   | { type: 'candidate'; index: number;
-      status: 'generating' | 'rendering' | 'fixing' | 'critiquing' | 'ok' | 'failed' }
+      status: 'generating' | 'rendering' | 'fixing' | 'critiquing' | 'ok' | 'failed';
+      styleHint: string }
   | { type: 'screenshot'; index: number; dataUrl: string }
-  | { type: 'scores'; scores: RubricScores[]; winnerIndex: number; candidateIndices: number[] }
+  | { type: 'critic-verdict'; index: number; physicsOk: boolean; issues: string[] }
+  | { type: 'judge-verdict'; scores: RubricScores[]; candidateIndices: number[];
+      winnerIndex: number; feedback: string }
+  | { type: 'refine-round'; round: number; before: RubricScores; after: RubricScores | null }
   | { type: 'warning'; message: string }
   | { type: 'cancelled' }
   | { type: 'done'; simulationId: string }

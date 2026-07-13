@@ -1,5 +1,6 @@
 import type {
-  PipelineEvent, QualityMode, SimulationMeta, CandidateResult, RubricScores,
+  PipelineEvent, PipelineStage, PlanSpec, PlanSummary, QualityMode, SimulationMeta,
+  CandidateResult, RubricScores,
 } from '../types';
 import { minScore } from '../types';
 import { activeProvider } from '../settings';
@@ -7,7 +8,7 @@ import { bindChat } from '../provider';
 import { renderArtifact } from '../renderer';
 import { createSimulation, saveThumbnail, getArtifact, updateArtifact } from '../storage';
 import { extractHtml, findForbiddenUrls, instrument } from '../artifact';
-import { REFINER_SYSTEM, STYLE_HINTS, CDN_WHITELIST } from './prompts';
+import { REFINER_SYSTEM, STYLE_HINTS, STYLE_NAMES, CDN_WHITELIST } from './prompts';
 import { plan, generateCandidate, verifyCandidate, fixArtifact, type Ctx } from './stages';
 import { judge, rescore } from './judge';
 
@@ -22,6 +23,20 @@ export const MODES: Record<QualityMode, {
   max: { candidates: 3, useJudge: true, maxRefine: 3, threshold: 8 },
 };
 
+/** Кооперативная отмена: runPipeline бросает это между этапами, если signal() вернул true. */
+export class CancelledError extends Error {
+  constructor() {
+    super('Отменено пользователем');
+    this.name = 'CancelledError';
+  }
+}
+
+/** Кламп числа кандидатов в [1,5]; отсутствие requested -> дефолт режима. */
+export function resolveCandidates(mode: QualityMode, requested?: number): number {
+  const n = requested ?? MODES[mode].candidates;
+  return Math.min(5, Math.max(1, Math.round(n)));
+}
+
 export function makeCtx(emit: (e: PipelineEvent) => void): Ctx {
   const p = activeProvider();
   if (!p) throw new Error('Провайдер не настроен. Откройте Настройки.');
@@ -33,33 +48,63 @@ export function makeCtx(emit: (e: PipelineEvent) => void): Ctx {
   };
 }
 
+function emitStage(ctx: Ctx, stage: PipelineStage, status: 'start' | 'end'): void {
+  ctx.emit({ type: 'stage', stage, status, at: Date.now() });
+}
+
+function planSummary(spec: PlanSpec): PlanSummary {
+  return {
+    title: spec.title,
+    subject: spec.subject,
+    mode: spec.mode,
+    physics: spec.physics,
+    parameters: spec.parameters.map((p) => ({ label: p.label, unit: p.unit })),
+    goals: spec.learningGoals,
+  };
+}
+
 export async function runPipeline(
   ctx: Ctx,
-  input: { prompt: string; imageDataUrl?: string; mode: QualityMode },
+  input: { prompt: string; imageDataUrl?: string; mode: QualityMode; candidates?: number },
+  signal?: () => boolean,
 ): Promise<SimulationMeta> {
+  function checkCancelled(): void {
+    if (signal?.()) throw new CancelledError();
+  }
+
   const mode = MODES[input.mode];
+  const count = resolveCandidates(input.mode, input.candidates);
   const warnings: string[] = [];
   if (!ctx.visionChat) {
     warnings.push('Vision-модель не настроена: без визуальной критики и судьи.');
     ctx.emit({ type: 'warning', message: warnings[0] });
   }
 
-  ctx.emit({ type: 'stage', stage: 'planning' });
+  checkCancelled();
+  emitStage(ctx, 'planning', 'start');
   const spec = await plan(ctx, input.prompt, input.imageDataUrl);
+  emitStage(ctx, 'planning', 'end');
+  ctx.emit({ type: 'plan-ready', spec: planSummary(spec) });
 
-  ctx.emit({ type: 'stage', stage: 'generating', detail: `${mode.candidates} кандидата(ов)` });
+  const hints = Array.from({ length: count }, (_, i) => STYLE_HINTS[i % STYLE_HINTS.length]);
+  const styleNames = Array.from({ length: count }, (_, i) => STYLE_NAMES[i % STYLE_NAMES.length]);
+
+  emitStage(ctx, 'generating', 'start');
   const candidates = await Promise.all(
-    STYLE_HINTS.slice(0, mode.candidates).map(async (hint, index) => {
-      ctx.emit({ type: 'candidate', index, status: 'generating' });
+    hints.map(async (hint, index) => {
+      checkCancelled();
+      const styleName = styleNames[index];
+      ctx.emit({ type: 'candidate', index, status: 'generating', styleHint: styleName });
       try {
         const html = await generateCandidate(ctx, spec, hint);
-        return await verifyCandidate(ctx, spec, html, index);
+        return await verifyCandidate(ctx, spec, html, index, styleName);
       } catch {
-        ctx.emit({ type: 'candidate', index, status: 'failed' });
+        ctx.emit({ type: 'candidate', index, status: 'failed', styleHint: styleName });
         return null;
       }
     }),
   );
+  emitStage(ctx, 'generating', 'end');
 
   const alive: CandidateResult[] = [];
   const aliveIndices: number[] = [];
@@ -86,12 +131,27 @@ export async function runPipeline(
     ctx.emit({ type: 'warning', message: msg });
     best = clean;
   } else if (mode.useJudge && ctx.visionChat && alive.length > 0) {
-    ctx.emit({ type: 'stage', stage: 'judging' });
+    checkCancelled();
+    emitStage(ctx, 'judging', 'start');
+    let verdict = null;
     try {
-      const verdict = await judge(ctx, spec, alive);
+      verdict = await judge(ctx, spec, alive);
+    } catch {
+      verdict = null; // судья недоступен/вернул мусор — деградируем ниже
+    }
+    emitStage(ctx, 'judging', 'end');
+
+    if (!verdict) {
+      // судья недоступен ещё до первого вердикта — деградируем на первого живого кандидата,
+      // не теряя уже сгенерированные (и отрендеренные) варианты.
+      const msg = 'Судья недоступен — выбран первый кандидат.';
+      warnings.push(msg);
+      ctx.emit({ type: 'warning', message: msg });
+      best = alive[0];
+    } else {
       ctx.emit({
-        type: 'scores', scores: verdict.scores, winnerIndex: verdict.winnerIndex,
-        candidateIndices: aliveIndices,
+        type: 'judge-verdict', scores: verdict.scores, winnerIndex: verdict.winnerIndex,
+        candidateIndices: aliveIndices, feedback: verdict.feedback,
       });
       best = alive[verdict.winnerIndex];
       bestOrigIndex = aliveIndices[verdict.winnerIndex] ?? aliveIndices[0];
@@ -100,36 +160,37 @@ export async function runPipeline(
       // подстраховываемся нулевым объектом, чтобы minScore() ниже не упал на undefined.
       let current = verdict.scores[verdict.winnerIndex] ?? { ...ZERO_SCORES };
 
+      if (mode.maxRefine > 0) emitStage(ctx, 'refining', 'start');
       for (let round = 0; round < mode.maxRefine; round++) {
         const belowThreshold = mode.threshold > 0 && minScore(current) < mode.threshold;
         const firstStandardRound = mode.threshold === 0 && round === 0 && !!feedback;
         if (!belowThreshold && !firstStandardRound) break;
-        ctx.emit({ type: 'stage', stage: 'refining', detail: `круг ${round + 1}` });
+        checkCancelled();
+        const before = current;
         try {
           const refined = await refineHtml(ctx, best.html, feedback);
-          const verified = await verifyCandidate(ctx, spec, refined, 0);
-          if (!verified.alive) break; // доводка сломала — оставляем предыдущее
+          const verified = await verifyCandidate(
+            ctx, spec, refined, 0, styleNames[bestOrigIndex] ?? styleNames[0],
+          );
+          if (!verified.alive) {
+            // доводка сломала — оставляем предыдущее
+            ctx.emit({ type: 'refine-round', round: round + 1, before, after: null });
+            break;
+          }
           const re = await rescore(ctx, spec, verified);
           best = verified;
           current = re.scores;
           feedback = re.feedback;
-          ctx.emit({
-            type: 'scores', scores: [re.scores], winnerIndex: 0,
-            candidateIndices: [bestOrigIndex],
-          });
-        } catch {
+          ctx.emit({ type: 'refine-round', round: round + 1, before, after: current });
+        } catch (e) {
+          if (e instanceof CancelledError) throw e;
           // рефайн или пересуд упал (например, судья вернул не-JSON) — не валим пайплайн,
           // просто останавливаемся на текущем лучшем кандидате.
+          ctx.emit({ type: 'refine-round', round: round + 1, before, after: null });
           break;
         }
       }
-    } catch {
-      // судья недоступен/вернул мусор ещё до первого вердикта — деградируем на первого
-      // живого кандидата, не теряя уже сгенерированные (и отрендеренные) варианты.
-      const msg = 'Судья недоступен — выбран первый кандидат.';
-      warnings.push(msg);
-      ctx.emit({ type: 'warning', message: msg });
-      best = alive[0];
+      if (mode.maxRefine > 0) emitStage(ctx, 'refining', 'end');
     }
   } else {
     best = alive[0];
@@ -141,7 +202,8 @@ export async function runPipeline(
     ctx.emit({ type: 'warning', message: msg });
   }
 
-  ctx.emit({ type: 'stage', stage: 'saving' });
+  checkCancelled();
+  emitStage(ctx, 'saving', 'start');
   const meta = createSimulation({
     title: spec.title, prompt: input.prompt, subject: spec.subject,
     tags: spec.learningGoals.slice(0, 3),
@@ -149,6 +211,7 @@ export async function runPipeline(
   }, best.html);
   const shot = best.render.screenshots[1] ?? best.render.screenshots[0];
   if (shot) saveThumbnail(meta.id, shot);
+  emitStage(ctx, 'saving', 'end');
   ctx.emit({ type: 'done', simulationId: meta.id });
   return meta;
 }
@@ -163,23 +226,27 @@ async function refineHtml(ctx: Ctx, html: string, feedback: string): Promise<str
 
 export async function refineExisting(ctx: Ctx, id: string, instruction: string): Promise<void> {
   const html = getArtifact(id);
-  ctx.emit({ type: 'stage', stage: 'refining' });
-  let refined = await refineHtml(ctx, html, instruction);
-  let report = await ctx.render(refined);
-  let forbidden = findForbiddenUrls(refined, CDN_ALLOWED);
-  for (let attempt = 0; (!report.ok || forbidden.length > 0) && attempt < 2; attempt++) {
-    const errors = [...report.errors];
-    if (forbidden.length) errors.push(`Запрещённые внешние ресурсы: ${forbidden.join(', ')}`);
-    refined = await fixArtifact(ctx, refined, errors);
-    report = await ctx.render(refined);
-    forbidden = findForbiddenUrls(refined, CDN_ALLOWED);
+  emitStage(ctx, 'refining', 'start');
+  try {
+    let refined = await refineHtml(ctx, html, instruction);
+    let report = await ctx.render(refined);
+    let forbidden = findForbiddenUrls(refined, CDN_ALLOWED);
+    for (let attempt = 0; (!report.ok || forbidden.length > 0) && attempt < 2; attempt++) {
+      const errors = [...report.errors];
+      if (forbidden.length) errors.push(`Запрещённые внешние ресурсы: ${forbidden.join(', ')}`);
+      refined = await fixArtifact(ctx, refined, errors);
+      report = await ctx.render(refined);
+      forbidden = findForbiddenUrls(refined, CDN_ALLOWED);
+    }
+    if (!report.ok) throw new Error('Правка сломала симуляцию: ' + report.errors.join('; '));
+    if (forbidden.length > 0) {
+      throw new Error('Правка внесла запрещённые внешние ресурсы: ' + forbidden.join(', '));
+    }
+    updateArtifact(id, refined);
+    const shot = report.screenshots[1] ?? report.screenshots[0];
+    if (shot) saveThumbnail(id, shot);
+  } finally {
+    emitStage(ctx, 'refining', 'end');
   }
-  if (!report.ok) throw new Error('Правка сломала симуляцию: ' + report.errors.join('; '));
-  if (forbidden.length > 0) {
-    throw new Error('Правка внесла запрещённые внешние ресурсы: ' + forbidden.join(', '));
-  }
-  updateArtifact(id, refined);
-  const shot = report.screenshots[1] ?? report.screenshots[0];
-  if (shot) saveThumbnail(id, shot);
   ctx.emit({ type: 'done', simulationId: id });
 }

@@ -19,11 +19,12 @@ export default function ProgressFeed({ events }: { events: PipelineEvent[] }) {
   const lines: string[] = [];
   let scores: string | null = null;
   for (const e of events) {
-    if (e.type === 'stage') lines.push(STAGE_LABELS[e.stage] ?? e.stage);
+    // «start» — начало этапа; «end» игнорируем здесь (полноценные тайминги — в T5/StageTimeline).
+    if (e.type === 'stage' && e.status === 'start') lines.push(STAGE_LABELS[e.stage] ?? e.stage);
     if (e.type === 'candidate') candStatus.set(e.index, CAND_LABELS[e.status]);
     if (e.type === 'screenshot') shots.set(e.index, e.dataUrl);
     if (e.type === 'warning') lines.push('⚠️ ' + e.message);
-    if (e.type === 'scores')
+    if (e.type === 'judge-verdict')
       scores = e.scores.map((s, i) =>
         `Кандидат ${(e.candidateIndices[i] ?? i) + 1}: физика ${s.physics} / ` +
         `наглядность ${s.clarity} / интерактив ${s.interactivity} / ` +

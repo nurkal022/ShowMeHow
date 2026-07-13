@@ -14,8 +14,13 @@ describe('prompts', () => {
     expect(g).toContain('SimUI');
     for (const url of Object.values(P.CDN_WHITELIST)) expect(g).toContain(url);
   });
-  it('has exactly 3 style hints', () => {
-    expect(P.STYLE_HINTS).toHaveLength(3);
+  it('has exactly 5 style hints', () => {
+    expect(P.STYLE_HINTS).toHaveLength(5);
+  });
+
+  it('STYLE_NAMES has 5 entries, index-aligned with STYLE_HINTS', () => {
+    expect(P.STYLE_NAMES).toEqual(['Реализм', 'Наглядность', 'Интерактив', 'Схема', 'Данные']);
+    expect(P.STYLE_NAMES).toHaveLength(P.STYLE_HINTS.length);
   });
 
   it('EXAMPLE_SKELETON covers the required structural elements', () => {
