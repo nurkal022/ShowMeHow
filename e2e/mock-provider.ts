@@ -20,6 +20,15 @@ const ARTIFACT = `<!DOCTYPE html><html><head><title>sim</title></head><body>
     requestAnimationFrame(loop); })();
 </script></body></html>`;
 
+// Маркер из EXAMPLE_SKELETON-блока generatorSystem() — встречается ТОЛЬКО в системном
+// промпте генератора кандидата (не в планировщике/критике/судье/фиксере), поэтому
+// им можно отличить генераторный запрос, не совпадая случайно с другими ролями.
+const GENERATOR_MARKER = 'Каркас качественной симуляции';
+// Искусственная задержка перед ответом на генераторный запрос: даёт e2e-тесту отмены
+// окно, в которое клик «Отменить» гарантированно успевает до того, как кандидат сгенерован
+// (остальные роли отвечают мгновенно — не тормозим планировщика/критика/судью).
+const GENERATOR_DELAY_MS = 1200;
+
 function reply(system: string): string {
   if (system.includes('методист')) return JSON.stringify(SPEC);
   // ВАЖНО: судью проверяем ДО рецензента — JUDGE_SYSTEM содержит слово «рецензента»
@@ -38,10 +47,14 @@ export function startMockProvider(port: number): Promise<() => Promise<void>> {
     req.on('end', () => {
       const { messages } = JSON.parse(body || '{}');
       const system = String(messages?.[0]?.content ?? '');
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({
-        choices: [{ message: { content: reply(system) } }],
-      }));
+      const send = () => {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({
+          choices: [{ message: { content: reply(system) } }],
+        }));
+      };
+      if (system.includes(GENERATOR_MARKER)) setTimeout(send, GENERATOR_DELAY_MS);
+      else send();
     });
   });
   return new Promise((resolve) => {

@@ -23,6 +23,14 @@ describe('chatWithClient', () => {
     expect(out).toBe('привет');
   });
 
+  it('passes extraBody through to the create call', async () => {
+    const c = fakeClient(['ok']);
+    await chatWithClient(c as never, 'm', [{ role: 'user', content: 'hi' }],
+      { extraBody: { enable_thinking: false, temperature: 0.2 } });
+    expect(c.chat.completions.create).toHaveBeenCalledWith(
+      expect.objectContaining({ enable_thinking: false, temperature: 0.2, model: 'm' }));
+  });
+
   it('retries with backoff then succeeds', async () => {
     const c = fakeClient([new Error('503'), new Error('503'), 'ok']);
     const sleeps: number[] = [];

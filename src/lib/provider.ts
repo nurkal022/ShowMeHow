@@ -27,6 +27,8 @@ export function makeClient(p: ProviderProfile): OpenAI {
 interface ChatOpts {
   retries?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Провайдер-специфичные поля тела запроса (enable_thinking, temperature, ...). */
+  extraBody?: Record<string, unknown>;
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -53,7 +55,7 @@ export async function chatWithClient(
   client: OpenAI,
   model: string,
   messages: ChatMessage[],
-  { retries = 3, sleep = defaultSleep }: ChatOpts = {},
+  { retries = 3, sleep = defaultSleep, extraBody }: ChatOpts = {},
 ): Promise<string> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -61,6 +63,7 @@ export async function chatWithClient(
       const res = await client.chat.completions.create({
         model,
         messages: messages as never,
+        ...extraBody,
       });
       const text = res.choices[0]?.message?.content;
       if (!text) throw new Error('empty response from provider');
@@ -76,5 +79,5 @@ export async function chatWithClient(
 
 export function bindChat(p: ProviderProfile, model: string): ChatFn {
   const client = makeClient(p);
-  return (messages) => chatWithClient(client, model, messages);
+  return (messages) => chatWithClient(client, model, messages, { extraBody: p.extraBody });
 }

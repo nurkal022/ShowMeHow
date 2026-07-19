@@ -20,13 +20,14 @@ test.afterAll(async () => { await stop(); });
 test('generate simulation end-to-end', async ({ page }) => {
   await page.goto('/');
   await page.getByPlaceholder(/Опишите симуляцию/).fill('диффузия духов в комнате');
-  await page.getByRole('combobox').selectOption('fast');
+  await page.getByLabel('Режим качества').selectOption('fast');
   await page.getByRole('button', { name: 'Создать' }).click();
-  // прогресс виден
-  await expect(page.getByText(/Составляю план/)).toBeVisible({ timeout: 30_000 });
+  // прогресс виден: чип таймлайна «Планирование» либо заголовок карточки плана
+  await expect(page.getByText('Планирование').or(page.getByText('Диффузия духов')))
+    .toBeVisible({ timeout: 32_000 });
   // превью появилось
   const frame = page.frameLocator('iframe.preview-frame');
-  await expect(frame.locator('canvas')).toBeVisible({ timeout: 90_000 });
+  await expect(frame.locator('canvas')).toBeVisible({ timeout: 92_000 });
   // симуляция в библиотеке
   await page.goto('/library');
   await expect(page.getByText('Диффузия духов')).toBeVisible();

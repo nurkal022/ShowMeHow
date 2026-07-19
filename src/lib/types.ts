@@ -8,6 +8,12 @@ export interface ProviderProfile {
   generationModel: string;
   /** Vision-модель для критика/судьи; пустая строка = vision недоступен */
   visionModel: string;
+  /**
+   * Доп. поля тела запроса chat.completions, специфичные для провайдера
+   * (например `{ enable_thinking: false, temperature: 0.2 }` для qwen на MaaS).
+   * Опционально; по умолчанию ничего не добавляется.
+   */
+  extraBody?: Record<string, unknown>;
 }
 
 export interface Settings {

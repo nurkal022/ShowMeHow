@@ -344,6 +344,7 @@ export default function Workbench() {
           {!hasSim && (
             <div className="composer-row">
               <select
+                aria-label="Режим качества"
                 value={mode}
                 disabled={phase === 'generating'}
                 onChange={(e) => onModeChange(e.target.value as QualityMode)}
@@ -353,6 +354,7 @@ export default function Workbench() {
                 <option value="fast">Быстрый (~1 мин)</option>
               </select>
               <select
+                aria-label="Число кандидатов"
                 value={candidates}
                 disabled={phase === 'generating'}
                 onChange={(e) => setCandidates(Number(e.target.value))}
