@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { extractHtml, extractJson, findForbiddenUrls, instrument, stripRuntime, reinstrument } from '@/lib/artifact';
-import { UIKIT_JS } from '@/lib/runtime';
+import { UIKIT_JS, UIKIT_CSS } from '@/lib/runtime';
 import { CDN_WHITELIST } from '@/lib/pipeline/prompts';
 
 describe('extractHtml', () => {
@@ -47,6 +47,20 @@ describe('UIKIT_JS SimUI.title()', () => {
   });
   it('makes title() order-independent by inserting/updating an <h1> on the existing panel', () => {
     expect(UIKIT_JS).toContain('insertBefore');
+  });
+});
+
+describe('collapse layer', () => {
+  it('UIKIT_JS still parses as valid JS after adding the collapse module', () => {
+    expect(() => new Function(UIKIT_JS)).not.toThrow();
+  });
+  it('exposes __smhMakeCollapsible and scans on load', () => {
+    expect(UIKIT_JS).toContain('__smhMakeCollapsible');
+    expect(UIKIT_JS).toContain('MutationObserver');
+  });
+  it('UIKIT_CSS defines collapse styles', () => {
+    expect(UIKIT_CSS).toContain('.smh-collapse-btn');
+    expect(UIKIT_CSS).toContain('.smh-collapsed');
   });
 });
 

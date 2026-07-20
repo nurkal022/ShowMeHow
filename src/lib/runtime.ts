@@ -67,6 +67,14 @@ body { margin:0; background:var(--sim-bg); color:var(--sim-text);
   .sim-control input[type=range] { height:34px; }
   .sim-btns button { padding:12px 0; min-height:46px; font-size:15px; }
 }
+
+.smh-collapse-btn { position:absolute; top:6px; right:6px; z-index:3; width:28px; height:28px;
+  border-radius:8px; border:1px solid #2a3341; background:var(--sim-panel); color:var(--sim-text);
+  font-size:13px; line-height:1; cursor:pointer; padding:0; }
+[data-smh-panel].smh-collapsed { width:auto!important; min-width:0!important; max-width:none!important;
+  height:auto!important; min-height:0!important; max-height:none!important;
+  padding:6px!important; overflow:hidden!important; }
+[data-smh-panel].smh-collapsed > *:not(.smh-collapse-btn) { display:none!important; }
 `;
 
 /** SimUI — фабрика контролов. Генератор обязан использовать её, не изобретать своё. */
@@ -100,6 +108,7 @@ window.SimUI = (function () {
       panel.appendChild(close);
       if (title) { var h = document.createElement('h1'); h.textContent = title; panel.appendChild(h); }
       document.body.appendChild(panel);
+      if (window.__smhMakeCollapsible) window.__smhMakeCollapsible(panel, { noMobileCollapse: true });
       // Таблетка-переключатель снизу по центру (видна только на мобиле через CSS).
       toggle = document.createElement('button');
       toggle.type = 'button';
@@ -155,6 +164,56 @@ window.SimUI = (function () {
     }
   }
   return { slider: slider, playPause: playPause, title: title };
+})();
+
+(function () {
+  function makeCollapsible(panel, opts) {
+    if (panel.getAttribute('data-smh-panel')) return;
+    panel.setAttribute('data-smh-panel', '1');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'smh-collapse-btn';
+    btn.setAttribute('aria-label', 'Свернуть или развернуть панель');
+    function sync() { btn.textContent = panel.classList.contains('smh-collapsed') ? '▸' : '▾'; }
+    btn.onclick = function () { panel.classList.toggle('smh-collapsed'); sync(); };
+    panel.insertBefore(btn, panel.firstChild);
+    var mobile = window.matchMedia && window.matchMedia('(max-width:640px)').matches;
+    if (opts && opts.collapsed) panel.classList.add('smh-collapsed');
+    else if (mobile && !(opts && opts.noMobileCollapse)) panel.classList.add('smh-collapsed');
+    sync();
+  }
+  window.__smhMakeCollapsible = makeCollapsible;
+
+  function isPanel(el) {
+    if (!el.getAttribute || el.getAttribute('data-smh-panel')) return false;
+    if (el.tagName === 'CANVAS' || el.tagName === 'BUTTON' || el.tagName === 'SCRIPT') return false;
+    if (el.classList && (el.classList.contains('sim-panel') ||
+        el.classList.contains('sim-panel-toggle'))) return false;
+    var cs = window.getComputedStyle(el);
+    if (cs.position !== 'fixed') return false;
+    var hasContent = (el.textContent || '').replace(/\\s+/g, '') !== '' ||
+      el.querySelector('canvas,svg,img');
+    if (!hasContent) return false;
+    var r = el.getBoundingClientRect();
+    if (r.width < 24 || r.height < 24) return false;
+    var area = (r.width * r.height) / (window.innerWidth * window.innerHeight || 1);
+    if (area > 0.6) return false;
+    return true;
+  }
+  function scan() {
+    if (!document.body) return;
+    var all = document.body.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) { if (isPanel(all[i])) makeCollapsible(all[i]); }
+  }
+  function start() {
+    scan();
+    if (window.MutationObserver) {
+      var mo = new MutationObserver(function () { scan(); });
+      mo.observe(document.body, { childList: true, subtree: true });
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 })();
 `;
 
