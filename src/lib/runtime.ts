@@ -29,7 +29,7 @@ body { margin:0; background:var(--sim-bg); color:var(--sim-text);
   background:color-mix(in srgb, var(--sim-panel) 92%, transparent);
   border:1px solid #2a3341; border-radius:12px; backdrop-filter:blur(6px);
   display:flex; flex-direction:column; gap:10px; z-index:10; }
-.sim-panel h1 { font-size:15px; margin:0 0 4px; }
+.sim-panel h1 { font-size:15px; margin:0 0 4px; padding-right:32px; }
 .sim-control label { display:flex; justify-content:space-between;
   font-size:12px; color:var(--sim-muted); margin-bottom:4px; }
 .sim-control input[type=range] { width:100%; accent-color:var(--sim-accent); }
@@ -66,6 +66,7 @@ body { margin:0; background:var(--sim-bg); color:var(--sim-text);
   }
   .sim-control input[type=range] { height:34px; }
   .sim-btns button { padding:12px 0; min-height:46px; font-size:15px; }
+  .sim-panel > .smh-collapse-btn { display:none; }
 }
 
 .smh-collapse-btn { position:absolute; top:6px; right:6px; z-index:3; width:28px; height:28px;
@@ -76,13 +77,16 @@ body { margin:0; background:var(--sim-bg); color:var(--sim-text);
   padding:6px!important; overflow:hidden!important; }
 [data-smh-panel].smh-collapsed > *:not(.smh-collapse-btn) { display:none!important; }
 
-.sim-side-panel { position:fixed; z-index:9; max-width:min(340px,42vw); padding:12px 14px;
+.sim-corner { position:fixed; z-index:9; display:flex; flex-direction:column; gap:10px; }
+.sim-corner-tl, .sim-corner-bl { align-items:flex-start; }
+.sim-corner-tr, .sim-corner-br { align-items:flex-end; }
+.sim-corner-tl { left:12px; top:12px; } .sim-corner-bl { left:12px; bottom:12px; }
+.sim-corner-tr { right:12px; top:64px; } .sim-corner-br { right:12px; bottom:12px; }
+.sim-side-panel { max-width:min(340px,42vw); padding:12px 14px;
   background:color-mix(in srgb, var(--sim-panel) 92%, transparent); border:1px solid #2a3341;
   border-radius:12px; backdrop-filter:blur(6px); font-size:12px; color:var(--sim-text);
   display:flex; flex-direction:column; gap:8px; }
 .sim-side-title { font-size:13px; margin:0; padding-right:26px; }
-.sim-corner-tl { left:12px; top:12px; } .sim-corner-bl { left:12px; bottom:12px; }
-.sim-corner-tr { right:12px; top:64px; } .sim-corner-br { right:12px; bottom:12px; }
 @media (max-width:640px) { .sim-side-panel { max-width:calc(100vw - 24px); } }
 `;
 
@@ -92,6 +96,16 @@ window.SimUI = (function () {
   var ctrlPanel = null;
   var toggle = null;
   var open = false;
+  var cornerEls = {};
+  function ensureCorner(corner) {
+    if (!cornerEls[corner]) {
+      var c = document.createElement('div');
+      c.className = 'sim-corner sim-corner-' + corner;
+      document.body.appendChild(c);
+      cornerEls[corner] = c;
+    }
+    return cornerEls[corner];
+  }
   function setOpen(v) {
     open = v;
     if (ctrlPanel) {
@@ -174,15 +188,16 @@ window.SimUI = (function () {
   }
   function panel(o) { // {title, corner}
     o = o || {};
+    var container = ensureCorner(o.corner || 'bl');
     var el = document.createElement('div');
-    el.className = 'sim-side-panel sim-corner-' + (o.corner || 'bl');
+    el.className = 'sim-side-panel';
     if (o.title) {
       var h = document.createElement('h2'); h.className = 'sim-side-title';
       h.textContent = o.title; el.appendChild(h);
     }
     var body = document.createElement('div'); body.className = 'sim-side-body';
     el.appendChild(body);
-    document.body.appendChild(el);
+    container.appendChild(el);
     if (window.__smhMakeCollapsible) window.__smhMakeCollapsible(el);
     return body;
   }
@@ -211,7 +226,8 @@ window.SimUI = (function () {
     if (!el.getAttribute || el.getAttribute('data-smh-panel')) return false;
     if (el.tagName === 'CANVAS' || el.tagName === 'BUTTON' || el.tagName === 'SCRIPT') return false;
     if (el.classList && (el.classList.contains('sim-panel') ||
-        el.classList.contains('sim-panel-toggle'))) return false;
+        el.classList.contains('sim-panel-toggle') ||
+        el.classList.contains('sim-corner'))) return false;
     var cs = window.getComputedStyle(el);
     if (cs.position !== 'fixed') return false;
     var hasContent = (el.textContent || '').replace(/\\s+/g, '') !== '' ||
@@ -228,10 +244,17 @@ window.SimUI = (function () {
     var all = document.body.querySelectorAll('*');
     for (var i = 0; i < all.length; i++) { if (isPanel(all[i])) makeCollapsible(all[i]); }
   }
+  var scanScheduled = false;
+  function scheduleScan() {
+    if (scanScheduled) return;
+    scanScheduled = true;
+    var raf = window.requestAnimationFrame || function (cb) { return window.setTimeout(cb, 16); };
+    raf(function () { scanScheduled = false; scan(); });
+  }
   function start() {
     scan();
     if (window.MutationObserver) {
-      var mo = new MutationObserver(function () { scan(); });
+      var mo = new MutationObserver(function () { scheduleScan(); });
       mo.observe(document.body, { childList: true, subtree: true });
     }
   }
