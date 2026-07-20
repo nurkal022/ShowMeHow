@@ -351,6 +351,25 @@ a { color: var(--accent); }
 .settings button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .settings button.danger { color: var(--danger); align-self: flex-start; }
 
+/* --- T3: presentation exit + mobile library/settings --- */
+.present-exit {
+  position: fixed; top: 12px; left: 12px; z-index: 50;
+  display: inline-flex; align-items: center; min-height: 40px;
+  padding: 8px 14px; border-radius: 999px;
+  background: rgba(22, 28, 38, .55); color: #fff; text-decoration: none;
+  font-size: 14px; font-weight: 600; backdrop-filter: blur(6px);
+  transition: background .12s ease;
+}
+.present-exit:hover { background: rgba(22, 28, 38, .78); }
+
+@media (max-width: 640px) {
+  .library { padding: 16px; }
+  .library-head input { width: 100%; }
+  .cards { grid-template-columns: 1fr; }
+  .settings { padding: 16px; }
+  .settings-actions button { flex: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
