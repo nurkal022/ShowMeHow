@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { extractHtml, extractJson, findForbiddenUrls, instrument, stripRuntime, reinstrument } from '@/lib/artifact';
-import { UIKIT_JS, UIKIT_CSS } from '@/lib/runtime';
+import { UIKIT_JS, UIKIT_CSS, UIKIT_DOC } from '@/lib/runtime';
 import { CDN_WHITELIST } from '@/lib/pipeline/prompts';
 
 describe('extractHtml', () => {
@@ -196,5 +196,19 @@ describe('stripRuntime + reinstrument', () => {
     expect(out).not.toContain('/*old*/');
     expect(out.split('<!--showmehow-runtime-->').length - 1).toBe(1);
     expect(out).toContain('<!--/showmehow-runtime-->');
+  });
+});
+
+describe('SimUI.panel', () => {
+  it('UIKIT_JS defines a panel method and returns it from the factory', () => {
+    expect(UIKIT_JS).toContain('function panel(');
+    expect(UIKIT_JS).toContain('panel: panel');
+  });
+  it('UIKIT_DOC documents SimUI.panel and forbids hand-rolled panels', () => {
+    expect(UIKIT_DOC).toContain('SimUI.panel');
+    expect(UIKIT_DOC.toLowerCase()).toContain('не рисуй свои');
+  });
+  it('UIKIT_JS still parses after adding panel()', () => {
+    expect(() => new Function(UIKIT_JS)).not.toThrow();
   });
 });

@@ -75,19 +75,28 @@ body { margin:0; background:var(--sim-bg); color:var(--sim-text);
   height:auto!important; min-height:0!important; max-height:none!important;
   padding:6px!important; overflow:hidden!important; }
 [data-smh-panel].smh-collapsed > *:not(.smh-collapse-btn) { display:none!important; }
+
+.sim-side-panel { position:fixed; z-index:9; max-width:min(340px,42vw); padding:12px 14px;
+  background:color-mix(in srgb, var(--sim-panel) 92%, transparent); border:1px solid #2a3341;
+  border-radius:12px; backdrop-filter:blur(6px); font-size:12px; color:var(--sim-text);
+  display:flex; flex-direction:column; gap:8px; }
+.sim-side-title { font-size:13px; margin:0; padding-right:26px; }
+.sim-corner-tl { left:12px; top:12px; } .sim-corner-bl { left:12px; bottom:12px; }
+.sim-corner-tr { right:12px; top:64px; } .sim-corner-br { right:12px; bottom:12px; }
+@media (max-width:640px) { .sim-side-panel { max-width:calc(100vw - 24px); } }
 `;
 
 /** SimUI — фабрика контролов. Генератор обязан использовать её, не изобретать своё. */
 export const UIKIT_JS = `
 window.SimUI = (function () {
-  var panel = null;
+  var ctrlPanel = null;
   var toggle = null;
   var open = false;
   function setOpen(v) {
     open = v;
-    if (panel) {
-      if (open) panel.className = 'sim-panel sim-panel-open';
-      else panel.className = 'sim-panel';
+    if (ctrlPanel) {
+      if (open) ctrlPanel.className = 'sim-panel sim-panel-open';
+      else ctrlPanel.className = 'sim-panel';
     }
     if (toggle) {
       // Прячем таблетку, пока лист открыт, чтобы не перекрывала контролы.
@@ -95,9 +104,9 @@ window.SimUI = (function () {
     }
   }
   function ensurePanel(title) {
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.className = 'sim-panel';
+    if (!ctrlPanel) {
+      ctrlPanel = document.createElement('div');
+      ctrlPanel.className = 'sim-panel';
       // Кнопка закрытия листа (видна только на мобиле через CSS).
       var close = document.createElement('button');
       close.type = 'button';
@@ -105,10 +114,10 @@ window.SimUI = (function () {
       close.setAttribute('aria-label', 'Закрыть параметры');
       close.textContent = '✕';
       close.onclick = function () { setOpen(false); };
-      panel.appendChild(close);
-      if (title) { var h = document.createElement('h1'); h.textContent = title; panel.appendChild(h); }
-      document.body.appendChild(panel);
-      if (window.__smhMakeCollapsible) window.__smhMakeCollapsible(panel, { noMobileCollapse: true });
+      ctrlPanel.appendChild(close);
+      if (title) { var h = document.createElement('h1'); h.textContent = title; ctrlPanel.appendChild(h); }
+      document.body.appendChild(ctrlPanel);
+      if (window.__smhMakeCollapsible) window.__smhMakeCollapsible(ctrlPanel, { noMobileCollapse: true });
       // Таблетка-переключатель снизу по центру (видна только на мобиле через CSS).
       toggle = document.createElement('button');
       toggle.type = 'button';
@@ -117,7 +126,7 @@ window.SimUI = (function () {
       toggle.onclick = function () { setOpen(!open); };
       document.body.appendChild(toggle);
     }
-    return panel;
+    return ctrlPanel;
   }
   function slider(o) { // {label,min,max,step,value,unit,onChange}
     ensurePanel();
@@ -132,7 +141,7 @@ window.SimUI = (function () {
     inp.addEventListener('input', function () {
       val.textContent = fmt(inp.value); o.onChange(parseFloat(inp.value));
     });
-    wrap.appendChild(lab); wrap.appendChild(inp); panel.appendChild(wrap);
+    wrap.appendChild(lab); wrap.appendChild(inp); ctrlPanel.appendChild(wrap);
     return inp;
   }
   function playPause(o) { // {onPlay,onPause,onReset}
@@ -163,7 +172,21 @@ window.SimUI = (function () {
       p.insertBefore(h, p.firstChild);
     }
   }
-  return { slider: slider, playPause: playPause, title: title };
+  function panel(o) { // {title, corner}
+    o = o || {};
+    var el = document.createElement('div');
+    el.className = 'sim-side-panel sim-corner-' + (o.corner || 'bl');
+    if (o.title) {
+      var h = document.createElement('h2'); h.className = 'sim-side-title';
+      h.textContent = o.title; el.appendChild(h);
+    }
+    var body = document.createElement('div'); body.className = 'sim-side-body';
+    el.appendChild(body);
+    document.body.appendChild(el);
+    if (window.__smhMakeCollapsible) window.__smhMakeCollapsible(el);
+    return body;
+  }
+  return { slider: slider, playPause: playPause, title: title, panel: panel };
 })();
 
 (function () {
@@ -219,10 +242,15 @@ window.SimUI = (function () {
 
 /** Описание API для системного промпта генератора. */
 export const UIKIT_DOC = `
-В артефакт уже встроен UI-kit (не подключай его сам, не пиши свои панели/слайдеры):
-- SimUI.title('Название симуляции') — панель с заголовком (справа сверху).
+В артефакт уже встроен UI-kit (не подключай его сам). НЕ рисуй свои панели/легенды/
+инфо-блоки через position:fixed — используй только SimUI:
+- SimUI.title('Название симуляции') — панель управления (справа сверху) с заголовком.
 - SimUI.slider({label:'Температура', min:0, max:100, step:1, value:20, unit:'°C',
-    onChange:(v)=>{...}}) — слайдер параметра.
-- SimUI.playPause({onPlay:()=>{}, onPause:()=>{}, onReset:()=>{}}) — кнопки Пауза/Сброс.
-Стили: тёмный фон уже задан; canvas растягивай на всё окно.
+    onChange:(v)=>{...}}) — слайдер параметра (в панели управления).
+- SimUI.playPause({onPlay:()=>{}, onPause:()=>{}, onReset:()=>{}}) — Пауза/Сброс.
+- SimUI.panel({title:'Легенда', corner:'bl'}) — возвращает DIV, В КОТОРЫЙ клади любой
+  контент: легенду, инфо-величины, свой canvas-график. corner: 'tl'|'tr'|'bl'|'br'.
+  Панель докируется в угол и автоматически сворачивается (на мобиле — свёрнута).
+Правила лейаута: центр экрана — под визуализацию; ВСЕ подписи/легенды/графики только
+через SimUI.panel по углам, чтобы не перекрывать сцену. canvas сцены — на всё окно.
 `;
