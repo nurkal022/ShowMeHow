@@ -1,5 +1,5 @@
 import './globals.css';
-import Link from 'next/link';
+import NavLinks from '@/components/NavLinks';
 
 export const metadata = { title: 'ShowMeHow' };
 
@@ -8,10 +8,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ru">
       <body>
         <nav className="topnav">
-          <span className="brand">ShowMeHow</span>
-          <Link href="/">Создать</Link>
-          <Link href="/library">Библиотека</Link>
-          <Link href="/settings">Настройки</Link>
+          <span className="brand"><span className="brand-mark">🔬</span>ShowMeHow</span>
+          <NavLinks />
         </nav>
         <main>{children}</main>
       </body>
