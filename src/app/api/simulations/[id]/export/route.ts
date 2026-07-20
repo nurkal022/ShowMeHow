@@ -1,4 +1,4 @@
-import { getMeta, getArtifact } from '@/lib/storage';
+import { getMeta, getRenderableArtifact } from '@/lib/storage';
 
 function isInvalidSegment(e: unknown): boolean {
   return e instanceof Error && e.message.includes('invalid path segment');
@@ -8,7 +8,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   try {
     const meta = getMeta(id);
-    return new Response(getArtifact(id), {
+    return new Response(getRenderableArtifact(id), {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         'Content-Disposition':

@@ -1,10 +1,10 @@
-import { getArtifact } from '@/lib/storage';
+import { getRenderableArtifact } from '@/lib/storage';
 
 export default async function Present({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   let html: string;
   try {
-    html = getArtifact(id);
+    html = getRenderableArtifact(id);
   } catch {
     return <p style={{ padding: 20 }}>Симуляция не найдена.</p>;
   }

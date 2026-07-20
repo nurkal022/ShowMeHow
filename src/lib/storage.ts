@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { dataDir } from './settings';
+import { reinstrument } from './artifact';
 import type { SimulationMeta } from './types';
 
 function assertSafe(segment: string): void {
@@ -43,6 +44,11 @@ export function getMeta(id: string): SimulationMeta {
 export function getArtifact(id: string): string {
   assertSafe(id);
   return fs.readFileSync(artifactPath(id), 'utf8');
+}
+
+/** HTML для показа/скачивания: всегда со СВЕЖИМ рантаймом (ретроактивно для старых симов). */
+export function getRenderableArtifact(id: string): string {
+  return reinstrument(getArtifact(id));
 }
 
 export function listSimulations(): SimulationMeta[] {

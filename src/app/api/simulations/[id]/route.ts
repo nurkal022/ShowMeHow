@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getMeta, getArtifact, deleteSimulation } from '@/lib/storage';
+import { getMeta, getRenderableArtifact, deleteSimulation } from '@/lib/storage';
 
 type P = { params: Promise<{ id: string }> };
 
@@ -10,7 +10,7 @@ function isInvalidSegment(e: unknown): boolean {
 export async function GET(_req: Request, { params }: P) {
   const { id } = await params;
   try {
-    return NextResponse.json({ meta: getMeta(id), html: getArtifact(id) });
+    return NextResponse.json({ meta: getMeta(id), html: getRenderableArtifact(id) });
   } catch (e) {
     const status = isInvalidSegment(e) ? 400 : 404;
     return NextResponse.json({ error: 'not found' }, { status });

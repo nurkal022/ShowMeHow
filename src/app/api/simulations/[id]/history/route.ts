@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { listHistory, restoreVersion, getArtifact, saveThumbnail } from '@/lib/storage';
+import { listHistory, restoreVersion, getRenderableArtifact, saveThumbnail } from '@/lib/storage';
 import { renderArtifact } from '@/lib/renderer';
 
 type P = { params: Promise<{ id: string }> };
@@ -23,7 +23,7 @@ export async function POST(req: Request, { params }: P) {
   const { name } = (await req.json()) as { name: string };
   try {
     restoreVersion(id, name);
-    const html = getArtifact(id);
+    const html = getRenderableArtifact(id);
     try {
       const report = await renderArtifact(html);
       const shot = report.screenshots[1] ?? report.screenshots[0];

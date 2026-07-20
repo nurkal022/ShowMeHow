@@ -9,7 +9,8 @@ import { GET as getExport } from '@/app/api/simulations/[id]/export/route';
 import { GET as getThumbnail } from '@/app/api/simulations/[id]/thumbnail/route';
 import { GET as getHistory, POST as postHistory } from '@/app/api/simulations/[id]/history/route';
 import { saveSettings, loadSettings } from '@/lib/settings';
-import { createSimulation, updateArtifact } from '@/lib/storage';
+import { createSimulation, updateArtifact, getRenderableArtifact } from '@/lib/storage';
+import { reinstrument } from '@/lib/artifact';
 
 beforeEach(() => {
   process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-'));
@@ -88,7 +89,8 @@ describe('simulations api', () => {
     expect(list).toHaveLength(1);
     const params = Promise.resolve({ id: meta.id });
     const one = await (await getSim(new Request('http://t'), { params })).json();
-    expect(one.html).toBe('<html>x</html>');
+    // GET now serves getRenderableArtifact — a freshly re-instrumented copy, not the raw bytes.
+    expect(one.html).toBe(reinstrument('<html>x</html>'));
     await delSim(new Request('http://t'), { params: Promise.resolve({ id: meta.id }) });
     expect(await (await listSims()).json()).toHaveLength(0);
   });
@@ -125,6 +127,30 @@ describe('simulations api', () => {
   });
 });
 
+describe('getRenderableArtifact', () => {
+  const META = { title: 'T', prompt: 'p', subject: 'Физика', tags: ['x'] };
+
+  it('injects the current runtime into a raw stored artifact', () => {
+    const { id } = createSimulation(
+      META,
+      '<!DOCTYPE html><html><head><title>t</title></head><body></body></html>',
+    );
+    const html = getRenderableArtifact(id);
+    expect(html).toContain('<!--showmehow-runtime-->');
+    expect(html).toContain('<!--/showmehow-runtime-->');
+  });
+
+  it('upgrades a legacy-instrumented stored artifact to a single current block', () => {
+    const legacy = '<!DOCTYPE html><html><head>' +
+      '<!--showmehow-runtime--><script>/*old*/</script><style>.o{}</style><script>/*old*/</script>' +
+      '<title>t</title></head><body></body></html>';
+    const { id } = createSimulation(META, legacy);
+    const html = getRenderableArtifact(id);
+    expect(html).not.toContain('/*old*/');
+    expect(html.split('<!--showmehow-runtime-->').length - 1).toBe(1);
+  });
+});
+
 describe('history api', () => {
   it('lists history after an update and restores a version round-trip', async () => {
     const meta = createSimulation(
@@ -141,7 +167,8 @@ describe('history api', () => {
     );
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.html).toBe('<html>v1</html>');
+    // POST /history now returns getRenderableArtifact — freshly re-instrumented.
+    expect(body.html).toBe(reinstrument('<html>v1</html>'));
   });
 
   it('GET returns 404 for an unknown simulation id', async () => {

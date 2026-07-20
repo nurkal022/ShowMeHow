@@ -8,7 +8,7 @@ import { activeProvider } from '../settings';
 import { bindChat } from '../provider';
 import { renderArtifact } from '../renderer';
 import { createSimulation, saveThumbnail, getArtifact, updateArtifact } from '../storage';
-import { extractHtml, findForbiddenUrls, instrument } from '../artifact';
+import { extractHtml, findForbiddenUrls, instrument, stripRuntime } from '../artifact';
 import { REFINER_SYSTEM, STYLE_HINTS, STYLE_NAMES, CDN_WHITELIST } from './prompts';
 import { plan, generateCandidate, verifyCandidate, fixArtifact, type Ctx } from './stages';
 import { judge, rescore } from './judge';
@@ -233,9 +233,10 @@ export async function runPipeline(
 }
 
 async function refineHtml(ctx: Ctx, html: string, feedback: string): Promise<string> {
+  const base = stripRuntime(html);
   const out = await ctx.genChat([
     { role: 'system', content: REFINER_SYSTEM },
-    { role: 'user', content: `Замечания:\n${feedback}\n\nHTML:\n\`\`\`html\n${html}\n\`\`\`` },
+    { role: 'user', content: `Замечания:\n${feedback}\n\nHTML:\n\`\`\`html\n${base}\n\`\`\`` },
   ]);
   return instrument(extractHtml(out));
 }
