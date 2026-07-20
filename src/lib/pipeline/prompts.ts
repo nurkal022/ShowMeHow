@@ -56,17 +56,10 @@ export const EXAMPLE_SKELETON = `<!DOCTYPE html>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; }
   canvas { position: fixed; top: 0; left: 0; display: block; }
-  #info { position: fixed; left: 12px; bottom: 12px; z-index: 10; width: 300px;
-    padding: 12px; background: color-mix(in srgb, var(--sim-panel) 92%, transparent);
-    border: 1px solid #2a3341; border-radius: 12px; font-size: 12px; }
 </style>
 </head>
 <body>
 <canvas id="scene"></canvas>
-<div id="info">
-  <div id="formula"></div>
-  Значение: <b id="valX">—</b>
-</div>
 <script>
 (function () {
   // ---------- Константы физики (единицы измерения в комментариях) ----------
@@ -120,6 +113,10 @@ export const EXAMPLE_SKELETON = `<!DOCTYPE html>
     onReset: function () { resetSim(); },
   });
 
+  // Инфо-панель величин (докнута в угол, сворачиваемая — не перекрывает сцену).
+  var info = SimUI.panel({ title: 'Величины', corner: 'bl' });
+  info.innerHTML = 'Значение: <b id="valX">—</b>';
+
   // ---------- Инициализация ----------
   window.addEventListener('resize', resize);
   resize();
@@ -151,6 +148,11 @@ ${cdnList}
 - Код чистый и организованный: константы физики сверху с комментариями, функции короткие.
 - Русский язык во всех подписях. Формулы — KaTeX, если уместны.
 - Никаких заглушек и TODO: всё работает сразу.
+- Лейаут: центр экрана — только под визуализацию. НЕ создавай свои position:fixed
+  панели/легенды/инфо-блоки — используй SimUI.panel по углам, чтобы НЕ перекрывать сцену.
+- Графики рисуй на своём <canvas> вручную (оси/линии/подписи). НЕ используй chart.js и
+  иные внешние библиотеки графиков — они ненадёжны (ошибки загрузки модуля).
+- Все панели должны быть читаемы: контраст текста, единицы у величин, аккуратные отступы.
 
 Каркас качественной симуляции (следуй структуре):
 \`\`\`html

@@ -44,3 +44,19 @@ describe('prompts', () => {
     expect(P.CDN_WHITELIST.three).toContain('three.module.min.js');
   });
 });
+
+describe('generator prompt layout rules', () => {
+  const sys = P.generatorSystem('Стиль: реализм.');
+  it('forbids hand-rolled fixed panels and mandates SimUI.panel', () => {
+    expect(sys).toContain('SimUI.panel');
+    expect(sys.toLowerCase()).toContain('не перекрыва');
+  });
+  it('prefers canvas charts over fragile chart libraries', () => {
+    expect(sys.toLowerCase()).toContain('canvas');
+    expect(sys.toLowerCase()).toContain('chart.js');
+  });
+  it('the skeleton uses SimUI.panel and has no hand-rolled #info fixed div', () => {
+    expect(P.EXAMPLE_SKELETON).toContain('SimUI.panel');
+    expect(P.EXAMPLE_SKELETON).not.toContain('#info { position: fixed');
+  });
+});
