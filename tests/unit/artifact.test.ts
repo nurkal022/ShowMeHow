@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractHtml, extractJson, findForbiddenUrls, instrument } from '@/lib/artifact';
+import { extractHtml, extractJson, findForbiddenUrls, instrument, stripRuntime, reinstrument } from '@/lib/artifact';
 import { UIKIT_JS } from '@/lib/runtime';
 import { CDN_WHITELIST } from '@/lib/pipeline/prompts';
 
@@ -137,5 +137,50 @@ describe('findForbiddenUrls', () => {
     const html = `<style>@font-face{src:url('${fontUrl}');}</style><link href="${fontUrl}">`;
     // href= attribute form is what the scanner recognizes
     expect(findForbiddenUrls(html, allowed)).toEqual([]);
+  });
+});
+
+describe('stripRuntime + reinstrument', () => {
+  const RAW = '<!DOCTYPE html><html><head><title>t</title></head><body>x</body></html>';
+
+  it('stripRuntime removes a freshly instrumented block, leaving no marker', () => {
+    const stripped = stripRuntime(instrument(RAW));
+    expect(stripped).not.toContain('showmehow-runtime');
+    expect(stripped).toContain('<title>t</title>');
+    expect(stripped).toContain('<body>x</body>');
+  });
+
+  it('stripRuntime removes a LEGACY block (start marker, no closing marker)', () => {
+    // легаси-форма: маркер + наши три тега без закрывающего маркера
+    const legacy = '<!DOCTYPE html><html><head>' +
+      '<!--showmehow-runtime--><script>/*h*/</script><style>.a{}</style><script>/*u*/</script>' +
+      '<title>t</title></head><body>x</body></html>';
+    const stripped = stripRuntime(legacy);
+    expect(stripped).not.toContain('showmehow-runtime');
+    expect(stripped).toContain('<title>t</title>');
+  });
+
+  it('stripRuntime keeps the artifact own external scripts', () => {
+    const withCdn = '<!DOCTYPE html><html><head>' +
+      '<script src="https://cdn.jsdelivr.net/npm/katex/katex.min.js"></script>' +
+      '<title>t</title></head><body></body></html>';
+    expect(stripRuntime(instrument(withCdn))).toContain('katex.min.js');
+  });
+
+  it('reinstrument is idempotent and yields exactly one current runtime block', () => {
+    const once = reinstrument(RAW);
+    expect(reinstrument(once)).toBe(once);
+    // ровно один открывающий маркер
+    expect(once.split('<!--showmehow-runtime-->').length - 1).toBe(1);
+  });
+
+  it('reinstrument upgrades a legacy-instrumented file to a single current block', () => {
+    const legacy = '<!DOCTYPE html><html><head>' +
+      '<!--showmehow-runtime--><script>/*old*/</script><style>.old{}</style><script>/*old*/</script>' +
+      '<title>t</title></head><body></body></html>';
+    const out = reinstrument(legacy);
+    expect(out).not.toContain('/*old*/');
+    expect(out.split('<!--showmehow-runtime-->').length - 1).toBe(1);
+    expect(out).toContain('<!--/showmehow-runtime-->');
   });
 });

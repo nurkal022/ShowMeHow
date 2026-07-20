@@ -1,6 +1,7 @@
 import { HARNESS_JS, UIKIT_CSS, UIKIT_JS } from './runtime';
 
 const MARKER = '<!--showmehow-runtime-->';
+const END_MARKER = '<!--/showmehow-runtime-->';
 
 export function extractHtml(llmOutput: string): string {
   const fenced = llmOutput.match(/```html\s*\n([\s\S]*?)```/);
@@ -76,7 +77,7 @@ export function findForbiddenUrls(html: string, allowed: string[]): string[] {
 export function instrument(html: string): string {
   if (html.includes(MARKER)) return html;
   const runtime = `${MARKER}<script>${HARNESS_JS}</script>` +
-    `<style>${UIKIT_CSS}</style><script>${UIKIT_JS}</script>`;
+    `<style>${UIKIT_CSS}</style><script>${UIKIT_JS}</script>${END_MARKER}`;
 
   const headMatch = html.match(/<head[^>]*>/i);
   if (headMatch) {
@@ -102,4 +103,24 @@ export function instrument(html: string): string {
 
   // Нет ничего из вышеперечисленного — просто добавляем в начало.
   return runtime + html;
+}
+
+/**
+ * Снимает ранее вставленный нами рантайм-блок в двух формах:
+ *  - новая: между MARKER и END_MARKER;
+ *  - легаси (старые сохранённые файлы): MARKER + ровно наши три тега без закрывающего
+ *    маркера. Regex заякорен на MARKER, поэтому собственные скрипты артефакта не трогает.
+ */
+export function stripRuntime(html: string): string {
+  return html
+    .replace(/<!--showmehow-runtime-->[\s\S]*?<!--\/showmehow-runtime-->/g, '')
+    .replace(
+      /<!--showmehow-runtime--><script>[\s\S]*?<\/script><style>[\s\S]*?<\/style><script>[\s\S]*?<\/script>/g,
+      '',
+    );
+}
+
+/** Пере-инструментирует HTML текущим рантаймом (снять старый блок → вставить свежий). */
+export function reinstrument(html: string): string {
+  return instrument(stripRuntime(html));
 }
