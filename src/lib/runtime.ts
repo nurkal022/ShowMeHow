@@ -38,18 +38,75 @@ body { margin:0; background:var(--sim-bg); color:var(--sim-text);
   background:var(--sim-panel); color:var(--sim-text); cursor:pointer; font-size:13px; }
 .sim-btns button:hover { border-color:var(--sim-accent); }
 .sim-value { color:var(--sim-text); font-variant-numeric:tabular-nums; }
+.sim-panel-toggle { display:none; }
+.sim-panel-close { display:none; }
+
+/* Мобильный SimUI: панель сворачивается в таблетку «Параметры» снизу; развёрнутое
+   состояние — bottom-sheet с теми же контролами. На широком экране — как раньше. */
+@media (max-width:640px) {
+  .sim-panel {
+    left:8px; right:8px; top:auto; bottom:0; width:auto; z-index:12;
+    border-radius:16px 16px 0 0; max-height:72vh; overflow-y:auto;
+    padding:18px 16px 26px; transform:translateY(112%); transition:transform .25s ease;
+  }
+  .sim-panel.sim-panel-open { transform:translateY(0); box-shadow:0 -8px 28px rgba(0,0,0,.45); }
+  .sim-panel-toggle {
+    display:inline-flex; align-items:center; gap:6px; position:fixed; left:50%; bottom:16px;
+    transform:translateX(-50%); z-index:11; min-height:48px; padding:12px 22px;
+    border-radius:999px; border:1px solid #2a3341;
+    background:color-mix(in srgb, var(--sim-panel) 94%, transparent); backdrop-filter:blur(6px);
+    color:var(--sim-text); font:inherit; font-size:15px; cursor:pointer;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);
+  }
+  .sim-panel-toggle.sim-panel-hidden { display:none; }
+  .sim-panel-close {
+    display:flex; align-items:center; justify-content:center; position:absolute; top:10px; right:10px;
+    width:36px; height:36px; border-radius:999px; border:1px solid #2a3341;
+    background:var(--sim-panel); color:var(--sim-text); font-size:16px; line-height:1; cursor:pointer;
+  }
+  .sim-control input[type=range] { height:34px; }
+  .sim-btns button { padding:12px 0; min-height:46px; font-size:15px; }
+}
 `;
 
 /** SimUI — фабрика контролов. Генератор обязан использовать её, не изобретать своё. */
 export const UIKIT_JS = `
 window.SimUI = (function () {
   var panel = null;
+  var toggle = null;
+  var open = false;
+  function setOpen(v) {
+    open = v;
+    if (panel) {
+      if (open) panel.className = 'sim-panel sim-panel-open';
+      else panel.className = 'sim-panel';
+    }
+    if (toggle) {
+      // Прячем таблетку, пока лист открыт, чтобы не перекрывала контролы.
+      toggle.className = open ? 'sim-panel-toggle sim-panel-hidden' : 'sim-panel-toggle';
+    }
+  }
   function ensurePanel(title) {
     if (!panel) {
       panel = document.createElement('div');
       panel.className = 'sim-panel';
+      // Кнопка закрытия листа (видна только на мобиле через CSS).
+      var close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'sim-panel-close';
+      close.setAttribute('aria-label', 'Закрыть параметры');
+      close.textContent = '✕';
+      close.onclick = function () { setOpen(false); };
+      panel.appendChild(close);
       if (title) { var h = document.createElement('h1'); h.textContent = title; panel.appendChild(h); }
       document.body.appendChild(panel);
+      // Таблетка-переключатель снизу по центру (видна только на мобиле через CSS).
+      toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'sim-panel-toggle';
+      toggle.textContent = '⚙ Параметры';
+      toggle.onclick = function () { setOpen(!open); };
+      document.body.appendChild(toggle);
     }
     return panel;
   }
