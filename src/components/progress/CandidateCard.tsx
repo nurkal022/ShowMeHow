@@ -2,11 +2,7 @@
 import { useState } from 'react';
 import type { RubricScores } from '@/lib/types';
 import type { CandidateInfo } from './deriveProgress';
-
-const STATUS_LABELS: Record<CandidateInfo['status'], string> = {
-  generating: 'генерация', rendering: 'проверка рендера', fixing: 'автопочинка',
-  critiquing: 'критика', ok: '✓ готов', failed: '✗ выбыл',
-};
+import { candidateCopy } from './stepCopy';
 
 const SCORE_DIMS: { key: keyof RubricScores; label: string; cls: string }[] = [
   { key: 'physics', label: 'Физика', cls: 'dim-physics' },
@@ -27,7 +23,9 @@ export default function CandidateCard({ candidate }: { candidate: CandidateInfo 
       <div className="candidate-card-head">
         Кандидат {candidate.index + 1} · {candidate.styleHint || '…'}
       </div>
-      <div className="candidate-status">{STATUS_LABELS[candidate.status] ?? candidate.status}</div>
+      <div className={`candidate-status status-${candidate.status}`}>
+        {candidateCopy(candidate.status)}
+      </div>
       {candidate.screenshot && (
         // eslint-disable-next-line @next/next/no-img-element -- data: URL screenshot, next/image не умеет
         <img src={candidate.screenshot} alt="" className="candidate-shot" />

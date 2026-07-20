@@ -244,6 +244,37 @@ a { color: var(--accent); }
 .stage-chip.stage-skipped { opacity: .35; }
 .stage-chip.stage-interrupted { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); opacity: .9; }
 
+/* --- T4: animated progress + step descriptions --- */
+@keyframes pop-in { 0% { transform: scale(0); } 70% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes fade-slide-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+.stage-timeline-wrap { display: flex; flex-direction: column; gap: 8px; }
+.stage-progressbar { height: 4px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.stage-progressbar-fill {
+  height: 100%; border-radius: 999px; background: var(--accent);
+  transition: width .5s ease;
+  background-image: linear-gradient(90deg, var(--accent), #7c74f0, var(--accent));
+  background-size: 200% 100%; animation: shimmer 1.6s linear infinite;
+}
+/* Галочка завершённого этапа появляется с «pop». */
+.stage-check { display: inline-block; animation: pop-in .3s ease-out; }
+/* Тонкое «бегущее» свечение активного чипа поверх пульса. */
+.stage-chip.stage-active {
+  background-image: linear-gradient(90deg, var(--accent-soft), #e4e6fd, var(--accent-soft));
+  background-size: 200% 100%; animation: chip-pulse 1.4s ease-in-out infinite, shimmer 2s linear infinite;
+}
+.stage-caption { font-size: 12px; color: var(--muted); }
+
+/* Карточки прогресса въезжают снизу. */
+.candidate-card, .plan-card, .refine-panel { animation: fade-slide-in .3s ease-out; }
+.candidate-shot { animation: fade-in .4s ease-out; }
+.winner-badge { animation: pop-in .4s ease-out; }
+.candidate-status.status-ok { color: var(--success); font-weight: 600; }
+.candidate-status.status-failed { color: var(--danger); }
+.refine-round-delta { color: var(--muted); font-variant-numeric: tabular-nums; }
+
 .plan-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
   box-shadow: var(--shadow-sm); padding: 12px; display: flex; flex-direction: column; gap: 4px; }
 .plan-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -277,7 +308,7 @@ a { color: var(--accent); }
 .score-bar-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }
 .score-bar-label { width: 74px; flex-shrink: 0; }
 .score-bar-track { flex: 1; height: 5px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
-.score-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+.score-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .5s ease; }
 .score-bar-fill.dim-physics { filter: hue-rotate(0deg); }
 .score-bar-fill.dim-clarity { filter: hue-rotate(25deg); opacity: .9; }
 .score-bar-fill.dim-interactivity { filter: hue-rotate(-25deg); opacity: .85; }
