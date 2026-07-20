@@ -25,6 +25,9 @@ export default function Workbench() {
   const [history, setHistory] = useState<string[]>([]);
   const [jobId, setJobId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  // Мобильные вкладки: на узком экране видна только одна колонка. На десктопе (≥900px)
+  // переключатель скрыт CSS и обе колонки показываются одновременно.
+  const [activeTab, setActiveTab] = useState<'create' | 'preview'>('create');
   const fileRef = useRef<HTMLInputElement>(null);
   // Strict Mode в dev монтирует компонент дважды — mount-эффект должен отработать
   // ровно один раз, иначе реплей job-стрима запустится параллельно и продублирует события.
@@ -173,6 +176,8 @@ export default function Workbench() {
           if (e.type === 'done') {
             sawTerminal = true;
             clearActiveJob();
+            // Готовый результат — на мобиле сразу показываем вкладку превью.
+            setActiveTab('preview');
             await openSimulation(e.simulationId);
           }
           if (e.type === 'error') {
@@ -320,7 +325,25 @@ export default function Workbench() {
   const hasSim = simId !== null;
 
   return (
-    <div className="workbench">
+    <div className={`workbench tab-${activeTab}`}>
+      <div className="mobile-tabs" role="tablist" aria-label="Разделы">
+        <button
+          role="tab"
+          aria-selected={activeTab === 'create'}
+          className={activeTab === 'create' ? 'active' : ''}
+          onClick={() => setActiveTab('create')}
+        >
+          Создать
+        </button>
+        <button
+          role="tab"
+          aria-selected={activeTab === 'preview'}
+          className={activeTab === 'preview' ? 'active' : ''}
+          onClick={() => setActiveTab('preview')}
+        >
+          Превью
+        </button>
+      </div>
       <aside className="chat-pane">
         <h2>{hasSim ? 'Доработка' : 'Новая симуляция'}</h2>
         {hasSim && phase !== 'generating' && (
@@ -386,6 +409,11 @@ export default function Workbench() {
         </div>
       </aside>
       <section className="preview-pane">
+        {phase === 'generating' && (
+          <button className="to-process-badge" onClick={() => setActiveTab('create')}>
+            идёт генерация → к процессу
+          </button>
+        )}
         <PreviewFrame html={html} />
         {simId && (
           <div className="preview-actions">

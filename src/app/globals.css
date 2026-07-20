@@ -187,6 +187,47 @@ a { color: var(--accent); }
 .error-box { background: var(--danger-soft); border: 1px solid var(--danger); color: #9a2d31;
   border-radius: var(--r-sm); padding: 10px; font-size: 13px; }
 
+/* --- T2: mobile tabs + responsive workbench --- */
+/* Переключатель Создать/Превью виден только на узком экране; на десктопе показываем
+   обе колонки как раньше. */
+.mobile-tabs { display: none; }
+.to-process-badge { display: none; }
+
+@media (max-width: 899px) {
+  .workbench { flex-direction: column; }
+  .mobile-tabs {
+    display: flex; gap: 4px; padding: 6px; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .mobile-tabs button {
+    flex: 1; min-height: 44px; border: none; border-radius: var(--r-sm);
+    background: transparent; color: var(--muted); font: inherit; font-weight: 600;
+    cursor: pointer; transition: background .12s ease, color .12s ease;
+  }
+  .mobile-tabs button.active { background: var(--accent-soft); color: var(--accent); }
+
+  /* Обе колонки на всю ширину; видима только соответствующая активной вкладке. */
+  .chat-pane { width: auto; min-width: 0; flex: 1; border-right: none; }
+  .preview-pane { flex: 1; }
+  .workbench.tab-create .preview-pane { display: none; }
+  .workbench.tab-preview .chat-pane { display: none; }
+
+  /* Композер прилипает снизу прокручиваемой колонки создания. */
+  .composer {
+    position: sticky; bottom: 0; background: var(--surface);
+    padding: 8px 0 4px; box-shadow: 0 -6px 12px -8px rgba(22, 28, 38, .18);
+  }
+  .composer button.primary { min-height: 50px; font-size: 16px; }
+
+  /* Мостик обратно к процессу, если пользователь на превью во время генерации. */
+  .to-process-badge {
+    display: inline-flex; align-self: flex-start; align-items: center;
+    margin: 8px; padding: 8px 14px; min-height: 40px;
+    background: var(--accent-soft); color: var(--accent); border: none;
+    border-radius: 999px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+}
+
 /* --- Rich progress view (StageTimeline / PlanCard / CandidateCard / RefinePanel) --- */
 .progress-view { display: flex; flex-direction: column; gap: 12px; }
 
