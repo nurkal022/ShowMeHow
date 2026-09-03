@@ -5,6 +5,14 @@ window.SimUI = (function () {
   var toggle = null;
   var open = false;
   var cornerEls = {};
+  var controls = [];
+  function register(c) { controls.push(c); return c; }
+  function setByName(name, value) {
+    for (var i = 0; i < controls.length; i++) {
+      if (controls[i].name === name && controls[i].set) { controls[i].set(value); return true; }
+    }
+    return false;
+  }
   function ensureCorner(corner) {
     if (!cornerEls[corner]) {
       var c = document.createElement('div');
@@ -64,6 +72,16 @@ window.SimUI = (function () {
       val.textContent = fmt(inp.value); o.onChange(parseFloat(inp.value));
     });
     wrap.appendChild(lab); wrap.appendChild(inp); ctrlPanel.appendChild(wrap);
+    register({
+      kind: 'slider', name: o.name || o.label, label: o.label,
+      min: Number(o.min), max: Number(o.max), step: Number(o.step),
+      get: function () { return parseFloat(inp.value); },
+      set: function (v) {
+        inp.value = v;
+        val.textContent = fmt(inp.value);
+        o.onChange(parseFloat(inp.value));
+      },
+    });
     return inp;
   }
   function playPause(o) { // {onPlay,onPause,onReset}
@@ -72,6 +90,8 @@ window.SimUI = (function () {
     var playing = true;
     var b1 = document.createElement('button'); b1.textContent = '⏸ Пауза';
     var b2 = document.createElement('button'); b2.textContent = '↺ Сброс';
+    b1.setAttribute('data-smh-btn', 'playpause');
+    b2.setAttribute('data-smh-btn', 'reset');
     b1.onclick = function () {
       playing = !playing;
       b1.textContent = playing ? '⏸ Пауза' : '▶ Пуск';
@@ -106,10 +126,15 @@ window.SimUI = (function () {
     var body = document.createElement('div'); body.className = 'sim-side-body';
     el.appendChild(body);
     container.appendChild(el);
-    if (window.__smhMakeCollapsible) window.__smhMakeCollapsible(el);
+    if (window.__smhMakeCollapsible) window.__smhMakeCollapsible(el, { collapsed: !!o.collapsed });
     return body;
   }
-  return { slider: slider, playPause: playPause, title: title, panel: panel };
+  return {
+    slider: slider, playPause: playPause, title: title, panel: panel,
+    // Служебное API для виджетов (kit-widgets) и моста интроспекции (kit-expose).
+    __panel: ensurePanel, __register: register, __controls: function () { return controls; },
+    __set: setByName,
+  };
 })();
 
 (function () {

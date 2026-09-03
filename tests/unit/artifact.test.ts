@@ -213,6 +213,29 @@ describe('SimUI.panel', () => {
   });
 });
 
+describe('мост интроспекции __smh', () => {
+  it('KIT_EXPOSE_JS входит в UIKIT_JS и определяет window.__smh', async () => {
+    const { KIT_EXPOSE_JS } = await import('@/lib/runtime/kit-expose');
+    expect(UIKIT_JS).toContain(KIT_EXPOSE_JS);
+    expect(KIT_EXPOSE_JS).toContain('window.__smh');
+    expect(KIT_EXPOSE_JS).toContain('SimUI.expose');
+  });
+  it('ядро кита ведёт реестр контролов и помечает кнопки паузы/сброса', async () => {
+    const { KIT_CORE_JS } = await import('@/lib/runtime/kit-core');
+    expect(KIT_CORE_JS).toContain('__register');
+    expect(KIT_CORE_JS).toContain('__controls');
+    expect(KIT_CORE_JS).toContain("data-smh-btn', 'playpause'");
+    expect(KIT_CORE_JS).toContain("data-smh-btn', 'reset'");
+  });
+  it('весь UIKIT_JS остаётся валидным JS', () => {
+    expect(() => new Function(UIKIT_JS)).not.toThrow();
+  });
+  it('UIKIT_DOC требует SimUI.expose', async () => {
+    const { UIKIT_DOC } = await import('@/lib/runtime');
+    expect(UIKIT_DOC).toContain('SimUI.expose');
+  });
+});
+
 describe('runtime module layout', () => {
   it('UIKIT_JS собирается из чанков и включает ядро кита', async () => {
     const { KIT_CORE_JS } = await import('@/lib/runtime/kit-core');
