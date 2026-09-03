@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>probe ok</title>
+<style>html,body{margin:0;height:100%;overflow:hidden}canvas{position:fixed;top:0;left:0}</style>
+</head><body><canvas id="c"></canvas><script>
+(function () {
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  var state = { t: 0, x: 0 }, speed = 60, running = true, last = null;
+  function resetSim() { state = { t: 0, x: 0 }; }
+  function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+  function draw() {
+    ctx.fillStyle = '#101318'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#4f8ff7'; ctx.fillRect(state.x % 600, 100, 40, 40);
+  }
+  function loop(now) {
+    if (last == null) last = now;
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (running) { state.t += dt; state.x += speed * dt; }
+    draw(); requestAnimationFrame(loop);
+  }
+  SimUI.title('Проба');
+  SimUI.slider({ name: 'speed', label: 'Скорость', min: 10, max: 400, step: 10, value: speed,
+    unit: 'px/с', onChange: function (v) { speed = v; } });
+  SimUI.playPause({ onPlay: function () { running = true; last = null; },
+    onPause: function () { /* забыли остановить */ }, onReset: function () { resetSim(); } });
+  SimUI.expose({ getState: function () { return { t: state.t, x: state.x, speed: speed }; },
+    reset: resetSim });
+  addEventListener('resize', resize); resize(); requestAnimationFrame(loop);
+})();
+</script></body></html>
