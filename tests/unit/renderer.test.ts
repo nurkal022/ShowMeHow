@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { renderArtifact, closeBrowser, __setLauncherForTests } from '@/lib/renderer';
+import { renderArtifact, closeBrowser, __setLauncherForTests, openSession } from '@/lib/renderer';
 
 const fx = (n: string) =>
   fs.readFileSync(path.join(process.cwd(), 'tests/fixtures', n), 'utf8');
@@ -61,9 +61,12 @@ describe('renderArtifact', () => {
     function fakePage() {
       return {
         on: () => {},
+        route: async () => {},
         setContent: async () => {},
         waitForTimeout: async () => {},
         screenshot: async () => Buffer.from([launchCount]),
+        click: async () => {},
+        evaluate: async () => null,
         close: async () => {},
       };
     }
@@ -114,9 +117,12 @@ describe('renderArtifact', () => {
     function fakePage() {
       return {
         on: () => {},
+        route: async () => {},
         setContent: async () => {},
         waitForTimeout: async () => {},
         screenshot: async () => Buffer.from([launchCount]),
+        click: async () => {},
+        evaluate: async () => null,
         close: async () => {},
       };
     }
@@ -166,4 +172,35 @@ describe('renderArtifact', () => {
       await closeBrowser();
     }
   });
+});
+
+describe('openSession', () => {
+  afterAll(() => closeBrowser());
+
+  it('даёт кадры, evaluate и клик по селектору', async () => {
+    const s = await openSession(
+      '<html><body><button id="b" onclick="window.__n=(window.__n||0)+1">x</button></body></html>',
+    );
+    try {
+      expect((await s.shot()).length).toBeGreaterThan(0);
+      expect(await s.click('#b')).toBe(true);
+      expect(await s.evaluate<number>('window.__n')).toBe(1);
+      expect(await s.click('#missing')).toBe(false);
+      expect(s.errors()).toEqual([]);
+    } finally {
+      await s.close();
+    }
+  }, 30000);
+
+  it('блокирует запрос вне whitelist и записывает его', async () => {
+    const s = await openSession(
+      '<html><body><img src="https://evil.example.com/x.png"></body></html>',
+    );
+    try {
+      await s.wait(300);
+      expect(s.blockedUrls()).toContain('https://evil.example.com/x.png');
+    } finally {
+      await s.close();
+    }
+  }, 30000);
 });

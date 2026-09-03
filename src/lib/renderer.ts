@@ -1,5 +1,6 @@
 import { chromium, type Browser } from 'playwright';
 import type { RenderReport } from './types';
+import { allowedPrefixes } from './cdn';
 
 export type RenderFn = (html: string) => Promise<RenderReport>;
 
@@ -61,15 +62,79 @@ export async function closeBrowser(): Promise<void> {
   }
 }
 
+export interface RenderSession {
+  shot(): Promise<Buffer>;
+  /** Выражение исполняется в контексте страницы; результат должен быть сериализуем. */
+  evaluate<T = unknown>(expression: string): Promise<T>;
+  /** false, если элемент не найден или клик не удался. */
+  click(selector: string): Promise<boolean>;
+  wait(ms: number): Promise<void>;
+  errors(): string[];
+  blockedUrls(): string[];
+  close(): Promise<void>;
+}
+
+export interface SessionOpts {
+  timeoutMs?: number;
+  viewport?: { width: number; height: number };
+}
+
+export async function openSession(
+  html: string,
+  { timeoutMs = 15000, viewport = { width: 1280, height: 800 } }: SessionOpts = {},
+): Promise<RenderSession> {
+  const browser = await getBrowser();
+  const page = await browser.newPage({ viewport });
+  const errors: string[] = [];
+  const blocked: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+
+  // Сеть вне whitelist режется на уровне браузера: regex-скан по исходнику
+  // ловит не всё (например, URL, собранный из строк в рантайме).
+  const prefixes = allowedPrefixes();
+  await page.route('**/*', (route) => {
+    const url = route.request().url();
+    if (!/^https?:\/\//i.test(url) || prefixes.some((p) => url.startsWith(p))) {
+      route.continue().catch(() => {});
+      return;
+    }
+    blocked.push(url);
+    route.abort().catch(() => {});
+  });
+
+  try {
+    await page.setContent(html, { timeout: timeoutMs, waitUntil: 'load' });
+  } catch (e) {
+    errors.push('render timeout/navigation: ' + String(e));
+  }
+
+  return {
+    shot: () => page.screenshot({ timeout: timeoutMs }),
+    evaluate: <T>(expression: string) => page.evaluate(expression) as Promise<T>,
+    click: async (selector) => {
+      try {
+        await page.click(selector, { timeout: 2000 });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    wait: (ms) => page.waitForTimeout(ms),
+    errors: () => errors,
+    blockedUrls: () => blocked,
+    close: async () => { await page.close().catch(() => {}); },
+  };
+}
+
 export async function renderArtifact(
   html: string,
-  { timeoutMs = 15000, shotTimes = [300, 1200, 3000] }: { timeoutMs?: number; shotTimes?: number[] } = {},
+  { timeoutMs = 15000, shotTimes = [300, 1200, 3000] }:
+    { timeoutMs?: number; shotTimes?: number[] } = {},
 ): Promise<RenderReport> {
-  let browser: Browser;
-  let page: Awaited<ReturnType<Browser['newPage']>>;
+  let session: RenderSession;
   try {
-    browser = await getBrowser();
-    page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    session = await openSession(html, { timeoutMs });
   } catch (e) {
     return {
       ok: false,
@@ -78,23 +143,22 @@ export async function renderArtifact(
       screenshots: [],
     };
   }
-  const errors: string[] = [];
   const screenshots: Buffer[] = [];
-  page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   try {
-    await page.setContent(html, { timeout: timeoutMs, waitUntil: 'load' });
     let prev = 0;
     for (const t of shotTimes) {
-      await page.waitForTimeout(t - prev);
+      await session.wait(t - prev);
       prev = t;
-      screenshots.push(await page.screenshot({ timeout: timeoutMs }));
+      screenshots.push(await session.shot());
     }
   } catch (e) {
-    errors.push('render timeout/navigation: ' + String(e));
-  } finally {
-    await page.close().catch(() => {});
+    session.errors().push('screenshot failure: ' + String(e));
   }
+  const errors = [...session.errors()];
+  for (const url of session.blockedUrls()) {
+    errors.push('Заблокирован запрос вне whitelist: ' + url);
+  }
+  await session.close();
   const animated = screenshots.length >= 2 &&
     !screenshots[0].equals(screenshots[screenshots.length - 1]);
   return { ok: errors.length === 0 && screenshots.length > 0, errors, animated, screenshots };
