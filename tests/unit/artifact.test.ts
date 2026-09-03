@@ -212,3 +212,18 @@ describe('SimUI.panel', () => {
     expect(() => new Function(UIKIT_JS)).not.toThrow();
   });
 });
+
+describe('runtime module layout', () => {
+  it('UIKIT_JS собирается из чанков и включает ядро кита', async () => {
+    const { KIT_CORE_JS } = await import('@/lib/runtime/kit-core');
+    expect(UIKIT_JS).toContain(KIT_CORE_JS);
+  });
+  it('HARNESS_JS живёт в отдельном модуле', async () => {
+    const { HARNESS_JS } = await import('@/lib/runtime/harness');
+    expect(HARNESS_JS).toContain('sim-error');
+  });
+  it('UIKIT_CSS живёт в отдельном модуле', async () => {
+    const mod = await import('@/lib/runtime/kit-css');
+    expect(mod.UIKIT_CSS).toContain('.sim-panel');
+  });
+});
