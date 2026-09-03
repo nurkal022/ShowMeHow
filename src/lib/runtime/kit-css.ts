@@ -67,4 +67,10 @@ body { margin:0; background:var(--sim-bg); color:var(--sim-text);
   display:flex; flex-direction:column; gap:8px; }
 .sim-side-title { font-size:13px; margin:0; padding-right:26px; }
 @media (max-width:640px) { .sim-side-panel { max-width:calc(100vw - 24px); } }
+
+.sim-chart { display:block; border-radius:8px; border:1px solid #2a3341; }
+.sim-chart-legend { display:flex; flex-wrap:wrap; gap:10px; margin-top:6px;
+  font-size:10.5px; color:var(--sim-muted); }
+.sim-chart-legend span { display:inline-flex; align-items:center; gap:4px; }
+.sim-chart-legend i { width:9px; height:9px; border-radius:2px; display:inline-block; }
 `;

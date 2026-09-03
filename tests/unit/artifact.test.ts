@@ -213,6 +213,21 @@ describe('SimUI.panel', () => {
   });
 });
 
+describe('SimUI.chart', () => {
+  it('KIT_CHART_JS входит в UIKIT_JS и определяет chart', async () => {
+    const { KIT_CHART_JS } = await import('@/lib/runtime/kit-chart');
+    expect(UIKIT_JS).toContain(KIT_CHART_JS);
+    expect(KIT_CHART_JS).toContain('K.chart = chart');
+  });
+  it('UIKIT_JS остаётся валидным JS', () => {
+    expect(() => new Function(UIKIT_JS)).not.toThrow();
+  });
+  it('UIKIT_CSS содержит стили графика', async () => {
+    const { UIKIT_CSS } = await import('@/lib/runtime');
+    expect(UIKIT_CSS).toContain('.sim-chart');
+  });
+});
+
 describe('мост интроспекции __smh', () => {
   it('KIT_EXPOSE_JS входит в UIKIT_JS и определяет window.__smh', async () => {
     const { KIT_EXPOSE_JS } = await import('@/lib/runtime/kit-expose');
