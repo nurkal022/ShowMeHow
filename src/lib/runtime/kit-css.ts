@@ -73,4 +73,37 @@ body { margin:0; background:var(--sim-bg); color:var(--sim-text);
   font-size:10.5px; color:var(--sim-muted); }
 .sim-chart-legend span { display:inline-flex; align-items:center; gap:4px; }
 .sim-chart-legend i { width:9px; height:9px; border-radius:2px; display:inline-block; }
+
+.sim-readout { display:flex; justify-content:space-between; gap:12px; font-size:12px;
+  color:var(--sim-muted); line-height:1.7; }
+.sim-readout-value { color:var(--sim-text); font-variant-numeric:tabular-nums; font-weight:600; }
+.sim-legend { display:flex; flex-wrap:wrap; gap:10px; font-size:11px; color:var(--sim-muted); }
+.sim-legend span { display:inline-flex; align-items:center; gap:5px; }
+.sim-legend i { width:10px; height:10px; border-radius:2px; display:inline-block; }
+.sim-formula-tex { font-size:15px; margin-bottom:8px; color:var(--sim-text); }
+.sim-formula-nums { font-size:11.5px; color:var(--sim-muted); font-variant-numeric:tabular-nums;
+  line-height:1.6; }
+.sim-formula-note { font-size:10.5px; color:#5c6675; margin-top:8px; line-height:1.45; }
+.sim-goals { margin:0; padding-left:16px; font-size:11.5px; color:var(--sim-muted); line-height:1.6; }
+.sim-select, .sim-toggle { width:100%; padding:6px 8px; border-radius:8px; border:1px solid #2a3341;
+  background:var(--sim-panel); color:var(--sim-text); font:inherit; font-size:13px; cursor:pointer; }
+.sim-toggle-on { border-color:var(--sim-accent); color:var(--sim-accent); }
+.sim-presets { display:flex; flex-wrap:wrap; gap:6px; }
+.sim-presets button { flex:1 1 auto; padding:6px 10px; border-radius:8px; border:1px solid #2a3341;
+  background:var(--sim-panel); color:var(--sim-text); font:inherit; font-size:12px; cursor:pointer; }
+.sim-presets button:hover { border-color:var(--sim-accent); }
+
+/* Баннер фазы: сверху по центру, не заезжает под панель управления (она справа). */
+.sim-banner { position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:11;
+  min-width:220px; max-width:min(440px, calc(100vw - 300px)); padding:10px 22px; text-align:center;
+  background:color-mix(in srgb, var(--sim-panel) 90%, transparent);
+  border:1px solid #2a3341; border-bottom:3px solid var(--sim-banner-color, var(--sim-accent));
+  border-radius:12px; backdrop-filter:blur(6px);
+  box-shadow:0 0 22px 0 color-mix(in srgb, var(--sim-banner-color, var(--sim-accent)) 32%, transparent); }
+.sim-banner-name { font-size:21px; font-weight:700; color:var(--sim-text); letter-spacing:.3px; }
+.sim-banner-sub { font-size:12px; color:var(--sim-muted); margin-top:2px; }
+@media (max-width:640px) {
+  .sim-banner { left:8px; right:8px; transform:none; max-width:none; min-width:0; padding:8px 14px; }
+  .sim-banner-name { font-size:17px; }
+}
 `;

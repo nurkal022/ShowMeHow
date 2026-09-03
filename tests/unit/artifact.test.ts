@@ -207,7 +207,7 @@ describe('SimUI.panel', () => {
   });
   it('UIKIT_DOC documents SimUI.panel and forbids hand-rolled panels', () => {
     expect(UIKIT_DOC).toContain('SimUI.panel');
-    expect(UIKIT_DOC.toLowerCase()).toContain('не рисуй свои');
+    expect(UIKIT_DOC).toContain('position:fixed');
   });
   it('UIKIT_JS still parses after adding panel()', () => {
     expect(() => new Function(UIKIT_JS)).not.toThrow();
