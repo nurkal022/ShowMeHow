@@ -72,8 +72,13 @@ export const KIT_CHART_JS = `
           }
         }
       }
-      if (!isFinite(xmin) || !isFinite(xmax) || xmin === xmax) { xmin = xmin - 1; xmax = xmax + 1; }
-      if (!isFinite(ymin) || !isFinite(ymax) || ymin === ymax) { ymin = ymin - 1; ymax = ymax + 1; }
+      // Два разных вырожденных случая: нет ни одной конечной точки (sentinel-ы
+      // Infinity/-Infinity так и остались — их нельзя «раздвинуть» арифметикой,
+      // Infinity - 1 всё ещё Infinity) и есть точки, но все равны (xmin === xmax).
+      if (!isFinite(xmin) || !isFinite(xmax)) { xmin = 0; xmax = 1; }
+      else if (xmin === xmax) { xmin = xmin - 1; xmax = xmax + 1; }
+      if (!isFinite(ymin) || !isFinite(ymax)) { ymin = 0; ymax = 1; }
+      else if (ymin === ymax) { ymin = ymin - 1; ymax = ymax + 1; }
       var pad = (ymax - ymin) * 0.08;
       return { xmin: xmin, xmax: xmax, ymin: ymin - pad, ymax: ymax + pad };
     }
@@ -159,6 +164,8 @@ export const KIT_CHART_JS = `
       },
       clear: function () { xs = []; ys = []; schedule(); },
       element: cv,
+      // Внутренний тестовый шов (не документируется в UIKIT_DOC): текущий bounds().
+      __bounds: function () { return bounds(); },
     };
   }
 

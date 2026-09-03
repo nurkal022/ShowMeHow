@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { extractHtml, extractJson, findForbiddenUrls, instrument, stripRuntime, reinstrument } from '@/lib/artifact';
 import { UIKIT_JS, UIKIT_CSS, UIKIT_DOC } from '@/lib/runtime';
 import { CDN_WHITELIST } from '@/lib/pipeline/prompts';
+import { openSession, closeBrowser } from '@/lib/renderer';
 
 describe('extractHtml', () => {
   it('extracts fenced html block', () => {
@@ -226,6 +227,39 @@ describe('SimUI.chart', () => {
     const { UIKIT_CSS } = await import('@/lib/runtime');
     expect(UIKIT_CSS).toContain('.sim-chart');
   });
+
+  it('bounds() всегда конечен: сразу после создания, при равных y, и после clear()', async () => {
+    const html = instrument(
+      '<!DOCTYPE html><html><head></head><body><script>' +
+        "var c = SimUI.chart({ title: 'т', mode: 'time', xRange: [0, 720] });" +
+        'window.__b1 = c.__bounds();' +
+        'c.push(1, 5); c.push(2, 5); c.push(3, 5);' +
+        'window.__b2 = c.__bounds();' +
+        'c.clear();' +
+        'c.push(10, 20);' +
+        'c.clear();' +
+        'window.__b3 = c.__bounds();' +
+        '</script></body></html>',
+    );
+    const session = await openSession(html);
+    try {
+      expect(session.loaded()).toBe(true);
+      for (const name of ['__b1', '__b2', '__b3']) {
+        const b = await session.evaluate<{ xmin: number; xmax: number; ymin: number; ymax: number }>(
+          `window.${name}`,
+        );
+        expect(Number.isFinite(b.xmin)).toBe(true);
+        expect(Number.isFinite(b.xmax)).toBe(true);
+        expect(Number.isFinite(b.ymin)).toBe(true);
+        expect(Number.isFinite(b.ymax)).toBe(true);
+        expect(b.xmin).toBeLessThan(b.xmax);
+        expect(b.ymin).toBeLessThan(b.ymax);
+      }
+      expect(session.errors()).toEqual([]);
+    } finally {
+      await session.close();
+    }
+  }, 20000);
 });
 
 describe('мост интроспекции __smh', () => {
@@ -265,3 +299,5 @@ describe('runtime module layout', () => {
     expect(mod.UIKIT_CSS).toContain('.sim-panel');
   });
 });
+
+afterAll(() => closeBrowser());
