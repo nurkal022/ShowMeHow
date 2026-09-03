@@ -1,4 +1,5 @@
 import { HARNESS_JS, UIKIT_CSS, UIKIT_JS } from './runtime';
+import { CDN_WHITELIST } from './cdn';
 
 const MARKER = '<!--showmehow-runtime-->';
 const END_MARKER = '<!--/showmehow-runtime-->';
@@ -76,7 +77,16 @@ export function findForbiddenUrls(html: string, allowed: string[]): string[] {
 
 export function instrument(html: string): string {
   if (html.includes(MARKER)) return html;
-  const runtime = `${MARKER}<script>${HARNESS_JS}</script>` +
+  // Свой importmap артефакта уважаем: два importmap'а в документе — ошибка браузера.
+  const importMap = /type\s*=\s*["']importmap["']/i.test(html)
+    ? ''
+    : `<script type="importmap">${JSON.stringify({
+      imports: {
+        three: CDN_WHITELIST.three,
+        'three/addons/': CDN_WHITELIST.threeAddons,
+      },
+    })}</script>`;
+  const runtime = `${MARKER}${importMap}<script>${HARNESS_JS}</script>` +
     `<style>${UIKIT_CSS}</style><script>${UIKIT_JS}</script>${END_MARKER}`;
 
   const headMatch = html.match(/<head[^>]*>/i);

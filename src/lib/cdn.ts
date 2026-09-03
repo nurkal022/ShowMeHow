@@ -7,6 +7,10 @@ export const CDN_WHITELIST: Record<string, string> = {
   // three@0.164.0 больше не публикует классическую глобальную сборку build/three.min.js
   // (только ES-модуль build/three.module.min.js) — build/three.min.js отдаёт 404 на jsdelivr.
   three: 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.module.min.js',
+  // Директория аддонов three (OrbitControls, CSS2DRenderer и пр.). Значение —
+  // сама директория: allowedPrefixes() берёт путь до последнего '/', поэтому
+  // разрешает любой файл под examples/jsm/, включая подкаталоги.
+  threeAddons: 'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/',
   p5: 'https://cdn.jsdelivr.net/npm/p5@1.9.3/lib/p5.min.js',
   matter: 'https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js',
   chart: 'https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js',

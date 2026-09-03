@@ -101,6 +101,29 @@ describe('instrument', () => {
   });
 });
 
+describe('importmap для three', () => {
+  it('instrument вставляет importmap с three и three/addons/', () => {
+    const out = instrument('<!DOCTYPE html><html><head></head><body></body></html>');
+    expect(out).toContain('type="importmap"');
+    expect(out).toContain('"three/addons/"');
+    expect(out).toContain(CDN_WHITELIST.three);
+    // importmap обязан идти до любого модульного скрипта артефакта
+    expect(out.indexOf('type="importmap"')).toBeLessThan(out.indexOf('</head>'));
+  });
+
+  it('не вставляет второй importmap, если артефакт объявил свой', () => {
+    const own = '<!DOCTYPE html><html><head><script type="importmap">{"imports":{}}</script>' +
+      '</head><body></body></html>';
+    const out = instrument(own);
+    expect(out.split('type="importmap"').length - 1).toBe(1);
+  });
+
+  it('bare-спецификаторы three/addons не считаются запрещёнными URL', () => {
+    const html = `<script type="module">import { OrbitControls } from 'three/addons/controls/OrbitControls.js';</script>`;
+    expect(findForbiddenUrls(html, Object.values(CDN_WHITELIST))).toEqual([]);
+  });
+});
+
 describe('findForbiddenUrls', () => {
   const allowed = Object.values(CDN_WHITELIST);
 
@@ -139,12 +162,15 @@ describe('findForbiddenUrls', () => {
     expect(findForbiddenUrls(html, allowed)).toEqual(['https://evil.example.com/mod.js']);
   });
 
-  it('blocks a three.js file outside the whitelisted build/ directory', () => {
+  it('разрешает three.js addons из examples/jsm/', () => {
     const html = '<script type="module">import { OrbitControls } from ' +
       "'https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/controls/OrbitControls.js';</script>";
-    expect(findForbiddenUrls(html, allowed)).toEqual(
-      ['https://cdn.jsdelivr.net/npm/three@0.164.0/examples/jsm/controls/OrbitControls.js'],
-    );
+    expect(findForbiddenUrls(html, allowed)).toEqual([]);
+  });
+
+  it('блокирует файл three.js вне build/ и examples/jsm/', () => {
+    const url = 'https://cdn.jsdelivr.net/npm/three@0.164.0/src/Three.js';
+    expect(findForbiddenUrls(`<script src="${url}"></script>`, allowed)).toEqual([url]);
   });
 
   it('allows katex fonts under the same directory as katex.min.css', () => {
