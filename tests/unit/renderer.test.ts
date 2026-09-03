@@ -172,6 +172,47 @@ describe('renderArtifact', () => {
       await closeBrowser();
     }
   });
+
+  it('пропускает скриншоты и не считает анимацией, если исходная загрузка упала (loaded()===false)', async () => {
+    // Регрессия: до фикса session.loaded() не проверялась, и renderArtifact
+    // всё равно снимал скриншоты даже после проваленного setContent — на
+    // фейковом браузере screenshot() ничем не блокируется, так что это
+    // ловится независимо от того, блокирует ли страница ещё и screenshot().
+    let shotCalls = 0;
+
+    function fakePage() {
+      return {
+        on: () => {},
+        route: async () => {},
+        setContent: async () => { throw new Error('boom: setContent failed'); },
+        waitForTimeout: async () => {},
+        screenshot: async () => { shotCalls++; return Buffer.from([shotCalls]); },
+        click: async () => {},
+        evaluate: async () => null,
+        close: async () => {},
+      };
+    }
+    function fakeBrowser() {
+      return {
+        on: () => {},
+        newPage: async () => fakePage(),
+        close: async () => {},
+      };
+    }
+
+    await closeBrowser();
+    __setLauncherForTests(async () => fakeBrowser() as never);
+    try {
+      const r = await renderArtifact('<html></html>', { shotTimes: [10, 20] });
+      expect(r.ok).toBe(false);
+      expect(r.screenshots).toEqual([]);
+      expect(r.animated).toBe(false);
+      expect(shotCalls).toBe(0);
+    } finally {
+      __setLauncherForTests(null);
+      await closeBrowser();
+    }
+  });
 });
 
 describe('openSession', () => {
@@ -199,6 +240,21 @@ describe('openSession', () => {
     try {
       await s.wait(300);
       expect(s.blockedUrls()).toContain('https://evil.example.com/x.png');
+    } finally {
+      await s.close();
+    }
+  }, 30000);
+
+  it('дедуплицирует повторные блокировки одного и того же URL', async () => {
+    const s = await openSession(
+      `<html><body><script>
+        for (let i = 0; i < 3; i++) { fetch('https://evil.example.com/dup.png').catch(() => {}); }
+      </script></body></html>`,
+    );
+    try {
+      await s.wait(300);
+      const dup = s.blockedUrls().filter((u) => u === 'https://evil.example.com/dup.png');
+      expect(dup).toHaveLength(1);
     } finally {
       await s.close();
     }

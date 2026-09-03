@@ -71,6 +71,8 @@ export interface RenderSession {
   wait(ms: number): Promise<void>;
   errors(): string[];
   blockedUrls(): string[];
+  /** true, если начальный setContent() завершился без ошибки (страница загрузилась). */
+  loaded(): boolean;
   close(): Promise<void>;
 }
 
@@ -86,7 +88,9 @@ export async function openSession(
   const browser = await getBrowser();
   const page = await browser.newPage({ viewport });
   const errors: string[] = [];
-  const blocked: string[] = [];
+  // Set сохраняет порядок первого появления и естественно схлопывает повторы:
+  // страница с ретраями на запрещённый хост не должна раздувать errors().
+  const blockedSet = new Set<string>();
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
@@ -99,13 +103,15 @@ export async function openSession(
       route.continue().catch(() => {});
       return;
     }
-    blocked.push(url);
+    blockedSet.add(url);
     route.abort().catch(() => {});
   });
 
+  let loaded = true;
   try {
     await page.setContent(html, { timeout: timeoutMs, waitUntil: 'load' });
   } catch (e) {
+    loaded = false;
     errors.push('render timeout/navigation: ' + String(e));
   }
 
@@ -122,7 +128,8 @@ export async function openSession(
     },
     wait: (ms) => page.waitForTimeout(ms),
     errors: () => errors,
-    blockedUrls: () => blocked,
+    blockedUrls: () => [...blockedSet],
+    loaded: () => loaded,
     close: async () => { await page.close().catch(() => {}); },
   };
 }
@@ -144,15 +151,20 @@ export async function renderArtifact(
     };
   }
   const screenshots: Buffer[] = [];
-  try {
-    let prev = 0;
-    for (const t of shotTimes) {
-      await session.wait(t - prev);
-      prev = t;
-      screenshots.push(await session.shot());
+  // Если начальная загрузка не завершилась (setContent бросил/протух по
+  // таймауту), скриншоты не снимаем: страница в неопределённом состоянии,
+  // и любой «кадр» может ложно выглядеть анимированным.
+  if (session.loaded()) {
+    try {
+      let prev = 0;
+      for (const t of shotTimes) {
+        await session.wait(t - prev);
+        prev = t;
+        screenshots.push(await session.shot());
+      }
+    } catch (e) {
+      session.errors().push('screenshot failure: ' + String(e));
     }
-  } catch (e) {
-    session.errors().push('screenshot failure: ' + String(e));
   }
   const errors = [...session.errors()];
   for (const url of session.blockedUrls()) {
