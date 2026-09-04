@@ -9,6 +9,8 @@ import { bindChat, type ChatFn, type UsageInfo } from '../provider';
 import { renderArtifact } from '../renderer';
 import { createSimulation, saveThumbnail, getArtifact, updateArtifact } from '../storage';
 import { extractHtml, findForbiddenUrls, instrument, stripRuntime } from '../artifact';
+import { pickExemplar } from '../exemplars';
+import { listBundledDemos } from '../demos';
 import { REFINER_SYSTEM, STYLE_HINTS, STYLE_NAMES, CDN_WHITELIST } from './prompts';
 import { plan, generateCandidate, verifyCandidate, fixArtifact, type Ctx } from './stages';
 import { judge, rescore } from './judge';
@@ -94,6 +96,10 @@ export async function runPipeline(
   emitStage(ctx, 'planning', 'end');
   ctx.emit({ type: 'plan-ready', spec: planSummary(spec) });
 
+  // Ближайшая одобренная демка идёт генератору как эталон уровня проработки.
+  const exemplarEntry = pickExemplar(listBundledDemos(), spec);
+  const exemplarHtml = exemplarEntry ? exemplarEntry.html : undefined;
+
   const hints = Array.from({ length: count }, (_, i) => STYLE_HINTS[i % STYLE_HINTS.length]);
   const styleNames = Array.from({ length: count }, (_, i) => STYLE_NAMES[i % STYLE_NAMES.length]);
 
@@ -106,7 +112,7 @@ export async function runPipeline(
         const styleName = styleNames[index];
         ctx.emit({ type: 'candidate', index, status: 'generating', styleHint: styleName });
         try {
-          const html = await generateCandidate(ctx, spec, hint);
+          const html = await generateCandidate(ctx, spec, hint, exemplarHtml);
           return await verifyCandidate(ctx, spec, html, index, styleName);
         } catch {
           ctx.emit({ type: 'candidate', index, status: 'failed', styleHint: styleName });

@@ -11,6 +11,13 @@ export interface DemoEntry {
   subject: string;
   tags: string[];
   html: string;
+  /** Метаданные для подбора эталона (см. src/lib/exemplars.ts). */
+  mode?: '2d' | '3d';
+  libs?: string[];
+  keywords?: string[];
+  techniques?: string[];
+  /** Эталон уровня SimUI 2.0 — к нему применяется строгий гейт качества. */
+  exemplar?: boolean;
 }
 
 interface DemoMetaFile {
@@ -18,6 +25,11 @@ interface DemoMetaFile {
   prompt: string;
   subject: string;
   tags: string[];
+  mode?: '2d' | '3d';
+  libs?: string[];
+  keywords?: string[];
+  techniques?: string[];
+  exemplar?: boolean;
 }
 
 export function demosRoot(): string {
@@ -42,7 +54,11 @@ export function listBundledDemos(): DemoEntry[] {
       continue;
     }
     const html = fs.readFileSync(artifactPath, 'utf8');
-    demos.push({ slug, title: meta.title, prompt: meta.prompt, subject: meta.subject, tags: meta.tags, html });
+    demos.push({
+      slug, title: meta.title, prompt: meta.prompt, subject: meta.subject, tags: meta.tags,
+      mode: meta.mode, libs: meta.libs, keywords: meta.keywords,
+      techniques: meta.techniques, exemplar: meta.exemplar, html,
+    });
   }
   return demos;
 }

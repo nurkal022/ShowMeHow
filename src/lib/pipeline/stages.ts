@@ -25,9 +25,11 @@ export async function plan(ctx: Ctx, prompt: string, imageDataUrl?: string): Pro
   return extractJson<PlanSpec>(out);
 }
 
-export async function generateCandidate(ctx: Ctx, spec: PlanSpec, styleHint: string): Promise<string> {
+export async function generateCandidate(
+  ctx: Ctx, spec: PlanSpec, styleHint: string, exemplar?: string,
+): Promise<string> {
   const out = await ctx.chat('generator', [
-    { role: 'system', content: generatorSystem(styleHint) },
+    { role: 'system', content: generatorSystem(styleHint, exemplar) },
     { role: 'user', content: 'Спецификация:\n' + JSON.stringify(spec, null, 2) },
   ]);
   return instrument(extractHtml(out));

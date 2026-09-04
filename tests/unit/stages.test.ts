@@ -59,6 +59,13 @@ describe('generateCandidate', () => {
     expect(html).toContain('showmehow-runtime');
     expect(html).toContain('<canvas>');
   });
+
+  it('передаёт эталон в системный промпт генератора', async () => {
+    const c = ctx();
+    await generateCandidate(c, SPEC, 'стиль', '<html>ЭТАЛОН_МАРКЕР</html>');
+    const sys = String((c.chat as ReturnType<typeof vi.fn>).mock.calls[0][1][0].content);
+    expect(sys).toContain('ЭТАЛОН_МАРКЕР');
+  });
 });
 
 describe('verifyCandidate', () => {
