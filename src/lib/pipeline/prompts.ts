@@ -26,41 +26,63 @@ export const STYLE_HINTS = [
   'Акцент на НАГЛЯДНОСТЬ: крупные элементы, цветовое кодирование, подписи-аннотации прямо на сцене, замедленные характерные моменты.',
   'Акцент на ИНТЕРАКТИВНОСТЬ: максимум откликов на действия пользователя, курсором можно вмешиваться в симуляцию (добавлять частицы, двигать объекты).',
   'Акцент на СХЕМАТИЧНУЮ ЯСНОСТЬ: минимум декора, крупные схемы-диаграммы, стрелки и подписи, идеально для доски.',
-  'Акцент на ДАННЫЕ И ГРАФИКИ: приборная панель с живыми графиками величин (chart.js), численные индикаторы, экспорт понимания через числа.',
+  'Акцент на ДАННЫЕ И ГРАФИКИ: приборная панель через SimUI.chart и SimUI.readout — живые графики величин, численные индикаторы, фазовые/индикаторные диаграммы (mode:"xy").',
 ];
 
 /** Короткие имена акцентов для UI/событий, индексно соответствуют STYLE_HINTS. */
 export const STYLE_NAMES = ['Реализм', 'Наглядность', 'Интерактив', 'Схема', 'Данные'];
 
-// Каркас (~60 строк) выведен из структуры реальных одобренных демок (demos/*/artifact.html):
-// doctype → head (KaTeX по необходимости) → canvas на всё окно → константы физики →
-// state + resetSim() → SimUI.title/slider/playPause → dt-clamp цикл, где simT/картинка
-// замирают на паузе → resize → info-панель с текущими величинами.
+/**
+ * Правила, общие для генератора, фиксера и рефайнера. Один источник правды:
+ * раньше рефайнер их не видел и регрессировал лейаут при каждой доводке.
+ */
+export const GENERATION_RULES = `Жёсткие правила:
+- Ответ — только HTML-документ в блоке \`\`\`html ... \`\`\`. Никакого текста вне блока.
+- Один самодостаточный файл. Внешние ресурсы разрешены ТОЛЬКО отсюда (точные URL):
+${cdnList}
+  Подключай только то, что реально используешь. Без fetch/XHR/WebSocket.
+- НЕ создавай своих position:fixed панелей, легенд, баннеров и инфо-блоков.
+  Всё это — примитивы SimUI (см. описание кита ниже). Центр экрана — только сцена.
+- НЕ подключай библиотеки графиков (chart.js и любые другие) — используй SimUI.chart.
+- НЕ подключай KaTeX вручную — используй SimUI.formula, кит грузит KaTeX сам.
+- three.js: глобальной сборки нет. В \`<script type="module">\` пиши
+  \`import * as THREE from 'three';\` и \`import { OrbitControls } from 'three/addons/controls/OrbitControls.js';\`
+  — importmap уже вставлен китом. renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true}).
+- Анимация через requestAnimationFrame с dt-шагом и клампом (Math.min(0.05, dt)); от FPS не зависеть.
+- Пауза обязана останавливать И физику, И картинку; сброс — возвращать начальное состояние.
+- Каждый параметр из spec.parameters — SimUI.slider с тем же name/label/min/max/step/value/unit.
+- SimUI.expose({getState, reset}) ОБЯЗАТЕЛЕН: getState возвращает простой объект с числами.
+- Никаких NaN и Infinity в подписях и состоянии: делить на ноль и брать корень из
+  отрицательного — через Math.max(0, ...) и проверки.
+- Физика обязана следовать spec.physics: те же уравнения, разумные величины, единицы.
+- Русский язык во всех подписях, единицы измерения у всех величин.
+- Никаких заглушек и TODO: всё работает сразу.`;
+
+// Каркас выведен из структуры реальных одобренных демок (demos/*/artifact.html):
+// doctype → head → canvas на всё окно → константы физики → state + resetSim() →
+// SimUI.title/slider/presets/speed/playPause → приборы (banner/readout/chart/formula) →
+// SimUI.expose → dt-clamp цикл, где simT/картинка замирают на паузе → resize.
 export const EXAMPLE_SKELETON = `<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Название симуляции</title>
-<!-- KaTeX подключай, только если в сцене реально есть формулы -->
-<link rel="stylesheet" href="${CDN_WHITELIST.katexCss}">
-<script src="${CDN_WHITELIST.katexJs}"></script>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; }
-  canvas { position: fixed; top: 0; left: 0; display: block; }
+  canvas#scene { position: fixed; top: 0; left: 0; display: block; }
 </style>
 </head>
 <body>
 <canvas id="scene"></canvas>
 <script>
 (function () {
-  // ---------- Константы физики (единицы измерения в комментариях) ----------
+  // ---------- Константы физики (единицы в комментариях) ----------
   var G = 9.8;    // м/с^2
-  var PPM = 100;  // пикселей на метр, пересчитывается в resize()
 
-  // ---------- Состояние + сброс (используется и SimUI.playPause.onReset) ----------
-  var state = {};
-  function resetSim() { state = { t: 0, x: 0, v: 0 }; }
+  // ---------- Состояние + сброс ----------
+  var state = {}, param = 20;
+  function resetSim() { state = { t: 0, x: 0, v: 0 }; chart.clear(); }
   resetSim();
 
   // ---------- Канвас ----------
@@ -68,48 +90,65 @@ export const EXAMPLE_SKELETON = `<!DOCTYPE html>
   var ctx2d = canvas.getContext('2d');
   function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
 
-  // ---------- Физический шаг: чистая функция от dt, без привязки к FPS ----------
+  // ---------- Физический шаг: чистая функция от dt ----------
   function physics(dt) {
     state.v += -G * dt;
     state.x += state.v * dt;
     state.t += dt;
   }
 
-  // ---------- Отрисовка кадра (сцена по мотивам spec.visualPlan) ----------
+  // ---------- Отрисовка сцены (по мотивам spec.visualPlan) ----------
   function draw() {
     ctx2d.fillStyle = '#101318';
     ctx2d.fillRect(0, 0, canvas.width, canvas.height);
-    document.getElementById('valX').textContent = state.x.toFixed(2);
   }
 
-  // ---------- Главный цикл: dt-clamp, в паузе simT и картинка замирают ----------
-  var running = true, lastFrame = null;
-  function loop(now) {
-    if (lastFrame == null) lastFrame = now;
-    var dt = Math.min(0.05, (now - lastFrame) / 1000); // clamp — защита от долгих вкладок
-    lastFrame = now;
-    if (running) physics(dt);
-    draw();
-    requestAnimationFrame(loop);
-  }
-
-  // ---------- SimUI: заголовок, слайдер на каждый spec.parameters, play/pause/reset ----------
+  // ---------- Панель управления ----------
   SimUI.title('Название симуляции');
-  SimUI.slider({
-    label: 'Параметр', min: 0, max: 100, step: 1, value: 20, unit: '',
-    onChange: function (v) { /* применить к константе/состоянию */ },
-  });
+  SimUI.goals(['что должен понять студент']);
+  SimUI.slider({ name: 'param', label: 'Параметр', min: 0, max: 100, step: 1, value: param,
+    unit: '', onChange: function (v) { param = v; } });
+  SimUI.presets({ items: [{ label: 'Слабо', values: { param: 10 } },
+    { label: 'Сильно', values: { param: 90 } }] });
+  var speed = SimUI.speed({ values: [0.25, 0.5, 1, 2], value: 1 });
   SimUI.playPause({
     onPlay: function () { running = true; lastFrame = null; },
     onPause: function () { running = false; },
     onReset: function () { resetSim(); },
   });
 
-  // Инфо-панель величин (докнута в угол, сворачиваемая — не перекрывает сцену).
-  var info = SimUI.panel({ title: 'Величины', corner: 'bl' });
-  info.innerHTML = 'Значение: <b id="valX">—</b>';
+  // ---------- Приборы: баннер фазы, показания, график, формула ----------
+  var banner = SimUI.banner({ items: [{ name: 'Фаза 1', sub: 'что происходит', color: '#4f8ff7' }] });
+  var rT = SimUI.readout({ label: 'Время', unit: 'с', digits: 2, corner: 'bl' });
+  var rX = SimUI.readout({ label: 'Высота', unit: 'м', digits: 2, corner: 'bl' });
+  var chart = SimUI.chart({ title: 'Высота от времени', xLabel: 't, с', yLabel: 'h, м',
+    series: [{ name: 'h', color: '#4f8ff7' }], corner: 'br' });
+  var formula = SimUI.formula({ title: 'Как это работает',
+    tex: 'h = h_0 + v_0 t - \\\\frac{g t^2}{2}',
+    vars: { g: { label: 'g', unit: 'м/с²' }, t: { label: 't', unit: 'с' } }, corner: 'tl' });
 
-  // ---------- Инициализация ----------
+  // ---------- Самопроверка ----------
+  SimUI.expose({
+    getState: function () { return { t: state.t, x: state.x, v: state.v, param: param }; },
+    reset: resetSim,
+  });
+
+  // ---------- Главный цикл: dt-clamp, на паузе всё замирает ----------
+  var running = true, lastFrame = null;
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000) * speed.get();
+    lastFrame = now;
+    if (running) {
+      physics(dt);
+      chart.push(state.t, [state.x]);
+      rT.set(state.t); rX.set(state.x);
+      formula.set({ g: G, t: state.t });
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+
   window.addEventListener('resize', resize);
   resize();
   requestAnimationFrame(loop);
@@ -118,46 +157,42 @@ export const EXAMPLE_SKELETON = `<!DOCTYPE html>
 </body>
 </html>`;
 
-export function generatorSystem(styleHint: string): string {
+export function generatorSystem(styleHint: string, exemplar?: string): string {
+  const exemplarBlock = exemplar
+    ? `
+
+ЭТАЛОН КАЧЕСТВА — реальная одобренная симуляция на ДРУГУЮ тему. Копируй уровень
+проработки, структуру кода и приёмы (баннер фазы, показания, график, формула с живыми
+числами, пресеты), но НЕ копируй её тему и физику:
+\`\`\`html
+${exemplar}
+\`\`\``
+    : '';
   return `Ты — эксперт по учебным визуализациям (уровень лучших примеров Claude Artifacts).
 Напиши ОДИН самодостаточный HTML-файл с интерактивной симуляцией по спецификации.
 
 ${styleHint}
 
-Жёсткие правила:
-- Ответ — только HTML-документ в блоке \`\`\`html ... \`\`\`. Никакого текста вне блока.
-- Внешние ресурсы разрешены ТОЛЬКО из этого списка (точные URL):
-${cdnList}
-- Подключай только то, что реально используешь. Без fetch/XHR/WebSocket.
-- ${UIKIT_DOC}
-- Каждый параметр из spec.parameters — слайдер SimUI.slider с теми же label/min/max/step/value/unit.
-- Обязательно SimUI.playPause: пауза останавливает анимацию, сброс возвращает начальное состояние.
-- Физика обязана следовать spec.physics: те же уравнения, разумные величины, единицы.
-- Для three.js: глобальной сборки нет, подключай ТОЛЬКО через ES-модуль —
-  \`<script type="module">\` c \`import * as THREE from '${CDN_WHITELIST.three}';\`
-  в начале скрипта; renderer = new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true}).
-- Анимация через requestAnimationFrame с dt-шагом (не привязывайся к FPS).
-- Код чистый и организованный: константы физики сверху с комментариями, функции короткие.
-- Русский язык во всех подписях. Формулы — KaTeX, если уместны.
-- Никаких заглушек и TODO: всё работает сразу.
-- Лейаут: центр экрана — только под визуализацию. НЕ создавай свои position:fixed
-  панели/легенды/инфо-блоки — используй SimUI.panel по углам, чтобы НЕ перекрывать сцену.
-- Графики рисуй на своём <canvas> вручную (оси/линии/подписи). НЕ используй chart.js и
-  иные внешние библиотеки графиков — они ненадёжны (ошибки загрузки модуля).
-- Все панели должны быть читаемы: контраст текста, единицы у величин, аккуратные отступы.
+${GENERATION_RULES}
 
-Каркас качественной симуляции (следуй структуре):
+Планка качества: у симуляции обязаны быть сцена, приборы (показания и хотя бы один
+живой график), формула с подстановкой текущих значений, пресеты режимов и один
+запоминающийся момент, ради которого её показывают на занятии.
+
+${UIKIT_DOC}
+
+Каркас качественной симуляции (следуй структуре, содержимое подставь по спецификации):
 \`\`\`html
 ${EXAMPLE_SKELETON}
-\`\`\`
-Это скелет структуры (doctype→head→canvas→константы→state/resetSim→SimUI→dt-цикл→resize),
-а не готовая физика — содержимое physics()/draw()/слайдеров подставь по своей спецификации.`;
+\`\`\`${exemplarBlock}`;
 }
 
 export const FIXER_SYSTEM = `Ты чинишь сломанный HTML-артефакт симуляции. Тебе дают полный
-HTML и список ошибок из консоли headless-браузера. Найди причину и исправь минимальной
-правкой, сохранив всю функциональность и стиль. Не переписывай с нуля. Правила те же:
-один самодостаточный HTML, ответ только в блоке \`\`\`html ... \`\`\`.`;
+HTML и список проблем: ошибки консоли headless-браузера и/или провалы автоматических проб
+поведения. Найди причину и исправь минимальной правкой, сохранив всю функциональность и
+стиль. Не переписывай с нуля.
+
+${GENERATION_RULES}`;
 
 export const CRITIC_SYSTEM = `Ты — придирчивый физик-рецензент. Тебе дают спецификацию
 симуляции и скриншоты её кадров (t≈0с, 1с, 3с). Проверь:
@@ -180,7 +215,8 @@ export const JUDGE_SYSTEM = `Ты — судья качества учебных
  "feedback": "конкретные улучшения для победителя, по пунктам"}
 scores — в порядке кандидатов, winnerIndex — индекс лучшего.`;
 
-export const REFINER_SYSTEM = `Ты улучшаешь HTML-артефакт симуляции по замечаниям судьи
-и/или запросу преподавателя. Внеси все запрошенные изменения, сохранив работающее.
-Правила: один самодостаточный HTML, только разрешённые CDN, SimUI для контролов,
-ответ только в блоке \`\`\`html ... \`\`\`.`;
+export const REFINER_SYSTEM = `Ты улучшаешь HTML-артефакт симуляции по замечаниям судьи,
+физика-рецензента и/или запросу преподавателя. Внеси все запрошенные изменения, сохранив
+работающее. Не ломай лейаут и контролы.
+
+${GENERATION_RULES}`;

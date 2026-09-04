@@ -49,14 +49,39 @@ describe('generator prompt layout rules', () => {
   const sys = P.generatorSystem('Стиль: реализм.');
   it('forbids hand-rolled fixed panels and mandates SimUI.panel', () => {
     expect(sys).toContain('SimUI.panel');
-    expect(sys.toLowerCase()).toContain('не перекрыва');
+    expect(sys).toContain('position:fixed');
+    expect(sys.toLowerCase()).toContain('центр экрана');
   });
   it('prefers canvas charts over fragile chart libraries', () => {
     expect(sys.toLowerCase()).toContain('canvas');
     expect(sys.toLowerCase()).toContain('chart.js');
   });
   it('the skeleton uses SimUI.panel and has no hand-rolled #info fixed div', () => {
-    expect(P.EXAMPLE_SKELETON).toContain('SimUI.panel');
+    expect(P.EXAMPLE_SKELETON).toContain('SimUI.readout');
+    expect(P.EXAMPLE_SKELETON).toContain('SimUI.chart');
+    expect(P.EXAMPLE_SKELETON).toContain('SimUI.formula');
+    expect(P.EXAMPLE_SKELETON).toContain('SimUI.expose');
     expect(P.EXAMPLE_SKELETON).not.toContain('#info { position: fixed');
+  });
+});
+
+describe('GENERATION_RULES', () => {
+  it('единый блок правил входит в генератор, фиксер и рефайнер', () => {
+    expect(P.generatorSystem(P.STYLE_HINTS[0])).toContain(P.GENERATION_RULES);
+    expect(P.FIXER_SYSTEM).toContain(P.GENERATION_RULES);
+    expect(P.REFINER_SYSTEM).toContain(P.GENERATION_RULES);
+  });
+  it('правила требуют SimUI.expose и запрещают свои fixed-панели', () => {
+    expect(P.GENERATION_RULES).toContain('SimUI.expose');
+    expect(P.GENERATION_RULES).toContain('position:fixed');
+  });
+  it('ни один акцент не требует chart.js', () => {
+    for (const hint of P.STYLE_HINTS) expect(hint.toLowerCase()).not.toContain('chart.js');
+  });
+  it('генератор вставляет эталон, когда он передан', () => {
+    const withEx = P.generatorSystem(P.STYLE_HINTS[0], '<!DOCTYPE html><html>ЭТАЛОН_МАРКЕР</html>');
+    expect(withEx).toContain('ЭТАЛОН_МАРКЕР');
+    expect(withEx).toContain('ЭТАЛОН КАЧЕСТВА');
+    expect(P.generatorSystem(P.STYLE_HINTS[0])).not.toContain('ЭТАЛОН КАЧЕСТВА');
   });
 });
