@@ -25,16 +25,17 @@ export function scoreExemplar(demo: DemoEntry, spec: PlanSpec): number {
     if (k && text.includes(k.toLowerCase())) keywordHits++;
   }
   score += Math.min(keywordHits, 3) * 2;
-  for (const t of demo.techniques ?? []) {
-    if (t && text.includes(t.toLowerCase())) score += 1;
-  }
-  if (demo.exemplar) score += 2;
   return score;
 }
 
-/** Лучший эталон под спецификацию; при равенстве оценок — по slug (детерминизм). */
+/**
+ * Лучший эталон под спецификацию; при равенстве оценок — по slug (детерминизм).
+ * `exemplar: true` — жёсткий фильтр, а не бонус: в промпт генератора попадает только
+ * демка, построенная на примитивах кита. Иначе рядом с правилом «не создавай своих
+ * position:fixed панелей» оказывался бы пример, который именно это и делает.
+ */
 export function pickExemplar(demos: DemoEntry[], spec: PlanSpec): DemoEntry | null {
-  const usable = demos.filter((d) => d.html.length <= MAX_EXEMPLAR_CHARS);
+  const usable = demos.filter((d) => d.exemplar && d.html.length <= MAX_EXEMPLAR_CHARS);
   if (usable.length === 0) return null;
   return usable.reduce((best, d) => {
     const ds = scoreExemplar(d, spec);

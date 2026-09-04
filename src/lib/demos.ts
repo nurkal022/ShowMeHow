@@ -13,9 +13,7 @@ export interface DemoEntry {
   html: string;
   /** Метаданные для подбора эталона (см. src/lib/exemplars.ts). */
   mode?: '2d' | '3d';
-  libs?: string[];
   keywords?: string[];
-  techniques?: string[];
   /** Эталон уровня SimUI 2.0 — к нему применяется строгий гейт качества. */
   exemplar?: boolean;
 }
@@ -26,9 +24,7 @@ interface DemoMetaFile {
   subject: string;
   tags: string[];
   mode?: '2d' | '3d';
-  libs?: string[];
   keywords?: string[];
-  techniques?: string[];
   exemplar?: boolean;
 }
 
@@ -56,8 +52,7 @@ export function listBundledDemos(): DemoEntry[] {
     const html = fs.readFileSync(artifactPath, 'utf8');
     demos.push({
       slug, title: meta.title, prompt: meta.prompt, subject: meta.subject, tags: meta.tags,
-      mode: meta.mode, libs: meta.libs, keywords: meta.keywords,
-      techniques: meta.techniques, exemplar: meta.exemplar, html,
+      mode: meta.mode, keywords: meta.keywords, exemplar: meta.exemplar, html,
     });
   }
   return demos;

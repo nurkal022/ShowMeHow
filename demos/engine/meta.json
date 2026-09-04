@@ -10,9 +10,6 @@
     "термодинамика"
   ],
   "mode": "3d",
-  "libs": [
-    "three"
-  ],
   "keywords": [
     "двигатель",
     "внутреннего сгорания",
@@ -20,11 +17,6 @@
     "такт",
     "поршень",
     "коленвал"
-  ],
-  "techniques": [
-    "kinematic-chain",
-    "particles",
-    "3d-scene"
   ],
   "exemplar": true
 }

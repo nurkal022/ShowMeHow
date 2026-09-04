@@ -62,6 +62,14 @@ export function isRetryable(e: unknown): boolean {
   return true;
 }
 
+/** Провайдер вернул пустой контент. Отдельный тип — чтобы отличать его от сетевых сбоев. */
+export class EmptyResponseError extends Error {
+  constructor() {
+    super('empty response from provider');
+    this.name = 'EmptyResponseError';
+  }
+}
+
 const CONTINUE_PROMPT =
   'Ответ оборвался по лимиту длины. Продолжи РОВНО с места обрыва, ' +
   'не повторяя уже выданное и не начиная заново. Не добавляй пояснений.';
@@ -85,8 +93,17 @@ export async function chatWithClient(
   let combined = '';
 
   for (let round = 0; round <= maxContinuations; round++) {
-    const { text, truncated } = await once(
-      client, model, convo, { retries, sleep, extraBody, maxTokens, onUsage });
+    let text: string, truncated: boolean;
+    try {
+      ({ text, truncated } = await once(
+        client, model, convo, { retries, sleep, extraBody, maxTokens, onUsage }));
+    } catch (e) {
+      // Пустое продолжение — нормальный способ модели сказать «добавить нечего».
+      // Выбрасывать из-за него уже почти собранный ответ нельзя; пустой ПЕРВЫЙ
+      // раунд — по-прежнему провал, отдавать нечего.
+      if (round > 0 && e instanceof EmptyResponseError) return combined;
+      throw e;
+    }
     combined += text;
     if (!truncated) return combined;
     if (round === maxContinuations) return combined;
@@ -115,7 +132,7 @@ async function once(
       });
       const choice = res.choices[0];
       const text = choice?.message?.content;
-      if (!text) throw new Error('empty response from provider');
+      if (!text) throw new EmptyResponseError();
       onUsage?.({
         promptTokens: res.usage?.prompt_tokens ?? 0,
         completionTokens: res.usage?.completion_tokens ?? 0,

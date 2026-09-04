@@ -26,6 +26,13 @@ describe('prompts', () => {
     expect(P.STYLE_NAMES).toHaveLength(P.STYLE_HINTS.length);
   });
 
+  it('скелет не только создаёт баннер, но и переключает его из цикла', () => {
+    expect(P.EXAMPLE_SKELETON).toContain('SimUI.banner');
+    expect(P.EXAMPLE_SKELETON).toContain('banner.set(');
+    // Один пункт нечего переключать — нужно минимум два состояния.
+    expect((P.EXAMPLE_SKELETON.match(/\{ name: '/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
   it('EXAMPLE_SKELETON covers the required structural elements', () => {
     expect(P.EXAMPLE_SKELETON).toContain('resetSim');
     expect(P.EXAMPLE_SKELETON).toContain('SimUI.playPause');
@@ -56,8 +63,11 @@ describe('generator prompt layout rules', () => {
     expect(sys.toLowerCase()).toContain('центр экрана');
   });
   it('prefers canvas charts over fragile chart libraries', () => {
-    expect(sys.toLowerCase()).toContain('canvas');
-    expect(sys.toLowerCase()).toContain('chart.js');
+    // Проверяем намерение, а не случайное вхождение слов: правила обязаны гнать
+    // модель в SimUI.chart и запрещать внешние библиотеки графиков.
+    expect(sys).toContain('SimUI.chart');
+    expect(P.GENERATION_RULES).toMatch(
+      /НЕ подключай библиотеки графиков \(chart\.js и любые другие\) — используй SimUI\.chart/);
   });
   it('the skeleton uses SimUI.panel and has no hand-rolled #info fixed div', () => {
     expect(P.EXAMPLE_SKELETON).toContain('SimUI.readout');

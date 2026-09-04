@@ -30,6 +30,98 @@ interface ControlInfo {
 const PLAYPAUSE = '[data-smh-btn="playpause"]';
 const RESET = '[data-smh-btn="reset"]';
 
+/**
+ * Состояние без «эха» самого контрола. getState() по инструкции кита возвращает и
+ * текущие значения параметров, поэтому движение слайдера меняло состояние ВСЕГДА —
+ * независимо от того, читает ли физика этот параметр. Выбрасываем ключ с именем
+ * контрола и любой ключ, чьё новое значение совпало с новым значением слайдера:
+ * остаётся только то, что изменилось в самой симуляции.
+ */
+function withoutEcho(state: unknown, after: unknown, name: string, target: number): unknown {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return state;
+  const src = state as Record<string, unknown>;
+  const dst = (after && typeof after === 'object' && !Array.isArray(after)
+    ? after : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(src)) {
+    if (k === name) continue;
+    const v = dst[k];
+    if (typeof v === 'number' && Math.abs(v - target) <= 1e-9 * Math.max(1, Math.abs(target))) {
+      continue;
+    }
+    out[k] = src[k];
+  }
+  return out;
+}
+
+/**
+ * Панель управления сама показывает значение слайдера и положение ползунка, поэтому
+ * кадр с ней меняется после ЛЮБОГО движения слайдера — это эхо интерфейса, а не физика.
+ * Прячем панель только на время съёмки: кнопки паузы/сброса должны оставаться кликабельными.
+ */
+const HIDE_PANEL =
+  "(function(){var e=document.querySelectorAll('.sim-panel,.sim-panel-toggle');" +
+  "for(var i=0;i<e.length;i++){e[i].style.visibility='hidden';}return true;})()";
+const SHOW_PANEL =
+  "(function(){var e=document.querySelectorAll('.sim-panel,.sim-panel-toggle');" +
+  "for(var i=0;i<e.length;i++){e[i].style.visibility='';}return true;})()";
+
+/** Числовые величины состояния без ключа-эха самого контрола. */
+function numbersOf(state: unknown, ignore: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return out;
+  for (const [k, v] of Object.entries(state as Record<string, unknown>)) {
+    if (k === ignore) continue;
+    if (typeof v === 'number' && isFinite(v)) out[k] = v;
+  }
+  return out;
+}
+
+/** Кадр только сцены и приборов: панель управления на время съёмки скрыта. */
+async function sceneShot(s: RenderSession): Promise<Buffer> {
+  await safe(() => s.evaluate<boolean>(HIDE_PANEL), false);
+  try {
+    return await s.shot();
+  } finally {
+    await safe(() => s.evaluate<boolean>(SHOW_PANEL), false);
+  }
+}
+
+/**
+ * Как меняются величины состояния за окно работающей симуляции. Слайдер, влияющий
+ * только на ТЕМП (скорость, жёсткость, затухание), на паузе не виден вообще:
+ * сравнить его эффект можно лишь по приращениям за одинаковые окна.
+ */
+async function deltaOverWindow(
+  s: RenderSession, ms: number, ignore: string,
+): Promise<Record<string, number>> {
+  const state = () => safe(() => s.evaluate<unknown>('window.__smh.state()'), null);
+  const before = numbersOf(await state(), ignore);
+  await s.click(PLAYPAUSE);
+  await s.wait(ms);
+  await s.click(PLAYPAUSE);
+  const after = numbersOf(await state(), ignore);
+  const out: Record<string, number> = {};
+  for (const k of Object.keys(before)) {
+    if (k in after) out[k] = after[k] - before[k];
+  }
+  return out;
+}
+
+/**
+ * Приращения различаются заметно сильнее, чем джиттер окна (несколько процентов).
+ * Порог намеренно грубый: сомнение трактуем как «эффект не наблюдаем», а не как провал.
+ */
+function ratesDiffer(a: Record<string, number>, b: Record<string, number>): boolean {
+  for (const k of Object.keys(a)) {
+    if (!(k in b)) continue;
+    const scale = Math.max(Math.abs(a[k]), Math.abs(b[k]));
+    if (scale < 1e-9) continue;
+    if (Math.abs(a[k] - b[k]) > 0.15 * scale) return true;
+  }
+  return false;
+}
+
 async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await fn();
@@ -76,10 +168,18 @@ export async function runProbes(s: RenderSession): Promise<ProbeReport> {
   } else {
     paused = true;
     await s.wait(250);
+    // Три кадра вместо двух в том же окне: Chromium изредка отдаёт кадр,
+    // отличающийся парой пикселей на 1/255 (шум композитора), и побайтовое
+    // сравнение двух кадров объявляло рабочую паузу сломанной — а фиксер шёл
+    // чинить несуществующий баг. Совпадения ЛЮБОЙ пары достаточно: одиночный
+    // шумный кадр больше ничего не решает, а реально идущая симуляция меняется
+    // во всех трёх.
     const p1 = await s.shot();
-    await s.wait(800);
+    await s.wait(400);
     const p2 = await s.shot();
-    if (p1.equals(p2)) {
+    await s.wait(400);
+    const p3 = await s.shot();
+    if (p1.equals(p2) || p1.equals(p3) || p2.equals(p3)) {
       add('pause', 'Пауза останавливает анимацию', 'pass', '');
     } else {
       add('pause', 'Пауза останавливает анимацию', 'fail',
@@ -120,10 +220,13 @@ export async function runProbes(s: RenderSession): Promise<ProbeReport> {
       'ни одного SimUI.slider — у симуляции нет интерактивных параметров');
   } else {
     const errorsBefore = s.errors().length;
-    const unobservable: string[] = [];
+    // dead — параметр было чем измерить, и не откликнулось НИЧЕГО (настоящий дефект);
+    // unmeasurable — измерять было нечем (нет expose или в состоянии одно эхо).
+    const dead: string[] = [];
+    const unmeasurable: string[] = [];
     for (const c of sliders) {
       const stateBefore = await safe(() => s.evaluate<unknown>('window.__smh.state()'), null);
-      const frameBefore = paused ? await s.shot() : null;
+      const frameBefore = paused ? await sceneShot(s) : null;
       // Целимся в дальний от текущего значения конец диапазона — так эффект максимален.
       const cur = typeof c.value === 'number' ? c.value : Number(c.min ?? 0);
       const min = Number(c.min ?? 0);
@@ -136,12 +239,32 @@ export async function runProbes(s: RenderSession): Promise<ProbeReport> {
       );
       await s.wait(500);
       const stateAfter = await safe(() => s.evaluate<unknown>('window.__smh.state()'), null);
-      const frameAfter = paused ? await s.shot() : null;
+      const frameAfter = paused ? await sceneShot(s) : null;
+      // Сравниваем состояния, выбросив из ОБОИХ ключи-эхо слайдера: изменение
+      // должно быть видно где-то ещё — в другой величине или в кадре на паузе.
       const stateChanged = stateBefore !== null &&
-        JSON.stringify(stateBefore) !== JSON.stringify(stateAfter);
+        JSON.stringify(withoutEcho(stateBefore, stateAfter, c.name, target)) !==
+        JSON.stringify(withoutEcho(stateAfter, stateAfter, c.name, target));
       const frameChanged = !!frameBefore && !!frameAfter && !frameBefore.equals(frameAfter);
       if (frameAfter) shots.push(frameAfter);
-      if (!stateChanged && !frameChanged) unobservable.push(c.label || c.name);
+      let observed = stateChanged || frameChanged;
+      // Ничего не изменилось на паузе — это ещё не приговор: параметр может влиять
+      // только на темп процесса. Сравниваем приращения за два одинаковых окна работы.
+      const measurable = paused && hasExpose &&
+        Object.keys(numbersOf(stateAfter, c.name)).length > 0;
+      if (!observed && measurable) {
+        const atTarget = await deltaOverWindow(s, 600, c.name);
+        if (typeof c.value === 'number') {
+          await safe(
+            () => s.evaluate<boolean>(
+              `window.__smh.setControl(${JSON.stringify(c.name)}, ${c.value})`),
+            false,
+          );
+        }
+        const atOriginal = await deltaOverWindow(s, 600, c.name);
+        observed = ratesDiffer(atTarget, atOriginal);
+      }
+      if (!observed) (measurable ? dead : unmeasurable).push(c.label || c.name);
       // Возвращаем исходное значение, чтобы следующие пробы шли по нетронутой симуляции.
       if (typeof c.value === 'number') {
         await safe(
@@ -155,9 +278,14 @@ export async function runProbes(s: RenderSession): Promise<ProbeReport> {
     if (newErrors.length > 0) {
       add('sliders', 'Слайдеры влияют на симуляцию', 'fail',
         'движение слайдера вызвало ошибку: ' + newErrors.join('; '));
-    } else if (unobservable.length === sliders.length) {
+    } else if (dead.length > 0) {
+      add('sliders', 'Слайдеры влияют на симуляцию', 'fail',
+        'параметр (' + dead.join(', ') + ') ни на что не влияет: при движении слайдера ' +
+        'в крайнее положение не изменились ни картинка, ни одна величина состояния, ' +
+        'ни темп процесса — значение читается только в getState');
+    } else if (unmeasurable.length === sliders.length) {
       add('sliders', 'Слайдеры влияют на симуляцию', 'skip',
-        'эффект слайдеров (' + unobservable.join(', ') +
+        'эффект слайдеров (' + unmeasurable.join(', ') +
         ') не наблюдаем автоматически — состояние и кадр не изменились');
     } else {
       add('sliders', 'Слайдеры влияют на симуляцию', 'pass', '');

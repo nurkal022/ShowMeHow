@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>probe dead slider</title>
+<style>html,body{margin:0;height:100%;overflow:hidden}canvas{position:fixed;top:0;left:0}</style>
+</head><body><canvas id="c"></canvas><script>
+(function () {
+  // Слайдер «Температура» подключён, его значение исправно возвращается из
+  // getState() — но НИ draw(), НИ physics() его не читают: картинка, величины и
+  // темп процесса от него не зависят. Ровно тот дефект, который ищет проба
+  // «Слайдеры влияют на симуляцию»: параметр есть в интерфейсе и в состоянии,
+  // а в физике его нет.
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  var temp = 20, state = { t: 0, x: 0 }, running = true, last = null;
+  function resetSim() { state = { t: 0, x: 0 }; }
+  function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+  function draw() {
+    ctx.fillStyle = '#101318'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#4f8ff7'; ctx.fillRect(state.x % 600, 100, 40, 40);
+  }
+  function physics(dt) { state.t += dt; state.x += 60 * dt; }
+  function loop(now) {
+    if (last == null) last = now;
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (running) { physics(dt); }
+    draw(); requestAnimationFrame(loop);
+  }
+  SimUI.title('Проба: мёртвый слайдер');
+  SimUI.slider({ name: 'temp', label: 'Температура', min: 0, max: 100, step: 1, value: temp,
+    unit: '°C', onChange: function (v) { temp = v; } });
+  SimUI.playPause({ onPlay: function () { running = true; last = null; },
+    onPause: function () { running = false; }, onReset: function () { resetSim(); } });
+  SimUI.expose({ getState: function () { return { t: state.t, x: state.x, temp: temp }; },
+    reset: resetSim });
+  addEventListener('resize', resize); resize(); requestAnimationFrame(loop);
+})();
+</script></body></html>

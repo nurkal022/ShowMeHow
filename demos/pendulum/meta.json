@@ -10,17 +10,12 @@
     "период колебаний"
   ],
   "mode": "2d",
-  "libs": [],
   "keywords": [
     "маятник",
     "колебания",
     "период",
     "амплитуда",
     "энергия"
-  ],
-  "techniques": [
-    "ode-integration",
-    "live-chart"
   ],
   "exemplar": true
 }

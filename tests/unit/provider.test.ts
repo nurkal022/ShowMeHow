@@ -106,6 +106,17 @@ describe('обрыв по лимиту токенов', () => {
     expect(c.chat.completions.create).toHaveBeenCalledTimes(2);
   });
 
+  it('пустое продолжение завершает ответ, а не выбрасывает накопленное', async () => {
+    // Пустой ответ на «продолжи» — нормальный способ модели сказать «добавить нечего».
+    const c = fakeClientWithFinish([
+      { content: '<html><body>почти всё</body></html>', finish: 'length' },
+      { content: '', finish: 'stop' },
+    ]);
+    const out = await chatWithClient(c as never, 'm', [{ role: 'user', content: 'x' }],
+      { sleep: async () => {} });
+    expect(out).toBe('<html><body>почти всё</body></html>');
+  });
+
   it('перестаёт продолжать после maxContinuations и отдаёт склеенное', async () => {
     const c = fakeClientWithFinish([{ content: 'кусок', finish: 'length' }]);
     const out = await chatWithClient(c as never, 'm', [{ role: 'user', content: 'x' }],

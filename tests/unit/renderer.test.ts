@@ -1,7 +1,8 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { renderArtifact, closeBrowser, __setLauncherForTests, openSession } from '@/lib/renderer';
+import { renderArtifact, closeBrowser, __setLauncherForTests, __setPageHookForTests,
+  openSession } from '@/lib/renderer';
 import { instrument } from '@/lib/artifact';
 
 const fx = (n: string) =>
@@ -25,11 +26,46 @@ describe('renderArtifact', () => {
       { shotTimes: [200, 700], probes: true },
     );
     expect(r.animated).toBe(false);
-    // Кадры проб (пауза + слайдер на максимуме) обязаны попасть в screenshots
-    // для критика — иначе этот тест прошёл бы и после наивного «просто не
-    // добавлять кадры проб», что не то поведение, которое требуется.
-    expect(r.screenshots.length).toBeGreaterThan(2);
+    // Кадры проб живут отдельно от кадров таймлапса: screenshots — ровно
+    // shotTimes, кадры измерения доступны через probes.shots.
+    expect(r.screenshots).toHaveLength(2);
+    expect(r.probes!.shots.length).toBeGreaterThan(0);
   }, 60000);
+
+  it('недоступный KaTeX с разрешённого CDN не валит кандидата', async () => {
+    // Симулируем перебои jsdelivr: запрос к разрешённому CDN обрывается, Chromium
+    // пишет в консоль «Failed to load resource: net::ERR_FAILED». Кит переживает
+    // это (js.onerror → текстовая формула), значит и кандидат обязан выжить.
+    const html = `<!DOCTYPE html><html><body>
+      <canvas id="c" width="300" height="200"></canvas><script>
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js';
+      s.onerror = function () {}; document.head.appendChild(s);
+      var ctx = document.getElementById('c').getContext('2d'), t = 0;
+      (function loop() { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 300, 200);
+        ctx.fillStyle = '#fff'; ctx.fillRect((t += 7) % 260, 40, 20, 20);
+        requestAnimationFrame(loop); })();
+      </script></body></html>`;
+    __setPageHookForTests(async (page) => {
+      await page.route(
+        (u) => u.href.includes('katex'), (r) => { r.abort().catch(() => {}); });
+    });
+    try {
+      const r = await renderArtifact(html, { shotTimes: [200, 700] });
+      expect(r.errors).toEqual([]);
+      expect(r.ok).toBe(true);
+    } finally {
+      __setPageHookForTests(null);
+    }
+  }, 30000);
+
+  it('настоящая ошибка в скрипте страницы по-прежнему даёт ok:false', async () => {
+    const html = `<!DOCTYPE html><html><body><canvas id="c"></canvas>
+      <script>throw new Error('boom-9f3a2b');</script></body></html>`;
+    const r = await renderArtifact(html, { shotTimes: [200] });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/boom-9f3a2b/);
+  }, 30000);
 
   it('broken artifact: reports js error', async () => {
     const r = await renderArtifact(fx('broken.html'), { shotTimes: [200] });

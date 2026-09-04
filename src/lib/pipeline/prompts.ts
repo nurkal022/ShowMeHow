@@ -118,7 +118,9 @@ export const EXAMPLE_SKELETON = `<!DOCTYPE html>
   });
 
   // ---------- Приборы: баннер фазы, показания, график, формула ----------
-  var banner = SimUI.banner({ items: [{ name: 'Фаза 1', sub: 'что происходит', color: '#4f8ff7' }] });
+  var banner = SimUI.banner({ items: [
+    { name: 'Подъём', sub: 'скорость направлена вверх', color: '#4f8ff7' },
+    { name: 'Падение', sub: 'скорость направлена вниз', color: '#f79f4f' }] });
   var rT = SimUI.readout({ label: 'Время', unit: 'с', digits: 2, corner: 'bl' });
   var rX = SimUI.readout({ label: 'Высота', unit: 'м', digits: 2, corner: 'bl' });
   var chart = SimUI.chart({ title: 'Высота от времени', xLabel: 't, с', yLabel: 'h, м',
@@ -144,6 +146,7 @@ export const EXAMPLE_SKELETON = `<!DOCTYPE html>
       chart.push(state.t, [state.x]);
       rT.set(state.t); rX.set(state.x);
       formula.set({ g: G, t: state.t });
+      banner.set(state.v >= 0 ? 0 : 1); // фаза процесса обязана меняться по ходу симуляции
     }
     draw();
     requestAnimationFrame(loop);

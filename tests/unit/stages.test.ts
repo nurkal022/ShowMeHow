@@ -263,6 +263,23 @@ describe('пробы в verifyCandidate', () => {
     expect(JSON.stringify(fixerCalls[0][1])).toContain('Пауза останавливает анимацию');
   });
 
+  it('критику уходят только кадры таймлапса, без кадров проб', async () => {
+    // Кадры проб сняты на паузе и с параметром в крайнем положении: критик принял бы
+    // их за поведение симуляции и сообщил бы о несуществующих поломках.
+    const timed = [Buffer.from('t1'), Buffer.from('t2'), Buffer.from('t3')];
+    const probeShots = [Buffer.from('p1'), Buffer.from('p2')];
+    const report: RenderReport = { ...okRender, screenshots: timed,
+      probes: { ...probesOk, shots: probeShots } };
+    const chat = visionOnly(async () => '{"physicsOk": true, "issues": []}');
+    const c = ctx({ chat, render: vi.fn(async () => report) });
+    await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
+    const criticCall = chat.mock.calls.find((call) => call[0] === 'critic')!;
+    const content = criticCall[1].at(-1)!.content as { type: string; image_url?: { url: string } }[];
+    const images = content.filter((part) => part.type === 'image_url')
+      .map((part) => part.image_url!.url);
+    expect(images).toEqual(timed.map((b) => 'data:image/png;base64,' + b.toString('base64')));
+  });
+
   it('эмитит probe-report с долей пройденных проб', async () => {
     const c = ctx({ render: vi.fn(async () => ({ ...okRender, probes: probesOk })) });
     await verifyCandidate(c, SPEC, HTML, 1, 'Данные');

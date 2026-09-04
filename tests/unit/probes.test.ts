@@ -35,6 +35,19 @@ describe('runProbes', () => {
     expect(r.passRate).toBe(1);
   }, 60000);
 
+  it('здоровый слайдер, влияющий только на темп, проходит пробу', async () => {
+    const r = await probe('probe-ok.html');
+    expect(status(r, 'sliders')).toBe('pass');
+  }, 60000);
+
+  it('ловит слайдер, который ни на что не влияет', async () => {
+    // Значение слайдера видно в getState, но физика и картинка его не читают:
+    // проба обязана отличить это от «эффект просто не наблюдаем».
+    const r = await probe('probe-dead-slider.html');
+    expect(status(r, 'sliders')).toBe('fail');
+    expect(r.failures.join(' ')).toContain('Температура');
+  }, 60000);
+
   it('ловит неработающую паузу', async () => {
     const r = await probe('probe-dead-pause.html');
     expect(status(r, 'pause')).toBe('fail');

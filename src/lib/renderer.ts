@@ -1,4 +1,4 @@
-import { chromium, type Browser } from 'playwright';
+import { chromium, type Browser, type ConsoleMessage, type Page } from 'playwright';
 import type { RenderReport } from './types';
 import { allowedPrefixes } from './cdn';
 import { runProbes, type ProbeReport } from './pipeline/probes';
@@ -20,6 +20,19 @@ let launcher: Launcher = defaultLauncher;
  */
 export function __setLauncherForTests(fn: Launcher | null): void {
   launcher = fn ?? defaultLauncher;
+}
+
+type PageHook = (page: Page) => Promise<void>;
+let pageHook: PageHook | null = null;
+
+/**
+ * Test-only hook: runs on the freshly created page right after the network
+ * whitelist route is installed (so a route registered here takes precedence)
+ * and before setContent. Used to simulate a CDN outage without touching the
+ * network. Pass `null` to clear. No-op effect in production: never called.
+ */
+export function __setPageHookForTests(fn: PageHook | null): void {
+  pageHook = fn;
 }
 
 let browserPromise: Promise<Browser> | null = null;
@@ -95,12 +108,27 @@ export async function openSession(
   // Set сохраняет порядок первого появления и естественно схлопывает повторы:
   // страница с ретраями на запрещённый хост не должна раздувать errors().
   const blockedSet = new Set<string>();
-  page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-
   // Сеть вне whitelist режется на уровне браузера: regex-скан по исходнику
   // ловит не всё (например, URL, собранный из строк в рантайме).
   const prefixes = allowedPrefixes();
+
+  // Chromium пишет неудавшуюся загрузку подресурса в консоль как error
+  // («Failed to load resource: net::ERR_FAILED»). Для разрешённого CDN это не
+  // ошибка кандидата: кит переживает недоступный KaTeX (js.onerror → текстовая
+  // формула), а вот пайплайн раньше объявлял такого кандидата сломанным и гонял
+  // фиксера за несуществующим багом при любом сбое jsdelivr. Запрещённые хосты
+  // сюда не попадают — они отдельно и намеренно репортятся через blockedUrls().
+  const isAllowedResourceFailure = (m: ConsoleMessage): boolean => {
+    if (!/^Failed to load resource/i.test(m.text())) return false;
+    const url = m.location()?.url ?? '';
+    return prefixes.some((p) => url.startsWith(p));
+  };
+
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error' && !isAllowedResourceFailure(m)) errors.push(m.text());
+  });
+
   await page.route('**/*', (route) => {
     const url = route.request().url();
     if (!/^https?:\/\//i.test(url) || prefixes.some((p) => url.startsWith(p))) {
@@ -110,6 +138,7 @@ export async function openSession(
     blockedSet.add(url);
     route.abort().catch(() => {});
   });
+  if (pageHook) await pageHook(page);
 
   let loaded = true;
   try {
@@ -170,11 +199,10 @@ export async function renderArtifact(
       session.errors().push('screenshot failure: ' + String(e));
     }
   }
-  // animated считаем ТОЛЬКО по кадрам таймлапса, снятым до проб: пробы ставят
-  // симуляцию на паузу и двигают слайдер в крайнее положение, так что кадр
-  // после них — не «t≈3с работающей симуляции», а статичная картинка на паузе
-  // со сдвинутым параметром. Если считать animated по расширенному массиву,
-  // статичная-но-реагирующая-на-слайдер симуляция ложно помечается как анимированная.
+  // animated считаем по кадрам таймлапса: пробы ставят симуляцию на паузу и
+  // двигают слайдер в крайнее положение, так что снятый ими кадр — не
+  // «t≈3с работающей симуляции», а статичная картинка на паузе со сдвинутым
+  // параметром.
   const animated = screenshots.length >= 2 &&
     !screenshots[0].equals(screenshots[screenshots.length - 1]);
   // Пробы гоняем только на реально загрузившейся странице: если setContent
@@ -185,9 +213,12 @@ export async function renderArtifact(
   if (probes && session.loaded()) {
     try {
       probeReport = await runProbes(session);
-      // Кадры проб (пауза, слайдер на максимуме) идут критику для контекста,
-      // но НЕ должны влиять на уже посчитанный выше animated.
-      screenshots.push(...probeReport.shots);
+      // Кадры проб (пауза, слайдер в крайнем положении) НЕ подмешиваем в
+      // screenshots: это артефакты измерения, а не кадры симуляции. Раньше их
+      // видел критик — и сообщал «симуляция замерла» или «параметр вне
+      // физичного диапазона» про сцену, которую сам же измерительный прогон и
+      // сделал такой, после чего рефайнер правил рабочий код. Кому нужны эти
+      // кадры — берёт их из report.probes.shots.
     } catch (e) {
       session.errors().push('probe failure: ' + String(e));
     }

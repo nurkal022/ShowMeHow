@@ -29,15 +29,36 @@ const GENERATOR_MARKER = 'Каркас качественной симуляци
 // (остальные роли отвечают мгновенно — не тормозим планировщика/критика/судью).
 const GENERATOR_DELAY_MS = 1200;
 
+export type MockRole = 'planner' | 'judge' | 'critic' | 'html';
+
+/**
+ * Роль по системному промпту. Маркеры — самоидентификация роли из первой строки
+ * её промпта, и только её: слово «рецензент» подходить не может, оно встречается
+ * и у судьи («физика-рецензента по каждому»), и у рефайнера («по замечаниям судьи,
+ * физика-рецензента»), из-за чего рефайнеру раньше отвечали вердиктом критика,
+ * а не HTML. Соответствие маркеров реальным промптам закреплено юнит-тестом
+ * tests/unit/mock-provider.test.ts.
+ */
+export function roleOf(system: string): MockRole {
+  if (system.includes('Ты — методист и физик')) return 'planner';
+  if (system.includes('Ты — судья качества')) return 'judge';
+  if (system.includes('Ты — придирчивый физик-рецензент')) return 'critic';
+  return 'html'; // генератор, фиксер, рефайнер — все ждут HTML-документ
+}
+
 function reply(system: string): string {
-  if (system.includes('методист')) return JSON.stringify(SPEC);
-  // ВАЖНО: судью проверяем ДО рецензента — JUDGE_SYSTEM содержит слово «рецензента»
-  if (system.includes('судья качества'))
-    return JSON.stringify({ winnerIndex: 0,
-      scores: [{ physics: 9, clarity: 9, interactivity: 9, aesthetics: 9 }],
-      feedback: '' });
-  if (system.includes('рецензент')) return '{"physicsOk": true, "issues": []}';
-  return '```html\n' + ARTIFACT + '\n```';
+  switch (roleOf(system)) {
+    case 'planner':
+      return JSON.stringify(SPEC);
+    case 'judge':
+      return JSON.stringify({ winnerIndex: 0,
+        scores: [{ physics: 9, clarity: 9, interactivity: 9, aesthetics: 9 }],
+        feedback: '' });
+    case 'critic':
+      return '{"physicsOk": true, "issues": []}';
+    default:
+      return '```html\n' + ARTIFACT + '\n```';
+  }
 }
 
 export function startMockProvider(port: number): Promise<() => Promise<void>> {
