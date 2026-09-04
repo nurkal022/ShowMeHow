@@ -170,6 +170,13 @@ export async function renderArtifact(
       session.errors().push('screenshot failure: ' + String(e));
     }
   }
+  // animated считаем ТОЛЬКО по кадрам таймлапса, снятым до проб: пробы ставят
+  // симуляцию на паузу и двигают слайдер в крайнее положение, так что кадр
+  // после них — не «t≈3с работающей симуляции», а статичная картинка на паузе
+  // со сдвинутым параметром. Если считать animated по расширенному массиву,
+  // статичная-но-реагирующая-на-слайдер симуляция ложно помечается как анимированная.
+  const animated = screenshots.length >= 2 &&
+    !screenshots[0].equals(screenshots[screenshots.length - 1]);
   // Пробы гоняем только на реально загрузившейся странице: если setContent
   // бросил, страница в неопределённом состоянии — каждая проба провалится
   // по той же причине, что уже видна в errors(), и завалит фиксера кучей
@@ -178,6 +185,8 @@ export async function renderArtifact(
   if (probes && session.loaded()) {
     try {
       probeReport = await runProbes(session);
+      // Кадры проб (пауза, слайдер на максимуме) идут критику для контекста,
+      // но НЕ должны влиять на уже посчитанный выше animated.
       screenshots.push(...probeReport.shots);
     } catch (e) {
       session.errors().push('probe failure: ' + String(e));
@@ -188,8 +197,6 @@ export async function renderArtifact(
     errors.push('Заблокирован запрос вне whitelist: ' + url);
   }
   await session.close();
-  const animated = screenshots.length >= 2 &&
-    !screenshots[0].equals(screenshots[screenshots.length - 1]);
   return {
     ok: errors.length === 0 && screenshots.length > 0,
     errors, animated, screenshots, probes: probeReport,

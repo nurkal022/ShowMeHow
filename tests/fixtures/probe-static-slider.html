@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>probe static slider</title>
+<style>html,body{margin:0;height:100%;overflow:hidden}canvas{position:fixed;top:0;left:0}</style>
+</head><body><canvas id="c"></canvas><script>
+(function () {
+  // Картинка зависит ТОЛЬКО от слайдера, а не от времени: t растёт, но draw()
+  // рисует прямоугольник на позиции, вычисленной из param, а не из state.t/x.
+  // Это фиксатор ровно того бага, который проверяет тест: пробы двигают
+  // слайдер в крайнее положение и снимают кадр — он ОБЯЗАН отличаться от
+  // t=0, но это не значит, что симуляция анимирована во времени.
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  var param = 10, state = { t: 0 }, running = true, last = null;
+  function resetSim() { state = { t: 0 }; }
+  function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+  function draw() {
+    ctx.fillStyle = '#101318'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#4f8ff7';
+    ctx.fillRect(param * 6, 100, 40, 40);
+  }
+  function loop(now) {
+    if (last == null) last = now;
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (running) { state.t += dt; }
+    draw();
+    requestAnimationFrame(loop);
+  }
+  SimUI.title('Проба: статика + реагирующий слайдер');
+  SimUI.slider({ name: 'param', label: 'Параметр', min: 0, max: 100, step: 1, value: param,
+    unit: '', onChange: function (v) { param = v; } });
+  SimUI.playPause({ onPlay: function () { running = true; last = null; },
+    onPause: function () { running = false; }, onReset: function () { resetSim(); } });
+  SimUI.expose({ getState: function () { return { t: state.t, param: param }; },
+    reset: resetSim });
+  addEventListener('resize', resize); resize(); requestAnimationFrame(loop);
+})();
+</script></body></html>

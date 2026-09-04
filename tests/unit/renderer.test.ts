@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { renderArtifact, closeBrowser, __setLauncherForTests, openSession } from '@/lib/renderer';
+import { instrument } from '@/lib/artifact';
 
 const fx = (n: string) =>
   fs.readFileSync(path.join(process.cwd(), 'tests/fixtures', n), 'utf8');
@@ -16,6 +17,19 @@ describe('renderArtifact', () => {
     expect(r.animated).toBe(true);
     expect(r.screenshots).toHaveLength(2);
   });
+
+  it('probe shots must not corrupt the animated signal: a static-picture ' +
+     'candidate whose slider changes the static frame stays animated:false', async () => {
+    const r = await renderArtifact(
+      instrument(fx('probe-static-slider.html')),
+      { shotTimes: [200, 700], probes: true },
+    );
+    expect(r.animated).toBe(false);
+    // Кадры проб (пауза + слайдер на максимуме) обязаны попасть в screenshots
+    // для критика — иначе этот тест прошёл бы и после наивного «просто не
+    // добавлять кадры проб», что не то поведение, которое требуется.
+    expect(r.screenshots.length).toBeGreaterThan(2);
+  }, 60000);
 
   it('broken artifact: reports js error', async () => {
     const r = await renderArtifact(fx('broken.html'), { shotTimes: [200] });
