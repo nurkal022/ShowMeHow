@@ -59,9 +59,10 @@ ${cdnList}
 - Никаких заглушек и TODO: всё работает сразу.`;
 
 // Каркас выведен из структуры реальных одобренных демок (demos/*/artifact.html):
-// doctype → head → canvas на всё окно → константы физики → state + resetSim() →
-// SimUI.title/slider/presets/speed/playPause → приборы (banner/readout/chart/formula) →
-// SimUI.expose → dt-clamp цикл, где simT/картинка замирают на паузе → resize.
+// doctype → head → canvas на всё окно → константы физики → state + resetSim() (не
+// вызывается сразу — она трогает приборы, которых ещё нет) → SimUI.title/slider/
+// presets/speed/playPause → приборы (banner/readout/chart/formula) → SimUI.expose →
+// resize → первый resetSim() (приборы уже созданы) → dt-clamp цикл.
 export const EXAMPLE_SKELETON = `<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -80,10 +81,9 @@ export const EXAMPLE_SKELETON = `<!DOCTYPE html>
   // ---------- Константы физики (единицы в комментариях) ----------
   var G = 9.8;    // м/с^2
 
-  // ---------- Состояние + сброс ----------
+  // ---------- Состояние + сброс (вызывается ниже, когда приборы уже созданы) ----------
   var state = {}, param = 20;
   function resetSim() { state = { t: 0, x: 0, v: 0 }; chart.clear(); }
-  resetSim();
 
   // ---------- Канвас ----------
   var canvas = document.getElementById('scene');
@@ -151,6 +151,7 @@ export const EXAMPLE_SKELETON = `<!DOCTYPE html>
 
   window.addEventListener('resize', resize);
   resize();
+  resetSim(); // приборы (chart и т.п.) уже созданы выше — теперь можно
   requestAnimationFrame(loop);
 })();
 </script>

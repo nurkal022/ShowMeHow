@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import * as P from '@/lib/pipeline/prompts';
+import { instrument } from '@/lib/artifact';
+import { openSession, closeBrowser } from '@/lib/renderer';
+import { runProbes } from '@/lib/pipeline/probes';
 
 describe('prompts', () => {
   it('all prompts are non-empty strings', () => {
@@ -84,4 +87,20 @@ describe('GENERATION_RULES', () => {
     expect(withEx).toContain('ЭТАЛОН КАЧЕСТВА');
     expect(P.generatorSystem(P.STYLE_HINTS[0])).not.toContain('ЭТАЛОН КАЧЕСТВА');
   });
+});
+
+describe('EXAMPLE_SKELETON исполняется в браузере', () => {
+  afterAll(() => closeBrowser());
+
+  it('скелет загружается без ошибок консоли и проходит автоматические пробы', async () => {
+    const html = instrument(P.EXAMPLE_SKELETON);
+    const session = await openSession(html);
+    try {
+      expect(session.errors()).toEqual([]);
+      const report = await runProbes(session);
+      expect(report.failures).toEqual([]);
+    } finally {
+      await session.close();
+    }
+  }, 30000);
 });
