@@ -80,6 +80,52 @@ describe('chatWithClient', () => {
   });
 });
 
+function fakeClientWithFinish(
+  chunks: Array<{ content: string; finish?: string }>,
+) {
+  let i = 0;
+  return {
+    chat: { completions: { create: vi.fn(async () => {
+      const c = chunks[Math.min(i++, chunks.length - 1)];
+      return {
+        choices: [{ message: { content: c.content }, finish_reason: c.finish ?? 'stop' }],
+        usage: { prompt_tokens: 10, completion_tokens: 20 },
+      };
+    }) } },
+  };
+}
+
+describe('обрыв по лимиту токенов', () => {
+  it('склеивает продолжение при finish_reason=length', async () => {
+    const c = fakeClientWithFinish([
+      { content: '<html><body>нача', finish: 'length' },
+      { content: 'ло и конец</body></html>', finish: 'stop' },
+    ]);
+    const out = await chatWithClient(c as never, 'm', [{ role: 'user', content: 'x' }]);
+    expect(out).toBe('<html><body>начало и конец</body></html>');
+    expect(c.chat.completions.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('перестаёт продолжать после maxContinuations и отдаёт склеенное', async () => {
+    const c = fakeClientWithFinish([{ content: 'кусок', finish: 'length' }]);
+    const out = await chatWithClient(c as never, 'm', [{ role: 'user', content: 'x' }],
+      { maxContinuations: 2 });
+    expect(out).toBe('кусоккусоккусок');
+    expect(c.chat.completions.create).toHaveBeenCalledTimes(3);
+  });
+
+  it('передаёт max_tokens и сообщает usage', async () => {
+    const c = fakeClientWithFinish([{ content: 'ок' }]);
+    const seen: Array<{ promptTokens: number; completionTokens: number }> = [];
+    await chatWithClient(c as never, 'm', [{ role: 'user', content: 'x' }],
+      { maxTokens: 777, onUsage: (u) => seen.push(u) });
+    expect(c.chat.completions.create).toHaveBeenCalledWith(
+      expect.objectContaining({ max_tokens: 777 }));
+    expect(seen[0].promptTokens).toBe(10);
+    expect(seen[0].completionTokens).toBe(20);
+  });
+});
+
 describe('isRetryable', () => {
   it('returns false for non-retryable 4xx statuses', () => {
     for (const status of [400, 401, 403, 404, 422]) {

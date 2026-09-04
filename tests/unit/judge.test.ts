@@ -15,8 +15,16 @@ const verdict = { winnerIndex: 1,
            { physics: 9, clarity: 9, interactivity: 8, aesthetics: 9 }],
   feedback: 'добавь график' };
 
-function ctx(visionChat: Ctx['visionChat']): Ctx {
-  return { genChat: vi.fn(), visionChat, render: vi.fn(), emit: vi.fn() };
+function ctx(visionChat: ((messages: unknown[]) => Promise<string>) | null): Ctx {
+  return {
+    chat: vi.fn(async (_role, messages) => {
+      if (!visionChat) throw new Error('vision unavailable');
+      return visionChat(messages);
+    }),
+    hasVision: !!visionChat,
+    render: vi.fn(),
+    emit: vi.fn(),
+  };
 }
 
 describe('judge', () => {

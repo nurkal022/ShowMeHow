@@ -1,13 +1,15 @@
-import type { CandidateResult, PipelineEvent, PlanSpec, RenderReport } from '../types';
-import type { ChatFn } from '../provider';
+import type { CandidateResult, PipelineEvent, PlanSpec, RenderReport, Role } from '../types';
+import type { ChatMessage } from '../provider';
 import { textPart, imagePart } from '../provider';
 import type { RenderFn } from '../renderer';
 import { extractHtml, extractJson, findForbiddenUrls, instrument } from '../artifact';
 import { PLANNER_SYSTEM, generatorSystem, FIXER_SYSTEM, CRITIC_SYSTEM, CDN_WHITELIST } from './prompts';
 
 export interface Ctx {
-  genChat: ChatFn;
-  visionChat: ChatFn | null;
+  /** Один вход в модель для всех ролей: конфиг роли резолвится в provider-слое. */
+  chat: (role: Role, messages: ChatMessage[]) => Promise<string>;
+  /** Доступна ли vision-модель (критик и судья). */
+  hasVision: boolean;
   render: RenderFn;
   emit: (e: PipelineEvent) => void;
 }
@@ -16,7 +18,7 @@ export async function plan(ctx: Ctx, prompt: string, imageDataUrl?: string): Pro
   const content = imageDataUrl
     ? [textPart(prompt), imagePart(imageDataUrl)]
     : prompt;
-  const out = await ctx.genChat([
+  const out = await ctx.chat('planner', [
     { role: 'system', content: PLANNER_SYSTEM },
     { role: 'user', content },
   ]);
@@ -24,7 +26,7 @@ export async function plan(ctx: Ctx, prompt: string, imageDataUrl?: string): Pro
 }
 
 export async function generateCandidate(ctx: Ctx, spec: PlanSpec, styleHint: string): Promise<string> {
-  const out = await ctx.genChat([
+  const out = await ctx.chat('generator', [
     { role: 'system', content: generatorSystem(styleHint) },
     { role: 'user', content: 'Спецификация:\n' + JSON.stringify(spec, null, 2) },
   ]);
@@ -32,7 +34,7 @@ export async function generateCandidate(ctx: Ctx, spec: PlanSpec, styleHint: str
 }
 
 export async function fixArtifact(ctx: Ctx, html: string, errors: string[]): Promise<string> {
-  const out = await ctx.genChat([
+  const out = await ctx.chat('fixer', [
     { role: 'system', content: FIXER_SYSTEM },
     { role: 'user', content: `Ошибки:\n${errors.join('\n')}\n\nHTML:\n\`\`\`html\n${html}\n\`\`\`` },
   ]);
@@ -95,13 +97,13 @@ export async function verifyCandidate(
     ctx.emit({ type: 'screenshot', index, dataUrl: toDataUrl(report.screenshots[0]) });
   }
   let critic = null;
-  if (ctx.visionChat) {
+  if (ctx.hasVision) {
     ctx.emit({ type: 'candidate', index, status: 'critiquing', styleHint: styleName });
     try {
       const animationNote = report.animated
         ? ''
         : `\n\nВНИМАНИЕ: ${STATIC_ANIMATION_ERROR.toLowerCase()} даже после попыток починки.`;
-      const out = await ctx.visionChat([
+      const out = await ctx.chat('critic', [
         { role: 'system', content: CRITIC_SYSTEM },
         { role: 'user', content: [
           textPart('Спецификация:\n' + JSON.stringify(spec, null, 2) + animationNote),

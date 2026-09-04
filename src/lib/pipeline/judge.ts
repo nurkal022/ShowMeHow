@@ -18,10 +18,10 @@ function candidateParts(c: CandidateResult, label: string) {
 export async function judge(
   ctx: Ctx, spec: PlanSpec, candidates: CandidateResult[],
 ): Promise<JudgeVerdict> {
-  if (!ctx.visionChat) {
+  if (!ctx.hasVision) {
     return { winnerIndex: 0, scores: candidates.map(() => ({ ...ZERO })), feedback: '' };
   }
-  const out = await ctx.visionChat([
+  const out = await ctx.chat('judge', [
     { role: 'system', content: JUDGE_SYSTEM },
     { role: 'user', content: [
       textPart('Спецификация:\n' + JSON.stringify(spec, null, 2)),

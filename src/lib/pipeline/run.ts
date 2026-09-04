@@ -1,11 +1,11 @@
 import type {
   PipelineEvent, PipelineStage, PlanSpec, PlanSummary, QualityMode, SimulationMeta,
-  CandidateResult, RubricScores,
+  CandidateResult, RubricScores, Role,
 } from '../types';
 import { minScore } from '../types';
 import { CANDIDATE_DEFAULTS } from '../candidate-defaults';
 import { activeProvider } from '../settings';
-import { bindChat } from '../provider';
+import { bindChat, type ChatFn, type UsageInfo } from '../provider';
 import { renderArtifact } from '../renderer';
 import { createSimulation, saveThumbnail, getArtifact, updateArtifact } from '../storage';
 import { extractHtml, findForbiddenUrls, instrument, stripRuntime } from '../artifact';
@@ -41,9 +41,16 @@ export function resolveCandidates(mode: QualityMode, requested?: number): number
 export function makeCtx(emit: (e: PipelineEvent) => void): Ctx {
   const p = activeProvider();
   if (!p) throw new Error('Провайдер не настроен. Откройте Настройки.');
+  const onUsage = (u: UsageInfo & { role: Role; model: string }) =>
+    emit({ type: 'usage', role: u.role, model: u.model,
+      promptTokens: u.promptTokens, completionTokens: u.completionTokens, ms: u.ms });
+  const chats = new Map<Role, ChatFn>();
   return {
-    genChat: bindChat(p, p.generationModel),
-    visionChat: p.visionModel ? bindChat(p, p.visionModel) : null,
+    chat: (role, messages) => {
+      if (!chats.has(role)) chats.set(role, bindChat(p, role, onUsage));
+      return chats.get(role)!(messages);
+    },
+    hasVision: !!p.visionModel,
     render: (html) => renderArtifact(html),
     emit,
   };
@@ -76,7 +83,7 @@ export async function runPipeline(
   const mode = MODES[input.mode];
   const count = resolveCandidates(input.mode, input.candidates);
   const warnings: string[] = [];
-  if (!ctx.visionChat) {
+  if (!ctx.hasVision) {
     warnings.push('Vision-модель не настроена: без визуальной критики и судьи.');
     ctx.emit({ type: 'warning', message: warnings[0] });
   }
@@ -137,7 +144,7 @@ export async function runPipeline(
     warnings.push(msg);
     ctx.emit({ type: 'warning', message: msg });
     best = clean;
-  } else if (mode.useJudge && ctx.visionChat && alive.length > 0) {
+  } else if (mode.useJudge && ctx.hasVision && alive.length > 0) {
     checkCancelled();
     emitStage(ctx, 'judging', 'start');
     let verdict = null;
@@ -234,7 +241,7 @@ export async function runPipeline(
 
 async function refineHtml(ctx: Ctx, html: string, feedback: string): Promise<string> {
   const base = stripRuntime(html);
-  const out = await ctx.genChat([
+  const out = await ctx.chat('refiner', [
     { role: 'system', content: REFINER_SYSTEM },
     { role: 'user', content: `Замечания:\n${feedback}\n\nHTML:\n\`\`\`html\n${base}\n\`\`\`` },
   ]);

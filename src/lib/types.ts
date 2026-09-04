@@ -1,5 +1,15 @@
 export type QualityMode = 'fast' | 'standard' | 'max';
 
+/** Роли пайплайна, каждая может резолвиться в свою модель/лимит/параметры. */
+export type Role = 'planner' | 'generator' | 'fixer' | 'critic' | 'judge' | 'refiner';
+
+export interface RoleConfig {
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  extraBody?: Record<string, unknown>;
+}
+
 export interface ProviderProfile {
   id: string;
   name: string;
@@ -14,6 +24,11 @@ export interface ProviderProfile {
    * Опционально; по умолчанию ничего не добавляется.
    */
   extraBody?: Record<string, unknown>;
+  /**
+   * Настройки по ролям пайплайна: планировщику можно дать сильную модель,
+   * фиксеру — дешёвую. Пустое поле = поведение по умолчанию (см. resolveRole).
+   */
+  roles?: Partial<Record<Role, RoleConfig>>;
 }
 
 export interface Settings {
@@ -114,7 +129,9 @@ export type PipelineEvent =
   | { type: 'warning'; message: string }
   | { type: 'cancelled' }
   | { type: 'done'; simulationId: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'usage'; role: Role; model: string; promptTokens: number;
+      completionTokens: number; ms: number };
 
 export function minScore(s: RubricScores): number {
   return Math.min(s.physics, s.clarity, s.interactivity, s.aesthetics);

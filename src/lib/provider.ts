@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
-import type { ProviderProfile } from './types';
+import type { ProviderProfile, Role } from './types';
+import { resolveRole } from './roles';
 
 export type ContentPart =
   | { type: 'text'; text: string }
@@ -24,11 +25,21 @@ export function makeClient(p: ProviderProfile): OpenAI {
   return new OpenAI({ baseURL: p.baseURL, apiKey: p.apiKey });
 }
 
+export interface UsageInfo {
+  promptTokens: number;
+  completionTokens: number;
+  ms: number;
+}
+
 interface ChatOpts {
   retries?: number;
   sleep?: (ms: number) => Promise<void>;
   /** Провайдер-специфичные поля тела запроса (enable_thinking, temperature, ...). */
   extraBody?: Record<string, unknown>;
+  maxTokens?: number;
+  /** Сколько раз добирать ответ, оборванный по лимиту токенов. */
+  maxContinuations?: number;
+  onUsage?: (u: UsageInfo) => void;
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -51,23 +62,66 @@ export function isRetryable(e: unknown): boolean {
   return true;
 }
 
+const CONTINUE_PROMPT =
+  'Ответ оборвался по лимиту длины. Продолжи РОВНО с места обрыва, ' +
+  'не повторяя уже выданное и не начиная заново. Не добавляй пояснений.';
+
+/**
+ * Один вызов модели с ретраями. Ответ, оборванный провайдером по лимиту токенов
+ * (finish_reason: 'length'), добирается продолжениями и склеивается: без этого
+ * HTML на 6-9k токенов у провайдеров с дефолтом 4096 приходит без </html>
+ * и кандидат гибнет на разборе.
+ */
 export async function chatWithClient(
   client: OpenAI,
   model: string,
   messages: ChatMessage[],
-  { retries = 3, sleep = defaultSleep, extraBody }: ChatOpts = {},
+  {
+    retries = 3, sleep = defaultSleep, extraBody, maxTokens,
+    maxContinuations = 2, onUsage,
+  }: ChatOpts = {},
 ): Promise<string> {
+  const convo: ChatMessage[] = [...messages];
+  let combined = '';
+
+  for (let round = 0; round <= maxContinuations; round++) {
+    const { text, truncated } = await once(
+      client, model, convo, { retries, sleep, extraBody, maxTokens, onUsage });
+    combined += text;
+    if (!truncated) return combined;
+    if (round === maxContinuations) return combined;
+    convo.push({ role: 'assistant', content: text });
+    convo.push({ role: 'user', content: CONTINUE_PROMPT });
+  }
+  return combined;
+}
+
+async function once(
+  client: OpenAI,
+  model: string,
+  messages: ChatMessage[],
+  { retries, sleep, extraBody, maxTokens, onUsage }: Required<Pick<ChatOpts, 'retries' | 'sleep'>>
+    & Pick<ChatOpts, 'extraBody' | 'maxTokens' | 'onUsage'>,
+): Promise<{ text: string; truncated: boolean }> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < retries; attempt++) {
+    const started = Date.now();
     try {
       const res = await client.chat.completions.create({
         model,
         messages: messages as never,
+        ...(maxTokens ? { max_tokens: maxTokens } : {}),
         ...extraBody,
       });
-      const text = res.choices[0]?.message?.content;
+      const choice = res.choices[0];
+      const text = choice?.message?.content;
       if (!text) throw new Error('empty response from provider');
-      return text;
+      onUsage?.({
+        promptTokens: res.usage?.prompt_tokens ?? 0,
+        completionTokens: res.usage?.completion_tokens ?? 0,
+        ms: Date.now() - started,
+      });
+      return { text, truncated: choice?.finish_reason === 'length' };
     } catch (e) {
       lastErr = e;
       if (!isRetryable(e)) throw e;
@@ -77,7 +131,15 @@ export async function chatWithClient(
   throw lastErr;
 }
 
-export function bindChat(p: ProviderProfile, model: string): ChatFn {
+export function bindChat(
+  p: ProviderProfile,
+  role: Role,
+  onUsage?: (u: UsageInfo & { role: Role; model: string }) => void,
+): ChatFn {
   const client = makeClient(p);
-  return (messages) => chatWithClient(client, model, messages, { extraBody: p.extraBody });
+  const { model, maxTokens, extraBody } = resolveRole(p, role);
+  return (messages) => chatWithClient(client, model, messages, {
+    extraBody, maxTokens,
+    onUsage: onUsage ? (u) => onUsage({ ...u, role, model }) : undefined,
+  });
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { plan, generateCandidate, verifyCandidate, type Ctx } from '@/lib/pipeline/stages';
-import type { PlanSpec, RenderReport } from '@/lib/types';
+import type { PlanSpec, RenderReport, Role } from '@/lib/types';
 import type { ChatMessage } from '@/lib/provider';
 
 const SPEC: PlanSpec = {
@@ -16,21 +16,39 @@ const staticRender: RenderReport = { ok: true, errors: [], animated: false, scre
 
 function ctx(over: Partial<Ctx> = {}): Ctx {
   return {
-    genChat: vi.fn(async () => '```html\n' + HTML + '\n```'),
-    visionChat: vi.fn(async () => '{"physicsOk": true, "issues": []}'),
+    chat: vi.fn(async (role: Role) =>
+      role === 'critic' || role === 'judge'
+        ? '{"physicsOk": true, "issues": []}'
+        : '```html\n' + HTML + '\n```'),
+    hasVision: true,
     render: vi.fn(async () => okRender),
     emit: vi.fn(),
     ...over,
   };
 }
 
+/** Заменяет только генераторские роли (planner/generator/fixer/refiner), критик/судья — дефолт. */
+function genOnly(impl: (messages: ChatMessage[]) => Promise<string>) {
+  return vi.fn(async (role: Role, messages: ChatMessage[]) =>
+    role === 'critic' || role === 'judge'
+      ? '{"physicsOk": true, "issues": []}'
+      : impl(messages));
+}
+
+/** Заменяет только критика/судью, остальные роли — дефолтный HTML. */
+function visionOnly(impl: (messages: ChatMessage[]) => Promise<string>) {
+  return vi.fn(async (role: Role, messages: ChatMessage[]) =>
+    role === 'critic' || role === 'judge' ? impl(messages) : '```html\n' + HTML + '\n```');
+}
+
 describe('plan', () => {
   it('parses spec json and passes image part', async () => {
-    const genChat = vi.fn(async (_messages: ChatMessage[]) => JSON.stringify(SPEC));
-    const c = ctx({ genChat });
+    const chat = vi.fn(async (_role: Role, _messages: ChatMessage[]) => JSON.stringify(SPEC));
+    const c = ctx({ chat });
     const spec = await plan(c, 'диффузия', 'data:image/png;base64,xxx');
     expect(spec.title).toBe('Диффузия');
-    const userMsg = genChat.mock.calls[0]![0].at(-1)!;
+    expect(chat.mock.calls[0]![0]).toBe('planner');
+    const userMsg = chat.mock.calls[0]![1].at(-1)!;
     expect(JSON.stringify(userMsg.content)).toContain('data:image/png');
   });
 });
@@ -58,7 +76,8 @@ describe('verifyCandidate', () => {
     const r = await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(render).toHaveBeenCalledTimes(2);
-    expect(c.genChat).toHaveBeenCalledTimes(1); // один вызов фиксера
+    const calls = (c.chat as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.filter((call) => call[0] === 'fixer')).toHaveLength(1); // один вызов фиксера
   });
 
   it('gives up after 2 fix attempts', async () => {
@@ -69,7 +88,7 @@ describe('verifyCandidate', () => {
   });
 
   it('skips critic when vision unavailable', async () => {
-    const r = await verifyCandidate(ctx({ visionChat: null }), SPEC, HTML, 0, 'Реализм');
+    const r = await verifyCandidate(ctx({ hasVision: false }), SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(r.critic).toBeNull();
   });
@@ -90,7 +109,7 @@ describe('verifyCandidate', () => {
   it('emits critic-verdict after a live critic runs', async () => {
     const visionChat = vi.fn(async () =>
       '{"physicsOk": false, "issues": ["стрелка направлена не туда"]}');
-    const c = ctx({ visionChat });
+    const c = ctx({ chat: visionOnly(visionChat) });
     await verifyCandidate(c, SPEC, HTML, 1, 'Наглядность');
     const verdictEvents = (c.emit as ReturnType<typeof vi.fn>).mock.calls
       .map(([e]) => e)
@@ -101,7 +120,7 @@ describe('verifyCandidate', () => {
   });
 
   it('no critic-verdict emitted when vision is unavailable', async () => {
-    const c = ctx({ visionChat: null });
+    const c = ctx({ hasVision: false });
     await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
     const verdictEvents = (c.emit as ReturnType<typeof vi.fn>).mock.calls
       .map(([e]) => e)
@@ -115,7 +134,7 @@ describe('verifyCandidate', () => {
       .mockResolvedValueOnce(staticRender)
       .mockResolvedValueOnce(okRender);
     const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
-    const c = ctx({ render, genChat });
+    const c = ctx({ render, chat: genOnly(genChat) });
     const r = await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(r.render.animated).toBe(true);
@@ -129,7 +148,7 @@ describe('verifyCandidate', () => {
   it('ok but persistently not animated after 2 fix attempts: stays alive, critic notified', async () => {
     const render = vi.fn(async () => staticRender);
     const visionChat = vi.fn(async (_messages: ChatMessage[]) => '{"physicsOk": true, "issues": []}');
-    const c = ctx({ render, visionChat });
+    const c = ctx({ render, chat: visionOnly(visionChat) });
     const r = await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(r.render.animated).toBe(false);
@@ -147,7 +166,9 @@ describe('verifyCandidate', () => {
       .mockResolvedValueOnce(badRender);
     const visionChat = vi.fn(async (_messages: ChatMessage[]) => '{"physicsOk": true, "issues": []}');
     const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
-    const c = ctx({ render, visionChat, genChat });
+    const chat = vi.fn(async (role: Role, messages: ChatMessage[]) =>
+      role === 'critic' || role === 'judge' ? visionChat(messages) : genChat(messages));
+    const c = ctx({ render, chat });
     const r = await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(r.html).toBe(HTML); // версия до фиксов, а не последняя (сломанная) попытка
@@ -168,7 +189,7 @@ describe('verifyCandidate', () => {
     );
     const render = vi.fn(async () => okRender);
     const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
-    const c = ctx({ render, genChat });
+    const c = ctx({ render, chat: genOnly(genChat) });
     const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0, 'Реализм');
     expect(r.alive).toBe(true);
     expect(genChat).toHaveBeenCalledTimes(1); // один вызов фиксера
@@ -191,7 +212,7 @@ describe('verifyCandidate', () => {
       .mockResolvedValueOnce(badRender)  // фикс 1: чистый, но сломан
       .mockResolvedValueOnce(badRender); // фикс 2: чистый, но сломан
     const genChat = vi.fn(async (_messages: ChatMessage[]) => '```html\n' + HTML + '\n```');
-    const c = ctx({ render, genChat });
+    const c = ctx({ render, chat: genOnly(genChat) });
     const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0, 'Реализм');
     expect(r.alive).toBe(false);
     expect(r.html).not.toContain('evil.example.com');
@@ -203,8 +224,8 @@ describe('verifyCandidate', () => {
       '<script src="https://evil.example.com/x.js"></script><canvas>',
     );
     const render = vi.fn(async () => okRender); // рендер «успешен», но HTML заражён
-    const genChat = vi.fn(async () => { throw new Error('provider down'); });
-    const c = ctx({ render, genChat });
+    const chat = vi.fn(async () => { throw new Error('provider down'); });
+    const c = ctx({ render, chat });
     const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0, 'Реализм');
     expect(r.alive).toBe(false); // whitelist-нарушение не может уйти в библиотеку
   });

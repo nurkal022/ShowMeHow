@@ -5,7 +5,8 @@ import path from 'node:path';
 import { runPipeline, refineExisting, MODES, resolveCandidates, CancelledError } from '@/lib/pipeline/run';
 import type { Ctx } from '@/lib/pipeline/stages';
 import { getArtifact, getMeta, listHistory, createSimulation } from '@/lib/storage';
-import type { PipelineEvent, RenderReport } from '@/lib/types';
+import type { ChatMessage } from '@/lib/provider';
+import type { PipelineEvent, RenderReport, Role } from '@/lib/types';
 import { STYLE_NAMES } from '@/lib/pipeline/prompts';
 
 const SPEC = { title: 'Маятник', subject: 'Физика', mode: '2d', learningGoals: ['x'],
@@ -16,33 +17,43 @@ const okRender: RenderReport = { ok: true, errors: [], animated: true,
 const GOOD = { physics: 9, clarity: 9, interactivity: 9, aesthetics: 9 };
 const WEAK = { physics: 6, clarity: 9, interactivity: 9, aesthetics: 9 };
 
+/** Роли, не идущие через vision-модель — соответствуют старому "genChat". */
+const TEXT_ROLES: Role[] = ['planner', 'generator', 'fixer', 'refiner'];
+
 function fakeCtx(opts: { firstScores?: object; renders?: RenderReport[] } = {}): {
   ctx: Ctx; events: PipelineEvent[];
 } {
   const events: PipelineEvent[] = [];
   let judgeCall = 0;
   const renders = opts.renders;
-  const ctx: Ctx = {
-    genChat: vi.fn(async (msgs) => {
-      const sys = String(msgs[0].content);
-      if (sys.includes('методист')) return JSON.stringify(SPEC);
-      return '```html\n' + HTML + '\n```';
-    }),
-    visionChat: vi.fn(async (msgs) => {
-      const sys = String(msgs[0].content);
-      // ВАЖНО: сначала проверяем судью — JUDGE_SYSTEM тоже содержит слово «рецензента»
-      if (!sys.includes('судья качества')) return '{"physicsOk": true, "issues": []}';
+  const chat = vi.fn(async (role: Role, msgs: ChatMessage[]) => {
+    if (role === 'planner') return JSON.stringify(SPEC);
+    if (role === 'critic') return '{"physicsOk": true, "issues": []}';
+    if (role === 'judge') {
       // судья: первый вызов — заданные баллы, дальше — хорошие
       const s = judgeCall++ === 0 ? (opts.firstScores ?? GOOD) : GOOD;
       const user = JSON.stringify(msgs[1].content);
       const n = (user.match(/Кандидат /g) ?? ['x']).length;
       return JSON.stringify({ winnerIndex: 0,
         scores: Array.from({ length: n }, () => s), feedback: 'улучшить' });
-    }),
+    }
+    return '```html\n' + HTML + '\n```'; // generator/fixer/refiner
+  });
+  const ctx: Ctx = {
+    chat,
+    hasVision: true,
     render: vi.fn(async () => renders ? renders.shift() ?? okRender : okRender),
     emit: (e) => events.push(e),
   };
   return { ctx, events };
+}
+
+function callsByRole(chat: unknown, role: Role) {
+  return (chat as ReturnType<typeof vi.fn>).mock.calls.filter((c) => c[0] === role);
+}
+
+function textCalls(chat: unknown) {
+  return (chat as ReturnType<typeof vi.fn>).mock.calls.filter((c) => TEXT_ROLES.includes(c[0]));
 }
 
 beforeEach(() => {
@@ -55,15 +66,16 @@ describe('runPipeline', () => {
     const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'fast' });
     expect(getMeta(meta.id).title).toBe('Маятник');
     expect(getArtifact(meta.id)).toContain('showmehow-runtime');
-    expect(ctx.visionChat).toHaveBeenCalledTimes(1); // только критик, судьи нет
+    expect(callsByRole(ctx.chat, 'critic')).toHaveLength(1); // только критик, судьи нет
+    expect(callsByRole(ctx.chat, 'judge')).toHaveLength(0);
     expect(events.at(-1)).toEqual({ type: 'done', simulationId: meta.id });
   });
 
   it('max mode: refines until threshold met', async () => {
     const { ctx, events } = fakeCtx({ firstScores: WEAK }); // первый суд: physics=6 < 8
     await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
-    // genChat: план + 3 кандидата + 1 рефайн = 5
-    expect(ctx.genChat).toHaveBeenCalledTimes(5);
+    // текстовые роли: план + 3 кандидата + 1 рефайн = 5
+    expect(textCalls(ctx.chat)).toHaveLength(5);
     const judgeEvents = events.filter((e) => e.type === 'judge-verdict');
     // единственный judge-verdict — от начального суда, маппит все три исходных индекса
     expect(judgeEvents).toHaveLength(1);
@@ -108,9 +120,7 @@ describe('runPipeline', () => {
     await expect(runPipeline(ctx, { prompt: 'маятник', mode: 'standard' }, signal))
       .rejects.toThrow(CancelledError);
     expect(events.some((e) => e.type === 'done')).toBe(false);
-    const judgeCalls = (ctx.visionChat as ReturnType<typeof vi.fn>).mock.calls
-      .filter(([msgs]) => String(msgs[0].content).includes('судья качества'));
-    expect(judgeCalls).toHaveLength(0); // суд так и не был вызван
+    expect(callsByRole(ctx.chat, 'judge')).toHaveLength(0); // суд так и не был вызван
   });
 
   it('CancelledError: cancel during candidate generation still emits generating stage end', async () => {
@@ -118,11 +128,10 @@ describe('runPipeline', () => {
     // Сигнал становится true ИЗНУТРИ генерации: первый вызов генератора взводит флаг,
     // так что checkCancelled следующего кандидата (внутри Promise.all-спана) бросает.
     let generatorCalled = false;
-    const origGen = ctx.genChat;
-    ctx.genChat = vi.fn(async (msgs) => {
-      const sys = String(msgs[0].content);
-      if (sys.includes('эксперт по учебным визуализациям')) generatorCalled = true;
-      return origGen(msgs);
+    const origChat = ctx.chat;
+    ctx.chat = vi.fn(async (role: Role, msgs: ChatMessage[]) => {
+      if (role === 'generator') generatorCalled = true;
+      return origChat(role, msgs);
     });
     await expect(runPipeline(ctx, { prompt: 'маятник', mode: 'standard' }, () => generatorCalled))
       .rejects.toThrow(CancelledError);
@@ -154,20 +163,25 @@ describe('runPipeline', () => {
     const events: PipelineEvent[] = [];
     const dead = '```html\n<html><body>DEADCAND</body></html>\n```';
     const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
-    const ctx: Ctx = {
-      genChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (sys.includes('методист')) return JSON.stringify(SPEC);
-        if (sys.includes('НАГЛЯДНОСТЬ')) return dead; // второй style hint → всегда мёртвый кандидат
-        const user = String(msgs[1]?.content ?? '');
-        if (user.includes('DEADCAND')) return dead; // фиксер тоже не спасает
-        return '```html\n' + HTML + '\n```';
-      }),
-      visionChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (!sys.includes('судья качества')) return '{"physicsOk": true, "issues": []}';
+    const chat = vi.fn(async (role: Role, msgs: ChatMessage[]) => {
+      if (role === 'planner') return JSON.stringify(SPEC);
+      if (role === 'critic') return '{"physicsOk": true, "issues": []}';
+      if (role === 'judge') {
         return JSON.stringify({ winnerIndex: 0, scores: [GOOD, GOOD], feedback: '' });
-      }),
+      }
+      if (role === 'generator') {
+        const sys = String(msgs[0].content);
+        if (sys.includes('НАГЛЯДНОСТЬ')) return dead; // второй style hint → всегда мёртвый кандидат
+        return '```html\n' + HTML + '\n```';
+      }
+      // fixer тоже не спасает
+      const user = String(msgs[1]?.content ?? '');
+      if (user.includes('DEADCAND')) return dead;
+      return '```html\n' + HTML + '\n```';
+    });
+    const ctx: Ctx = {
+      chat,
+      hasVision: true,
       render: vi.fn(async (html: string) => (html.includes('DEADCAND') ? badRender : okRender)),
       emit: (e) => events.push(e),
     };
@@ -182,25 +196,30 @@ describe('runPipeline', () => {
     const dead = '```html\n<html><body>DEADCAND</body></html>\n```';
     const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
     let judgeCall = 0;
-    const ctx: Ctx = {
-      genChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (sys.includes('методист')) return JSON.stringify(SPEC);
-        if (sys.includes('НАГЛЯДНОСТЬ')) return dead; // средний кандидат (1) — мёртвый
-        const user = String(msgs[1]?.content ?? '');
-        if (user.includes('DEADCAND')) return dead; // фиксер не спасает
-        return '```html\n' + HTML + '\n```';
-      }),
-      visionChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (!sys.includes('судья качества')) return '{"physicsOk": true, "issues": []}';
+    const chat = vi.fn(async (role: Role, msgs: ChatMessage[]) => {
+      if (role === 'planner') return JSON.stringify(SPEC);
+      if (role === 'critic') return '{"physicsOk": true, "issues": []}';
+      if (role === 'judge') {
         // Первый суд: живые [0, 2]; winnerIndex 1 → оригинальный индекс 2; слабые баллы
         // у победителя запускают доводку. Пересуд (rescore) возвращает GOOD — стоп.
         if (judgeCall++ === 0) {
           return JSON.stringify({ winnerIndex: 1, scores: [GOOD, WEAK], feedback: 'улучшить' });
         }
         return JSON.stringify({ winnerIndex: 0, scores: [GOOD], feedback: '' });
-      }),
+      }
+      if (role === 'generator') {
+        const sys = String(msgs[0].content);
+        if (sys.includes('НАГЛЯДНОСТЬ')) return dead; // средний кандидат (1) — мёртвый
+        return '```html\n' + HTML + '\n```';
+      }
+      // fixer не спасает
+      const user = String(msgs[1]?.content ?? '');
+      if (user.includes('DEADCAND')) return dead;
+      return '```html\n' + HTML + '\n```';
+    });
+    const ctx: Ctx = {
+      chat,
+      hasVision: true,
       render: vi.fn(async (html: string) => (html.includes('DEADCAND') ? badRender : okRender)),
       emit: (e) => events.push(e),
     };
@@ -236,7 +255,7 @@ describe('runPipeline', () => {
 
   it('vision unavailable: standard mode degrades with warning', async () => {
     const { ctx, events } = fakeCtx();
-    ctx.visionChat = null;
+    ctx.hasVision = false;
     const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'standard' });
     expect(getMeta(meta.id).warning).toMatch(/vision/i);
     expect(events.some((e) => e.type === 'warning')).toBe(true);
@@ -246,17 +265,15 @@ describe('runPipeline', () => {
 
   it('guard: judge returns malformed JSON -> falls back to first candidate with warning', async () => {
     const events: PipelineEvent[] = [];
+    const chat = vi.fn(async (role: Role) => {
+      if (role === 'planner') return JSON.stringify(SPEC);
+      if (role === 'judge') return 'это не JSON, а обычный текст без скобок';
+      if (role === 'critic') return '{"physicsOk": true, "issues": []}';
+      return '```html\n' + HTML + '\n```';
+    });
     const ctx: Ctx = {
-      genChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (sys.includes('методист')) return JSON.stringify(SPEC);
-        return '```html\n' + HTML + '\n```';
-      }),
-      visionChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (sys.includes('судья качества')) return 'это не JSON, а обычный текст без скобок';
-        return '{"physicsOk": true, "issues": []}';
-      }),
+      chat,
+      hasVision: true,
       render: vi.fn(async () => okRender),
       emit: (e) => events.push(e),
     };
@@ -271,20 +288,22 @@ describe('runPipeline', () => {
     const TAINTED_HTML = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
       + '<script src="https://evil.example.com/bad.js"></script></body></html>';
     const events: PipelineEvent[] = [];
+    const chat = vi.fn(async (role: Role, msgs: ChatMessage[]) => {
+      if (role === 'planner') return JSON.stringify(SPEC);
+      if (role === 'critic') return '{"physicsOk": true, "issues": []}';
+      if (role === 'fixer') {
+        // фиксер: возвращаем html как есть (заражённость/чистота сохраняется, рендер по-прежнему падает)
+        const user = String(msgs[1]?.content ?? '');
+        const m = user.match(/```html\n([\s\S]*?)\n```/);
+        return '```html\n' + (m ? m[1] : HTML) + '\n```';
+      }
+      const sys = String(msgs[0].content);
+      if (sys.includes('НАГЛЯДНОСТЬ')) return '```html\n' + HTML + '\n```'; // кандидат 1: чистый
+      return '```html\n' + TAINTED_HTML + '\n```'; // кандидат 0: заражённый
+    });
     const ctx: Ctx = {
-      genChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (sys.includes('методист')) return JSON.stringify(SPEC);
-        if (sys.includes('чинишь')) {
-          // фиксер: возвращаем html как есть (заражённость/чистота сохраняется, рендер по-прежнему падает)
-          const user = String(msgs[1]?.content ?? '');
-          const m = user.match(/```html\n([\s\S]*?)\n```/);
-          return '```html\n' + (m ? m[1] : HTML) + '\n```';
-        }
-        if (sys.includes('НАГЛЯДНОСТЬ')) return '```html\n' + HTML + '\n```'; // кандидат 1: чистый
-        return '```html\n' + TAINTED_HTML + '\n```'; // кандидат 0: заражённый
-      }),
-      visionChat: vi.fn(async () => '{"physicsOk": true, "issues": []}'),
+      chat,
+      hasVision: true,
       render: vi.fn(async () => badRender),
       emit: (e) => events.push(e),
     };
@@ -297,18 +316,19 @@ describe('runPipeline', () => {
     const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
     const TAINTED_HTML = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
       + '<script src="https://evil.example.com/bad.js"></script></body></html>';
+    const chat = vi.fn(async (role: Role, msgs: ChatMessage[]) => {
+      if (role === 'planner') return JSON.stringify(SPEC);
+      if (role === 'critic') return '{"physicsOk": true, "issues": []}';
+      if (role === 'fixer') {
+        const user = String(msgs[1]?.content ?? '');
+        const m = user.match(/```html\n([\s\S]*?)\n```/);
+        return '```html\n' + (m ? m[1] : TAINTED_HTML) + '\n```';
+      }
+      return '```html\n' + TAINTED_HTML + '\n```';
+    });
     const ctx: Ctx = {
-      genChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (sys.includes('методист')) return JSON.stringify(SPEC);
-        if (sys.includes('чинишь')) {
-          const user = String(msgs[1]?.content ?? '');
-          const m = user.match(/```html\n([\s\S]*?)\n```/);
-          return '```html\n' + (m ? m[1] : TAINTED_HTML) + '\n```';
-        }
-        return '```html\n' + TAINTED_HTML + '\n```';
-      }),
-      visionChat: vi.fn(async () => '{"physicsOk": true, "issues": []}'),
+      chat,
+      hasVision: true,
       render: vi.fn(async () => badRender),
       emit: () => {},
     };
@@ -319,21 +339,21 @@ describe('runPipeline', () => {
   it('guard: scores array shorter than candidates does not crash', async () => {
     const events: PipelineEvent[] = [];
     let judgeCall = 0;
-    const ctx: Ctx = {
-      genChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (sys.includes('методист')) return JSON.stringify(SPEC);
-        return '```html\n' + HTML + '\n```';
-      }),
-      visionChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (!sys.includes('судья качества')) return '{"physicsOk": true, "issues": []}';
+    const chat = vi.fn(async (role: Role) => {
+      if (role === 'planner') return JSON.stringify(SPEC);
+      if (role === 'critic') return '{"physicsOk": true, "issues": []}';
+      if (role === 'judge') {
         if (judgeCall++ === 0) {
           // намеренно короче числа кандидатов (3): winnerIndex указывает за пределы массива scores
           return JSON.stringify({ winnerIndex: 2, scores: [GOOD], feedback: 'улучшить' });
         }
         return JSON.stringify({ winnerIndex: 0, scores: [GOOD], feedback: '' });
-      }),
+      }
+      return '```html\n' + HTML + '\n```';
+    });
+    const ctx: Ctx = {
+      chat,
+      hasVision: true,
       render: vi.fn(async () => okRender),
       emit: (e) => events.push(e),
     };
@@ -345,7 +365,7 @@ describe('runPipeline', () => {
     expect(getMeta(meta.id).warning ?? '').not.toMatch(/судья недоступен/i);
     // ...и что рефайн реально состоялся: план(1) + 3 кандидата(3) + 1 рефайн(1) = 5
     // (нулевые баллы < порога 8 → круг 1; rescore возвращает GOOD ≥ 8 → стоп).
-    expect(ctx.genChat).toHaveBeenCalledTimes(5);
+    expect(textCalls(chat)).toHaveLength(5);
     // 1 начальный judge-verdict + 1 refine-round (не повторный judge-verdict)
     expect(events.filter((e) => e.type === 'judge-verdict')).toHaveLength(1);
     expect(events.filter((e) => e.type === 'refine-round')).toHaveLength(1);
@@ -387,14 +407,14 @@ describe('refineExisting', () => {
       { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
     const TAINTED = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
       + '<script src="https://evil.example.com/bad.js"></script></body></html>';
+    const chat = vi.fn(async (role: Role) => {
+      if (role === 'refiner') return '```html\n' + TAINTED + '\n```';
+      if (role === 'fixer') return '```html\n' + HTML + '\n```'; // фиксер вычищает CDN
+      return '```html\n' + HTML + '\n```';
+    });
     const ctx: Ctx = {
-      genChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (sys.includes('улучшаешь')) return '```html\n' + TAINTED + '\n```';
-        if (sys.includes('чинишь')) return '```html\n' + HTML + '\n```'; // фиксер вычищает CDN
-        return '```html\n' + HTML + '\n```';
-      }),
-      visionChat: vi.fn(async () => '{"physicsOk": true, "issues": []}'),
+      chat,
+      hasVision: true,
       render: vi.fn(async () => okRender),
       emit: () => {},
     };
@@ -407,13 +427,13 @@ describe('refineExisting', () => {
       { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
     const TAINTED = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
       + '<script src="https://evil.example.com/bad.js"></script></body></html>';
+    const chat = vi.fn(async (role: Role) => {
+      if (role === 'refiner') return '```html\n' + TAINTED + '\n```';
+      return '```html\n' + TAINTED + '\n```'; // фиксер не спасает — остаётся заражённым
+    });
     const ctx: Ctx = {
-      genChat: vi.fn(async (msgs) => {
-        const sys = String(msgs[0].content);
-        if (sys.includes('улучшаешь')) return '```html\n' + TAINTED + '\n```';
-        return '```html\n' + TAINTED + '\n```'; // фиксер не спасает — остаётся заражённым
-      }),
-      visionChat: vi.fn(async () => '{"physicsOk": true, "issues": []}'),
+      chat,
+      hasVision: true,
       render: vi.fn(async () => okRender),
       emit: () => {},
     };
