@@ -77,13 +77,24 @@ function numbersOf(state: unknown, ignore: string): Record<string, number> {
   return out;
 }
 
+/**
+ * Вернуть панель управления. Вызывается не только из finally съёмки: проглоченный
+ * сбой SHOW_PANEL оставил бы `.sim-panel` скрытой до конца сессии, а внутри неё живут
+ * кнопки паузы и сброса — Playwright по невидимому элементу не кликает, и все
+ * последующие пробы посыпались бы ЛОЖНЫМИ провалами. Поэтому восстановление
+ * повторяется перед каждым местом, где дальше будет клик, и ещё раз после цикла.
+ */
+async function showPanel(s: RenderSession): Promise<void> {
+  await safe(() => s.evaluate<boolean>(SHOW_PANEL), false);
+}
+
 /** Кадр только сцены и приборов: панель управления на время съёмки скрыта. */
 async function sceneShot(s: RenderSession): Promise<Buffer> {
   await safe(() => s.evaluate<boolean>(HIDE_PANEL), false);
   try {
     return await s.shot();
   } finally {
-    await safe(() => s.evaluate<boolean>(SHOW_PANEL), false);
+    await showPanel(s);
   }
 }
 
@@ -96,6 +107,8 @@ async function deltaOverWindow(
   s: RenderSession, ms: number, ignore: string,
 ): Promise<Record<string, number>> {
   const state = () => safe(() => s.evaluate<unknown>('window.__smh.state()'), null);
+  // Окно измеряется кликами по кнопке паузы — панель обязана быть видимой.
+  await showPanel(s);
   const before = numbersOf(await state(), ignore);
   await s.click(PLAYPAUSE);
   await s.wait(ms);
@@ -109,8 +122,18 @@ async function deltaOverWindow(
 }
 
 /**
- * Приращения различаются заметно сильнее, чем джиттер окна (несколько процентов).
- * Порог намеренно грубый: сомнение трактуем как «эффект не наблюдаем», а не как провал.
+ * Приращения признаём разными, если они расходятся сильнее, чем джиттер окна
+ * (несколько процентов). Порог в 15 % — компромисс, и его смещение надо понимать
+ * честно: при measurable=true «темп не изменился» ведёт в dead, то есть в ПРОВАЛ,
+ * поэтому грубый порог рискует завалить слабый, но настоящий эффект слайдера
+ * (меньше 15 % за окно). Ниже опускать порог нельзя — джиттер реального окна
+ * начнёт выдавать себя за эффект и проба потеряет смысл.
+ *
+ * Обратная сторона того же сравнения — ложный ПРОПУСК: величина, которая
+ * разгоняется сама по себе (координата при постоянном ускорении), даёт разные
+ * приращения за два соседних окна из-за одного лишь дрейфа, поэтому мёртвый
+ * слайдер на такой симуляции получит pass, а не fail. Это безопасная сторона
+ * ошибки: фиксера не отправляют чинить работающий код.
  */
 function ratesDiffer(a: Record<string, number>, b: Record<string, number>): boolean {
   for (const k of Object.keys(a)) {
@@ -274,6 +297,9 @@ export async function runProbes(s: RenderSession): Promise<ProbeReport> {
         );
       }
     }
+    // Страховка на случай проглоченного сбоя восстановления внутри цикла:
+    // дальше пробам ещё кликать по кнопке паузы (снятие паузы, проба NaN).
+    if (paused) await showPanel(s);
     const newErrors = s.errors().slice(errorsBefore);
     if (newErrors.length > 0) {
       add('sliders', 'Слайдеры влияют на симуляцию', 'fail',
