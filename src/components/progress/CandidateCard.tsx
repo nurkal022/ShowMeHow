@@ -46,6 +46,16 @@ export default function CandidateCard({ candidate }: { candidate: CandidateInfo 
           </details>
         )
       )}
+      {candidate.probes && (
+        <div className={candidate.probes.failed.length ? 'cand-probes warn' : 'cand-probes ok'}>
+          {candidate.probes.failed.length === 0
+            ? `✓ пробы пройдены (${Math.round(candidate.probes.passRate * 100)}%)`
+            : `⚠ пробы: ${candidate.probes.failed.length} провал(ов)`}
+          {candidate.probes.failed.length > 0 && (
+            <ul>{candidate.probes.failed.map((f) => <li key={f}>{f}</li>)}</ul>
+          )}
+        </div>
+      )}
       {candidate.scores && (
         <div className="score-bars">
           {SCORE_DIMS.map((d) => {

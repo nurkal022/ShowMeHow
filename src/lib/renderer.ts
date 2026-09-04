@@ -1,8 +1,12 @@
 import { chromium, type Browser } from 'playwright';
 import type { RenderReport } from './types';
 import { allowedPrefixes } from './cdn';
+import { runProbes, type ProbeReport } from './pipeline/probes';
 
-export type RenderFn = (html: string) => Promise<RenderReport>;
+export type RenderFn = (
+  html: string,
+  opts?: { timeoutMs?: number; shotTimes?: number[]; probes?: boolean },
+) => Promise<RenderReport>;
 
 type Launcher = () => Promise<Browser>;
 
@@ -136,8 +140,8 @@ export async function openSession(
 
 export async function renderArtifact(
   html: string,
-  { timeoutMs = 15000, shotTimes = [300, 1200, 3000] }:
-    { timeoutMs?: number; shotTimes?: number[] } = {},
+  { timeoutMs = 15000, shotTimes = [300, 1200, 3000], probes = false }:
+    { timeoutMs?: number; shotTimes?: number[]; probes?: boolean } = {},
 ): Promise<RenderReport> {
   let session: RenderSession;
   try {
@@ -166,6 +170,19 @@ export async function renderArtifact(
       session.errors().push('screenshot failure: ' + String(e));
     }
   }
+  // Пробы гоняем только на реально загрузившейся странице: если setContent
+  // бросил, страница в неопределённом состоянии — каждая проба провалится
+  // по той же причине, что уже видна в errors(), и завалит фиксера кучей
+  // вводящих в заблуждение фраз поверх настоящей ошибки загрузки.
+  let probeReport: ProbeReport | undefined;
+  if (probes && session.loaded()) {
+    try {
+      probeReport = await runProbes(session);
+      screenshots.push(...probeReport.shots);
+    } catch (e) {
+      session.errors().push('probe failure: ' + String(e));
+    }
+  }
   const errors = [...session.errors()];
   for (const url of session.blockedUrls()) {
     errors.push('Заблокирован запрос вне whitelist: ' + url);
@@ -173,5 +190,8 @@ export async function renderArtifact(
   await session.close();
   const animated = screenshots.length >= 2 &&
     !screenshots[0].equals(screenshots[screenshots.length - 1]);
-  return { ok: errors.length === 0 && screenshots.length > 0, errors, animated, screenshots };
+  return {
+    ok: errors.length === 0 && screenshots.length > 0,
+    errors, animated, screenshots, probes: probeReport,
+  };
 }

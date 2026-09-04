@@ -1,3 +1,5 @@
+import type { ProbeReport } from './pipeline/probes';
+
 export type QualityMode = 'fast' | 'standard' | 'max';
 
 /** Роли пайплайна, каждая может резолвиться в свою модель/лимит/параметры. */
@@ -76,11 +78,19 @@ export interface RenderReport {
   errors: string[];
   animated: boolean;
   screenshots: Buffer[];    // PNG
+  probes?: ProbeReport;
+}
+
+export type CriticSeverity = 'blocker' | 'major' | 'minor';
+
+export interface CriticIssue {
+  severity: CriticSeverity;
+  text: string;
 }
 
 export interface CriticReport {
   physicsOk: boolean;
-  issues: string[];
+  issues: CriticIssue[];
 }
 
 export interface RubricScores {
@@ -123,6 +133,9 @@ export type PipelineEvent =
       styleHint: string }
   | { type: 'screenshot'; index: number; dataUrl: string }
   | { type: 'critic-verdict'; index: number; physicsOk: boolean; issues: string[] }
+  | { type: 'probe-report'; index: number; passRate: number;
+      results: { id: string; label: string; status: 'pass' | 'fail' | 'skip'; detail: string }[] }
+  | { type: 'targeted-fix'; index: number; issues: string[] }
   | { type: 'judge-verdict'; scores: RubricScores[]; candidateIndices: number[];
       winnerIndex: number; feedback: string }
   | { type: 'refine-round'; round: number; before: RubricScores; after: RubricScores | null }

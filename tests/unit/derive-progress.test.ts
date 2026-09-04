@@ -142,4 +142,16 @@ describe('deriveProgress', () => {
     expect(s.candidates).toEqual([]);
     expect(s.stages.every((st) => st.status === 'pending')).toBe(true);
   });
+
+  it('probe-report и targeted-fix попадают в карточку кандидата', () => {
+    const state = deriveProgress([
+      { type: 'candidate', index: 0, status: 'ok', styleHint: 'Реализм' },
+      { type: 'probe-report', index: 0, passRate: 0.8,
+        results: [{ id: 'pause', label: 'Пауза', status: 'fail', detail: 'не работает' }] },
+      { type: 'targeted-fix', index: 0, issues: ['частицы вылетают'] },
+    ]);
+    expect(state.candidates[0].probes).toEqual({
+      passRate: 0.8, failed: ['Пауза: не работает'] });
+    expect(state.candidates[0].targetedFix).toEqual(['частицы вылетают']);
+  });
 });

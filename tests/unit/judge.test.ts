@@ -7,7 +7,8 @@ const SPEC = { title: 't', subject: 's', mode: '2d', learningGoals: [], physics:
   parameters: [], visualPlan: 'v' } as PlanSpec;
 
 function cand(): CandidateResult {
-  return { html: '<html/>', alive: true, critic: { physicsOk: true, issues: ['мелочь'] },
+  return { html: '<html/>', alive: true,
+    critic: { physicsOk: true, issues: [{ severity: 'minor', text: 'мелочь' }] },
     render: { ok: true, errors: [], animated: true, screenshots: [Buffer.from('x')] } };
 }
 const verdict = { winnerIndex: 1,

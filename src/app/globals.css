@@ -304,6 +304,10 @@ a { color: var(--accent); }
 .candidate-critic.ok { color: var(--success); }
 .candidate-critic.warn summary { color: var(--warn); cursor: pointer; }
 .candidate-critic.warn ul { margin: 4px 0 0; padding-left: 16px; color: var(--muted); }
+.cand-probes { font-size: 12px; margin-top: 6px; }
+.cand-probes.ok { color: var(--ok, #2e7d4f); }
+.cand-probes.warn { color: var(--warn, #a35b00); }
+.cand-probes ul { margin: 4px 0 0; padding-left: 16px; }
 .score-bars { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
 .score-bar-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }
 .score-bar-label { width: 74px; flex-shrink: 0; }

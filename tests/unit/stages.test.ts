@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { plan, generateCandidate, verifyCandidate, type Ctx } from '@/lib/pipeline/stages';
 import type { PlanSpec, RenderReport, Role } from '@/lib/types';
 import type { ChatMessage } from '@/lib/provider';
+import type { ProbeReport } from '@/lib/pipeline/probes';
 
 const SPEC: PlanSpec = {
   title: 'Диффузия', subject: 'Физика', mode: '2d',
@@ -235,5 +236,73 @@ describe('verifyCandidate', () => {
     const c = ctx({ render, chat });
     const r = await verifyCandidate(c, SPEC, htmlWithForbidden, 0, 'Реализм');
     expect(r.alive).toBe(false); // whitelist-нарушение не может уйти в библиотеку
+  });
+});
+
+const probesOk: ProbeReport = {
+  results: [{ id: 'pause', label: 'Пауза', status: 'pass', detail: '' }],
+  passRate: 1, failures: [], shots: [],
+};
+const probesBad: ProbeReport = {
+  results: [{ id: 'pause', label: 'Пауза останавливает анимацию', status: 'fail',
+    detail: 'кадры продолжают меняться' }],
+  passRate: 0, failures: ['Пауза останавливает анимацию: кадры продолжают меняться'], shots: [],
+};
+
+describe('пробы в verifyCandidate', () => {
+  it('провал пробы отправляет кандидата в фиксер и попадает в текст ошибок', async () => {
+    const render = vi.fn()
+      .mockResolvedValueOnce({ ...okRender, probes: probesBad })
+      .mockResolvedValueOnce({ ...okRender, probes: probesOk });
+    const c = ctx({ render });
+    const r = await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
+    expect(r.alive).toBe(true);
+    const fixerCalls = (c.chat as ReturnType<typeof vi.fn>).mock.calls
+      .filter((call) => call[0] === 'fixer');
+    expect(fixerCalls).toHaveLength(1);
+    expect(JSON.stringify(fixerCalls[0][1])).toContain('Пауза останавливает анимацию');
+  });
+
+  it('эмитит probe-report с долей пройденных проб', async () => {
+    const c = ctx({ render: vi.fn(async () => ({ ...okRender, probes: probesOk })) });
+    await verifyCandidate(c, SPEC, HTML, 1, 'Данные');
+    const ev = (c.emit as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0]).find((e) => e.type === 'probe-report');
+    expect(ev).toMatchObject({ index: 1, passRate: 1 });
+  });
+});
+
+describe('целевая починка по замечаниям критика', () => {
+  it('блокер от критика запускает один раунд правки и переpроверку', async () => {
+    const chat = vi.fn(async (role: string, _messages: ChatMessage[]) => {
+      if (role === 'critic') {
+        return JSON.stringify({ physicsOk: false, issues: [
+          { severity: 'blocker', text: 'частицы вылетают за стенки сосуда' }] });
+      }
+      return '```html\n' + HTML + '\n```';
+    });
+    const render = vi.fn(async () => ({ ...okRender, probes: probesOk }));
+    const c = ctx({ chat, render });
+    const r = await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
+    expect(r.alive).toBe(true);
+    const refinerCalls = chat.mock.calls.filter((call) => call[0] === 'refiner');
+    expect(refinerCalls).toHaveLength(1);
+    expect(JSON.stringify(refinerCalls[0][1])).toContain('вылетают за стенки');
+    const ev = (c.emit as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0]).find((e) => e.type === 'targeted-fix');
+    expect(ev).toMatchObject({ index: 0 });
+  });
+
+  it('только minor-замечания целевую починку не запускают', async () => {
+    const chat = vi.fn(async (role: string) => {
+      if (role === 'critic') {
+        return JSON.stringify({ physicsOk: true, issues: [
+          { severity: 'minor', text: 'подписи мелковаты' }] });
+      }
+      return '```html\n' + HTML + '\n```';
+    });
+    const c = ctx({ chat, render: vi.fn(async () => ({ ...okRender, probes: probesOk })) });
+    await verifyCandidate(c, SPEC, HTML, 0, 'Реализм');
+    expect(chat.mock.calls.filter((call) => call[0] === 'refiner')).toHaveLength(0);
   });
 });

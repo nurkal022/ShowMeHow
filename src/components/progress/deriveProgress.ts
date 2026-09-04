@@ -39,6 +39,8 @@ export interface CandidateInfo {
   critic?: { physicsOk: boolean; issues: string[] };
   scores?: RubricScores;
   isWinner: boolean;
+  probes?: { passRate: number; failed: string[] };
+  targetedFix?: string[];
 }
 
 export interface RefineRoundInfo {
@@ -110,6 +112,15 @@ export function deriveProgress(events: PipelineEvent[]): ProgressState {
         break;
       case 'critic-verdict':
         candidate(e.index).critic = { physicsOk: e.physicsOk, issues: e.issues };
+        break;
+      case 'probe-report':
+        candidate(e.index).probes = {
+          passRate: e.passRate,
+          failed: e.results.filter((r) => r.status === 'fail').map((r) => `${r.label}: ${r.detail}`),
+        };
+        break;
+      case 'targeted-fix':
+        candidate(e.index).targetedFix = e.issues;
         break;
       case 'judge-verdict':
         judgeFeedback = e.feedback;
