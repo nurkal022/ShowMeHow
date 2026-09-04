@@ -21,5 +21,6 @@
   "techniques": [
     "ode-integration",
     "live-chart"
-  ]
+  ],
+  "exemplar": true
 }

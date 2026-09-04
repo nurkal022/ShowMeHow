@@ -347,6 +347,7 @@
   var N_PARTICLES = 450;
   var particles = [];
   var running = true;
+  var needsRedraw = true;  // перерисовать кадр в паузе (слайдер, сброс, ресайз)
   var simT = 0;
   var lastFrame = null;
 
@@ -433,9 +434,9 @@
       simT += dt;
       drawFrame();
     }
-    // в паузе fx-канвас не трогаем: картинка полностью замирает,
-    // симуляционное время (simT) также стоит на месте
-    updateHud();
+    // В паузе не трогаем ни полотно, ни подписи: любая перерисовка в паузе —
+    // это дрожание кадра, из-за которого проба «Пауза» справедливо падает.
+    if (running || needsRedraw) { updateHud(); needsRedraw = false; }
     requestAnimationFrame(loop);
   }
 
@@ -443,22 +444,22 @@
   SimUI.title('Конвекция от батареи');
   SimUI.slider({
     label: 'Мощность батареи', min: 0, max: 100, step: 1, value: batteryPower, unit: '%',
-    onChange: function (v) { batteryPower = v; drawStatic(); },
+    onChange: function (v) { batteryPower = v; drawStatic(); needsRedraw = true; },
   });
   SimUI.slider({
     label: 'Открытость окна', min: 0, max: 100, step: 1, value: windowOpen, unit: '%',
-    onChange: function (v) { windowOpen = v; drawStatic(); },
+    onChange: function (v) { windowOpen = v; drawStatic(); needsRedraw = true; },
   });
   SimUI.playPause({
     onPlay: function () { running = true; },
     onPause: function () { running = false; },
-    onReset: function () { resetSim(); },
+    onReset: function () { resetSim(); needsRedraw = true; },
   });
 
   // ---------- Инициализация ----------
   // resize() ДО initParticles(): layout() должен посчитать реальные
   // границы комнаты, иначе частицы стартуют в нулевом прямоугольнике.
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', function () { resize(); needsRedraw = true; });
   resize();
   initParticles();
   requestAnimationFrame(loop);

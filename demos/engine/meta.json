@@ -25,5 +25,6 @@
     "kinematic-chain",
     "particles",
     "3d-scene"
-  ]
+  ],
+  "exemplar": true
 }

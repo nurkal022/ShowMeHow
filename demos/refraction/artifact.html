@@ -144,6 +144,7 @@
   var n2 = 1.0;
 
   var running = true;
+  var needsRedraw = true;  // перерисовать кадр в паузе (слайдер, сброс, ресайз)
   var lastFrame = null;
 
   // ---------- Геометрия / оптика ----------
@@ -394,8 +395,13 @@
       advancePhotons(dt, lenInc, lenRefl, lenTr);
     }
 
-    drawFrame();
-    updateHud();
+    // В паузе не трогаем ни полотно, ни подписи: любая перерисовка в паузе —
+    // это дрожание кадра, из-за которого проба «Пауза» справедливо падает.
+    if (running || needsRedraw) {
+      drawFrame();
+      updateHud();
+      needsRedraw = false;
+    }
     requestAnimationFrame(loop);
   }
 
@@ -403,11 +409,11 @@
   SimUI.title('Преломление и полное внутреннее отражение');
   var angleSlider = SimUI.slider({
     label: 'Угол падения', min: 0, max: 89, step: 1, value: angleDeg, unit: '°',
-    onChange: function (v) { angleDeg = v; },
+    onChange: function (v) { angleDeg = v; needsRedraw = true; },
   });
   var n1Slider = SimUI.slider({
     label: 'Показатель преломления n₁', min: 1.0, max: 2.0, step: 0.01, value: n1, unit: '',
-    onChange: function (v) { n1 = v; drawStatic(); },
+    onChange: function (v) { n1 = v; drawStatic(); needsRedraw = true; },
   });
   SimUI.playPause({
     onPlay: function () { running = true; lastFrame = null; },
@@ -421,11 +427,12 @@
       n1Slider.dispatchEvent(new Event('input'));
       initPhotons();
       drawStatic();
+      needsRedraw = true;
     },
   });
 
   // ---------- Инициализация ----------
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', function () { resize(); needsRedraw = true; });
   resize();
   computeOptics();
   requestAnimationFrame(loop);

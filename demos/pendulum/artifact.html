@@ -4,81 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Математический маятник</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
   canvas.scene { position: fixed; top: 0; left: 0; display: block; }
   #bg { z-index: 0; }
   #fx { z-index: 1; }
-  #chart-panel {
-    position: fixed; right: 12px; top: 12px; z-index: 10;
-    width: 300px; padding: 12px 14px;
-    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
-    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
-    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  }
-  #chart-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
-  #chart-legend { display: flex; gap: 10px; font-size: 10.5px; color: var(--sim-muted, #8b95a3); margin-top: 6px; flex-wrap: wrap; }
-  #chart-legend span { display: inline-flex; align-items: center; gap: 4px; }
-  #chart-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
-  #formula-panel {
-    position: fixed; left: 12px; bottom: 12px; z-index: 10;
-    width: 300px; padding: 14px;
-    background: color-mix(in srgb, var(--sim-panel, #1a2029) 92%, transparent);
-    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
-    color: var(--sim-text, #e8ecf1); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  }
-  #formula-panel h2 { font-size: 13px; margin: 0 0 8px; color: var(--sim-muted, #8b95a3); font-weight: 600; }
-  #formula-katex { font-size: 18px; margin-bottom: 8px; }
-  #formula-nums { font-size: 12px; line-height: 1.6; color: var(--sim-muted, #8b95a3); font-variant-numeric: tabular-nums; }
-  #formula-nums b { color: var(--sim-text, #e8ecf1); font-weight: 600; }
-  #formula-note { font-size: 10.5px; margin-top: 8px; color: #5c6675; line-height: 1.4; }
 </style>
 </head>
 <body>
 <canvas id="bg" class="scene"></canvas>
 <canvas id="fx" class="scene"></canvas>
 
-<div id="chart-panel">
-  <h2>Энергия во времени (окно 20 с)</h2>
-  <canvas id="energyChart" width="272" height="170"></canvas>
-  <div id="chart-legend">
-    <span><i style="background:#4f8ff7"></i>Eкин</span>
-    <span><i style="background:#f7b84f"></i>Eпот</span>
-    <span><i style="background:#7ee787"></i>Eполн</span>
-  </div>
-</div>
-
-<div id="formula-panel">
-  <h2>Период колебаний</h2>
-  <div id="formula-katex">T = 2\pi\sqrt{L/g}</div>
-  <div id="formula-nums">
-    L = <b id="valL">-</b> м, затухание b = <b id="valB">-</b><br>
-    T (расчёт) = <b id="valTheor">-</b> с<br>
-    T (измерено, переходы θ=0) = <b id="valMeas">-</b> с<br>
-    t (симуляция) = <b id="valT">-</b> с
-  </div>
-  <div id="formula-note">
-    Масса груза принята равной 1 кг (энергии — в Дж/кг). Интегрирование —
-    полунеявный метод Эйлера с фиксированным субшагом ~4 мс (накопитель времени),
-    что не даёт энергии нарастать при выключенном затухании.
-  </div>
-</div>
-
 <script>
 (function () {
   'use strict';
-
-  // ---------- KaTeX (с деградацией в текст, если CDN недоступен) ----------
-  function renderFormula(el, tex) {
-    if (typeof katex !== 'undefined') {
-      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
-    }
-    el.textContent = tex;
-  }
-  renderFormula(document.getElementById('formula-katex'), 'T = 2\\pi\\sqrt{L/g}');
 
   // ---------- Canvas setup ----------
   var bg = document.getElementById('bg');
@@ -90,25 +29,10 @@
   var pivot = { x: 0, y: 0 };
   var PPM = 140; // пикселей на метр (пересчитывается при resize)
 
-  var chartPanel = document.getElementById('chart-panel');
-
-  // ---------- Позиционирование панели графика (избегаем перекрытия с SimUI) ----------
-  function layoutChartPanel() {
-    chartPanel.style.top = '12px';
-    var simPanel = document.querySelector('.sim-panel');
-    if (!simPanel) return;
-    var simRect = simPanel.getBoundingClientRect();
-    var panelRect = chartPanel.getBoundingClientRect();
-    var overlap = panelRect.left < simRect.right && panelRect.right > simRect.left &&
-      panelRect.top < simRect.bottom && panelRect.bottom > simRect.top;
-    if (overlap) chartPanel.style.top = (simRect.bottom + 14) + 'px';
-  }
-
-  // ---------- Геометрия сцены: точка подвеса вверху по центру области слева от графика ----------
+  // ---------- Геометрия сцены: точка подвеса вверху по центру ----------
+  // Панели кита пристыкованы к углам, поэтому центр окна свободен под сцену.
   function layout() {
-    var chartRect = chartPanel.getBoundingClientRect();
-    var leftAreaRight = Math.max(W * 0.35, chartRect.left - 24);
-    pivot.x = leftAreaRight * 0.5;
+    pivot.x = W * 0.5;
     pivot.y = Math.max(70, H * 0.12);
     var availH = H - pivot.y - 40;
     PPM = Math.max(60, Math.min(220, availH / 3.3)); // хватает места для L до 3м
@@ -126,7 +50,6 @@
     });
     bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     fxCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    layoutChartPanel();
     layout();
     drawStatic();
     fxCtx.clearRect(0, 0, W, H);
@@ -202,6 +125,15 @@
     return { Ek: Ek, Ep: Ep, Et: Ek + Ep };
   }
 
+  /** Амплитуда текущего размаха из полной энергии: cos θmax = 1 − E/(gL). */
+  function amplitudeDeg() {
+    var c = 1 - energies().Et / (G * L);
+    return Math.acos(Math.max(-1, Math.min(1, c))) * 180 / Math.PI;
+  }
+
+  /** Период малых колебаний по формуле T = 2π√(L/g). */
+  function theoreticalPeriod() { return 2 * Math.PI * Math.sqrt(L / G); }
+
   function substep() {
     // полунеявный (симплектический) метод Эйлера: сначала скорость, потом угол
     // на уже обновлённой скорости — это и даёт отсутствие векового роста энергии.
@@ -235,8 +167,7 @@
     lastPosCrossT = null;
     measuredPeriod = null;
     lastChartT = -1;
-    chartData.length = 0;
-    resetChart();
+    energyChart.clear();
     fxCtx.clearRect(0, 0, W, H);
   }
 
@@ -281,80 +212,9 @@
     fxCtx.stroke();
   }
 
-  // ---------- Chart.js: Eкин, Eпот, Eполн от времени (скользящее окно 20с) ----------
-  var chartData = []; // {t, Ek, Ep, Et}
-  var WINDOW_S = 20;
-  var CHART_DT = 0.1; // обновление графика не чаще ~10Гц
+  // ---------- Точка графика не чаще ~10 Гц ----------
+  var CHART_DT = 0.1;
   var lastChartT = -1;
-  var energyChart = null;
-
-  function initChart() {
-    var ctx = document.getElementById('energyChart').getContext('2d');
-    energyChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        datasets: [
-          { label: 'Eкин', data: [], borderColor: '#4f8ff7', backgroundColor: 'transparent', borderWidth: 1.6, pointRadius: 0, tension: 0.15 },
-          { label: 'Eпот', data: [], borderColor: '#f7b84f', backgroundColor: 'transparent', borderWidth: 1.6, pointRadius: 0, tension: 0.15 },
-          { label: 'Eполн', data: [], borderColor: '#7ee787', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.15 },
-        ],
-      },
-      options: {
-        responsive: false,
-        animation: false,
-        normalized: true,
-        parsing: false,
-        interaction: { intersect: false },
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        scales: {
-          x: { type: 'linear', ticks: { color: '#5c6675', font: { size: 9 }, maxTicksLimit: 5 }, grid: { color: 'rgba(140,160,190,0.08)' } },
-          y: { ticks: { color: '#5c6675', font: { size: 9 }, maxTicksLimit: 5 }, grid: { color: 'rgba(140,160,190,0.08)' }, beginAtZero: true },
-        },
-      },
-    });
-  }
-
-  function resetChart() {
-    if (!energyChart) return;
-    energyChart.data.datasets[0].data = [];
-    energyChart.data.datasets[1].data = [];
-    energyChart.data.datasets[2].data = [];
-    energyChart.update('none');
-  }
-
-  function pushChartPoint(t, e) {
-    chartData.push({ t: t, Ek: e.Ek, Ep: e.Ep, Et: e.Et });
-    var cutoff = t - WINDOW_S;
-    while (chartData.length && chartData[0].t < cutoff) chartData.shift();
-    var d0 = [], d1 = [], d2 = [];
-    for (var i = 0; i < chartData.length; i++) {
-      d0.push({ x: chartData[i].t, y: chartData[i].Ek });
-      d1.push({ x: chartData[i].t, y: chartData[i].Ep });
-      d2.push({ x: chartData[i].t, y: chartData[i].Et });
-    }
-    energyChart.data.datasets[0].data = d0;
-    energyChart.data.datasets[1].data = d1;
-    energyChart.data.datasets[2].data = d2;
-    var minX = chartData.length ? chartData[0].t : 0;
-    energyChart.options.scales.x.min = minX;
-    energyChart.options.scales.x.max = minX + WINDOW_S;
-    energyChart.update('none');
-  }
-
-  // ---------- HUD ----------
-  var elL = document.getElementById('valL');
-  var elB = document.getElementById('valB');
-  var elTheor = document.getElementById('valTheor');
-  var elMeas = document.getElementById('valMeas');
-  var elT = document.getElementById('valT');
-
-  function updateHud() {
-    elL.textContent = L.toFixed(2);
-    elB.textContent = damping.toFixed(2);
-    elTheor.textContent = (2 * Math.PI * Math.sqrt(L / G)).toFixed(2);
-    elMeas.textContent = measuredPeriod !== null ? measuredPeriod.toFixed(2) : '—';
-    elT.textContent = simT.toFixed(1);
-  }
 
   // ---------- Главный цикл (dt-based, не завязан на FPS) ----------
   function loop(now) {
@@ -366,11 +226,17 @@
       drawFrame();
       if (simT - lastChartT >= CHART_DT) {
         lastChartT = simT;
-        pushChartPoint(simT, energies());
+        var e = energies();
+        energyChart.push(simT, [e.Ek, e.Ep, e.Et]);
+        rL.set(L);
+        rAmp.set(amplitudeDeg());
+        rTheor.set(theoreticalPeriod());
+        rMeas.set(measuredPeriod === null ? '—' : measuredPeriod);
+        rTime.set(simT);
+        periodFormula.set({ L: L, g: G, T: theoreticalPeriod() });
       }
     }
-    // в паузе fx-канвас и график не трогаем: и картинка, и время (simT) замирают
-    updateHud();
+    // в паузе fx-канвас, приборы и график не трогаем: и картинка, и время (simT) замирают
     requestAnimationFrame(loop);
   }
 
@@ -394,9 +260,38 @@
     onReset: function () { resetSim(); },
   });
 
+  var energyChart = SimUI.chart({
+    title: 'Энергия', xLabel: 't, с', yLabel: 'E, Дж',
+    series: [{ name: 'кинетическая', color: '#4f8ff7' },
+      { name: 'потенциальная', color: '#ffb27a' },
+      { name: 'полная', color: '#8b95a3' }],
+    corner: 'br',
+  });
+  var rL = SimUI.readout({ label: 'Длина', unit: 'м', digits: 2, corner: 'bl' });
+  var rAmp = SimUI.readout({ label: 'Амплитуда', unit: '°', digits: 1, corner: 'bl' });
+  var rTheor = SimUI.readout({ label: 'Период (теория)', unit: 'с', digits: 3, corner: 'bl' });
+  var rMeas = SimUI.readout({ label: 'Период (измеренный)', unit: 'с', digits: 3, corner: 'bl' });
+  var rTime = SimUI.readout({ label: 'Время', unit: 'с', digits: 1, corner: 'bl' });
+  var periodFormula = SimUI.formula({
+    title: 'Период малых колебаний',
+    tex: 'T = 2\\pi\\sqrt{L/g}',
+    vars: { L: { label: 'L', unit: 'м' }, g: { label: 'g', unit: 'м/с²' },
+      T: { label: 'T', unit: 'с' } },
+    note: 'Формула верна для малых углов; при большой амплитуде измеренный период больше теоретического.',
+    corner: 'tl',
+  });
+
+  SimUI.expose({
+    getState: function () {
+      var e = energies();
+      return { t: simT, angle: theta, omega: omega, length: L,
+        kinetic: e.Ek, potential: e.Ep };
+    },
+    reset: resetSim,
+  });
+
   // ---------- Инициализация ----------
   window.addEventListener('resize', resize);
-  initChart();
   resize();
   requestAnimationFrame(loop);
 })();

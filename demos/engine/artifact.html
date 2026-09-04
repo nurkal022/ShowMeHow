@@ -4,84 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Четырёхтактный двигатель внутреннего сгорания</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
   #scene { position: fixed; top: 0; left: 0; display: block; z-index: 0; }
-
-  #stroke-banner {
-    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-    z-index: 10; min-width: 260px; padding: 10px 22px; text-align: center;
-    background: color-mix(in srgb, #1a2029 88%, transparent);
-    border: 1px solid #2a3341; border-bottom: 3px solid var(--stroke-color, #4f8ff7);
-    border-radius: 12px; backdrop-filter: blur(6px);
-    box-shadow: 0 0 22px 0 color-mix(in srgb, var(--stroke-color, #4f8ff7) 35%, transparent);
-    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-    transition: top 0.15s ease;
-  }
-  #stroke-banner .name { font-size: 22px; font-weight: 700; color: #e8ecf1; letter-spacing: 0.3px; }
-  #stroke-banner .idx { font-size: 12px; color: #8b95a3; margin-top: 2px; }
-
-  #formula-panel {
-    position: fixed; left: 12px; bottom: 12px; z-index: 10;
-    width: 320px; padding: 14px;
-    background: color-mix(in srgb, #1a2029 92%, transparent);
-    border: 1px solid #2a3341; border-radius: 12px; backdrop-filter: blur(6px);
-    color: #e8ecf1; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  }
-  #formula-panel h2 { font-size: 13px; margin: 0 0 8px; color: #8b95a3; font-weight: 600; }
-  #formula-katex { font-size: 16px; margin-bottom: 8px; }
-  #formula-nums { font-size: 12px; line-height: 1.65; color: #8b95a3; font-variant-numeric: tabular-nums; }
-  #formula-nums b { color: #e8ecf1; font-weight: 600; }
-  #formula-note { font-size: 10.5px; margin-top: 8px; color: #5c6675; line-height: 1.4; }
 </style>
 </head>
 <body>
 <canvas id="scene"></canvas>
-
-<div id="stroke-banner">
-  <div class="name" id="strokeName">Впуск</div>
-  <div class="idx" id="strokeIdx">Такт 1 из 4 &middot; впускной клапан открыт</div>
-</div>
-
-<div id="formula-panel">
-  <h2>Как это работает</h2>
-  <div id="formula-katex">x = r\cos\theta + \sqrt{l^2 - r^2\sin^2\theta}</div>
-  <div id="formula-nums">
-    Кривошипно-шатунный механизм превращает вращение коленвала в
-    возвратно-поступательное движение поршня: x — положение поршня,
-    r — радиус кривошипа, l — длина шатуна, θ — угол поворота коленвала.<br><br>
-    Обороты = <b id="valRpm">-</b> об/мин<br>
-    Угол коленвала θ = <b id="valTheta">-</b>°<br>
-    Текущий такт = <b id="valStroke">-</b>
-  </div>
-  <div id="formula-note">Полный рабочий цикл (впуск → сжатие → рабочий ход → выпуск) занимает 2 оборота коленвала — 720°.</div>
-</div>
 
 <!--
   Примечание про CDN three.js: пакет three@0.164.0 на jsdelivr больше не
   публикует классическую глобальную сборку build/three.min.js (только
   build/three.module.js / three.module.min.js — three.js убрал UMD-сборку
   начиная примерно с r150, build/three.min.js отдаёт 404). Поэтому здесь
-  используется ES-модуль ТОЙ ЖЕ версии 0.164.0 с того же CDN через
-  <script type="module">; OrbitControls по-прежнему НЕ импортируется —
-  камера фиксирована с автоповоротом.
+  используется ES-модуль ТОЙ ЖЕ версии 0.164.0 через importmap, который
+  вставляет кит: голые имена 'three' и 'three/addons/...' резолвятся в
+  разрешённые whitelist'ом адреса CDN.
 -->
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.module.min.js';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 (function () {
   'use strict';
-
-  // ---------- KaTeX (с деградацией в текст, если CDN недоступен) ----------
-  function renderFormula(el, tex) {
-    if (typeof katex !== 'undefined') {
-      try { katex.render(tex, el, { throwOnError: false }); return; } catch (e) { /* fall through */ }
-    }
-    el.textContent = tex;
-  }
-  renderFormula(document.getElementById('formula-katex'), 'x = r\\cos\\theta + \\sqrt{l^2 - r^2\\sin^2\\theta}');
 
   // ---------- Renderer / scene / camera ----------
   var canvas = document.getElementById('scene');
@@ -98,6 +43,16 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.m
   var CENTER = new THREE.Vector3(0, 1.4, 0);
   var camera = new THREE.PerspectiveCamera(48, 1, 0.1, 50);
 
+  // Камера: автоблёт по кругу, но любое касание мышью отдаёт управление зрителю.
+  var controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(CENTER);
+  controls.enableDamping = true;
+  controls.enablePan = false;
+  controls.minDistance = 3.5;
+  controls.maxDistance = 12;
+  var autoRotate = true;
+  controls.addEventListener('start', function () { autoRotate = false; });
+
   function resize() {
     var w = window.innerWidth, h = window.innerHeight;
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -105,22 +60,6 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.m
     renderer.setSize(w, h, true);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    layoutBanner();
-  }
-
-  // ---------- Панель такта: избегаем перекрытия с SimUI-панелью (справа сверху) ----------
-  var banner = document.getElementById('stroke-banner');
-  function layoutBanner() {
-    banner.style.top = '12px';
-    var simPanel = document.querySelector('.sim-panel');
-    if (!simPanel) return;
-    var simRect = simPanel.getBoundingClientRect();
-    var bannerRect = banner.getBoundingClientRect();
-    var overlap = bannerRect.left < simRect.right && bannerRect.right > simRect.left &&
-      bannerRect.top < simRect.bottom && bannerRect.bottom > simRect.top;
-    if (overlap) {
-      banner.style.top = (simRect.bottom + 14) + 'px';
-    }
   }
 
   // ---------- Освещение (2-3 источника, без теней) ----------
@@ -322,6 +261,12 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.m
     { name: 'Выпуск', sub: 'выпускной клапан открыт', color: '#8b95a3' },
   ];
 
+  /** Подъём клапана: плавный кулачковый профиль, открыт только в «свой» такт. */
+  function valveLift(isIntake, st) {
+    var open = isIntake ? st.strokeIndex === 0 : st.strokeIndex === 3;
+    return open ? Math.sin(Math.PI * st.strokeFrac) * VALVE_MAX_LIFT : 0;
+  }
+
   function cycleState(theta) {
     var TWO_PI = Math.PI * 2, FOUR_PI = Math.PI * 4;
     var cyclePos = ((theta % FOUR_PI) + FOUR_PI) % FOUR_PI;
@@ -331,6 +276,38 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.m
     return { strokeIndex: strokeIndex, strokeFrac: strokeFrac, crankPhys: crankPhys };
   }
 
+  // ---------- Термодинамика цикла Отто ----------
+  var GAMMA = 1.4;            // показатель адиабаты для воздуха
+  var P0 = 1.0;               // атмосферное давление, бар
+  var IGNITION_RATIO = 3.2;   // скачок давления при сгорании при постоянном объёме
+  var eps = 10;               // степень сжатия, слайдер 6..14
+  var BORE_AREA = Math.PI * PISTON_RADIUS * PISTON_RADIUS;  // условные единицы площади
+
+  /** Объём над поршнем в условных литрах: рабочий объём + камера сгорания. */
+  function volume(theta, epsilon) {
+    var swept = BORE_AREA * (PISTON_MAX_Y - pistonY(theta));
+    var displacement = BORE_AREA * (PISTON_MAX_Y - PISTON_MIN_Y);
+    var clearance = displacement / (epsilon - 1);
+    return clearance + swept;
+  }
+
+  /** Давление в цилиндре по тактам: адиабаты сжатия и расширения, изобары обмена. */
+  function pressure(strokeIndex, theta, epsilon) {
+    var vmax = volume(Math.PI, epsilon);   // НМТ
+    var vmin = volume(0, epsilon);         // ВМТ
+    var v = volume(theta, epsilon);
+    if (strokeIndex === 0) return P0;
+    if (strokeIndex === 1) return P0 * Math.pow(vmax / v, GAMMA);
+    if (strokeIndex === 2) {
+      var p3 = P0 * Math.pow(vmax / vmin, GAMMA) * IGNITION_RATIO;
+      return p3 * Math.pow(vmin / v, GAMMA);
+    }
+    return P0 * 1.08;
+  }
+
+  /** Термический КПД идеального цикла Отто. */
+  function efficiency(epsilon) { return 1 - Math.pow(epsilon, 1 - GAMMA); }
+
   // ---------- Состояние симуляции ----------
   var rpm = 600;             // об/мин, слайдер
   var theta = 0;             // накопленный угол поворота коленвала, рад
@@ -338,39 +315,24 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.m
   var lastFrame = null;
   var orbitAngle = 0.4;
   var intakeBudget = 0, exhaustBudget = 0;
-  var lastStrokeIndex = -1;
-  var strokeNameEl = document.getElementById('strokeName');
-  var strokeIdxEl = document.getElementById('strokeIdx');
-  var valRpm = document.getElementById('valRpm');
-  var valTheta = document.getElementById('valTheta');
-  var valStroke = document.getElementById('valStroke');
+  var lastCycleDeg = 0;      // для сброса развёртки фаз на границе цикла
 
   function resetSim() {
     theta = 0;
     lastFrame = null;
     intakeBudget = 0; exhaustBudget = 0;
-    lastStrokeIndex = -1;
+    lastCycleDeg = 0;
+    chartTheta = 0;
     resetParticles();
-  }
-
-  function updateBanner(strokeIndex) {
-    if (strokeIndex === lastStrokeIndex) return;
-    lastStrokeIndex = strokeIndex;
-    var s = STROKES[strokeIndex];
-    banner.style.setProperty('--stroke-color', s.color);
-    banner.style.background = 'linear-gradient(180deg, color-mix(in srgb, ' + s.color +
-      ' 30%, transparent), color-mix(in srgb, #1a2029 90%, transparent))';
-    strokeNameEl.textContent = s.name;
-    strokeIdxEl.textContent = 'Такт ' + (strokeIndex + 1) + ' из 4 · ' + s.sub;
+    pvChart.clear();
+    valveChart.clear();
   }
 
   function stepPhysics(dt) {
     var omega = (rpm * Math.PI * 2) / 60; // рад/с
     theta += omega * dt;
-    orbitAngle += 0.15 * dt;
 
     var st = cycleState(theta);
-    updateBanner(st.strokeIndex);
 
     var py = pistonY(st.crankPhys);
     piston.position.set(0, py, 0);
@@ -382,10 +344,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.m
     placeLink(crankWeb, origin3, crankPin3);
     placeLink(rod, crankPin3, pistonPin3);
 
-    // Клапаны: плавный (синусоидальный) кулачковый профиль, открыт только
-    // в течение "своего" такта.
-    var intakeLift = st.strokeIndex === 0 ? Math.sin(Math.PI * st.strokeFrac) * VALVE_MAX_LIFT : 0;
-    var exhaustLift = st.strokeIndex === 3 ? Math.sin(Math.PI * st.strokeFrac) * VALVE_MAX_LIFT : 0;
+    var intakeLift = valveLift(true, st);
+    var exhaustLift = valveLift(false, st);
     intakeValve.position.y = VALVE_SEAT_Y - intakeLift;
     exhaustValve.position.y = VALVE_SEAT_Y - exhaustLift;
     intakeValve.userData.mat.color.copy(INTAKE_COLOR_CLOSED).lerp(INTAKE_COLOR_OPEN, intakeLift / VALVE_MAX_LIFT);
@@ -422,51 +382,172 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.0/build/three.m
     }
     updateParticles(dt);
 
-    valRpm.textContent = rpm.toFixed(0);
-    valTheta.textContent = (st.crankPhys * 180 / Math.PI).toFixed(0);
-    valStroke.textContent = STROKES[st.strokeIndex].name + ' (' + (st.strokeIndex + 1) + '/4)';
+    // ---------- Приборы ----------
+    strokeBanner.set(st.strokeIndex);
+    rRpm.set(rpm);
+    rTheta.set(st.crankPhys * 180 / Math.PI);
+    rStroke.set(STROKES[st.strokeIndex].name + ' (' + (st.strokeIndex + 1) + '/4)');
+    rPress.set(pressure(st.strokeIndex, st.crankPhys, eps));
+    rEff.set(efficiency(eps) * 100);
+    sampleCharts();
+    kinematics.set({ r: R, l: L, theta: st.crankPhys * 180 / Math.PI, x: pistonY(st.crankPhys) });
+    otto.set({ eps: eps, gamma: GAMMA, eta: efficiency(eps) * 100 });
   }
 
-  function updateCamera() {
-    var Rc = 5.4;
-    camera.position.set(
-      CENTER.x + Rc * Math.sin(orbitAngle),
-      CENTER.y + 0.55,
-      CENTER.z + Rc * Math.cos(orbitAngle),
-    );
-    camera.lookAt(CENTER);
+  // Точки на диаграммы кладём не по кадрам, а через равные приращения угла
+  // коленвала: форма кривых тогда не зависит ни от оборотов, ни от частоты
+  // кадров. p–V замкнута сама на себя — там достаточно кольцевого буфера ровно
+  // на один цикл (720° / 4° = 180 точек); развёртку фаз на границе цикла
+  // стираем, как луч осциллографа, иначе циклы наслаиваются друг на друга.
+  var CHART_STEP = 4 * Math.PI / 180;  // шаг выборки по углу, рад
+  var chartTheta = 0;                  // угол, до которого диаграммы уже построены
+
+  function sampleCharts() {
+    var guard = 0;
+    while (theta - chartTheta >= CHART_STEP && guard < 400) {
+      chartTheta += CHART_STEP;
+      guard++;
+      var st = cycleState(chartTheta);
+      var cycleDeg = ((chartTheta % (Math.PI * 4)) + Math.PI * 4) % (Math.PI * 4) * 180 / Math.PI;
+      if (cycleDeg < lastCycleDeg) valveChart.clear();
+      lastCycleDeg = cycleDeg;
+      pvChart.push(volume(st.crankPhys, eps), [pressure(st.strokeIndex, st.crankPhys, eps)]);
+      valveChart.push(cycleDeg, [
+        valveLift(true, st) / VALVE_MAX_LIFT,
+        valveLift(false, st) / VALVE_MAX_LIFT,
+        (pistonY(st.crankPhys) - PISTON_MIN_Y) / (PISTON_MAX_Y - PISTON_MIN_Y),
+      ]);
+    }
+    // Если за кадр коленвал провернулся слишком далеко (низкий FPS на больших
+    // оборотах), долг не копим — переносим развёртку сразу на текущий угол.
+    if (theta - chartTheta >= CHART_STEP) chartTheta = theta;
+  }
+
+  // dt = 0 в паузе: облёт обязан замереть вместе с механизмом.
+  function updateCamera(dt) {
+    if (autoRotate) {
+      orbitAngle += 0.15 * dt;
+      var Rc = 5.4;
+      camera.position.set(
+        CENTER.x + Rc * Math.sin(orbitAngle),
+        CENTER.y + 0.55,
+        CENTER.z + Rc * Math.cos(orbitAngle));
+      camera.lookAt(CENTER);
+    }
+    controls.update();
   }
 
   // ---------- Главный цикл ----------
   function loop(now) {
     if (lastFrame == null) lastFrame = now;
-    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    var dt = Math.min(0.05, (now - lastFrame) / 1000) * speedCtl.get();
     lastFrame = now;
     if (running) {
       stepPhysics(dt);
     }
-    updateCamera();
+    updateCamera(running ? dt : 0);
     renderer.render(scene, camera);
     requestAnimationFrame(loop);
   }
 
   // ---------- SimUI ----------
   SimUI.title('Четырёхтактный ДВС');
+  SimUI.goals([
+    'Как вращение коленвала превращается в ход поршня',
+    'Что происходит в каждом из четырёх тактов',
+    'Почему степень сжатия поднимает КПД',
+  ]);
   SimUI.slider({
-    label: 'Обороты', min: 60, max: 3000, step: 10, value: rpm, unit: 'об/мин',
+    name: 'rpm', label: 'Обороты', min: 60, max: 3000, step: 10, value: rpm, unit: 'об/мин',
     onChange: function (v) { rpm = v; },
   });
+  SimUI.slider({
+    name: 'eps', label: 'Степень сжатия', min: 6, max: 14, step: 0.5, value: eps, unit: '',
+    onChange: function (v) { eps = v; pvChart.clear(); },
+  });
+  SimUI.presets({ items: [
+    { label: 'Холостой ход', values: { rpm: 800, eps: 10 } },
+    { label: 'Город', values: { rpm: 1800, eps: 10 } },
+    { label: 'Трасса', values: { rpm: 2600, eps: 12 } },
+  ] });
+  SimUI.select({
+    name: 'view', label: 'Ракурс',
+    options: [{ value: 'auto', label: 'Облёт' }, { value: 'side', label: 'Сбоку' },
+      { value: 'top', label: 'Сверху' }],
+    value: 'auto',
+    onChange: function (v) {
+      autoRotate = v === 'auto';
+      if (v === 'side') { camera.position.set(0, CENTER.y + 0.4, 5.4); camera.lookAt(CENTER); }
+      if (v === 'top') { camera.position.set(0, CENTER.y + 5.4, 0.01); camera.lookAt(CENTER); }
+    },
+  });
+  SimUI.toggle({
+    name: 'cut', label: 'Разрез', value: true,
+    onChange: function (on) { linerMat.opacity = on ? 0.32 : 0.95; linerMat.depthWrite = !on; },
+  });
+  var speedCtl = SimUI.speed({ values: [0.1, 0.25, 0.5, 1, 2], value: 1 });
   SimUI.playPause({
     onPlay: function () { running = true; lastFrame = null; },
     onPause: function () { running = false; },
     onReset: function () { resetSim(); },
   });
 
+  var strokeBanner = SimUI.banner({ items: STROKES });
+
+  var rRpm = SimUI.readout({ label: 'Обороты', unit: 'об/мин', digits: 0, corner: 'bl' });
+  var rTheta = SimUI.readout({ label: 'Угол коленвала', unit: '°', digits: 0, corner: 'bl' });
+  var rStroke = SimUI.readout({ label: 'Такт', unit: '', digits: 0, corner: 'bl' });
+  var rPress = SimUI.readout({ label: 'Давление', unit: 'бар', digits: 2, corner: 'bl' });
+  var rEff = SimUI.readout({ label: 'КПД цикла', unit: '%', digits: 1, corner: 'bl' });
+
+  var pvChart = SimUI.chart({
+    title: 'Индикаторная диаграмма p–V', xLabel: 'V, усл.', yLabel: 'p, бар',
+    mode: 'xy', maxPoints: 180, series: [{ name: 'цикл', color: '#ff6a3d' }], corner: 'br',
+  });
+  var valveChart = SimUI.chart({
+    title: 'Фазы газораспределения', xLabel: 'θ, °', yLabel: 'подъём',
+    mode: 'time', maxPoints: 200, xRange: [0, 720],
+    series: [{ name: 'впуск', color: '#5a8fd6' }, { name: 'выпуск', color: '#ffb27a' },
+      { name: 'поршень', color: '#8b95a3' }],
+    corner: 'bl',
+  });
+
+  var kinematics = SimUI.formula({
+    title: 'Кинематика КШМ',
+    tex: 'x = r\\cos\\theta + \\sqrt{l^2 - r^2\\sin^2\\theta}',
+    vars: { r: { label: 'r', unit: '' }, l: { label: 'l', unit: '' },
+      theta: { label: 'θ', unit: '°' }, x: { label: 'x', unit: '' } },
+    note: 'Полный цикл занимает два оборота коленвала — 720°.',
+    corner: 'tl',
+  });
+  var otto = SimUI.formula({
+    title: 'Цикл Отто',
+    tex: '\\eta = 1 - \\varepsilon^{1-\\gamma}',
+    vars: { eps: { label: 'ε', unit: '' }, gamma: { label: 'γ', unit: '' },
+      eta: { label: 'η', unit: '%' } },
+    note: 'Чем выше степень сжатия, тем выше термический КПД идеального цикла.',
+    corner: 'tl',
+  });
+
+  SimUI.expose({
+    getState: function () {
+      var st = cycleState(theta);
+      return {
+        theta: st.crankPhys, strokeIndex: st.strokeIndex, rpm: rpm, eps: eps,
+        pistonY: pistonY(st.crankPhys),
+        pressure: pressure(st.strokeIndex, st.crankPhys, eps),
+        volume: volume(st.crankPhys, eps),
+        efficiency: efficiency(eps),
+      };
+    },
+    reset: function () { resetSim(); },
+  });
+
   // ---------- Инициализация ----------
   window.addEventListener('resize', resize);
   resize();
   stepPhysics(0); // выставить начальную позу (θ=0) до первого кадра
-  updateCamera();
+  updateCamera(0);
   requestAnimationFrame(loop);
 })();
 </script>

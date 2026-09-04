@@ -157,6 +157,7 @@
   // ---------- Состояние симуляции ----------
   var particles = null;
   var running = true;
+  var needsRedraw = true;  // перерисовать кадр в паузе (сброс, слайдер, ресайз)
   var lastFrame = null;
   var concentrationPct = DEFAULT_CONCENTRATION;
   var temperatureC = DEFAULT_TEMP;
@@ -470,8 +471,10 @@
     lastFrame = now;
 
     if (running) step(dt);
-    draw();
-    updateHud();
+    // В паузе полотно не перерисовываем: даже одинаковая по содержанию
+    // перерисовка заставляет композитор пересчитывать backdrop-фильтр панелей,
+    // и кадр «дрожит» на уровне единиц яркости.
+    if (running || needsRedraw) { draw(); updateHud(); needsRedraw = false; }
     requestAnimationFrame(loop);
   }
 
@@ -479,11 +482,11 @@
   SimUI.title('Осмос через полупроницаемую мембрану');
   SimUI.slider({
     label: 'Концентрация раствора', min: 0, max: 100, step: 1, value: DEFAULT_CONCENTRATION, unit: '%',
-    onChange: function (v) { concentrationPct = v; adjustSoluteCount(); },
+    onChange: function (v) { concentrationPct = v; adjustSoluteCount(); needsRedraw = true; },
   });
   SimUI.slider({
     label: 'Температура', min: 0, max: 60, step: 1, value: DEFAULT_TEMP, unit: '°C',
-    onChange: function (v) { temperatureC = v; },
+    onChange: function (v) { temperatureC = v; needsRedraw = true; },
   });
   SimUI.playPause({
     onPlay: function () { running = true; lastFrame = null; },
@@ -491,11 +494,12 @@
     onReset: function () {
       // слайдеры не трогаем — пересобираем сцену заново при текущей концентрации
       particles = spawnAll();
+      needsRedraw = true;
     },
   });
 
   // ---------- Инициализация ----------
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', function () { resize(); needsRedraw = true; });
   W = window.innerWidth;
   H = window.innerHeight;
   computeGeometry();

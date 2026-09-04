@@ -179,6 +179,7 @@
   var dist = 40;    // см, слайдер "Расстояние между источниками"
   var phase = 0;    // накопленная фаза ωt, радианы
   var running = true;
+  var needsRedraw = true;  // перерисовать кадр в паузе (слайдер, сброс, ресайз)
   var lastFrame = null;
 
   function currentLambda() { return C_SPEED / freq; }
@@ -217,8 +218,9 @@
       stepPhysics(dt);
       renderField(phase, currentK());
     }
-    // в паузе поле не пересчитывается: и картинка, и фаза замирают
-    updateHud();
+    // В паузе не трогаем ни полотно, ни подписи: любая перерисовка в паузе —
+    // это дрожание кадра, из-за которого проба «Пауза» справедливо падает.
+    if (running || needsRedraw) { updateHud(); needsRedraw = false; }
     requestAnimationFrame(loop);
   }
 
@@ -226,20 +228,20 @@
   SimUI.title('Интерференция волн от двух источников');
   SimUI.slider({
     label: 'Частота', min: 0.3, max: 2.5, step: 0.05, value: freq, unit: 'Гц',
-    onChange: function (v) { freq = v; }, // c = const, k и ω меняются согласованно через λ=c/f
+    onChange: function (v) { freq = v; needsRedraw = true; }, // c = const, k и ω меняются согласованно через λ=c/f
   });
   SimUI.slider({
     label: 'Расстояние между источниками', min: 8, max: 60, step: 1, value: dist, unit: 'см',
-    onChange: function (v) { dist = v; rebuildGeometry(dist); drawMarkers(); },
+    onChange: function (v) { dist = v; rebuildGeometry(dist); drawMarkers(); needsRedraw = true; },
   });
   SimUI.playPause({
     onPlay: function () { running = true; lastFrame = null; },
     onPause: function () { running = false; },
-    onReset: function () { resetSim(); },
+    onReset: function () { resetSim(); needsRedraw = true; },
   });
 
   // ---------- Инициализация ----------
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', function () { resize(); needsRedraw = true; });
   rebuildGeometry(dist);
   resize();
   renderField(phase, currentK());

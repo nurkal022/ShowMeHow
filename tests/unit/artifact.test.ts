@@ -142,6 +142,11 @@ describe('findForbiddenUrls', () => {
     expect(findForbiddenUrls(html, allowed)).toEqual([]);
   });
 
+  it('chart.js больше не в whitelist — графики только через SimUI.chart', () => {
+    const html = '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>';
+    expect(findForbiddenUrls(html, Object.values(CDN_WHITELIST)).length).toBe(1);
+  });
+
   it('ignores relative paths and data: urls', () => {
     const html = '<img src="/local.png"><img src="data:image/png;base64,AAAA">';
     expect(findForbiddenUrls(html, allowed)).toEqual([]);

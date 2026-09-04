@@ -117,6 +117,7 @@
 
   var particles = null;
   var running = true;
+  var needsRedraw = true;  // перерисовать кадр в паузе (сброс, слайдер, ресайз)
   var lastFrame = null;
 
   var pMeasured = 0; // скользящее среднее измеренного давления
@@ -334,8 +335,10 @@
     lastFrame = now;
 
     if (running) step(dt);
-    draw();
-    updateHud();
+    // В паузе полотно не перерисовываем: даже одинаковая по содержанию
+    // перерисовка заставляет композитор пересчитывать backdrop-фильтр панелей,
+    // и кадр «дрожит» на уровне единиц яркости.
+    if (running || needsRedraw) { draw(); updateHud(); needsRedraw = false; }
     requestAnimationFrame(loop);
   }
 
@@ -343,7 +346,7 @@
   SimUI.title('Идеальный газ: давление, объём, температура');
   SimUI.slider({
     label: 'Объём', min: 30, max: 100, step: 1, value: DEFAULT_VOLUME_PCT, unit: '%',
-    onChange: function (v) { targetVolumeFrac = v / 100; },
+    onChange: function (v) { targetVolumeFrac = v / 100; needsRedraw = true; },
   });
   SimUI.slider({
     label: 'Температура', min: 100, max: 600, step: 10, value: DEFAULT_T, unit: 'K',
@@ -351,6 +354,7 @@
       var newT = v;
       rescaleVelocities(T, newT);
       T = newT;
+      needsRedraw = true;
     },
   });
   SimUI.playPause({
@@ -363,11 +367,12 @@
       pistonY = box.bottom - currentHeight;
       particles = spawnParticles();
       pMeasured = pTheory;
+      needsRedraw = true;
     },
   });
 
   // ---------- Инициализация ----------
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', function () { resize(); needsRedraw = true; });
   W = window.innerWidth;
   H = window.innerHeight;
   computeGeometry();

@@ -179,6 +179,7 @@
   var molarMass = 100;  // г/моль, слайдер
   var particles = [];
   var running = true;
+  var needsRedraw = true;  // перерисовать кадр в паузе (слайдер, сброс, ресайз)
   var simT = 0;         // накопленное симуляционное время, с (стоит в паузе)
   var spawnBudget = 0;  // дробный бюджет эмиссии частиц
   var lastFrame = null;
@@ -320,9 +321,9 @@
       simT += dt;
       drawFrame(dt);
     }
-    // в паузе fx-канвас не трогаем вовсе: без затухания следа и без
-    // аддитивного накопления яркости — картинка полностью замирает
-    updateHud();
+    // В паузе не трогаем ни полотно, ни подписи: любая перерисовка в паузе —
+    // это дрожание кадра, из-за которого проба «Пауза» справедливо падает.
+    if (running || needsRedraw) { updateHud(); needsRedraw = false; }
     requestAnimationFrame(loop);
   }
 
@@ -330,20 +331,20 @@
   SimUI.title('Диффузия духов в комнате');
   SimUI.slider({
     label: 'Температура', min: 0, max: 40, step: 1, value: tempC, unit: '°C',
-    onChange: function (v) { tempC = v; },
+    onChange: function (v) { tempC = v; needsRedraw = true; },
   });
   SimUI.slider({
     label: 'Молярная масса', min: 50, max: 300, step: 5, value: molarMass, unit: 'г/моль',
-    onChange: function (v) { molarMass = v; },
+    onChange: function (v) { molarMass = v; needsRedraw = true; },
   });
   SimUI.playPause({
     onPlay: function () { running = true; },
     onPause: function () { running = false; },
-    onReset: function () { resetSim(); },
+    onReset: function () { resetSim(); needsRedraw = true; },
   });
 
   // ---------- Инициализация ----------
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', function () { resize(); needsRedraw = true; });
   resize();
   requestAnimationFrame(loop);
 })();

@@ -206,6 +206,7 @@
   // ---------- Построение и кэширование силовых линий ----------
   var fieldLines = [];
   var linesDirty = true;
+  var needsRedraw = true;  // перерисовать кадр в паузе (курсор, ресайз, сброс)
 
   function seedAngles(count) {
     var out = [];
@@ -534,6 +535,7 @@
     mouseActive = true;
     testCharge.x = e.clientX;
     testCharge.y = e.clientY;
+    needsRedraw = true;
   });
 
   // ---------- Главный цикл (dt-based, пауза морозит пульсацию/штрихи) ----------
@@ -543,9 +545,14 @@
     lastFrame = now;
     if (running) simTime += dt;
 
-    recomputeIfDirty();
-    var probe = drawFrame();
-    updateHud(probe);
+    // В паузе кадр не перерисовываем вообще: даже одинаковая по содержанию
+    // перерисовка полотна заставляет композитор пересчитывать backdrop-фильтр
+    // панелей, и картинка «дрожит» на уровне единиц яркости.
+    if (running || linesDirty || needsRedraw) {
+      recomputeIfDirty();
+      updateHud(drawFrame());
+      needsRedraw = false;
+    }
     requestAnimationFrame(loop);
   }
 
@@ -574,7 +581,7 @@
   });
 
   // ---------- Инициализация ----------
-  window.addEventListener('resize', resize);
+  window.addEventListener('resize', function () { resize(); needsRedraw = true; });
   resize();
   buildFieldLines();
   linesDirty = false;
