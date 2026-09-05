@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { PipelineEvent, QualityMode } from '@/lib/types';
-import { CANDIDATE_DEFAULTS } from '@/lib/candidate-defaults';
 import { historyLabel } from '@/lib/history-label';
 import ProgressView from './progress/ProgressView';
 import PreviewFrame from './PreviewFrame';
@@ -19,7 +18,6 @@ export default function Workbench() {
   const [simId, setSimId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [mode, setMode] = useState<QualityMode>('max');
-  const [candidates, setCandidates] = useState<number>(CANDIDATE_DEFAULTS.max);
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
@@ -34,12 +32,6 @@ export default function Workbench() {
   const didInit = useRef(false);
   // jobId, к стриму которого мы сейчас подключены (защита от повторного connect к тому же job).
   const connectedJobRef = useRef<string | null>(null);
-
-  function onModeChange(next: QualityMode) {
-    setMode(next);
-    // Смена режима сбрасывает пользовательский выбор числа кандидатов на дефолт режима.
-    setCandidates(CANDIDATE_DEFAULTS[next]);
-  }
 
   function clearActiveJob() {
     localStorage.removeItem(ACTIVE_JOB_KEY);
@@ -227,7 +219,7 @@ export default function Workbench() {
     try {
       const res = await fetch('/api/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, imageDataUrl: image ?? undefined, mode, candidates }),
+        body: JSON.stringify({ prompt: text, imageDataUrl: image ?? undefined, mode }),
       });
       if (!res.ok) {
         let message = `Ошибка сервера (${res.status})`;
@@ -354,21 +346,11 @@ export default function Workbench() {
                 aria-label="Режим качества"
                 value={mode}
                 disabled={phase === 'generating'}
-                onChange={(e) => onModeChange(e.target.value as QualityMode)}
+                onChange={(e) => setMode(e.target.value as QualityMode)}
               >
                 <option value="max">Максимум (3-6 мин)</option>
                 <option value="standard">Стандарт (1-3 мин)</option>
                 <option value="fast">Быстрый (~1 мин)</option>
-              </select>
-              <select
-                aria-label="Число кандидатов"
-                value={candidates}
-                disabled={phase === 'generating'}
-                onChange={(e) => setCandidates(Number(e.target.value))}
-              >
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <option key={n} value={n}>Кандидатов: {n}</option>
-                ))}
               </select>
               <button disabled={phase === 'generating'} onClick={() => fileRef.current?.click()}>
                 {image ? '🖼 картинка ✓' : '🖼 картинка'}

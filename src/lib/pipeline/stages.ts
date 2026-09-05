@@ -28,10 +28,10 @@ export async function plan(ctx: Ctx, prompt: string, imageDataUrl?: string): Pro
 }
 
 export async function generateCandidate(
-  ctx: Ctx, spec: PlanSpec, styleHint: string, exemplar?: string,
+  ctx: Ctx, spec: PlanSpec, exemplar?: string,
 ): Promise<string> {
   const out = await ctx.chat('generator', [
-    { role: 'system', content: generatorSystem(styleHint, exemplar) },
+    { role: 'system', content: generatorSystem(exemplar) },
     { role: 'user', content: 'Спецификация:\n' + JSON.stringify(spec, null, 2) },
   ]);
   return instrument(extractHtml(out));
@@ -67,9 +67,9 @@ function rank(html: string, report: RenderReport): 0 | 1 | 2 | 3 {
 interface Ranked { html: string; report: RenderReport }
 
 export async function verifyCandidate(
-  ctx: Ctx, spec: PlanSpec, html: string, index: number, styleName: string,
+  ctx: Ctx, spec: PlanSpec, html: string, index: number,
 ): Promise<CandidateResult> {
-  ctx.emit({ type: 'candidate', index, status: 'rendering', styleHint: styleName });
+  ctx.emit({ type: 'candidate', index, status: 'rendering' });
   let current = html;
   let report = await ctx.render(current, { probes: true });
   // best-so-far: если попытки починки только ухудшают результат, в конце возвращаем лучшую
@@ -79,7 +79,7 @@ export async function verifyCandidate(
     const forbidden = findForbiddenUrls(current, CDN_ALLOWED);
     const probeFailed = (report.probes?.failures.length ?? 0) > 0;
     if (report.ok && report.animated && forbidden.length === 0 && !probeFailed) break;
-    ctx.emit({ type: 'candidate', index, status: 'fixing', styleHint: styleName });
+    ctx.emit({ type: 'candidate', index, status: 'fixing' });
     const errors = [...report.errors];
     if (report.ok && !report.animated) errors.push(STATIC_ANIMATION_ERROR);
     if (forbidden.length) errors.push(`Запрещённые внешние ресурсы: ${forbidden.join(', ')}`);
@@ -98,7 +98,7 @@ export async function verifyCandidate(
   }
   // Заражённый запрещёнными URL финалист не может уйти в библиотеку, даже если рендер прошёл.
   if (!report.ok || findForbiddenUrls(current, CDN_ALLOWED).length > 0) {
-    ctx.emit({ type: 'candidate', index, status: 'failed', styleHint: styleName });
+    ctx.emit({ type: 'candidate', index, status: 'failed' });
     return { html: current, render: report, critic: null, alive: false };
   }
   if (report.screenshots[0]) {
@@ -113,7 +113,7 @@ export async function verifyCandidate(
   }
   let critic: { physicsOk: boolean; issues: CriticIssue[] } | null = null;
   if (ctx.hasVision) {
-    ctx.emit({ type: 'candidate', index, status: 'critiquing', styleHint: styleName });
+    ctx.emit({ type: 'candidate', index, status: 'critiquing' });
     try {
       const probeNote = report.probes && report.probes.failures.length
         ? '\n\nАвтоматические пробы не пройдены:\n- ' + report.probes.failures.join('\n- ')
@@ -171,6 +171,6 @@ export async function verifyCandidate(
       // её провал не должен убивать живого кандидата.
     }
   }
-  ctx.emit({ type: 'candidate', index, status: 'ok', styleHint: styleName });
+  ctx.emit({ type: 'candidate', index, status: 'ok' });
   return { html: current, render: report, critic, alive: true };
 }

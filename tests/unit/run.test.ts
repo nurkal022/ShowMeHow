@@ -2,12 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runPipeline, refineExisting, MODES, resolveCandidates, CancelledError } from '@/lib/pipeline/run';
+import { runPipeline, refineExisting, MODES, CancelledError } from '@/lib/pipeline/run';
 import type { Ctx } from '@/lib/pipeline/stages';
 import { getArtifact, getMeta, listHistory, createSimulation } from '@/lib/storage';
 import type { ChatMessage } from '@/lib/provider';
 import type { PipelineEvent, RenderReport, Role } from '@/lib/types';
-import { STYLE_NAMES } from '@/lib/pipeline/prompts';
 
 const SPEC = { title: 'Маятник', subject: 'Физика', mode: '2d', learningGoals: ['x'],
   physics: 'F=ma', parameters: [], visualPlan: 'v' };
@@ -74,12 +73,12 @@ describe('runPipeline', () => {
   it('max mode: refines until threshold met', async () => {
     const { ctx, events } = fakeCtx({ firstScores: WEAK }); // первый суд: physics=6 < 8
     await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
-    // текстовые роли: план + 3 кандидата + 1 рефайн = 5
-    expect(textCalls(ctx.chat)).toHaveLength(5);
+    // текстовые роли: план + 1 кандидат + 1 рефайн = 3
+    expect(textCalls(ctx.chat)).toHaveLength(3);
     const judgeEvents = events.filter((e) => e.type === 'judge-verdict');
-    // единственный judge-verdict — от начального суда, маппит все три исходных индекса
+    // единственный judge-verdict — от начального суда, единственный кандидат под индексом 0
     expect(judgeEvents).toHaveLength(1);
-    expect(judgeEvents[0]).toMatchObject({ candidateIndices: [0, 1, 2], feedback: 'улучшить' });
+    expect(judgeEvents[0]).toMatchObject({ candidateIndices: [0], feedback: 'улучшить' });
     // рефайн-раунд несёт before/after вместо повторного judge-verdict
     const refineEvents = events.filter((e) => e.type === 'refine-round');
     expect(refineEvents).toHaveLength(1);
@@ -97,17 +96,6 @@ describe('runPipeline', () => {
         goals: ['x'], parameters: [],
       },
     });
-  });
-
-  it('candidates=5: generates 5 candidates, styleHints cycled from STYLE_NAMES', async () => {
-    const { ctx, events } = fakeCtx();
-    await runPipeline(ctx, { prompt: 'маятник', mode: 'max', candidates: 5 });
-    const genEvents = events.filter(
-      (e): e is Extract<PipelineEvent, { type: 'candidate' }> =>
-        e.type === 'candidate' && e.status === 'generating',
-    );
-    expect(genEvents).toHaveLength(5);
-    expect(genEvents.map((e) => e.styleHint)).toEqual(STYLE_NAMES);
   });
 
   it('CancelledError: signal true right before judging aborts, nothing saved', async () => {
@@ -158,82 +146,38 @@ describe('runPipeline', () => {
     expect(events.some((e) => e.type === 'done')).toBe(false);
   });
 
-  it('judge-verdict event maps alive positions to original candidate indices '
-    + 'when the middle candidate dies', async () => {
+  it('refine-phase candidate/screenshot events carry the (единственного) candidate index 0', async () => {
     const events: PipelineEvent[] = [];
-    const dead = '```html\n<html><body>DEADCAND</body></html>\n```';
-    const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
-    const chat = vi.fn(async (role: Role, msgs: ChatMessage[]) => {
-      if (role === 'planner') return JSON.stringify(SPEC);
-      if (role === 'critic') return '{"physicsOk": true, "issues": []}';
-      if (role === 'judge') {
-        return JSON.stringify({ winnerIndex: 0, scores: [GOOD, GOOD], feedback: '' });
-      }
-      if (role === 'generator') {
-        const sys = String(msgs[0].content);
-        if (sys.includes('НАГЛЯДНОСТЬ')) return dead; // второй style hint → всегда мёртвый кандидат
-        return '```html\n' + HTML + '\n```';
-      }
-      // fixer тоже не спасает
-      const user = String(msgs[1]?.content ?? '');
-      if (user.includes('DEADCAND')) return dead;
-      return '```html\n' + HTML + '\n```';
-    });
-    const ctx: Ctx = {
-      chat,
-      hasVision: true,
-      render: vi.fn(async (html: string) => (html.includes('DEADCAND') ? badRender : okRender)),
-      emit: (e) => events.push(e),
-    };
-    await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
-    const verdictEvent = events.find((e) => e.type === 'judge-verdict');
-    expect(verdictEvent).toMatchObject({ candidateIndices: [0, 2] });
-  });
-
-  it('refine-phase candidate/screenshot events carry the winner\'s ORIGINAL index '
-    + '(dead middle candidate, winner orig-index 2)', async () => {
-    const events: PipelineEvent[] = [];
-    const dead = '```html\n<html><body>DEADCAND</body></html>\n```';
-    const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
     let judgeCall = 0;
-    const chat = vi.fn(async (role: Role, msgs: ChatMessage[]) => {
+    const chat = vi.fn(async (role: Role) => {
       if (role === 'planner') return JSON.stringify(SPEC);
       if (role === 'critic') return '{"physicsOk": true, "issues": []}';
       if (role === 'judge') {
-        // Первый суд: живые [0, 2]; winnerIndex 1 → оригинальный индекс 2; слабые баллы
-        // у победителя запускают доводку. Пересуд (rescore) возвращает GOOD — стоп.
+        // Первый суд: слабые баллы у победителя запускают доводку. Пересуд (rescore)
+        // возвращает GOOD — стоп.
         if (judgeCall++ === 0) {
-          return JSON.stringify({ winnerIndex: 1, scores: [GOOD, WEAK], feedback: 'улучшить' });
+          return JSON.stringify({ winnerIndex: 0, scores: [WEAK], feedback: 'улучшить' });
         }
         return JSON.stringify({ winnerIndex: 0, scores: [GOOD], feedback: '' });
       }
-      if (role === 'generator') {
-        const sys = String(msgs[0].content);
-        if (sys.includes('НАГЛЯДНОСТЬ')) return dead; // средний кандидат (1) — мёртвый
-        return '```html\n' + HTML + '\n```';
-      }
-      // fixer не спасает
-      const user = String(msgs[1]?.content ?? '');
-      if (user.includes('DEADCAND')) return dead;
       return '```html\n' + HTML + '\n```';
     });
     const ctx: Ctx = {
       chat,
       hasVision: true,
-      render: vi.fn(async (html: string) => (html.includes('DEADCAND') ? badRender : okRender)),
+      render: vi.fn(async () => okRender),
       emit: (e) => events.push(e),
     };
     await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
     expect(events.filter((e) => e.type === 'refine-round')).toHaveLength(1);
-    // все candidate/screenshot-события ПОСЛЕ старта доводки — про карточку победителя (2),
-    // а не про кандидата 0: иначе UI перерисовывал бы чужую карточку.
+    // все candidate/screenshot-события ПОСЛЕ старта доводки — про единственного кандидата 0.
     const refineStart = events.findIndex(
       (e) => e.type === 'stage' && e.stage === 'refining' && e.status === 'start');
     expect(refineStart).toBeGreaterThan(-1);
     const refinePhase = events.slice(refineStart)
       .filter((e) => e.type === 'candidate' || e.type === 'screenshot');
     expect(refinePhase.length).toBeGreaterThan(0);
-    for (const e of refinePhase) expect(e).toMatchObject({ index: 2 });
+    for (const e of refinePhase) expect(e).toMatchObject({ index: 0 });
   });
 
   it('all candidates broken: saves best-effort with warning', async () => {
@@ -283,36 +227,7 @@ describe('runPipeline', () => {
     expect(events.some((e) => e.type === 'warning')).toBe(true);
   });
 
-  it('all candidates broken: prefers a non-tainted broken candidate over a CDN-tainted one', async () => {
-    const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
-    const TAINTED_HTML = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
-      + '<script src="https://evil.example.com/bad.js"></script></body></html>';
-    const events: PipelineEvent[] = [];
-    const chat = vi.fn(async (role: Role, msgs: ChatMessage[]) => {
-      if (role === 'planner') return JSON.stringify(SPEC);
-      if (role === 'critic') return '{"physicsOk": true, "issues": []}';
-      if (role === 'fixer') {
-        // фиксер: возвращаем html как есть (заражённость/чистота сохраняется, рендер по-прежнему падает)
-        const user = String(msgs[1]?.content ?? '');
-        const m = user.match(/```html\n([\s\S]*?)\n```/);
-        return '```html\n' + (m ? m[1] : HTML) + '\n```';
-      }
-      const sys = String(msgs[0].content);
-      if (sys.includes('НАГЛЯДНОСТЬ')) return '```html\n' + HTML + '\n```'; // кандидат 1: чистый
-      return '```html\n' + TAINTED_HTML + '\n```'; // кандидат 0: заражённый
-    });
-    const ctx: Ctx = {
-      chat,
-      hasVision: true,
-      render: vi.fn(async () => badRender),
-      emit: (e) => events.push(e),
-    };
-    const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'standard' });
-    expect(getArtifact(meta.id)).not.toContain('evil.example.com');
-    expect(getMeta(meta.id).warning).toMatch(/ошибк/i);
-  });
-
-  it('all candidates broken and all CDN-tainted: rejects instead of saving a tainted artifact', async () => {
+  it('broken and CDN-tainted candidate: rejects instead of saving a tainted artifact', async () => {
     const badRender: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
     const TAINTED_HTML = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
       + '<script src="https://evil.example.com/bad.js"></script></body></html>';
@@ -336,7 +251,7 @@ describe('runPipeline', () => {
       .rejects.toThrow(/запрещённые внешние ресурсы/i);
   });
 
-  it('guard: scores array shorter than candidates does not crash', async () => {
+  it('guard: empty scores array does not crash', async () => {
     const events: PipelineEvent[] = [];
     let judgeCall = 0;
     const chat = vi.fn(async (role: Role) => {
@@ -344,8 +259,8 @@ describe('runPipeline', () => {
       if (role === 'critic') return '{"physicsOk": true, "issues": []}';
       if (role === 'judge') {
         if (judgeCall++ === 0) {
-          // намеренно короче числа кандидатов (3): winnerIndex указывает за пределы массива scores
-          return JSON.stringify({ winnerIndex: 2, scores: [GOOD], feedback: 'улучшить' });
+          // намеренно пустой scores: verdict.scores[winnerIndex] окажется undefined
+          return JSON.stringify({ winnerIndex: 0, scores: [], feedback: 'улучшить' });
         }
         return JSON.stringify({ winnerIndex: 0, scores: [GOOD], feedback: '' });
       }
@@ -363,32 +278,12 @@ describe('runPipeline', () => {
     // внутреннего try, попадает во внешний catch, и пайплайн деградирует с предупреждением
     // «Судья недоступен» без рефайна. Проверяем, что этого НЕ произошло:
     expect(getMeta(meta.id).warning ?? '').not.toMatch(/судья недоступен/i);
-    // ...и что рефайн реально состоялся: план(1) + 3 кандидата(3) + 1 рефайн(1) = 5
+    // ...и что рефайн реально состоялся: план(1) + 1 кандидат(1) + 1 рефайн(1) = 3
     // (нулевые баллы < порога 8 → круг 1; rescore возвращает GOOD ≥ 8 → стоп).
-    expect(textCalls(chat)).toHaveLength(5);
+    expect(textCalls(chat)).toHaveLength(3);
     // 1 начальный judge-verdict + 1 refine-round (не повторный judge-verdict)
     expect(events.filter((e) => e.type === 'judge-verdict')).toHaveLength(1);
     expect(events.filter((e) => e.type === 'refine-round')).toHaveLength(1);
-  });
-});
-
-describe('resolveCandidates', () => {
-  it('clamps 0 up to 1', () => {
-    expect(resolveCandidates('fast', 0)).toBe(1);
-  });
-
-  it('clamps 9 down to 5', () => {
-    expect(resolveCandidates('fast', 9)).toBe(5);
-  });
-
-  it('undefined falls back to the mode default', () => {
-    expect(resolveCandidates('fast')).toBe(1);
-    expect(resolveCandidates('standard')).toBe(2);
-    expect(resolveCandidates('max')).toBe(3);
-  });
-
-  it('passes through valid values unchanged', () => {
-    expect(resolveCandidates('max', 4)).toBe(4);
   });
 });
 
@@ -443,10 +338,36 @@ describe('refineExisting', () => {
   });
 });
 
+describe('один кандидат', () => {
+  it('генерируется ровно один кандидат в любом режиме', async () => {
+    for (const mode of ['fast', 'standard', 'max'] as const) {
+      const { ctx } = fakeCtx();
+      await runPipeline(ctx, { prompt: 'тест', mode });
+      const gen = (ctx.chat as ReturnType<typeof vi.fn>).mock.calls
+        .filter((call) => call[0] === 'generator');
+      expect(gen, `режим ${mode}`).toHaveLength(1);
+    }
+  });
+
+  it('MODES больше не содержит числа кандидатов', () => {
+    for (const m of Object.values(MODES)) {
+      expect(m).not.toHaveProperty('candidates');
+    }
+  });
+
+  it('событие candidate не несёт styleHint', async () => {
+    const { ctx, events } = fakeCtx();
+    await runPipeline(ctx, { prompt: 'тест', mode: 'fast' });
+    for (const e of events.filter((x) => x.type === 'candidate')) {
+      expect(e).not.toHaveProperty('styleHint');
+    }
+  });
+});
+
 describe('MODES', () => {
   it('matches spec', () => {
-    expect(MODES.fast).toEqual({ candidates: 1, useJudge: false, maxRefine: 0, threshold: 0 });
-    expect(MODES.standard).toEqual({ candidates: 2, useJudge: true, maxRefine: 1, threshold: 0 });
-    expect(MODES.max).toEqual({ candidates: 3, useJudge: true, maxRefine: 3, threshold: 8 });
+    expect(MODES.fast).toEqual({ useJudge: false, maxRefine: 0, threshold: 0 });
+    expect(MODES.standard).toEqual({ useJudge: true, maxRefine: 1, threshold: 0 });
+    expect(MODES.max).toEqual({ useJudge: true, maxRefine: 3, threshold: 8 });
   });
 });

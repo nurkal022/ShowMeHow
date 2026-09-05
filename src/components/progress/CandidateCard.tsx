@@ -14,15 +14,11 @@ const SCORE_DIMS: { key: keyof RubricScores; label: string; cls: string }[] = [
 export default function CandidateCard({ candidate }: { candidate: CandidateInfo }) {
   const [showIssues, setShowIssues] = useState(false);
   const classes = ['candidate-card'];
-  if (candidate.isWinner) classes.push('winner');
   if (candidate.status === 'failed') classes.push('failed');
 
   return (
     <div className={classes.join(' ')}>
-      {candidate.isWinner && <span className="winner-badge" title="Победитель">👑</span>}
-      <div className="candidate-card-head">
-        Кандидат {candidate.index + 1} · {candidate.styleHint || '…'}
-      </div>
+      <div className="candidate-card-head">Кандидат</div>
       <div className={`candidate-status status-${candidate.status}`}>
         {candidateCopy(candidate.status)}
       </div>

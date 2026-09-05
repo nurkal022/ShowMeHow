@@ -11,7 +11,7 @@ import { saveSettings, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import type { JobRequest } from '@/lib/jobs';
 import type { PipelineEvent } from '@/lib/types';
 
-const REQUEST: JobRequest = { prompt: 'маятник', mode: 'standard', candidates: 2, hasImage: false };
+const REQUEST: JobRequest = { prompt: 'маятник', mode: 'standard', hasImage: false };
 
 beforeEach(() => {
   process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-jobs-api-'));

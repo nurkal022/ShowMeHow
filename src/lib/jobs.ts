@@ -9,7 +9,6 @@ export type JobStatus = 'running' | 'done' | 'error' | 'cancelled';
 export interface JobRequest {
   prompt: string;
   mode: QualityMode;
-  candidates: number;
   hasImage: boolean;
 }
 

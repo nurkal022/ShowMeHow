@@ -11,19 +11,10 @@ describe('prompts', () => {
       expect(p.length).toBeGreaterThan(200);
     }
   });
-  it('generator prompt embeds style hint, uikit doc and CDN whitelist', () => {
-    const g = P.generatorSystem(P.STYLE_HINTS[0]);
-    expect(g).toContain(P.STYLE_HINTS[0]);
+  it('generator prompt embeds uikit doc and CDN whitelist', () => {
+    const g = P.generatorSystem();
     expect(g).toContain('SimUI');
     for (const url of Object.values(P.CDN_WHITELIST)) expect(g).toContain(url);
-  });
-  it('has exactly 5 style hints', () => {
-    expect(P.STYLE_HINTS).toHaveLength(5);
-  });
-
-  it('STYLE_NAMES has 5 entries, index-aligned with STYLE_HINTS', () => {
-    expect(P.STYLE_NAMES).toEqual(['Реализм', 'Наглядность', 'Интерактив', 'Схема', 'Данные']);
-    expect(P.STYLE_NAMES).toHaveLength(P.STYLE_HINTS.length);
   });
 
   it('скелет не только создаёт баннер, но и переключает его из цикла', () => {
@@ -42,13 +33,13 @@ describe('prompts', () => {
   });
 
   it('generator prompt includes the quality skeleton marker and content', () => {
-    const g = P.generatorSystem(P.STYLE_HINTS[0]);
+    const g = P.generatorSystem();
     expect(g).toContain('Каркас качественной симуляции');
     expect(g).toContain(P.EXAMPLE_SKELETON);
   });
 
   it('generator prompt instructs three.js to load via ES module import (no UMD build)', () => {
-    const g = P.generatorSystem(P.STYLE_HINTS[0]);
+    const g = P.generatorSystem();
     expect(g).toContain('import * as THREE from');
     expect(g).toContain(P.CDN_WHITELIST.three);
     expect(P.CDN_WHITELIST.three).toContain('three.module.min.js');
@@ -56,7 +47,7 @@ describe('prompts', () => {
 });
 
 describe('generator prompt layout rules', () => {
-  const sys = P.generatorSystem('Стиль: реализм.');
+  const sys = P.generatorSystem();
   it('forbids hand-rolled fixed panels and mandates SimUI.panel', () => {
     expect(sys).toContain('SimUI.panel');
     expect(sys).toContain('position:fixed');
@@ -80,7 +71,7 @@ describe('generator prompt layout rules', () => {
 
 describe('GENERATION_RULES', () => {
   it('единый блок правил входит в генератор, фиксер и рефайнер', () => {
-    expect(P.generatorSystem(P.STYLE_HINTS[0])).toContain(P.GENERATION_RULES);
+    expect(P.generatorSystem()).toContain(P.GENERATION_RULES);
     expect(P.FIXER_SYSTEM).toContain(P.GENERATION_RULES);
     expect(P.REFINER_SYSTEM).toContain(P.GENERATION_RULES);
   });
@@ -88,14 +79,11 @@ describe('GENERATION_RULES', () => {
     expect(P.GENERATION_RULES).toContain('SimUI.expose');
     expect(P.GENERATION_RULES).toContain('position:fixed');
   });
-  it('ни один акцент не требует chart.js', () => {
-    for (const hint of P.STYLE_HINTS) expect(hint.toLowerCase()).not.toContain('chart.js');
-  });
   it('генератор вставляет эталон, когда он передан', () => {
-    const withEx = P.generatorSystem(P.STYLE_HINTS[0], '<!DOCTYPE html><html>ЭТАЛОН_МАРКЕР</html>');
+    const withEx = P.generatorSystem('<!DOCTYPE html><html>ЭТАЛОН_МАРКЕР</html>');
     expect(withEx).toContain('ЭТАЛОН_МАРКЕР');
     expect(withEx).toContain('ЭТАЛОН КАЧЕСТВА');
-    expect(P.generatorSystem(P.STYLE_HINTS[0])).not.toContain('ЭТАЛОН КАЧЕСТВА');
+    expect(P.generatorSystem()).not.toContain('ЭТАЛОН КАЧЕСТВА');
   });
 });
 

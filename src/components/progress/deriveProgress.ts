@@ -33,7 +33,6 @@ export type CandidateStatus = 'generating' | 'rendering' | 'fixing' | 'critiquin
 
 export interface CandidateInfo {
   index: number;
-  styleHint: string;
   status: CandidateStatus;
   screenshot?: string;
   critic?: { physicsOk: boolean; issues: string[] };
@@ -83,7 +82,7 @@ export function deriveProgress(events: PipelineEvent[]): ProgressState {
   function candidate(index: number): CandidateInfo {
     let c = candMap.get(index);
     if (!c) {
-      c = { index, styleHint: '', status: 'generating', isWinner: false };
+      c = { index, status: 'generating', isWinner: false };
       candMap.set(index, c);
     }
     return c;
@@ -103,7 +102,6 @@ export function deriveProgress(events: PipelineEvent[]): ProgressState {
         break;
       case 'candidate': {
         const c = candidate(e.index);
-        c.styleHint = e.styleHint;
         c.status = e.status;
         break;
       }

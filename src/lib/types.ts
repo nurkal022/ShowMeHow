@@ -129,8 +129,7 @@ export type PipelineEvent =
   | { type: 'stage'; stage: PipelineStage; status: 'start' | 'end'; at: number }
   | { type: 'plan-ready'; spec: PlanSummary }
   | { type: 'candidate'; index: number;
-      status: 'generating' | 'rendering' | 'fixing' | 'critiquing' | 'ok' | 'failed';
-      styleHint: string }
+      status: 'generating' | 'rendering' | 'fixing' | 'critiquing' | 'ok' | 'failed' }
   | { type: 'screenshot'; index: number; dataUrl: string }
   | { type: 'critic-verdict'; index: number; physicsOk: boolean; issues: string[] }
   | { type: 'probe-report'; index: number; passRate: number;

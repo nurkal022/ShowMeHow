@@ -8,7 +8,7 @@ import {
 } from '@/lib/jobs';
 import type { JobRequest } from '@/lib/jobs';
 
-const REQUEST: JobRequest = { prompt: 'маятник', mode: 'standard', candidates: 2, hasImage: false };
+const REQUEST: JobRequest = { prompt: 'маятник', mode: 'standard', hasImage: false };
 
 describe('jobs store', () => {
   beforeEach(() => {

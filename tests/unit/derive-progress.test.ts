@@ -75,12 +75,12 @@ describe('deriveProgress', () => {
   it('builds candidate map from candidate/screenshot/critic-verdict events and applies judge winner via candidateIndices', () => {
     const SCORES_2: RubricScores = { physics: 5, clarity: 5, interactivity: 5, aesthetics: 5 };
     const events: PipelineEvent[] = [
-      { type: 'candidate', index: 0, status: 'generating', styleHint: 'Реализм' },
-      { type: 'candidate', index: 1, status: 'generating', styleHint: 'Схема' },
-      { type: 'candidate', index: 2, status: 'generating', styleHint: 'Данные' },
-      { type: 'candidate', index: 0, status: 'failed', styleHint: 'Реализм' },
-      { type: 'candidate', index: 1, status: 'ok', styleHint: 'Схема' },
-      { type: 'candidate', index: 2, status: 'ok', styleHint: 'Данные' },
+      { type: 'candidate', index: 0, status: 'generating' },
+      { type: 'candidate', index: 1, status: 'generating' },
+      { type: 'candidate', index: 2, status: 'generating' },
+      { type: 'candidate', index: 0, status: 'failed' },
+      { type: 'candidate', index: 1, status: 'ok' },
+      { type: 'candidate', index: 2, status: 'ok' },
       { type: 'screenshot', index: 1, dataUrl: 'data:image/png;base64,abc' },
       { type: 'critic-verdict', index: 1, physicsOk: false, issues: ['слишком быстро'] },
       // Кандидат 0 выбыл: судья видит только выживших [1, 2]. winnerIndex судьи — индекс
@@ -101,7 +101,6 @@ describe('deriveProgress', () => {
     expect(c0.isWinner).toBe(false);
     expect(c0.scores).toBeUndefined();
     expect(c1.status).toBe('ok');
-    expect(c1.styleHint).toBe('Схема');
     expect(c1.screenshot).toBe('data:image/png;base64,abc');
     expect(c1.critic).toEqual({ physicsOk: false, issues: ['слишком быстро'] });
     expect(c1.scores).toEqual(SCORES);
@@ -145,7 +144,7 @@ describe('deriveProgress', () => {
 
   it('probe-report и targeted-fix попадают в карточку кандидата', () => {
     const state = deriveProgress([
-      { type: 'candidate', index: 0, status: 'ok', styleHint: 'Реализм' },
+      { type: 'candidate', index: 0, status: 'ok' },
       { type: 'probe-report', index: 0, passRate: 0.8,
         results: [{ id: 'pause', label: 'Пауза', status: 'fail', detail: 'не работает' }] },
       { type: 'targeted-fix', index: 0, issues: ['частицы вылетают'] },

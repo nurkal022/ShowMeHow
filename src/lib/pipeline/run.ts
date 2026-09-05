@@ -3,7 +3,6 @@ import type {
   CandidateResult, RubricScores, Role,
 } from '../types';
 import { minScore } from '../types';
-import { CANDIDATE_DEFAULTS } from '../candidate-defaults';
 import { activeProvider, NO_PROVIDER_MESSAGE } from '../settings';
 import { bindChat, type ChatFn, type UsageInfo } from '../provider';
 import { renderArtifact } from '../renderer';
@@ -11,19 +10,25 @@ import { createSimulation, saveThumbnail, getArtifact, updateArtifact } from '..
 import { extractHtml, findForbiddenUrls, instrument, stripRuntime } from '../artifact';
 import { pickExemplar } from '../exemplars';
 import { listBundledDemos } from '../demos';
-import { REFINER_SYSTEM, STYLE_HINTS, STYLE_NAMES, CDN_WHITELIST } from './prompts';
+import { REFINER_SYSTEM, CDN_WHITELIST } from './prompts';
 import { plan, generateCandidate, verifyCandidate, fixArtifact, type Ctx } from './stages';
 import { judge, rescore } from './judge';
 
 const ZERO_SCORES: RubricScores = { physics: 0, clarity: 0, interactivity: 0, aesthetics: 0 };
 const CDN_ALLOWED = Object.values(CDN_WHITELIST);
 
+/**
+ * Режим задаёт глубину полировки, а не число вариантов: кандидат всегда один.
+ * Перебор акцентов был механизмом разнообразия, но хорошая учебная симуляция
+ * обязана быть точной, наглядной и интерактивной одновременно — теперь этого
+ * требуют от единственного кандидата сразу (см. GENERATION_RULES).
+ */
 export const MODES: Record<QualityMode, {
-  candidates: number; useJudge: boolean; maxRefine: number; threshold: number;
+  useJudge: boolean; maxRefine: number; threshold: number;
 }> = {
-  fast: { candidates: CANDIDATE_DEFAULTS.fast, useJudge: false, maxRefine: 0, threshold: 0 },
-  standard: { candidates: CANDIDATE_DEFAULTS.standard, useJudge: true, maxRefine: 1, threshold: 0 },
-  max: { candidates: CANDIDATE_DEFAULTS.max, useJudge: true, maxRefine: 3, threshold: 8 },
+  fast: { useJudge: false, maxRefine: 0, threshold: 0 },
+  standard: { useJudge: true, maxRefine: 1, threshold: 0 },
+  max: { useJudge: true, maxRefine: 3, threshold: 8 },
 };
 
 /** Кооперативная отмена: runPipeline бросает это между этапами, если signal() вернул true. */
@@ -32,12 +37,6 @@ export class CancelledError extends Error {
     super('Отменено пользователем');
     this.name = 'CancelledError';
   }
-}
-
-/** Кламп числа кандидатов в [1,5]; отсутствие requested -> дефолт режима. */
-export function resolveCandidates(mode: QualityMode, requested?: number): number {
-  const n = requested ?? MODES[mode].candidates;
-  return Math.min(5, Math.max(1, Math.round(n)));
 }
 
 export function makeCtx(emit: (e: PipelineEvent) => void): Ctx {
@@ -75,7 +74,7 @@ function planSummary(spec: PlanSpec): PlanSummary {
 
 export async function runPipeline(
   ctx: Ctx,
-  input: { prompt: string; imageDataUrl?: string; mode: QualityMode; candidates?: number },
+  input: { prompt: string; imageDataUrl?: string; mode: QualityMode },
   signal?: () => boolean,
 ): Promise<SimulationMeta> {
   function checkCancelled(): void {
@@ -83,7 +82,6 @@ export async function runPipeline(
   }
 
   const mode = MODES[input.mode];
-  const count = resolveCandidates(input.mode, input.candidates);
   const warnings: string[] = [];
   if (!ctx.hasVision) {
     warnings.push('Vision-модель не настроена: без визуальной критики и судьи.');
@@ -100,81 +98,62 @@ export async function runPipeline(
   const exemplarEntry = pickExemplar(listBundledDemos(), spec);
   const exemplarHtml = exemplarEntry ? exemplarEntry.html : undefined;
 
-  const hints = Array.from({ length: count }, (_, i) => STYLE_HINTS[i % STYLE_HINTS.length]);
-  const styleNames = Array.from({ length: count }, (_, i) => STYLE_NAMES[i % STYLE_NAMES.length]);
-
   emitStage(ctx, 'generating', 'start');
-  let candidates: (CandidateResult | null)[];
+  let candidate: CandidateResult | null = null;
   try {
-    candidates = await Promise.all(
-      hints.map(async (hint, index) => {
-        checkCancelled();
-        const styleName = styleNames[index];
-        ctx.emit({ type: 'candidate', index, status: 'generating', styleHint: styleName });
-        try {
-          const html = await generateCandidate(ctx, spec, hint, exemplarHtml);
-          return await verifyCandidate(ctx, spec, html, index, styleName);
-        } catch {
-          ctx.emit({ type: 'candidate', index, status: 'failed', styleHint: styleName });
-          return null;
-        }
-      }),
-    );
+    checkCancelled();
+    ctx.emit({ type: 'candidate', index: 0, status: 'generating' });
+    try {
+      const html = await generateCandidate(ctx, spec, exemplarHtml);
+      candidate = await verifyCandidate(ctx, spec, html, 0);
+    } catch {
+      ctx.emit({ type: 'candidate', index: 0, status: 'failed' });
+      candidate = null;
+    }
   } finally {
-    // Отмена (checkCancelled внутри Promise.all-спана) не должна оставлять висящий
-    // stage-start: end эмитится всегда, иначе чип таймлайна пульсировал бы вечно.
+    // Отмена не должна оставить висящий stage-start: без end чип таймлайна
+    // пульсировал бы вечно.
     emitStage(ctx, 'generating', 'end');
   }
 
-  const alive: CandidateResult[] = [];
-  const aliveIndices: number[] = [];
-  candidates.forEach((c, i) => {
-    if (c && c.alive) { alive.push(c); aliveIndices.push(i); }
-  });
   let best: CandidateResult;
-  let bestOrigIndex = 0;
   let feedback = '';
 
-  if (alive.length === 0) {
-    const brokenCandidates = candidates.filter((c): c is CandidateResult => !!c);
-    if (brokenCandidates.length === 0) {
-      throw new Error('Не удалось сгенерировать ни одного кандидата.');
+  if (!candidate || !candidate.alive) {
+    // Кандидат один: подстраховки «возьмём другого» больше нет. Сломанный
+    // сохраняем best-effort, но заражённый запрещённым CDN — никогда.
+    if (!candidate) throw new Error('Не удалось сгенерировать кандидата.');
+    if (findForbiddenUrls(candidate.html, CDN_ALLOWED).length > 0) {
+      throw new Error('Кандидат содержит запрещённые внешние ресурсы.');
     }
-    // Заражённая CDN-артефактом версия не может уйти в библиотеку даже как best-effort —
-    // среди сломанных кандидатов предпочитаем чистого; если чистых нет, отказываемся сохранять.
-    const clean = brokenCandidates.find(
-      (c) => findForbiddenUrls(c.html, CDN_ALLOWED).length === 0,
-    );
-    if (!clean) throw new Error('Все кандидаты содержат запрещённые внешние ресурсы.');
-    const msg = 'Все кандидаты завершились с ошибками — сохранён лучший как есть.';
+    const msg = 'Кандидат завершился с ошибками — сохранён как есть.';
     warnings.push(msg);
     ctx.emit({ type: 'warning', message: msg });
-    best = clean;
-  } else if (mode.useJudge && ctx.hasVision && alive.length > 0) {
+    best = candidate;
+  } else if (mode.useJudge && ctx.hasVision) {
     checkCancelled();
     emitStage(ctx, 'judging', 'start');
     let verdict = null;
     try {
-      verdict = await judge(ctx, spec, alive);
+      verdict = await judge(ctx, spec, [candidate]);
     } catch {
       verdict = null; // судья недоступен/вернул мусор — деградируем ниже
     }
     emitStage(ctx, 'judging', 'end');
 
     if (!verdict) {
-      // судья недоступен ещё до первого вердикта — деградируем на первого живого кандидата,
-      // не теряя уже сгенерированные (и отрендеренные) варианты.
+      // судья недоступен ещё до первого вердикта — деградируем на единственного кандидата,
+      // не теряя уже сгенерированный (и отрендеренный) вариант.
       const msg = 'Судья недоступен — выбран первый кандидат.';
       warnings.push(msg);
       ctx.emit({ type: 'warning', message: msg });
-      best = alive[0];
+      best = candidate;
     } else {
       ctx.emit({
         type: 'judge-verdict', scores: verdict.scores, winnerIndex: verdict.winnerIndex,
-        candidateIndices: aliveIndices, feedback: verdict.feedback,
+        candidateIndices: [0], feedback: verdict.feedback,
       });
-      best = alive[verdict.winnerIndex];
-      bestOrigIndex = aliveIndices[verdict.winnerIndex] ?? aliveIndices[0];
+      best = candidate;
       feedback = verdict.feedback;
       // judge может вернуть массив scores короче числа кандидатов (сломанный JSON от модели);
       // подстраховываемся нулевым объектом, чтобы minScore() ниже не упал на undefined.
@@ -193,11 +172,7 @@ export async function runPipeline(
             const before = current;
             try {
               const refined = await refineHtml(ctx, best.html, feedback);
-              // Индекс — оригинальный индекс победителя: candidate/screenshot-события
-              // доводки должны обновлять КАРТОЧКУ победителя в UI, а не кандидата 0.
-              const verified = await verifyCandidate(
-                ctx, spec, refined, bestOrigIndex, styleNames[bestOrigIndex] ?? styleNames[0],
-              );
+              const verified = await verifyCandidate(ctx, spec, refined, 0);
               if (!verified.alive) {
                 // доводка сломала — оставляем предыдущее
                 ctx.emit({ type: 'refine-round', round: round + 1, before, after: null });
@@ -222,7 +197,7 @@ export async function runPipeline(
       }
     }
   } else {
-    best = alive[0];
+    best = candidate;
   }
 
   if (!best.render.animated) {

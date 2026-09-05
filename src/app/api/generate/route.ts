@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createJob, appendEvent, markCancelled, isCancelled } from '@/lib/jobs';
-import { makeCtx, runPipeline, resolveCandidates, CancelledError } from '@/lib/pipeline/run';
+import { makeCtx, runPipeline, CancelledError } from '@/lib/pipeline/run';
 import { activeProvider, resolveMode, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import type { QualityMode } from '@/lib/types';
 
@@ -10,13 +10,12 @@ interface GenerateInput {
   prompt: string;
   imageDataUrl?: string;
   mode: QualityMode;
-  candidates: number;
 }
 
 export async function POST(req: Request) {
-  const { prompt, imageDataUrl, mode: bodyMode, candidates: bodyCandidates } =
+  const { prompt, imageDataUrl, mode: bodyMode } =
     (await req.json()) as {
-      prompt: string; imageDataUrl?: string; mode?: QualityMode; candidates?: number;
+      prompt: string; imageDataUrl?: string; mode?: QualityMode;
     };
   // Провайдер проверяется ДО createJob: если он не настроен, job не создаётся вовсе —
   // клиент получает 400 без побочных эффектов (никакого осиротевшего job-файла).
@@ -24,9 +23,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: NO_PROVIDER_MESSAGE }, { status: 400 });
   }
   const mode = resolveMode(bodyMode);
-  const candidates = resolveCandidates(mode, bodyCandidates);
-  const job = createJob({ prompt, mode, candidates, hasImage: !!imageDataUrl });
-  void runDetached(job.id, { prompt, imageDataUrl, mode, candidates });
+  const job = createJob({ prompt, mode, hasImage: !!imageDataUrl });
+  void runDetached(job.id, { prompt, imageDataUrl, mode });
   return NextResponse.json({ jobId: job.id });
 }
 
