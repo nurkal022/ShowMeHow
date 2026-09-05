@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { instrument } from './artifact';
 import { renderArtifact, type RenderFn } from './renderer';
-import { createSimulation, listSimulations, saveThumbnail } from './storage';
+import { createSimulation, saveThumbnail } from './storage';
+import { getRepo } from './db/repo';
 
 export interface DemoEntry {
   slug: string;
@@ -58,39 +59,46 @@ export function listBundledDemos(): DemoEntry[] {
   return demos;
 }
 
-let installPromise: Promise<{ installed: string[]; skipped: string[] }> | null = null;
+const installPromises = new Map<string, Promise<{ installed: string[]; skipped: string[] }>>();
 
 /**
  * Конкурентные вызовы (например, несколько вкладок, открытых одновременно на старте)
  * должны разделять один запуск установки демок, а не гонять listBundledDemos()/createSimulation()
- * параллельно и рисковать дублями в библиотеке.
+ * параллельно и рисковать дублями в библиотеке. Запуск кэшируется по владельцу: два
+ * разных пользователя, нажавшие кнопку одновременно, обязаны получить каждый свой прогон.
  */
 export function installDemos(
+  ownerId: string,
   render: RenderFn = renderArtifact,
 ): Promise<{ installed: string[]; skipped: string[] }> {
-  installPromise ??= runInstallDemos(render).finally(() => { installPromise = null; });
-  return installPromise;
+  let pending = installPromises.get(ownerId);
+  if (!pending) {
+    pending = runInstallDemos(ownerId, render).finally(() => { installPromises.delete(ownerId); });
+    installPromises.set(ownerId, pending);
+  }
+  return pending;
 }
 
 async function runInstallDemos(
+  ownerId: string,
   render: RenderFn,
 ): Promise<{ installed: string[]; skipped: string[] }> {
   const installed: string[] = [];
   const skipped: string[] = [];
-  const existing = listSimulations();
   for (const demo of listBundledDemos()) {
-    if (existing.some((m) => m.demo === demo.slug)) {
+    if (await getRepo().hasDemo(ownerId, demo.slug)) {
       skipped.push(demo.slug);
       continue;
     }
     const html = instrument(demo.html);
     const report = await render(html);
-    const meta = createSimulation(
+    const meta = await createSimulation(
+      ownerId,
       { title: demo.title, prompt: demo.prompt, subject: demo.subject, tags: demo.tags, demo: demo.slug },
       html,
     );
     const thumbnail = report.screenshots[1] ?? report.screenshots[0];
-    if (thumbnail) saveThumbnail(meta.id, thumbnail);
+    if (thumbnail) await saveThumbnail(ownerId, meta.id, thumbnail);
     installed.push(demo.slug);
   }
   return { installed, skipped };

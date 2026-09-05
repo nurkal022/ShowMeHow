@@ -7,6 +7,8 @@ import type { Ctx } from '@/lib/pipeline/stages';
 import { getArtifact, getMeta, listHistory, createSimulation } from '@/lib/storage';
 import type { ChatMessage } from '@/lib/provider';
 import type { PipelineEvent, RenderReport, Role } from '@/lib/types';
+import { __setRepoForTests, createMemoryRepo } from '@/lib/db/repo';
+import { TEMP_OWNER_ID as OWNER } from '@/lib/auth/current';
 
 const SPEC = { title: 'Маятник', subject: 'Физика', mode: '2d', learningGoals: ['x'],
   physics: 'F=ma', parameters: [], visualPlan: 'v' };
@@ -57,14 +59,15 @@ function textCalls(chat: unknown) {
 
 beforeEach(() => {
   process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-'));
+  __setRepoForTests(createMemoryRepo());
 });
 
 describe('runPipeline', () => {
   it('fast mode: 1 candidate, no judge, saves simulation', async () => {
     const { ctx, events } = fakeCtx();
-    const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'fast' });
-    expect(getMeta(meta.id).title).toBe('Маятник');
-    expect(getArtifact(meta.id)).toContain('showmehow-runtime');
+    const meta = await runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'fast' });
+    expect((await getMeta(OWNER, meta.id))!.title).toBe('Маятник');
+    expect(await getArtifact(OWNER, meta.id)).toContain('showmehow-runtime');
     expect(callsByRole(ctx.chat, 'critic')).toHaveLength(1); // только критик, судьи нет
     expect(callsByRole(ctx.chat, 'judge')).toHaveLength(0);
     expect(events.at(-1)).toEqual({ type: 'done', simulationId: meta.id });
@@ -72,7 +75,7 @@ describe('runPipeline', () => {
 
   it('max mode: refines until threshold met', async () => {
     const { ctx, events } = fakeCtx({ firstScores: WEAK }); // первый суд: physics=6 < 8
-    await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
+    await runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'max' });
     // текстовые роли: план + 1 кандидат + 1 рефайн = 3
     expect(textCalls(ctx.chat)).toHaveLength(3);
     const judgeEvents = events.filter((e) => e.type === 'judge-verdict');
@@ -87,7 +90,7 @@ describe('runPipeline', () => {
 
   it('emits plan-ready with a PlanSummary derived from the plan spec', async () => {
     const { ctx, events } = fakeCtx();
-    await runPipeline(ctx, { prompt: 'маятник', mode: 'fast' });
+    await runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'fast' });
     const planReady = events.find((e) => e.type === 'plan-ready');
     expect(planReady).toMatchObject({
       type: 'plan-ready',
@@ -105,7 +108,7 @@ describe('runPipeline', () => {
     const signal = () => events.some(
       (e) => e.type === 'stage' && e.stage === 'generating' && e.status === 'end',
     );
-    await expect(runPipeline(ctx, { prompt: 'маятник', mode: 'standard' }, signal))
+    await expect(runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'standard' }, signal))
       .rejects.toThrow(CancelledError);
     expect(events.some((e) => e.type === 'done')).toBe(false);
     expect(callsByRole(ctx.chat, 'judge')).toHaveLength(0); // суд так и не был вызван
@@ -121,7 +124,7 @@ describe('runPipeline', () => {
       if (role === 'generator') generatorCalled = true;
       return origChat(role, msgs);
     });
-    await expect(runPipeline(ctx, { prompt: 'маятник', mode: 'standard' }, () => generatorCalled))
+    await expect(runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'standard' }, () => generatorCalled))
       .rejects.toThrow(CancelledError);
     // start не должен остаться висящим: end обязателен даже при отмене посреди этапа
     expect(events).toContainEqual(
@@ -137,7 +140,7 @@ describe('runPipeline', () => {
     // сигнал становится true сразу после judge-verdict — отмена ловится
     // проверкой перед кругом, уже ВНУТРИ refining-спана (после start).
     const signal = () => events.some((e) => e.type === 'judge-verdict');
-    await expect(runPipeline(ctx, { prompt: 'маятник', mode: 'standard' }, signal))
+    await expect(runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'standard' }, signal))
       .rejects.toThrow(CancelledError);
     expect(events).toContainEqual(
       { type: 'stage', stage: 'refining', status: 'start', at: expect.any(Number) });
@@ -168,7 +171,7 @@ describe('runPipeline', () => {
       render: vi.fn(async () => okRender),
       emit: (e) => events.push(e),
     };
-    await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
+    await runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'max' });
     expect(events.filter((e) => e.type === 'refine-round')).toHaveLength(1);
     // все candidate/screenshot-события ПОСЛЕ старта доводки — про единственного кандидата 0.
     const refineStart = events.findIndex(
@@ -183,8 +186,8 @@ describe('runPipeline', () => {
   it('all candidates broken: saves best-effort with warning', async () => {
     const bad: RenderReport = { ok: false, errors: ['err'], animated: false, screenshots: [] };
     const { ctx, events } = fakeCtx({ renders: Array(20).fill(bad) });
-    const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'fast' });
-    expect(getMeta(meta.id).warning).toMatch(/ошибк/i);
+    const meta = await runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'fast' });
+    expect((await getMeta(OWNER, meta.id))!.warning).toMatch(/ошибк/i);
     expect(events.some((e) => e.type === 'warning')).toBe(true);
   });
 
@@ -192,16 +195,16 @@ describe('runPipeline', () => {
     const staticReport: RenderReport = { ok: true, errors: [], animated: false,
       screenshots: [Buffer.from('png')] };
     const { ctx, events } = fakeCtx({ renders: Array(20).fill(staticReport) });
-    const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'fast' });
-    expect(getMeta(meta.id).warning).toMatch(/анимация/i);
+    const meta = await runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'fast' });
+    expect((await getMeta(OWNER, meta.id))!.warning).toMatch(/анимация/i);
     expect(events.some((e) => e.type === 'warning' && /анимация/i.test(e.message))).toBe(true);
   });
 
   it('vision unavailable: standard mode degrades with warning', async () => {
     const { ctx, events } = fakeCtx();
     ctx.hasVision = false;
-    const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'standard' });
-    expect(getMeta(meta.id).warning).toMatch(/vision/i);
+    const meta = await runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'standard' });
+    expect((await getMeta(OWNER, meta.id))!.warning).toMatch(/vision/i);
     expect(events.some((e) => e.type === 'warning')).toBe(true);
   });
 
@@ -221,9 +224,9 @@ describe('runPipeline', () => {
       render: vi.fn(async () => okRender),
       emit: (e) => events.push(e),
     };
-    const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'standard' });
-    expect(getMeta(meta.id).warning).toMatch(/судья/i);
-    expect(getArtifact(meta.id)).toContain('showmehow-runtime');
+    const meta = await runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'standard' });
+    expect((await getMeta(OWNER, meta.id))!.warning).toMatch(/судья/i);
+    expect(await getArtifact(OWNER, meta.id)).toContain('showmehow-runtime');
     expect(events.some((e) => e.type === 'warning')).toBe(true);
   });
 
@@ -247,7 +250,7 @@ describe('runPipeline', () => {
       render: vi.fn(async () => badRender),
       emit: () => {},
     };
-    await expect(runPipeline(ctx, { prompt: 'маятник', mode: 'standard' }))
+    await expect(runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'standard' }))
       .rejects.toThrow(/запрещённые внешние ресурсы/i);
   });
 
@@ -272,12 +275,12 @@ describe('runPipeline', () => {
       render: vi.fn(async () => okRender),
       emit: (e) => events.push(e),
     };
-    const meta = await runPipeline(ctx, { prompt: 'маятник', mode: 'max' });
-    expect(getArtifact(meta.id)).toContain('showmehow-runtime');
+    const meta = await runPipeline(ctx, { ownerId: OWNER, prompt: 'маятник', mode: 'max' });
+    expect(await getArtifact(OWNER, meta.id)).toContain('showmehow-runtime');
     // Дискриминация от guard 1: без `?? ZERO_SCORES` minScore(undefined) кидает ВНЕ
     // внутреннего try, попадает во внешний catch, и пайплайн деградирует с предупреждением
     // «Судья недоступен» без рефайна. Проверяем, что этого НЕ произошло:
-    expect(getMeta(meta.id).warning ?? '').not.toMatch(/судья недоступен/i);
+    expect((await getMeta(OWNER, meta.id))!.warning ?? '').not.toMatch(/судья недоступен/i);
     // ...и что рефайн реально состоялся: план(1) + 1 кандидат(1) + 1 рефайн(1) = 3
     // (нулевые баллы < порога 8 → круг 1; rescore возвращает GOOD ≥ 8 → стоп).
     expect(textCalls(chat)).toHaveLength(3);
@@ -289,17 +292,17 @@ describe('runPipeline', () => {
 
 describe('refineExisting', () => {
   it('updates artifact and keeps history', async () => {
-    const meta = createSimulation(
-      { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
+    const meta = await createSimulation(
+      OWNER, { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
     const { ctx } = fakeCtx();
-    await refineExisting(ctx, meta.id, 'сделай медленнее');
-    expect(getArtifact(meta.id)).toContain('showmehow-runtime');
-    expect(listHistory(meta.id)).toHaveLength(1);
+    await refineExisting(ctx, OWNER, meta.id, 'сделай медленнее');
+    expect(await getArtifact(OWNER, meta.id)).toContain('showmehow-runtime');
+    expect(await listHistory(OWNER, meta.id)).toHaveLength(1);
   });
 
   it('scans refined html for forbidden CDN urls: fixer cleans it -> artifact updated', async () => {
-    const meta = createSimulation(
-      { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
+    const meta = await createSimulation(
+      OWNER, { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
     const TAINTED = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
       + '<script src="https://evil.example.com/bad.js"></script></body></html>';
     const chat = vi.fn(async (role: Role) => {
@@ -313,13 +316,13 @@ describe('refineExisting', () => {
       render: vi.fn(async () => okRender),
       emit: () => {},
     };
-    await refineExisting(ctx, meta.id, 'сделай медленнее');
-    expect(getArtifact(meta.id)).not.toContain('evil.example.com');
+    await refineExisting(ctx, OWNER, meta.id, 'сделай медленнее');
+    expect(await getArtifact(OWNER, meta.id)).not.toContain('evil.example.com');
   });
 
   it('scans refined html for forbidden CDN urls: fixer fails to clean -> rejects, artifact unchanged', async () => {
-    const meta = createSimulation(
-      { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
+    const meta = await createSimulation(
+      OWNER, { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
     const TAINTED = '<!DOCTYPE html><html><head></head><body><canvas></canvas>'
       + '<script src="https://evil.example.com/bad.js"></script></body></html>';
     const chat = vi.fn(async (role: Role) => {
@@ -332,9 +335,9 @@ describe('refineExisting', () => {
       render: vi.fn(async () => okRender),
       emit: () => {},
     };
-    await expect(refineExisting(ctx, meta.id, 'сделай медленнее'))
+    await expect(refineExisting(ctx, OWNER, meta.id, 'сделай медленнее'))
       .rejects.toThrow(/запрещённые внешние ресурсы/i);
-    expect(getArtifact(meta.id)).toBe('<html>old</html>');
+    expect(await getArtifact(OWNER, meta.id)).toBe('<html>old</html>');
   });
 });
 
@@ -342,7 +345,7 @@ describe('один кандидат', () => {
   it('генерируется ровно один кандидат в любом режиме', async () => {
     for (const mode of ['fast', 'standard', 'max'] as const) {
       const { ctx } = fakeCtx();
-      await runPipeline(ctx, { prompt: 'тест', mode });
+      await runPipeline(ctx, { ownerId: OWNER, prompt: 'тест', mode });
       const gen = (ctx.chat as ReturnType<typeof vi.fn>).mock.calls
         .filter((call) => call[0] === 'generator');
       expect(gen, `режим ${mode}`).toHaveLength(1);
@@ -357,7 +360,7 @@ describe('один кандидат', () => {
 
   it('событие candidate не несёт styleHint', async () => {
     const { ctx, events } = fakeCtx();
-    await runPipeline(ctx, { prompt: 'тест', mode: 'fast' });
+    await runPipeline(ctx, { ownerId: OWNER, prompt: 'тест', mode: 'fast' });
     for (const e of events.filter((x) => x.type === 'candidate')) {
       expect(e).not.toHaveProperty('styleHint');
     }

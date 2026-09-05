@@ -74,7 +74,7 @@ function planSummary(spec: PlanSpec): PlanSummary {
 
 export async function runPipeline(
   ctx: Ctx,
-  input: { prompt: string; imageDataUrl?: string; mode: QualityMode },
+  input: { ownerId: string; prompt: string; imageDataUrl?: string; mode: QualityMode },
   signal?: () => boolean,
 ): Promise<SimulationMeta> {
   function checkCancelled(): void {
@@ -208,13 +208,13 @@ export async function runPipeline(
 
   checkCancelled();
   emitStage(ctx, 'saving', 'start');
-  const meta = createSimulation({
+  const meta = await createSimulation(input.ownerId, {
     title: spec.title, prompt: input.prompt, subject: spec.subject,
     tags: spec.learningGoals.slice(0, 3),
     warning: warnings.length ? warnings.join(' ') : undefined,
   }, best.html);
   const shot = best.render.screenshots[1] ?? best.render.screenshots[0];
-  if (shot) saveThumbnail(meta.id, shot);
+  if (shot) await saveThumbnail(input.ownerId, meta.id, shot);
   emitStage(ctx, 'saving', 'end');
   ctx.emit({ type: 'done', simulationId: meta.id });
   return meta;
@@ -229,8 +229,11 @@ async function refineHtml(ctx: Ctx, html: string, feedback: string): Promise<str
   return instrument(extractHtml(out));
 }
 
-export async function refineExisting(ctx: Ctx, id: string, instruction: string): Promise<void> {
-  const html = getArtifact(id);
+export async function refineExisting(
+  ctx: Ctx, ownerId: string, id: string, instruction: string,
+): Promise<void> {
+  const html = await getArtifact(ownerId, id);
+  if (html === null) throw new Error('Симуляция не найдена');
   emitStage(ctx, 'refining', 'start');
   try {
     let refined = await refineHtml(ctx, html, instruction);
@@ -247,9 +250,9 @@ export async function refineExisting(ctx: Ctx, id: string, instruction: string):
     if (forbidden.length > 0) {
       throw new Error('Правка внесла запрещённые внешние ресурсы: ' + forbidden.join(', '));
     }
-    updateArtifact(id, refined);
+    await updateArtifact(ownerId, id, refined);
     const shot = report.screenshots[1] ?? report.screenshots[0];
-    if (shot) saveThumbnail(id, shot);
+    if (shot) await saveThumbnail(ownerId, id, shot);
   } finally {
     emitStage(ctx, 'refining', 'end');
   }

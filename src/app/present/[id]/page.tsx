@@ -1,13 +1,15 @@
 import { getRenderableArtifact } from '@/lib/storage';
+import { TEMP_OWNER_ID } from '@/lib/auth/current';
 
 export default async function Present({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  let html: string;
+  let html: string | null;
   try {
-    html = getRenderableArtifact(id);
+    html = await getRenderableArtifact(TEMP_OWNER_ID, id);
   } catch {
-    return <p style={{ padding: 20 }}>Симуляция не найдена.</p>;
+    html = null;
   }
+  if (html === null) return <p style={{ padding: 20 }}>Симуляция не найдена.</p>;
   return (
     <>
       <iframe

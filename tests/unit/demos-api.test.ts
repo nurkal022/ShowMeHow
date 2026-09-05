@@ -3,12 +3,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { POST as postDemos } from '@/app/api/demos/route';
+import { __setRepoForTests, createMemoryRepo } from '@/lib/db/repo';
 
 beforeEach(() => {
   process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-data-'));
   // Пустая папка демок — installDemos() должен вернуть пустые списки без
   // запуска реального рендера (playwright), т.к. нет ни одной демки для установки.
   process.env.SHOWMEHOW_DEMOS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-demos-'));
+  __setRepoForTests(createMemoryRepo());
 });
 
 describe('POST /api/demos', () => {

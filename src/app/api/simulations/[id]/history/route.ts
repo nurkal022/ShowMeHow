@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { listHistory, restoreVersion, getRenderableArtifact, saveThumbnail } from '@/lib/storage';
 import { renderArtifact } from '@/lib/renderer';
+import { TEMP_OWNER_ID } from '@/lib/auth/current';
 
 type P = { params: Promise<{ id: string }> };
 
@@ -11,7 +12,9 @@ function isInvalidSegment(e: unknown): boolean {
 export async function GET(_req: Request, { params }: P) {
   const { id } = await params;
   try {
-    return NextResponse.json(listHistory(id));
+    const hist = await listHistory(TEMP_OWNER_ID, id);
+    if (hist === null) return NextResponse.json({ error: 'not found' }, { status: 404 });
+    return NextResponse.json(hist);
   } catch (e) {
     const status = isInvalidSegment(e) ? 400 : 404;
     return NextResponse.json({ error: 'not found' }, { status });
@@ -22,12 +25,14 @@ export async function POST(req: Request, { params }: P) {
   const { id } = await params;
   const { name } = (await req.json()) as { name: string };
   try {
-    restoreVersion(id, name);
-    const html = getRenderableArtifact(id);
+    const ok = await restoreVersion(TEMP_OWNER_ID, id, name);
+    if (!ok) return NextResponse.json({ error: 'not found' }, { status: 404 });
+    const html = await getRenderableArtifact(TEMP_OWNER_ID, id);
+    if (html === null) return NextResponse.json({ error: 'not found' }, { status: 404 });
     try {
       const report = await renderArtifact(html);
       const shot = report.screenshots[1] ?? report.screenshots[0];
-      if (shot) saveThumbnail(id, shot);
+      if (shot) await saveThumbnail(TEMP_OWNER_ID, id, shot);
     } catch {
       // рендер thumbnail упал — restore всё равно успешен, просто не обновляем превью
     }

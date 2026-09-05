@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { dataDir } from './settings';
 import { reinstrument } from './artifact';
+import { getRepo } from './db/repo';
 import type { SimulationMeta } from './types';
 
 function assertSafe(segment: string): void {
@@ -17,102 +18,108 @@ function simsRoot(): string {
 function simDir(id: string): string {
   return path.join(simsRoot(), id);
 }
-function metaPath(id: string): string {
-  return path.join(simDir(id), 'meta.json');
-}
 function artifactPath(id: string): string {
   return path.join(simDir(id), 'artifact.html');
 }
 
-export function createSimulation(
+/**
+ * Владение проверяется до любого обращения к диску: каталог адресуется по uuid,
+ * поэтому единственная защита от чужого id — запись в базе. Отсутствие прав и
+ * отсутствие записи неотличимы намеренно (см. спецификацию, раздел 4).
+ */
+async function owned(ownerId: string, id: string): Promise<boolean> {
+  assertSafe(id);
+  const rec = await getRepo().get(id);
+  return !!rec && rec.ownerId === ownerId;
+}
+
+export async function createSimulation(
+  ownerId: string,
   input: { title: string; prompt: string; subject: string; tags: string[]; warning?: string; demo?: string },
   html: string,
-): SimulationMeta {
+): Promise<SimulationMeta> {
   const now = new Date().toISOString();
   const meta: SimulationMeta = { id: crypto.randomUUID(), createdAt: now, updatedAt: now, ...input };
+  await getRepo().insert({ ...meta, ownerId });
   fs.mkdirSync(path.join(simDir(meta.id), 'history'), { recursive: true });
-  fs.writeFileSync(metaPath(meta.id), JSON.stringify(meta, null, 2));
   fs.writeFileSync(artifactPath(meta.id), html);
   return meta;
 }
 
-export function getMeta(id: string): SimulationMeta {
+export async function getMeta(ownerId: string, id: string): Promise<SimulationMeta | null> {
   assertSafe(id);
-  return JSON.parse(fs.readFileSync(metaPath(id), 'utf8'));
+  const rec = await getRepo().get(id);
+  if (!rec || rec.ownerId !== ownerId) return null;
+  const { ownerId: _owner, ...meta } = rec;
+  return meta;
 }
 
-export function getArtifact(id: string): string {
-  assertSafe(id);
-  return fs.readFileSync(artifactPath(id), 'utf8');
+export async function getArtifact(ownerId: string, id: string): Promise<string | null> {
+  if (!(await owned(ownerId, id))) return null;
+  try {
+    return fs.readFileSync(artifactPath(id), 'utf8');
+  } catch {
+    // Запись в базе есть, а файла нет — библиотека не должна падать целиком.
+    return null;
+  }
 }
 
 /** HTML для показа/скачивания: всегда со СВЕЖИМ рантаймом (ретроактивно для старых симов). */
-export function getRenderableArtifact(id: string): string {
-  return reinstrument(getArtifact(id));
+export async function getRenderableArtifact(ownerId: string, id: string): Promise<string | null> {
+  const html = await getArtifact(ownerId, id);
+  return html === null ? null : reinstrument(html);
 }
 
-export function listSimulations(): SimulationMeta[] {
-  if (!fs.existsSync(simsRoot())) return [];
-  const metas: SimulationMeta[] = [];
-  for (const d of fs.readdirSync(simsRoot())) {
-    if (!fs.existsSync(metaPath(d))) continue;
-    try {
-      metas.push(getMeta(d));
-    } catch {
-      // повреждённый meta.json не должен ронять всю библиотеку — пропускаем запись
-    }
-  }
-  return metas.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+export async function listSimulations(ownerId: string): Promise<SimulationMeta[]> {
+  return getRepo().listByOwner(ownerId);
 }
 
-function touch(id: string): void {
-  const meta = getMeta(id);
-  meta.updatedAt = new Date().toISOString();
-  fs.writeFileSync(metaPath(id), JSON.stringify(meta, null, 2));
-}
-
-export function updateArtifact(id: string, html: string): void {
-  assertSafe(id);
+export async function updateArtifact(ownerId: string, id: string, html: string): Promise<boolean> {
+  if (!(await owned(ownerId, id))) return false;
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const historyDir = path.join(simDir(id), 'history');
+  fs.mkdirSync(historyDir, { recursive: true });
   let historyFile = path.join(historyDir, `${stamp}.html`);
-
-  // Handle collision: if file exists, append numeric suffix until unique
   let suffix = 2;
   while (fs.existsSync(historyFile)) {
     historyFile = path.join(historyDir, `${stamp}-${suffix}.html`);
     suffix++;
   }
-
   fs.renameSync(artifactPath(id), historyFile);
   fs.writeFileSync(artifactPath(id), html);
-  touch(id);
+  await getRepo().touch(id, new Date().toISOString());
+  return true;
 }
 
-export function listHistory(id: string): string[] {
-  assertSafe(id);
-  return fs.readdirSync(path.join(simDir(id), 'history')).sort().reverse();
+export async function listHistory(ownerId: string, id: string): Promise<string[] | null> {
+  if (!(await owned(ownerId, id))) return null;
+  const dir = path.join(simDir(id), 'history');
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).sort().reverse();
 }
 
-export function restoreVersion(id: string, name: string): void {
-  assertSafe(id);
+export async function restoreVersion(ownerId: string, id: string, name: string): Promise<boolean> {
   assertSafe(name);
+  if (!(await owned(ownerId, id))) return false;
   const restored = fs.readFileSync(path.join(simDir(id), 'history', name), 'utf8');
-  updateArtifact(id, restored);
+  return updateArtifact(ownerId, id, restored);
 }
 
-export function deleteSimulation(id: string): void {
-  assertSafe(id);
+export async function deleteSimulation(ownerId: string, id: string): Promise<void> {
+  if (!(await owned(ownerId, id))) return;
+  await getRepo().remove(id);
   fs.rmSync(simDir(id), { recursive: true, force: true });
 }
 
-export function saveThumbnail(id: string, png: Buffer): void {
-  assertSafe(id);
+export async function saveThumbnail(ownerId: string, id: string, png: Buffer): Promise<boolean> {
+  if (!(await owned(ownerId, id))) return false;
+  fs.mkdirSync(simDir(id), { recursive: true });
   fs.writeFileSync(path.join(simDir(id), 'thumbnail.png'), png);
+  return true;
 }
 
-export function getThumbnailPath(id: string): string | null {
-  assertSafe(id);
+export async function getThumbnailPath(ownerId: string, id: string): Promise<string | null> {
+  if (!(await owned(ownerId, id))) return null;
   const p = path.join(simDir(id), 'thumbnail.png');
   return fs.existsSync(p) ? p : null;
 }

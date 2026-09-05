@@ -9,15 +9,27 @@ import { getArtifact } from '../src/lib/storage';
 import { renderArtifact, closeBrowser } from '../src/lib/renderer';
 import type { RubricScores } from '../src/lib/types';
 
+/** Прогоны эвалов принадлежат конкретному пользователю — id задаётся окружением. */
+function evalOwnerId(): string {
+  const id = process.env.SHOWMEHOW_EVAL_OWNER_ID;
+  if (!id) {
+    throw new Error('Задайте SHOWMEHOW_EVAL_OWNER_ID: id пользователя, которому принадлежат прогоны');
+  }
+  return id;
+}
+
 async function evalOne(prompt: string): Promise<EvalRow> {
   try {
+    const ownerId = evalOwnerId();
     const ctx = makeCtx(() => {});
-    const meta = await runPipeline(ctx, { prompt, mode: 'max' });
+    const meta = await runPipeline(ctx, { ownerId, prompt, mode: 'max' });
     // финальная независимая оценка сохранённого артефакта
     const spec = await plan(ctx, prompt);
-    const render = await renderArtifact(getArtifact(meta.id));
+    const html = await getArtifact(ownerId, meta.id);
+    if (html === null) throw new Error('Артефакт прогона не найден');
+    const render = await renderArtifact(html);
     const { scores } = await rescore(ctx, spec,
-      { html: getArtifact(meta.id), render, critic: null, alive: render.ok });
+      { html, render, critic: null, alive: render.ok });
     return { prompt, scores };
   } catch (e) {
     return { prompt, scores: null, error: e instanceof Error ? e.message : String(e) };
