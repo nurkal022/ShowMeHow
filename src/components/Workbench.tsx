@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { PipelineEvent, QualityMode } from '@/lib/types';
+import type { JobStatus } from '@/lib/jobs';
 import { historyLabel } from '@/lib/history-label';
 import ProgressView from './progress/ProgressView';
 import PreviewFrame from './PreviewFrame';
@@ -9,6 +10,20 @@ import PreviewFrame from './PreviewFrame';
 type Phase = 'idle' | 'generating' | 'ready' | 'error';
 
 const ACTIVE_JOB_KEY = 'showmehow-active-job';
+
+/**
+ * Что делать при восстановлении job из localStorage при монтировании, в зависимости
+ * от его текущего статуса на сервере. 'queued' обрабатывается так же, как 'running':
+ * задание ещё живо (просто не стартовало), поэтому вместо ошибки мы переподключаемся
+ * к SSE-потоку — реплей уже содержит событие { type: 'queued', position }, и дальше
+ * job сам пришлёт стадии, когда до него дойдёт очередь.
+ */
+export function restoredJobAction(status: JobStatus): 'reconnect' | 'open' | 'cancelled' | 'error' {
+  if (status === 'running' || status === 'queued') return 'reconnect';
+  if (status === 'done') return 'open';
+  if (status === 'cancelled') return 'cancelled';
+  return 'error';
+}
 
 interface QuotaInfo {
   limit: number | null;
@@ -89,21 +104,25 @@ export default function Workbench() {
           return;
         }
         const job = await res.json();
-        if (job.status === 'running') {
-          setJobId(activeJobId);
-          await connectToJob(activeJobId);
-        } else if (job.status === 'done') {
-          localStorage.removeItem(ACTIVE_JOB_KEY);
-          if (job.simulationId) await openSimulation(job.simulationId);
-        } else if (job.status === 'cancelled') {
-          localStorage.removeItem(ACTIVE_JOB_KEY);
-          setError('Генерация отменена');
-          setPhase('idle');
-        } else {
-          // error
-          localStorage.removeItem(ACTIVE_JOB_KEY);
-          setError(job.error ?? 'Ошибка генерации');
-          setPhase('error');
+        switch (restoredJobAction(job.status)) {
+          case 'reconnect':
+            setJobId(activeJobId);
+            await connectToJob(activeJobId);
+            break;
+          case 'open':
+            localStorage.removeItem(ACTIVE_JOB_KEY);
+            if (job.simulationId) await openSimulation(job.simulationId);
+            break;
+          case 'cancelled':
+            localStorage.removeItem(ACTIVE_JOB_KEY);
+            setError('Генерация отменена');
+            setPhase('idle');
+            break;
+          default:
+            localStorage.removeItem(ACTIVE_JOB_KEY);
+            setError(job.error ?? 'Ошибка генерации');
+            setPhase('error');
+            break;
         }
       } catch {
         // Сеть недоступна прямо сейчас — оставляем ключ; при следующей загрузке

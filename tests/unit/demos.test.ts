@@ -7,7 +7,7 @@ import { listSimulations, getArtifact, getThumbnailPath } from '@/lib/storage';
 import type { RenderReport } from '@/lib/types';
 import type { RenderFn } from '@/lib/renderer';
 import { __setRepoForTests, createMemoryRepo } from '@/lib/db/repo';
-const TEMP_OWNER_ID = '11111111-1111-1111-1111-111111111111';
+const TEST_OWNER_ID = '11111111-1111-1111-1111-111111111111';
 
 const FIXTURE_HTML = `<!DOCTYPE html><html><head><title>fixture</title></head><body>
 <canvas id="c" width="400" height="300"></canvas>
@@ -79,42 +79,42 @@ describe('demos', () => {
 
   it('installDemos installs the fixture with a fake render (instrumented artifact, demo tag, thumbnail)', async () => {
     writeDemo(demosDir, 'test-demo');
-    const result = await installDemos(TEMP_OWNER_ID, fakeRender);
+    const result = await installDemos(TEST_OWNER_ID, fakeRender);
     expect(result.installed).toEqual(['test-demo']);
     expect(result.skipped).toEqual([]);
 
-    const sims = await listSimulations(TEMP_OWNER_ID);
+    const sims = await listSimulations(TEST_OWNER_ID);
     expect(sims).toHaveLength(1);
     expect(sims[0].demo).toBe('test-demo');
     expect(sims[0].title).toBe('Тестовая демка');
 
-    const html = await getArtifact(TEMP_OWNER_ID, sims[0].id);
+    const html = await getArtifact(TEST_OWNER_ID, sims[0].id);
     expect(html).toContain('showmehow-runtime');
 
-    const thumb = await getThumbnailPath(TEMP_OWNER_ID, sims[0].id);
+    const thumb = await getThumbnailPath(TEST_OWNER_ID, sims[0].id);
     expect(thumb).not.toBeNull();
   });
 
   it('installDemos is idempotent: second run skips already-installed demo, library does not grow', async () => {
     writeDemo(demosDir, 'test-demo');
-    await installDemos(TEMP_OWNER_ID, fakeRender);
-    const second = await installDemos(TEMP_OWNER_ID, fakeRender);
+    await installDemos(TEST_OWNER_ID, fakeRender);
+    const second = await installDemos(TEST_OWNER_ID, fakeRender);
     expect(second.installed).toEqual([]);
     expect(second.skipped).toEqual(['test-demo']);
-    expect(await listSimulations(TEMP_OWNER_ID)).toHaveLength(1);
+    expect(await listSimulations(TEST_OWNER_ID)).toHaveLength(1);
   });
 
   it('concurrent installDemos calls share one run: no duplicate installs', async () => {
     writeDemo(demosDir, 'test-demo');
     writeDemo(demosDir, 'another-demo');
     const [first, second] = await Promise.all(
-      [installDemos(TEMP_OWNER_ID, fakeRender), installDemos(TEMP_OWNER_ID, fakeRender)]);
+      [installDemos(TEST_OWNER_ID, fakeRender), installDemos(TEST_OWNER_ID, fakeRender)]);
     expect(first).toEqual(second);
     expect(first.installed.sort()).toEqual(['another-demo', 'test-demo']);
     expect(first.skipped).toEqual([]);
-    expect(await listSimulations(TEMP_OWNER_ID)).toHaveLength(2);
+    expect(await listSimulations(TEST_OWNER_ID)).toHaveLength(2);
     // после завершения in-flight запуск сбрасывается — следующий вызов не переиспользует старый промис
-    const third = await installDemos(TEMP_OWNER_ID, fakeRender);
+    const third = await installDemos(TEST_OWNER_ID, fakeRender);
     expect(third.installed).toEqual([]);
     expect(third.skipped.sort()).toEqual(['another-demo', 'test-demo']);
   });

@@ -21,7 +21,7 @@ vi.mock('@/lib/auth/session', async (orig) => ({
   currentUserFromCookies: async () => TEST_USER,
 }));
 
-const TEMP_OWNER_ID = TEST_USER.id;
+const TEST_OWNER_ID = TEST_USER.id;
 
 beforeEach(() => {
   process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-'));
@@ -31,7 +31,7 @@ beforeEach(() => {
 describe('simulations api', () => {
   it('list, get, delete', async () => {
     const meta = await createSimulation(
-      TEMP_OWNER_ID, { title: 'т', prompt: 'п', subject: 'Физика', tags: [] }, '<html>x</html>');
+      TEST_OWNER_ID, { title: 'т', prompt: 'п', subject: 'Физика', tags: [] }, '<html>x</html>');
     const list = await (await listSims(new Request('http://t'))).json();
     expect(list).toHaveLength(1);
     const params = Promise.resolve({ id: meta.id });
@@ -79,11 +79,11 @@ describe('getRenderableArtifact', () => {
 
   it('injects the current runtime into a raw stored artifact', async () => {
     const { id } = await createSimulation(
-      TEMP_OWNER_ID,
+      TEST_OWNER_ID,
       META,
       '<!DOCTYPE html><html><head><title>t</title></head><body></body></html>',
     );
-    const html = (await getRenderableArtifact(TEMP_OWNER_ID, id))!;
+    const html = (await getRenderableArtifact(TEST_OWNER_ID, id))!;
     expect(html).toContain('<!--showmehow-runtime-->');
     expect(html).toContain('<!--/showmehow-runtime-->');
   });
@@ -92,8 +92,8 @@ describe('getRenderableArtifact', () => {
     const legacy = '<!DOCTYPE html><html><head>' +
       '<!--showmehow-runtime--><script>/*old*/</script><style>.o{}</style><script>/*old*/</script>' +
       '<title>t</title></head><body></body></html>';
-    const { id } = await createSimulation(TEMP_OWNER_ID, META, legacy);
-    const html = (await getRenderableArtifact(TEMP_OWNER_ID, id))!;
+    const { id } = await createSimulation(TEST_OWNER_ID, META, legacy);
+    const html = (await getRenderableArtifact(TEST_OWNER_ID, id))!;
     expect(html).not.toContain('/*old*/');
     expect(html.split('<!--showmehow-runtime-->').length - 1).toBe(1);
   });
@@ -102,8 +102,8 @@ describe('getRenderableArtifact', () => {
 describe('history api', () => {
   it('lists history after an update and restores a version round-trip', async () => {
     const meta = await createSimulation(
-      TEMP_OWNER_ID, { title: 'т', prompt: 'п', subject: 'Физика', tags: [] }, '<html>v1</html>');
-    await updateArtifact(TEMP_OWNER_ID, meta.id, '<html>v2</html>');
+      TEST_OWNER_ID, { title: 'т', prompt: 'п', subject: 'Физика', tags: [] }, '<html>v1</html>');
+    await updateArtifact(TEST_OWNER_ID, meta.id, '<html>v2</html>');
     const params = Promise.resolve({ id: meta.id });
 
     const list = await (await getHistory(new Request('http://t'), { params })).json();
@@ -127,8 +127,8 @@ describe('history api', () => {
 
   it('POST returns 400 for a path-traversal name', async () => {
     const meta = await createSimulation(
-      TEMP_OWNER_ID, { title: 'т', prompt: 'п', subject: 'Физика', tags: [] }, '<html>v1</html>');
-    await updateArtifact(TEMP_OWNER_ID, meta.id, '<html>v2</html>');
+      TEST_OWNER_ID, { title: 'т', prompt: 'п', subject: 'Физика', tags: [] }, '<html>v1</html>');
+    await updateArtifact(TEST_OWNER_ID, meta.id, '<html>v2</html>');
     const res = await postHistory(
       new Request('http://t', { method: 'POST', body: JSON.stringify({ name: '../../etc/passwd' }) }),
       { params: Promise.resolve({ id: meta.id }) },
