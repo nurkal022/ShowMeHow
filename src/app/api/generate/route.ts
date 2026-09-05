@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import {
   createJob, appendEvent, markCancelled, isCancelled, setStatus,
 } from '@/lib/jobs';
-import { hasActive, submit, queuePosition } from '@/lib/limits';
+import { reserveUser, releaseUser, submit, queuePosition } from '@/lib/limits';
 import { quotaStatus, QUOTA_EXHAUSTED_MESSAGE } from '@/lib/quota';
 import { makeCtx, runPipeline, CancelledError } from '@/lib/pipeline/run';
 import { activeProvider, resolveMode, NO_PROVIDER_MESSAGE } from '@/lib/settings';
@@ -31,23 +31,39 @@ export async function POST(req: Request) {
   if (!activeProvider()) {
     return NextResponse.json({ error: NO_PROVIDER_MESSAGE }, { status: 400 });
   }
-  const quota = await quotaStatus(user);
-  if (quota.remaining !== null && quota.remaining <= 0) {
-    return NextResponse.json({ error: QUOTA_EXHAUSTED_MESSAGE }, { status: 403 });
-  }
-  if (hasActive(user.id)) {
+  // Резервация СИНХРОННО закрепляет за пользователем единственную генерацию —
+  // до первого await, иначе два одновременных POST прошли бы проверку оба
+  // (и заняли бы оба слота сервера, и переступили бы квоту на единицу).
+  if (!reserveUser(user.id)) {
     return NextResponse.json(
       { error: 'У вас уже идёт генерация. Дождитесь её окончания или отмените.' }, { status: 409 });
   }
-  const mode = resolveMode(bodyMode);
-  const job = await createJob(user.id, { prompt, mode, hasImage: !!imageDataUrl });
-  const state = submit(job.id, user.id,
-    () => void runDetached(job.id, { ownerId: user.id, prompt, imageDataUrl, mode }));
-  setStatus(job.id, state === 'running' ? 'running' : 'queued');
-  if (state === 'queued') {
-    appendEvent(job.id, { type: 'queued', position: queuePosition(job.id) });
+  let jobId = '';
+  try {
+    const quota = await quotaStatus(user);
+    if (quota.remaining !== null && quota.remaining <= 0) {
+      releaseUser(user.id);
+      return NextResponse.json({ error: QUOTA_EXHAUSTED_MESSAGE }, { status: 403 });
+    }
+    const mode = resolveMode(bodyMode);
+    const job = await createJob(user.id, { prompt, mode, hasImage: !!imageDataUrl });
+    jobId = job.id;
+    // 'running' ставится внутри start, а не после возврата из submit: только так
+    // задание, поднятое из очереди освободившимся слотом, тоже получает свой статус.
+    const state = submit(jobId, user.id, () => {
+      setStatus(jobId, 'running');
+      void runDetached(jobId, { ownerId: user.id, prompt, imageDataUrl, mode });
+    });
+    if (state === 'queued') {
+      appendEvent(jobId, { type: 'queued', position: queuePosition(jobId) });
+    }
+  } catch (e) {
+    // До submit резервация ещё висит на пользователе; после него она уже снята
+    // и повторный releaseUser безвреден.
+    releaseUser(user.id);
+    throw e;
   }
-  return NextResponse.json({ jobId: job.id });
+  return NextResponse.json({ jobId });
 }
 
 async function runDetached(jobId: string, input: GenerateInput): Promise<void> {

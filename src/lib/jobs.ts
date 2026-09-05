@@ -26,6 +26,13 @@ const jobs = new Map<string, Job>();
 const cancelFlags = new Set<string>();
 const subscribers = new Map<string, Set<(e: PipelineEvent) => void>>();
 
+const TERMINAL: readonly JobStatus[] = ['done', 'error', 'cancelled'];
+
+/** Терминальный статус окончателен: после него журнал и статус больше не меняются. */
+function isTerminal(status: JobStatus): boolean {
+  return TERMINAL.includes(status);
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -56,7 +63,10 @@ export async function flushJobWrites(): Promise<void> {
  * поэтому промежуточный журнал на диске никому не нужен.
  */
 function persistTerminal(job: Job): void {
-  const { id, status, events, simulationId, error } = job;
+  const { id, status, simulationId, error } = job;
+  // Снимок журнала берётся здесь, а не внутри отложенной записи: массив живой,
+  // и к моменту stringify в него могло бы попасть событие, пришедшее после терминального.
+  const events = job.events.slice();
   enqueueWrite(async () => {
     await db().query(
       'UPDATE jobs SET status = $2, events = $3::jsonb, simulation_id = $4, error = $5 WHERE id = $1',
@@ -85,7 +95,7 @@ export async function createJob(ownerId: string, request: JobRequest): Promise<J
 /** Статус ставит вызывающий сразу после submit: 'running' или 'queued'. */
 export function setStatus(id: string, status: JobStatus): void {
   const job = jobs.get(id);
-  if (!job) return;
+  if (!job || isTerminal(job.status)) return;
   job.status = status;
   enqueueWrite(async () => {
     await db().query('UPDATE jobs SET status = $2 WHERE id = $1', [id, status]);
@@ -140,7 +150,10 @@ function notify(id: string, e: PipelineEvent): void {
 
 export function appendEvent(id: string, e: PipelineEvent): void {
   const job = jobs.get(id);
-  if (!job) return;
+  // Отменённое задание ещё какое-то время доигрывает пайплайн и может прислать
+  // свой 'done'/'error'. Принять его значило бы освободить слот второй раз
+  // и переписать терминальный статус в базе, поэтому такие события отбрасываются.
+  if (!job || isTerminal(job.status)) return;
   job.events.push(e);
   if (e.type === 'done') {
     job.status = 'done';
@@ -160,7 +173,7 @@ export function appendEvent(id: string, e: PipelineEvent): void {
 
 export function markCancelled(id: string): void {
   const job = jobs.get(id);
-  if (!job) return;
+  if (!job || isTerminal(job.status)) return;
   const event: PipelineEvent = { type: 'cancelled' };
   job.events.push(event);
   job.status = 'cancelled';

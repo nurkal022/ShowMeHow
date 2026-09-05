@@ -4,11 +4,12 @@ import {
   subscribe, __clearForTests,
 } from '@/lib/jobs';
 import type { JobRequest } from '@/lib/jobs';
-import { __resetLimitsForTests } from '@/lib/limits';
+import { submit, finish, hasActive, __resetLimitsForTests } from '@/lib/limits';
 
 const REQUEST: JobRequest = { prompt: 'маятник', mode: 'standard', hasImage: false };
 const OWNER = '11111111-1111-1111-1111-111111111111';
 const STRANGER = '22222222-2222-2222-2222-222222222222';
+const THIRD = '33333333-3333-3333-3333-333333333333';
 
 describe('jobs store', () => {
   beforeEach(() => {
@@ -93,11 +94,52 @@ describe('jobs store', () => {
   });
 
   it('терминальное событие освобождает место в ограничителе', async () => {
-    const { submit, hasActive } = await import('@/lib/limits');
     const job = await createJob(OWNER, REQUEST);
     submit(job.id, OWNER, () => {});
     expect(hasActive(OWNER)).toBe(true);
     appendEvent(job.id, { type: 'done', simulationId: 'sim-1' });
     expect(hasActive(OWNER)).toBe(false);
+  });
+
+  // Отменённое задание доигрывает пайплайн и может прислать свой 'done': принять его
+  // значило бы освободить слот второй раз и переписать терминальный статус.
+  it('терминальное задание не меняется повторными событиями и не выдаёт второй слот', async () => {
+    const started: string[] = [];
+    const mine = await createJob(OWNER, REQUEST);
+    submit(mine.id, OWNER, () => started.push(mine.id));
+    const other = await createJob(STRANGER, REQUEST);
+    submit(other.id, STRANGER, () => started.push(other.id));
+    const waiting = await createJob(THIRD, REQUEST);
+    expect(submit(waiting.id, THIRD, () => started.push(waiting.id))).toBe('queued');
+
+    markCancelled(mine.id);
+    expect(started).toEqual([mine.id, other.id, waiting.id]);
+
+    // Повтор: ни статус, ни журнал, ни занятость слотов не меняются.
+    markCancelled(mine.id);
+    appendEvent(mine.id, { type: 'done', simulationId: 'sim-1' });
+    setStatus(mine.id, 'running');
+    const updated = (await getJob(OWNER, mine.id))!;
+    expect(updated.status).toBe('cancelled');
+    expect(updated.events).toEqual([{ type: 'cancelled' }]);
+    expect(started).toEqual([mine.id, other.id, waiting.id]);
+    expect(hasActive(OWNER)).toBe(false);
+  });
+
+  // Регрессия: задание, поднятое из очереди, оставалось в статусе 'queued', и роут
+  // отмены принимал его за не стартовавшее — освобождая слот под живым Chromium.
+  it('поднятое из очереди задание получает статус running', async () => {
+    const startAsRoute = (id: string) => () => setStatus(id, 'running');
+    const a = await createJob(OWNER, REQUEST);
+    submit(a.id, OWNER, startAsRoute(a.id));
+    const b = await createJob(STRANGER, REQUEST);
+    submit(b.id, STRANGER, startAsRoute(b.id));
+    const c = await createJob(THIRD, REQUEST);
+    expect(submit(c.id, THIRD, startAsRoute(c.id))).toBe('queued');
+    expect((await getJob(THIRD, c.id))!.status).toBe('queued');
+
+    appendEvent(a.id, { type: 'done', simulationId: 'sim-1' });
+    expect((await getJob(THIRD, c.id))!.status).toBe('running');
+    finish(b.id);
   });
 });

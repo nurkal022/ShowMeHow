@@ -8,6 +8,11 @@ interface Waiting {
 
 const running = new Map<string, string>();   // jobId → userId
 const queue: Waiting[] = [];
+// Пользователи, за которыми место уже закреплено, но задание ещё не создано.
+// Между проверкой «нет ли активной генерации» и submit в роуте стоят два await
+// (запрос квоты и INSERT задания), поэтому без синхронного резервирования два
+// одновременных POST одного пользователя проходили проверку оба.
+const reservations = new Set<string>();
 let listener: ((jobId: string, position: number) => void) | null = null;
 
 /** Кого оповещать о сдвиге очереди. Ставится один раз при инициализации jobs.ts. */
@@ -22,10 +27,28 @@ function announce(): void {
   queue.forEach((w, i) => listener!(w.jobId, i + 1));
 }
 
-/** Есть ли у пользователя задание, которое уже идёт или ждёт очереди. */
+/** Есть ли у пользователя задание, которое уже идёт, ждёт очереди или зарезервировано. */
 export function hasActive(userId: string): boolean {
+  if (reservations.has(userId)) return true;
   for (const owner of running.values()) if (owner === userId) return true;
   return queue.some((w) => w.userId === userId);
+}
+
+/**
+ * Синхронно закрепляет за пользователем единственную активную генерацию.
+ * false — у него уже есть идущая, ожидающая или зарезервированная. Между этим
+ * вызовом и submit не должно быть ни одного await, который мог бы пропустить
+ * второй запрос вперёд.
+ */
+export function reserveUser(userId: string): boolean {
+  if (hasActive(userId)) return false;
+  reservations.add(userId);
+  return true;
+}
+
+/** Снимает резервацию на путях, где до submit дело не дошло (квота, ошибка createJob). */
+export function releaseUser(userId: string): void {
+  reservations.delete(userId);
 }
 
 /**
@@ -33,6 +56,9 @@ export function hasActive(userId: string): boolean {
  * не больше MAX_CONCURRENT на весь сервер. Сверх лимита задание ждёт в FIFO-очереди.
  */
 export function submit(jobId: string, userId: string, start: () => void): 'running' | 'queued' {
+  // Резервация превращается в настоящую запись реестра: дальше пользователя
+  // держит само задание — в running или в очереди.
+  reservations.delete(userId);
   if (running.size < MAX_CONCURRENT) {
     running.set(jobId, userId);
     start();
@@ -64,5 +90,6 @@ export function queuePosition(jobId: string): number {
 export function __resetLimitsForTests(): void {
   running.clear();
   queue.length = 0;
+  reservations.clear();
   listener = null;
 }

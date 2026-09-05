@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  submit, finish, hasActive, queuePosition, setQueueListener,
+  submit, finish, hasActive, queuePosition, setQueueListener, reserveUser, releaseUser,
   __resetLimitsForTests, MAX_CONCURRENT,
 } from '@/lib/limits';
 
@@ -52,5 +52,35 @@ describe('ограничители параллелизма', () => {
     submit('b', 'u2', () => {});
     submit('c', 'u3', () => {});
     expect(hasActive('u3')).toBe(true);
+  });
+});
+
+describe('резервация пользователя', () => {
+  it('второй подряд reserveUser даёт false, после releaseUser снова true', () => {
+    expect(reserveUser('u1')).toBe(true);
+    expect(reserveUser('u1')).toBe(false);
+    releaseUser('u1');
+    expect(reserveUser('u1')).toBe(true);
+  });
+
+  it('резервация считается активностью и не мешает другому пользователю', () => {
+    reserveUser('u1');
+    expect(hasActive('u1')).toBe(true);
+    expect(reserveUser('u2')).toBe(true);
+  });
+
+  it('submit превращает резервацию в запись реестра, finish снимает и её', () => {
+    reserveUser('u1');
+    expect(submit('a', 'u1', () => {})).toBe('running');
+    expect(hasActive('u1')).toBe(true);
+    finish('a');
+    // Резервация не должна пережить задание, иначе пользователь остался бы
+    // навсегда заблокированным.
+    expect(hasActive('u1')).toBe(false);
+  });
+
+  it('у пользователя с идущим заданием зарезервировать второе нельзя', () => {
+    submit('a', 'u1', () => {});
+    expect(reserveUser('u1')).toBe(false);
   });
 });
