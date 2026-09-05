@@ -1,14 +1,27 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 const LINKS = [
   { href: '/', label: 'Создать' },
   { href: '/library', label: 'Библиотека' },
 ];
 
-export default function NavLinks() {
+interface NavUser {
+  email: string;
+  role: string;
+}
+
+export default function NavLinks({ user }: { user?: NavUser }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function logout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+    router.refresh();
+  }
+
   return (
     <div className="navlinks">
       {LINKS.map((l) => {
@@ -19,6 +32,12 @@ export default function NavLinks() {
           </Link>
         );
       })}
+      {user && (
+        <span className="nav-user">
+          <span className="nav-user-email">{user.email}</span>
+          <button type="button" className="link-btn" onClick={logout}>Выйти</button>
+        </span>
+      )}
     </div>
   );
 }

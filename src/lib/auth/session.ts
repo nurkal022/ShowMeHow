@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import { db } from '../db/client';
 import { findUserById, type AuthUser } from './users';
+import { SESSION_COOKIE } from './session-cookie';
 
-export const SESSION_COOKIE = 'showmehow_session';
+export { SESSION_COOKIE };
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** Продлеваем срок не чаще раза в сутки, чтобы не писать в базу на каждый запрос. */
 const RENEW_AFTER_MS = 24 * 60 * 60 * 1000;

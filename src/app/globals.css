@@ -383,3 +383,33 @@ a { color: var(--accent); }
   * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
+
+/* --- T5: страницы входа и шапка с пользователем --- */
+.nav-user { display: flex; align-items: center; gap: 10px; margin-left: auto; font-size: 13px; }
+.nav-user-email { color: var(--muted); }
+
+.auth-page {
+  min-height: calc(100vh - 56px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.auth-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+  box-shadow: var(--shadow-md); padding: 24px; width: 100%; max-width: 360px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.auth-card h1 { margin: 0 0 4px; font-size: 20px; }
+.auth-card label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.auth-card input {
+  width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  border-radius: var(--r-sm); padding: 10px 12px; font: inherit; min-height: 44px;
+}
+.auth-card input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+.auth-card button.primary {
+  background: var(--accent); border: 1px solid var(--accent); color: #fff;
+  border-radius: var(--r-sm); padding: 10px 16px; cursor: pointer; font: inherit; font-weight: 600;
+  min-height: 44px; box-shadow: var(--shadow-sm);
+}
+.auth-card button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.auth-card button.primary:disabled { opacity: .6; cursor: default; }
+.auth-card p.muted { margin: 0; }
