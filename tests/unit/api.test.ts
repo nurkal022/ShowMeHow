@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,7 +10,18 @@ import { GET as getHistory, POST as postHistory } from '@/app/api/simulations/[i
 import { createSimulation, updateArtifact, getRenderableArtifact } from '@/lib/storage';
 import { reinstrument } from '@/lib/artifact';
 import { __setRepoForTests, createMemoryRepo } from '@/lib/db/repo';
-import { TEMP_OWNER_ID } from '@/lib/auth/current';
+
+// Эти тесты вызывают роуты напрямую и не имеют базы — резолвер сессии подменяется
+// фиксированным пользователем, чтобы проверки 400/404 остались осмысленными и быстрыми.
+const TEST_USER = { id: '11111111-1111-1111-1111-111111111111', email: 'a@t', role: 'user' as const };
+
+vi.mock('@/lib/auth/session', async (orig) => ({
+  ...(await orig<typeof import('@/lib/auth/session')>()),
+  currentUserFromRequest: async () => TEST_USER,
+  currentUserFromCookies: async () => TEST_USER,
+}));
+
+const TEMP_OWNER_ID = TEST_USER.id;
 
 beforeEach(() => {
   process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-'));
@@ -21,14 +32,14 @@ describe('simulations api', () => {
   it('list, get, delete', async () => {
     const meta = await createSimulation(
       TEMP_OWNER_ID, { title: 'т', prompt: 'п', subject: 'Физика', tags: [] }, '<html>x</html>');
-    const list = await (await listSims()).json();
+    const list = await (await listSims(new Request('http://t'))).json();
     expect(list).toHaveLength(1);
     const params = Promise.resolve({ id: meta.id });
     const one = await (await getSim(new Request('http://t'), { params })).json();
     // GET now serves getRenderableArtifact — a freshly re-instrumented copy, not the raw bytes.
     expect(one.html).toBe(reinstrument('<html>x</html>'));
     await delSim(new Request('http://t'), { params: Promise.resolve({ id: meta.id }) });
-    expect(await (await listSims()).json()).toHaveLength(0);
+    expect(await (await listSims(new Request('http://t'))).json()).toHaveLength(0);
   });
 
   const UNKNOWN_UUID = '00000000-0000-0000-0000-000000000000';
@@ -55,11 +66,11 @@ describe('simulations api', () => {
     expect(unknown.status).toBe(404);
   });
 
-  it('DELETE returns 400 for a path-traversal id but is idempotent 200 for an unknown valid id', async () => {
+  it('DELETE returns 400 for a path-traversal id and 404 for an unknown id', async () => {
     const evil = await delSim(new Request('http://t'), { params: Promise.resolve({ id: EVIL_ID }) });
     expect(evil.status).toBe(400);
     const unknown = await delSim(new Request('http://t'), { params: Promise.resolve({ id: UNKNOWN_UUID }) });
-    expect(unknown.status).toBe(200);
+    expect(unknown.status).toBe(404);
   });
 });
 

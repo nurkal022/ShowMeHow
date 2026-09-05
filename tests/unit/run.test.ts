@@ -8,7 +8,7 @@ import { getArtifact, getMeta, listHistory, createSimulation } from '@/lib/stora
 import type { ChatMessage } from '@/lib/provider';
 import type { PipelineEvent, RenderReport, Role } from '@/lib/types';
 import { __setRepoForTests, createMemoryRepo } from '@/lib/db/repo';
-import { TEMP_OWNER_ID as OWNER } from '@/lib/auth/current';
+const OWNER = '11111111-1111-1111-1111-111111111111';
 
 const SPEC = { title: 'Маятник', subject: 'Физика', mode: '2d', learningGoals: ['x'],
   physics: 'F=ma', parameters: [], visualPlan: 'v' };

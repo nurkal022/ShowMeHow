@@ -1,5 +1,5 @@
 import { getMeta, getRenderableArtifact } from '@/lib/storage';
-import { TEMP_OWNER_ID } from '@/lib/auth/current';
+import { currentUserFromRequest } from '@/lib/auth/session';
 
 function isInvalidSegment(e: unknown): boolean {
   return e instanceof Error && e.message.includes('invalid path segment');
@@ -10,11 +10,18 @@ function notFound(status: number): Response {
     { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+function unauthorized(): Response {
+  return new Response(JSON.stringify({ error: 'Требуется вход в систему.' }),
+    { status: 401, headers: { 'Content-Type': 'application/json' } });
+}
+
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await currentUserFromRequest(req);
+  if (!user) return unauthorized();
   const { id } = await params;
   try {
-    const meta = await getMeta(TEMP_OWNER_ID, id);
-    const html = await getRenderableArtifact(TEMP_OWNER_ID, id);
+    const meta = await getMeta(user.id, id);
+    const html = await getRenderableArtifact(user.id, id);
     if (!meta || html === null) return notFound(404);
     return new Response(html, {
       headers: {

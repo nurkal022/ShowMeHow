@@ -105,10 +105,15 @@ export async function restoreVersion(ownerId: string, id: string, name: string):
   return updateArtifact(ownerId, id, restored);
 }
 
-export async function deleteSimulation(ownerId: string, id: string): Promise<void> {
-  if (!(await owned(ownerId, id))) return;
+/**
+ * Возвращает false для неизвестного или чужого id — вызывающий роут отвечает
+ * 404 в обоих случаях, не позволяя по коду ответа отличить "нет записи" от "чужая".
+ */
+export async function deleteSimulation(ownerId: string, id: string): Promise<boolean> {
+  if (!(await owned(ownerId, id))) return false;
   await getRepo().remove(id);
   fs.rmSync(simDir(id), { recursive: true, force: true });
+  return true;
 }
 
 export async function saveThumbnail(ownerId: string, id: string, png: Buffer): Promise<boolean> {

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { createJob, appendEvent, markCancelled, isCancelled } from '@/lib/jobs';
 import { makeCtx, runPipeline, CancelledError } from '@/lib/pipeline/run';
 import { activeProvider, resolveMode, NO_PROVIDER_MESSAGE } from '@/lib/settings';
-import { TEMP_OWNER_ID } from '@/lib/auth/current';
+import { currentUserFromRequest } from '@/lib/auth/session';
+import { unauthorized } from '@/lib/auth/guard';
 import type { QualityMode } from '@/lib/types';
 
 export const maxDuration = 600;
@@ -15,6 +16,8 @@ interface GenerateInput {
 }
 
 export async function POST(req: Request) {
+  const user = await currentUserFromRequest(req);
+  if (!user) return unauthorized();
   const { prompt, imageDataUrl, mode: bodyMode } =
     (await req.json()) as {
       prompt: string; imageDataUrl?: string; mode?: QualityMode;
@@ -26,7 +29,7 @@ export async function POST(req: Request) {
   }
   const mode = resolveMode(bodyMode);
   const job = createJob({ prompt, mode, hasImage: !!imageDataUrl });
-  void runDetached(job.id, { ownerId: TEMP_OWNER_ID, prompt, imageDataUrl, mode });
+  void runDetached(job.id, { ownerId: user.id, prompt, imageDataUrl, mode });
   return NextResponse.json({ jobId: job.id });
 }
 

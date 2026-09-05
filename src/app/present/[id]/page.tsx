@@ -1,11 +1,14 @@
+import { redirect } from 'next/navigation';
 import { getRenderableArtifact } from '@/lib/storage';
-import { TEMP_OWNER_ID } from '@/lib/auth/current';
+import { currentUserFromCookies } from '@/lib/auth/session';
 
 export default async function Present({ params }: { params: Promise<{ id: string }> }) {
+  const user = await currentUserFromCookies();
+  if (!user) redirect('/login');
   const { id } = await params;
   let html: string | null;
   try {
-    html = await getRenderableArtifact(TEMP_OWNER_ID, id);
+    html = await getRenderableArtifact(user.id, id);
   } catch {
     html = null;
   }

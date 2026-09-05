@@ -7,7 +7,7 @@ import { listSimulations, getArtifact, getThumbnailPath } from '@/lib/storage';
 import type { RenderReport } from '@/lib/types';
 import type { RenderFn } from '@/lib/renderer';
 import { __setRepoForTests, createMemoryRepo } from '@/lib/db/repo';
-import { TEMP_OWNER_ID } from '@/lib/auth/current';
+const TEMP_OWNER_ID = '11111111-1111-1111-1111-111111111111';
 
 const FIXTURE_HTML = `<!DOCTYPE html><html><head><title>fixture</title></head><body>
 <canvas id="c" width="400" height="300"></canvas>

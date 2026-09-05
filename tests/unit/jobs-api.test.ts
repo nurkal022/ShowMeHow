@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,6 +10,15 @@ import { createJob, appendEvent, __clearForTests } from '@/lib/jobs';
 import { saveSettings, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import type { JobRequest } from '@/lib/jobs';
 import type { PipelineEvent } from '@/lib/types';
+
+// В этих тестах роут /api/generate вызывается напрямую, без базы и cookie —
+// резолвер сессии подменяется фиксированным пользователем.
+const TEST_USER = { id: '11111111-1111-1111-1111-111111111111', email: 'a@t', role: 'user' as const };
+vi.mock('@/lib/auth/session', async (orig) => ({
+  ...(await orig<typeof import('@/lib/auth/session')>()),
+  currentUserFromRequest: async () => TEST_USER,
+  currentUserFromCookies: async () => TEST_USER,
+}));
 
 const REQUEST: JobRequest = { prompt: 'маятник', mode: 'standard', hasImage: false };
 
