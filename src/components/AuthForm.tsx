@@ -2,6 +2,17 @@
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+/**
+ * `next` приходит из query-строки — с точки зрения приложения это чужой ввод.
+ * Принимаем только путь внутри приложения: ровно один ведущий слеш и не два
+ * подряд (`//host` — protocol-relative URL, тоже уводит на чужой домен).
+ * Всё остальное («https://evil.example», «javascript:...») отбрасываем на «/».
+ */
+export function safeNextPath(raw: string | null | undefined): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/';
+  return raw;
+}
+
 export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -20,7 +31,7 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
         body: JSON.stringify({ email, password }),
       });
       if (res.ok) {
-        router.push(search.get('next') || '/');
+        router.push(safeNextPath(search.get('next')));
         router.refresh();
       } else {
         const body = await res.json().catch(() => ({}));

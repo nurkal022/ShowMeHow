@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { testDb, resetSchema } from '../db';
 import { applyMigrations } from '../../scripts/migrate';
 import { closeDb } from '@/lib/db/client';
@@ -8,14 +8,15 @@ import { POST as logout } from '@/app/api/auth/logout/route';
 import { GET as me } from '@/app/api/me/route';
 import { SESSION_COOKIE } from '@/lib/auth/session';
 import { __resetAttemptsForTests } from '@/lib/auth/rate-limit';
+import * as passwordModule from '@/lib/auth/password';
 
 const SCHEMA = 'auth_api_test';
 const pool = testDb(SCHEMA);
 
-function post(body: unknown, cookie?: string): Request {
+function post(body: unknown, cookie?: string, headers?: Record<string, string>): Request {
   return new Request('http://t', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}) },
+    headers: { 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}), ...(headers ?? {}) },
     body: JSON.stringify(body),
   });
 }
@@ -79,6 +80,52 @@ describe.skipIf(!pool)('api аутентификации', () => {
       await login(post({ email: 'e@example.com', password: 'неверный1' }));
     }
     expect((await login(post({ email: 'e@example.com', password: 'пароль123' }))).status).toBe(429);
+  });
+
+  it('лимит по почте не обходится сменой x-forwarded-for', async () => {
+    await register(post({ email: 'ip-hopper@example.com', password: 'пароль123' }));
+    for (let i = 0; i < 10; i++) {
+      const res = await login(post(
+        { email: 'ip-hopper@example.com', password: 'неверный1' },
+        undefined,
+        { 'x-forwarded-for': `10.0.0.${i}` },
+      ));
+      expect(res.status).toBe(401);
+    }
+    // Одиннадцатая неудачная попытка — уже с ещё одним новым IP — всё равно упирается
+    // в лимит по почте: подделка заголовка от прокси лимит не снимает.
+    const blocked = await login(post(
+      { email: 'ip-hopper@example.com', password: 'неверный1' },
+      undefined,
+      { 'x-forwarded-for': '10.0.0.99' },
+    ));
+    expect(blocked.status).toBe(429);
+  });
+
+  it('успешный вход не расходует лимит попыток', async () => {
+    await register(post({ email: 'success-does-not-count@example.com', password: 'верныйПароль1' }));
+    for (let i = 0; i < 9; i++) {
+      const res = await login(post(
+        { email: 'success-does-not-count@example.com', password: 'неверный1' }));
+      expect(res.status).toBe(401);
+    }
+    // Успешный вход после девяти неудач должен пройти...
+    const ok = await login(post(
+      { email: 'success-does-not-count@example.com', password: 'верныйПароль1' }));
+    expect(ok.status).toBe(200);
+    // ...и не приблизить блокировку: следующая (десятая по счёту реальная) неудача
+    // всё ещё даёт 401, а не 429 — то есть успех не потратил слот лимита.
+    const stillNotBlocked = await login(post(
+      { email: 'success-does-not-count@example.com', password: 'неверный1' }));
+    expect(stillNotBlocked.status).toBe(401);
+  });
+
+  it('verifyPassword вызывается и для несуществующей почты — иначе время ответа выдаёт, кто зарегистрирован', async () => {
+    const spy = vi.spyOn(passwordModule, 'verifyPassword');
+    spy.mockClear();
+    await login(post({ email: 'вообще-нет-такой-почты@example.com', password: 'что-угодно1' }));
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });
 
