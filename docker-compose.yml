@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: showmehow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-showmehow}
+      POSTGRES_DB: showmehow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U showmehow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://showmehow:${POSTGRES_PASSWORD:-showmehow}@db:5432/showmehow
+      SHOWMEHOW_API_KEY: ${SHOWMEHOW_API_KEY}
+      SHOWMEHOW_MODEL: ${SHOWMEHOW_MODEL}
+      SHOWMEHOW_BASE_URL: ${SHOWMEHOW_BASE_URL:-https://api.openai.com/v1}
+      SHOWMEHOW_VISION_MODEL: ${SHOWMEHOW_VISION_MODEL:-}
+      SHOWMEHOW_ADMIN_EMAIL: ${SHOWMEHOW_ADMIN_EMAIL:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  pgdata:

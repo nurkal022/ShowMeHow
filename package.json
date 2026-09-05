@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "eval": "tsx evals/run.ts",
     "seed": "tsx scripts/seed-demos.ts",
-    "migrate": "tsx scripts/migrate.ts"
+    "migrate": "tsx scripts/migrate.ts",
+    "migrate:data": "tsx scripts/migrate-to-db.ts"
   },
   "dependencies": {
     "@types/pg": "^8.23.1",
