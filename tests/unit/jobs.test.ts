@@ -1,60 +1,66 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import {
-  createJob, getJob, appendEvent, markCancelled, requestCancel, isCancelled,
+  createJob, getJob, setStatus, appendEvent, markCancelled, requestCancel, isCancelled,
   subscribe, __clearForTests,
 } from '@/lib/jobs';
 import type { JobRequest } from '@/lib/jobs';
+import { __resetLimitsForTests } from '@/lib/limits';
 
 const REQUEST: JobRequest = { prompt: 'маятник', mode: 'standard', hasImage: false };
+const OWNER = '11111111-1111-1111-1111-111111111111';
+const STRANGER = '22222222-2222-2222-2222-222222222222';
 
 describe('jobs store', () => {
   beforeEach(() => {
-    process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-jobs-'));
+    // DATABASE_URL не задан: хранилище заданий обязано работать целиком в памяти.
+    delete process.env.DATABASE_URL;
     __clearForTests();
+    __resetLimitsForTests();
   });
 
-  it('create → getJob returns the same job', () => {
-    const job = createJob(REQUEST);
-    expect(job.status).toBe('running');
+  it('create → getJob returns the same job', async () => {
+    const job = await createJob(OWNER, REQUEST);
+    expect(job.status).toBe('queued');
+    expect(job.ownerId).toBe(OWNER);
     expect(job.events).toEqual([]);
     expect(job.request).toEqual(REQUEST);
-    expect(getJob(job.id)).toEqual(job);
+    expect(await getJob(OWNER, job.id)).toEqual(job);
   });
 
-  it('getJob returns null for unknown id', () => {
-    expect(getJob('nope')).toBeNull();
+  it('getJob returns null for unknown id', async () => {
+    expect(await getJob(OWNER, 'nope')).toBeNull();
   });
 
-  it('appendEvent persists to disk (file matches in-memory job)', () => {
-    const job = createJob(REQUEST);
-    appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 });
-    const file = path.join(process.env.SHOWMEHOW_DATA_DIR!, 'jobs', `${job.id}.json`);
-    const onDisk = JSON.parse(fs.readFileSync(file, 'utf8'));
-    expect(onDisk).toEqual(getJob(job.id));
+  it('чужое задание неотличимо от несуществующего: getJob даёт null', async () => {
+    const job = await createJob(OWNER, REQUEST);
+    expect(await getJob(STRANGER, job.id)).toBeNull();
   });
 
-  it('done event sets status done + simulationId', () => {
-    const job = createJob(REQUEST);
+  it('setStatus меняет статус задания', async () => {
+    const job = await createJob(OWNER, REQUEST);
+    setStatus(job.id, 'running');
+    expect((await getJob(OWNER, job.id))!.status).toBe('running');
+  });
+
+  it('done event sets status done + simulationId', async () => {
+    const job = await createJob(OWNER, REQUEST);
     appendEvent(job.id, { type: 'done', simulationId: 'sim-1' });
-    const updated = getJob(job.id)!;
+    const updated = (await getJob(OWNER, job.id))!;
     expect(updated.status).toBe('done');
     expect(updated.simulationId).toBe('sim-1');
     expect(updated.events).toEqual([{ type: 'done', simulationId: 'sim-1' }]);
   });
 
-  it('error event sets status error + error message', () => {
-    const job = createJob(REQUEST);
+  it('error event sets status error + error message', async () => {
+    const job = await createJob(OWNER, REQUEST);
     appendEvent(job.id, { type: 'error', message: 'boom' });
-    const updated = getJob(job.id)!;
+    const updated = (await getJob(OWNER, job.id))!;
     expect(updated.status).toBe('error');
     expect(updated.error).toBe('boom');
   });
 
-  it('subscribe receives only events appended after subscription; unsubscribe stops delivery', () => {
-    const job = createJob(REQUEST);
+  it('subscribe receives only events appended after subscription; unsubscribe stops delivery', async () => {
+    const job = await createJob(OWNER, REQUEST);
     appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 });
 
     const received: string[] = [];
@@ -68,44 +74,30 @@ describe('jobs store', () => {
     expect(received).toEqual(['stage']);
   });
 
-  it('requestCancel / isCancelled', () => {
-    const job = createJob(REQUEST);
+  it('requestCancel / isCancelled', async () => {
+    const job = await createJob(OWNER, REQUEST);
     expect(isCancelled(job.id)).toBe(false);
     requestCancel(job.id);
     expect(isCancelled(job.id)).toBe(true);
   });
 
-  it('markCancelled appends a cancelled event and sets terminal status', () => {
-    const job = createJob(REQUEST);
+  it('markCancelled appends a cancelled event and sets terminal status', async () => {
+    const job = await createJob(OWNER, REQUEST);
     const received: string[] = [];
     subscribe(job.id, (e) => received.push(e.type));
     markCancelled(job.id);
-    const updated = getJob(job.id)!;
+    const updated = (await getJob(OWNER, job.id))!;
     expect(updated.status).toBe('cancelled');
     expect(updated.events).toEqual([{ type: 'cancelled' }]);
     expect(received).toEqual(['cancelled']);
   });
 
-  it('orphaned running job on disk (memory cleared) → error "Сервер был перезапущен", re-persisted', () => {
-    const job = createJob(REQUEST);
-    appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 });
-    __clearForTests();
-
-    const recovered = getJob(job.id)!;
-    expect(recovered.status).toBe('error');
-    expect(recovered.error).toBe('Сервер был перезапущен');
-
-    const file = path.join(process.env.SHOWMEHOW_DATA_DIR!, 'jobs', `${job.id}.json`);
-    const onDisk = JSON.parse(fs.readFileSync(file, 'utf8'));
-    expect(onDisk.status).toBe('error');
-    expect(onDisk.error).toBe('Сервер был перезапущен');
-  });
-
-  it('cancelled status is terminal (does not get overwritten by orphan recovery)', () => {
-    const job = createJob(REQUEST);
-    markCancelled(job.id);
-    __clearForTests();
-    const recovered = getJob(job.id)!;
-    expect(recovered.status).toBe('cancelled');
+  it('терминальное событие освобождает место в ограничителе', async () => {
+    const { submit, hasActive } = await import('@/lib/limits');
+    const job = await createJob(OWNER, REQUEST);
+    submit(job.id, OWNER, () => {});
+    expect(hasActive(OWNER)).toBe(true);
+    appendEvent(job.id, { type: 'done', simulationId: 'sim-1' });
+    expect(hasActive(OWNER)).toBe(false);
   });
 });

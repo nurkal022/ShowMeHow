@@ -7,31 +7,37 @@ import { GET as getJobRoute } from '@/app/api/jobs/[id]/route';
 import { POST as postCancel } from '@/app/api/jobs/[id]/cancel/route';
 import { GET as getStream } from '@/app/api/jobs/[id]/stream/route';
 import { createJob, appendEvent, __clearForTests } from '@/lib/jobs';
+import { __resetLimitsForTests } from '@/lib/limits';
 import { saveSettings, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import type { JobRequest } from '@/lib/jobs';
+import type { AuthUser } from '@/lib/auth/users';
 import type { PipelineEvent } from '@/lib/types';
 
-// В этих тестах роут /api/generate вызывается напрямую, без базы и cookie —
-// резолвер сессии подменяется фиксированным пользователем.
-const TEST_USER = { id: '11111111-1111-1111-1111-111111111111', email: 'a@t', role: 'user' as const };
+// В этих тестах роуты вызываются напрямую, без базы и cookie — резолвер сессии
+// подменяется пользователем, которого тест выставляет через session.current.
+const TEST_USER: AuthUser = {
+  id: '11111111-1111-1111-1111-111111111111', email: 'a@t', role: 'user',
+};
+const OTHER_USER: AuthUser = {
+  id: '22222222-2222-2222-2222-222222222222', email: 'b@t', role: 'user',
+};
+const session = vi.hoisted(() => ({ current: null as AuthUser | null }));
 vi.mock('@/lib/auth/session', async (orig) => ({
   ...(await orig<typeof import('@/lib/auth/session')>()),
-  currentUserFromRequest: async () => TEST_USER,
-  currentUserFromCookies: async () => TEST_USER,
+  currentUserFromRequest: async () => session.current,
+  currentUserFromCookies: async () => session.current,
 }));
 
 const REQUEST: JobRequest = { prompt: 'маятник', mode: 'standard', hasImage: false };
 
 beforeEach(() => {
   process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-jobs-api-'));
+  // Персистентность заданий отключена отсутствием DATABASE_URL: хранилище работает в памяти.
+  delete process.env.DATABASE_URL;
+  session.current = TEST_USER;
   __clearForTests();
+  __resetLimitsForTests();
 });
-
-function jobsDirEntries(): string[] {
-  const dir = path.join(process.env.SHOWMEHOW_DATA_DIR!, 'jobs');
-  if (!fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir);
-}
 
 describe('POST /api/generate', () => {
   it('returns 400 and creates no job when no provider is configured', async () => {
@@ -44,8 +50,14 @@ describe('POST /api/generate', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe(NO_PROVIDER_MESSAGE);
-    // Никаких побочных эффектов: job не создан ни в памяти, ни на диске.
-    expect(jobsDirEntries()).toHaveLength(0);
+  });
+
+  it('без сессии отвечает 401', async () => {
+    session.current = null;
+    const res = await postGenerate(new Request('http://t/api/generate', {
+      method: 'POST', body: JSON.stringify({ prompt: 'маятник' }),
+    }));
+    expect(res.status).toBe(401);
   });
 });
 
@@ -57,7 +69,7 @@ describe('POST /api/jobs/[id]/cancel', () => {
   });
 
   it('returns {ok:true} for a known job and is idempotent', async () => {
-    const job = createJob(REQUEST);
+    const job = await createJob(TEST_USER.id, REQUEST);
     const params = Promise.resolve({ id: job.id });
     const res1 = await postCancel(new Request('http://t', { method: 'POST' }), { params });
     expect(res1.status).toBe(200);
@@ -75,15 +87,43 @@ describe('GET /api/jobs/[id]', () => {
   });
 
   it('returns the job without an events array', async () => {
-    const job = createJob(REQUEST);
+    const job = await createJob(TEST_USER.id, REQUEST);
     appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 });
     const res = await getJobRoute(new Request('http://t'), { params: Promise.resolve({ id: job.id }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({
-      id: job.id, status: 'running', createdAt: job.createdAt, request: REQUEST,
+      id: job.id, status: 'queued', createdAt: job.createdAt, request: REQUEST,
     });
     expect(body.events).toBeUndefined();
+    // Владелец наружу не отдаётся — клиенту он не нужен.
+    expect(body.ownerId).toBeUndefined();
+  });
+});
+
+// Регрессия: по угаданному id посторонний читал чужой промпт, весь журнал пайплайна
+// и мог отменить чужую генерацию — все три роута заданий обязаны проверять владельца.
+describe('изоляция владельцев в роутах заданий', () => {
+  it('без сессии — 401, чужое задание — 404', async () => {
+    const job = await createJob(TEST_USER.id, REQUEST);
+    const params = () => Promise.resolve({ id: job.id });
+
+    session.current = null;
+    expect((await getJobRoute(new Request('http://t'), { params: params() })).status).toBe(401);
+    expect((await getStream(new Request('http://t'), { params: params() })).status).toBe(401);
+    expect((await postCancel(new Request('http://t', { method: 'POST' }),
+      { params: params() })).status).toBe(401);
+
+    session.current = OTHER_USER;
+    expect((await getJobRoute(new Request('http://t'), { params: params() })).status).toBe(404);
+    expect((await getStream(new Request('http://t'), { params: params() })).status).toBe(404);
+    expect((await postCancel(new Request('http://t', { method: 'POST' }),
+      { params: params() })).status).toBe(404);
+
+    session.current = TEST_USER;
+    expect((await getJobRoute(new Request('http://t'), { params: params() })).status).toBe(200);
+    expect((await postCancel(new Request('http://t', { method: 'POST' }),
+      { params: params() })).status).toBe(200);
   });
 });
 
@@ -114,7 +154,7 @@ describe('GET /api/jobs/[id]/stream', () => {
   });
 
   it('replays past events, delivers live events, and closes on the terminal event', async () => {
-    const job = createJob(REQUEST);
+    const job = await createJob(TEST_USER.id, REQUEST);
     appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 });
     appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'end', at: 2 });
 
@@ -174,7 +214,7 @@ describe('GET /api/jobs/[id]/stream', () => {
   });
 
   it('closes immediately after replay when the job is already terminal', async () => {
-    const job = createJob(REQUEST);
+    const job = await createJob(TEST_USER.id, REQUEST);
     appendEvent(job.id, { type: 'done', simulationId: 'sim-2' });
 
     const res = await getStream(new Request('http://t'), { params: Promise.resolve({ id: job.id }) });

@@ -1,4 +1,5 @@
 import { getJob, subscribe } from '@/lib/jobs';
+import { currentUserFromRequest } from '@/lib/auth/session';
 import type { PipelineEvent } from '@/lib/types';
 
 export const maxDuration = 600;
@@ -9,9 +10,17 @@ function isTerminal(e: PipelineEvent): boolean {
   return e.type === 'done' || e.type === 'error' || e.type === 'cancelled';
 }
 
-export async function GET(_req: Request, { params }: P) {
+export async function GET(req: Request, { params }: P) {
+  // Стрим отдаёт весь журнал пайплайна, поэтому владение проверяется так же
+  // строго, как в остальных роутах: нет сессии — 401, чужое задание — 404.
+  const user = await currentUserFromRequest(req);
+  if (!user) {
+    return new Response(JSON.stringify({ error: 'Требуется вход в систему.' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } });
+  }
   const { id } = await params;
-  if (!getJob(id)) return new Response(null, { status: 404 });
+  const job = await getJob(user.id, id);
+  if (!job) return new Response(null, { status: 404 });
 
   const encoder = new TextEncoder();
   let closed = false;
@@ -57,7 +66,7 @@ export async function GET(_req: Request, { params }: P) {
         }
       });
 
-      const snapshot = getJob(id)?.events ?? [];
+      const snapshot = job.events.slice();
       for (const e of snapshot) send(e);
       replaying = false;
       for (let i = snapshot.length; i < live.length; i++) send(live[i]);

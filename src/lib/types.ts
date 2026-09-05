@@ -126,6 +126,8 @@ export interface PlanSummary {
 }
 
 export type PipelineEvent =
+  /** Задание ждёт свободного места; position — место в очереди, считая с единицы. */
+  | { type: 'queued'; position: number }
   | { type: 'stage'; stage: PipelineStage; status: 'start' | 'end'; at: number }
   | { type: 'plan-ready'; spec: PlanSummary }
   | { type: 'candidate'; index: number;
