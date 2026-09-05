@@ -219,7 +219,7 @@
   // ---------- Главный цикл (dt-based, не завязан на FPS) ----------
   function loop(now) {
     if (lastFrame == null) lastFrame = now;
-    var dt = Math.min(0.05, (now - lastFrame) / 1000);
+    var dt = Math.min(0.05, (now - lastFrame) / 1000) * speedCtl.get();
     lastFrame = now;
     if (running) {
       stepPhysics(dt);
@@ -259,6 +259,7 @@
     onPause: function () { running = false; },
     onReset: function () { resetSim(); },
   });
+  var speedCtl = SimUI.speed({ values: [0.25, 0.5, 1, 2], value: 1 });
 
   var energyChart = SimUI.chart({
     title: 'Энергия', xLabel: 't, с', yLabel: 'E, Дж',

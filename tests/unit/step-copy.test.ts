@@ -20,7 +20,7 @@ describe('candidateCopy', () => {
     for (const s of STATUSES) expect(candidateCopy(s).trim().length).toBeGreaterThan(0);
   });
   it('failed status explains the candidate dropped out', () => {
-    expect(candidateCopy('failed').toLowerCase()).toContain('выбыл');
+    expect(candidateCopy('failed').toLowerCase()).toContain('не удалось');
   });
 });
 

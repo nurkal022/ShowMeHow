@@ -47,7 +47,7 @@ export interface SimulationMeta {
   tags: string[];
   createdAt: string; // ISO
   updatedAt: string; // ISO
-  /** Предупреждение, если пайплайн деградировал (нет vision / все кандидаты сломаны) */
+  /** Предупреждение, если пайплайн деградировал (нет vision / кандидат сломан) */
   warning?: string;
   /** slug вшитой демки, если симуляция установлена из demos/ (для идемпотентности install) */
   demo?: string;

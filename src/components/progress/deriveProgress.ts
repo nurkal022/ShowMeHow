@@ -4,7 +4,7 @@ import type { PipelineEvent, PipelineStage, PlanSummary, RubricScores } from '@/
  * Порядок и состав чипов таймлайна. 'critiquing' в PipelineStage существует только как
  * возможное значение типа события 'candidate'.status ('критика' внутри кандидата) —
  * ни один реальный 'stage'-событие не несёт stage:'critiquing' (run.ts эмитит только
- * planning/generating/judging/refining/saving), поэтому «Кандидаты» естественно
+ * planning/generating/judging/refining/saving), поэтому «Кандидат» естественно
  * агрегирует генерацию и критику одним чипом без специальной обработки.
  */
 export const STAGE_ORDER: PipelineStage[] = [
@@ -13,8 +13,8 @@ export const STAGE_ORDER: PipelineStage[] = [
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {
   planning: 'Планирование',
-  generating: 'Кандидаты',
-  critiquing: 'Кандидаты',
+  generating: 'Кандидат',
+  critiquing: 'Кандидат',
   judging: 'Суд',
   refining: 'Доводка',
   saving: 'Сохранение',

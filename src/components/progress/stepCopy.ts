@@ -10,8 +10,8 @@ import type { CandidateStatus } from './deriveProgress';
 /** Короткие подписи чипов таймлайна (совпадают со STAGE_LABELS в deriveProgress). */
 export const STAGE_TITLES: Record<PipelineStage, string> = {
   planning: 'Планирование',
-  generating: 'Кандидаты',
-  critiquing: 'Кандидаты',
+  generating: 'Кандидат',
+  critiquing: 'Кандидат',
   judging: 'Суд',
   refining: 'Доводка',
   saving: 'Сохранение',
@@ -21,23 +21,23 @@ export const STAGE_TITLES: Record<PipelineStage, string> = {
 export function stageCopy(stage: PipelineStage): string {
   switch (stage) {
     case 'planning': return 'Модель продумывает план симуляции';
-    case 'generating': return 'Генерируем несколько вариантов симуляции';
-    case 'critiquing': return 'Физик-критик проверяет варианты';
-    case 'judging': return 'Судья сравнивает кандидатов по рубрике';
-    case 'refining': return 'Доводим победителя до высоких оценок';
+    case 'generating': return 'Генерируем симуляцию';
+    case 'critiquing': return 'Физик-критик проверяет симуляцию';
+    case 'judging': return 'Судья оценивает симуляцию по рубрике';
+    case 'refining': return 'Доводим симуляцию до высоких оценок';
     case 'saving': return 'Сохраняем готовую симуляцию';
   }
 }
 
-/** Описание текущего шага работы над одним кандидатом. */
+/** Описание текущего шага работы над кандидатом. */
 export function candidateCopy(status: CandidateStatus): string {
   switch (status) {
-    case 'generating': return 'Пишем код варианта';
+    case 'generating': return 'Пишем код симуляции';
     case 'rendering': return 'Проверяем рендер в браузере';
     case 'fixing': return 'Чиним ошибки автоматически';
     case 'critiquing': return 'Проверяем физику';
     case 'ok': return 'Готов';
-    case 'failed': return 'Выбыл — не удалось запустить';
+    case 'failed': return 'Не удалось запустить';
   }
 }
 

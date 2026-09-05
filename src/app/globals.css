@@ -270,7 +270,6 @@ a { color: var(--accent); }
 /* Карточки прогресса въезжают снизу. */
 .candidate-card, .plan-card, .refine-panel { animation: fade-slide-in .3s ease-out; }
 .candidate-shot { animation: fade-in .4s ease-out; }
-.winner-badge { animation: pop-in .4s ease-out; }
 .candidate-status.status-ok { color: var(--success); font-weight: 600; }
 .candidate-status.status-failed { color: var(--danger); }
 .refine-round-delta { color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -294,9 +293,7 @@ a { color: var(--accent); }
 .candidate-card { position: relative; flex: 1 1 240px; min-width: 0; background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow-sm); padding: 10px;
   display: flex; flex-direction: column; gap: 6px; }
-.candidate-card.winner { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn) inset, var(--shadow-sm); }
 .candidate-card.failed { opacity: .55; }
-.winner-badge { position: absolute; top: 8px; right: 10px; font-size: 15px; }
 .candidate-card-head { font-size: 12px; font-weight: 600; padding-right: 20px; }
 .candidate-status { font-size: 11px; color: var(--muted); }
 .candidate-shot { display: block; width: 100%; border-radius: var(--r-sm); background: var(--surface-2); }
