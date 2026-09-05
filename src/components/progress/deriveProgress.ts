@@ -61,6 +61,8 @@ export interface ProgressState {
   refineRounds: RefineRoundInfo[];
   warnings: string[];
   terminal: TerminalState | null;
+  /** Место в очереди генерации (1 — следующий); 0, если задание уже не в очереди. */
+  queuePosition: number;
 }
 
 /**
@@ -78,6 +80,7 @@ export function deriveProgress(events: PipelineEvent[]): ProgressState {
   const refineRounds: RefineRoundInfo[] = [];
   const warnings: string[] = [];
   let terminal: TerminalState | null = null;
+  let queuePosition = 0;
 
   function candidate(index: number): CandidateInfo {
     let c = candMap.get(index);
@@ -90,7 +93,12 @@ export function deriveProgress(events: PipelineEvent[]): ProgressState {
 
   for (const e of events) {
     switch (e.type) {
+      case 'queued':
+        queuePosition = e.position;
+        break;
       case 'stage': {
+        // Первая же стадия означает, что задание вышло из очереди — прячем её текст.
+        queuePosition = 0;
         const info = stageMap.get(e.stage);
         if (!info) break; // 'critiquing' as a stage value never occurs in practice
         if (e.status === 'start') { info.status = 'active'; info.startAt = e.at; }
@@ -171,5 +179,6 @@ export function deriveProgress(events: PipelineEvent[]): ProgressState {
     refineRounds,
     warnings,
     terminal,
+    queuePosition,
   };
 }

@@ -153,4 +153,17 @@ describe('deriveProgress', () => {
       passRate: 0.8, failed: ['Пауза: не работает'] });
     expect(state.candidates[0].targetedFix).toEqual(['частицы вылетают']);
   });
+
+  it('событие queued попадает в состояние прогресса', () => {
+    const p = deriveProgress([{ type: 'queued', position: 3 }]);
+    expect(p.queuePosition).toBe(3);
+  });
+
+  it('первое событие stage сбрасывает queuePosition в 0', () => {
+    const p = deriveProgress([
+      { type: 'queued', position: 2 },
+      { type: 'stage', stage: 'planning', status: 'start', at: 1000 },
+    ]);
+    expect(p.queuePosition).toBe(0);
+  });
 });

@@ -45,3 +45,8 @@ export function candidateCopy(status: CandidateStatus): string {
 export function refineCopy(round: number): string {
   return `Круг ${round}: поднимаем самые слабые оценки`;
 }
+
+/** Описание положения задания в очереди генерации (вместо стадий, пока job не запущен). */
+export function queuedCopy(position: number): string {
+  return `Задание в очереди: перед вами ${position}. Начнём, как только освободится место.`;
+}

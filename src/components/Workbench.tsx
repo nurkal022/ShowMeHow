@@ -10,6 +10,12 @@ type Phase = 'idle' | 'generating' | 'ready' | 'error';
 
 const ACTIVE_JOB_KEY = 'showmehow-active-job';
 
+interface QuotaInfo {
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+}
+
 export default function Workbench() {
   const search = useSearchParams();
   const [phase, setPhase] = useState<Phase>('idle');
@@ -23,6 +29,8 @@ export default function Workbench() {
   const [history, setHistory] = useState<string[]>([]);
   const [jobId, setJobId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
   // Мобильные вкладки: на узком экране видна только одна колонка. На десктопе (≥900px)
   // переключатель скрыт CSS и обе колонки показываются одновременно.
   const [activeTab, setActiveTab] = useState<'create' | 'preview'>('create');
@@ -37,6 +45,24 @@ export default function Workbench() {
     localStorage.removeItem(ACTIVE_JOB_KEY);
     setJobId(null);
     setCancelling(false);
+  }
+
+  useEffect(() => { fetchQuota(); }, []);
+
+  // Квота нужна только для отображения строки под кнопкой «Создать» — не критична,
+  // поэтому молча игнорируем сетевые ошибки и оставляем quota равной null (строка
+  // просто не показывается). Перечитываем и после успешной генерации — она тратит
+  // квоту, и число «осталось» должно обновиться без перезагрузки страницы.
+  async function fetchQuota() {
+    try {
+      const res = await fetch('/api/me');
+      if (!res.ok) return;
+      const body = await res.json();
+      setQuota(body.quota ?? null);
+      setQuotaMessage(body.quotaMessage ?? null);
+    } catch {
+      // см. комментарий выше
+    }
   }
 
   useEffect(() => {
@@ -155,6 +181,8 @@ export default function Workbench() {
             // Готовый результат — на мобиле сразу показываем вкладку превью.
             setActiveTab('preview');
             await openSimulation(e.simulationId);
+            // Успешная генерация тратит квоту — перечитываем остаток.
+            fetchQuota();
           }
           if (e.type === 'error') {
             sawTerminal = true;
@@ -291,6 +319,7 @@ export default function Workbench() {
   function submit() {
     const text = prompt.trim();
     if (!text || phase === 'generating') return;
+    if (!hasSim && quota?.remaining === 0) return;
     setPrompt('');
     // Пока открыта симуляция (simId есть) — любой запрос это доработка,
     // даже после ошибки; новая генерация только после «+ начать новую».
@@ -369,9 +398,18 @@ export default function Workbench() {
               : 'Опишите симуляцию. Например: диффузия молекул духов в комнате'}
             rows={3}
           />
-          <button className="primary" disabled={phase === 'generating'} onClick={submit}>
+          <button
+            className="primary"
+            disabled={phase === 'generating' || (!hasSim && quota?.remaining === 0)}
+            onClick={submit}
+          >
             {phase === 'generating' ? 'Работаю…' : hasSim ? 'Доработать' : 'Создать'}
           </button>
+          {!hasSim && quota && quota.limit !== null && (
+            quota.remaining === 0
+              ? <div className="quota-line quota-exhausted">{quotaMessage}</div>
+              : <div className="quota-line">Осталось {quota.remaining} из {quota.limit} генераций</div>
+          )}
         </div>
       </aside>
       <section className="preview-pane">

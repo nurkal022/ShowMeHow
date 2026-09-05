@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stageCopy, candidateCopy, refineCopy, STAGE_TITLES } from '@/components/progress/stepCopy';
+import { stageCopy, candidateCopy, refineCopy, queuedCopy, STAGE_TITLES } from '@/components/progress/stepCopy';
 import type { PipelineStage } from '@/lib/types';
 import type { CandidateStatus } from '@/components/progress/deriveProgress';
 
@@ -35,5 +35,12 @@ describe('refineCopy', () => {
 describe('STAGE_TITLES', () => {
   it('has a non-empty title for every stage', () => {
     for (const s of STAGES) expect(STAGE_TITLES[s].trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe('queuedCopy', () => {
+  it('очередь описывается местом в ней', () => {
+    expect(queuedCopy(1)).toContain('перед вами');
+    expect(queuedCopy(1)).toContain('1');
   });
 });

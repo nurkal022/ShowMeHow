@@ -6,6 +6,7 @@ import StageTimeline from './StageTimeline';
 import PlanCard from './PlanCard';
 import CandidateCard from './CandidateCard';
 import RefinePanel from './RefinePanel';
+import { queuedCopy } from './stepCopy';
 
 /**
  * Единственный источник состояния — events[]: всё, что показывается, вычисляется
@@ -29,7 +30,9 @@ export default function ProgressView({ events }: { events: PipelineEvent[] }) {
 
   return (
     <div className="progress-view">
-      <StageTimeline stages={state.stages} now={now} />
+      {state.queuePosition > 0
+        ? <div className="queue-banner">{queuedCopy(state.queuePosition)}</div>
+        : <StageTimeline stages={state.stages} now={now} />}
       {state.plan && <PlanCard plan={state.plan} />}
       {state.candidates.length > 0 && (
         <div className="candidates-row">
