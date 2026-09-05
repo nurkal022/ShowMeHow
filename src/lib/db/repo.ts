@@ -27,13 +27,20 @@ function strip(rec: SimRecord): SimulationMeta {
 export function createMemoryRepo(): MetaRepo {
   const rows = new Map<string, SimRecord>();
   return {
-    async insert(rec) { rows.set(rec.id, structuredClone(rec)); },
+    async insert(rec) {
+      // Как и у постгресового драйвера (PRIMARY KEY на id): повторная вставка того же
+      // id — ошибка, а не тихая перезапись.
+      if (rows.has(rec.id)) {
+        throw new Error(`запись с id ${rec.id} уже существует`);
+      }
+      rows.set(rec.id, structuredClone(rec));
+    },
     async get(id) { const r = rows.get(id); return r ? structuredClone(r) : null; },
     async listByOwner(ownerId) {
       return [...rows.values()]
         .filter((r) => r.ownerId === ownerId)
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        .map(strip);
+        .map((r) => structuredClone(strip(r)));
     },
     async touch(id, at) { const r = rows.get(id); if (r) r.updatedAt = at; },
     async remove(id) { rows.delete(id); },

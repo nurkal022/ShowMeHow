@@ -68,4 +68,22 @@ describe.each(drivers)('MetaRepo (%s)', (_name, make) => {
     expect(ids.indexOf('99999999-9999-9999-9999-999999999999'))
       .toBeLessThan(ids.indexOf('88888888-8888-8888-8888-888888888888'));
   });
+
+  it('insert отклоняет повторный id', async () => {
+    const repo = make();
+    const id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    await repo.insert(rec(id, OWNER));
+    await expect(repo.insert(rec(id, OWNER))).rejects.toThrow();
+  });
+
+  it('listByOwner отдаёт независимую копию: мутация снаружи не портит хранилище', async () => {
+    const repo = make();
+    const id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    await repo.insert(rec(id, OWNER, { tags: ['исходный'] }));
+    const before = await repo.listByOwner(OWNER);
+    const item = before.find((m) => m.id === id);
+    item?.tags.push('чужой');
+    const after = await repo.listByOwner(OWNER);
+    expect(after.find((m) => m.id === id)?.tags).toEqual(['исходный']);
+  });
 });
