@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createJob, appendEvent, markCancelled, isCancelled } from '@/lib/jobs';
 import { makeCtx, runPipeline, resolveCandidates, CancelledError } from '@/lib/pipeline/run';
-import { activeProvider, resolveMode } from '@/lib/settings';
+import { activeProvider, resolveMode, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import type { QualityMode } from '@/lib/types';
 
 export const maxDuration = 600;
@@ -21,8 +21,7 @@ export async function POST(req: Request) {
   // Провайдер проверяется ДО createJob: если он не настроен, job не создаётся вовсе —
   // клиент получает 400 без побочных эффектов (никакого осиротевшего job-файла).
   if (!activeProvider()) {
-    return NextResponse.json(
-      { error: 'Провайдер не настроен. Откройте Настройки.' }, { status: 400 });
+    return NextResponse.json({ error: NO_PROVIDER_MESSAGE }, { status: 400 });
   }
   const mode = resolveMode(bodyMode);
   const candidates = resolveCandidates(mode, bodyCandidates);

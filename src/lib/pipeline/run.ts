@@ -4,7 +4,7 @@ import type {
 } from '../types';
 import { minScore } from '../types';
 import { CANDIDATE_DEFAULTS } from '../candidate-defaults';
-import { activeProvider } from '../settings';
+import { activeProvider, NO_PROVIDER_MESSAGE } from '../settings';
 import { bindChat, type ChatFn, type UsageInfo } from '../provider';
 import { renderArtifact } from '../renderer';
 import { createSimulation, saveThumbnail, getArtifact, updateArtifact } from '../storage';
@@ -42,7 +42,7 @@ export function resolveCandidates(mode: QualityMode, requested?: number): number
 
 export function makeCtx(emit: (e: PipelineEvent) => void): Ctx {
   const p = activeProvider();
-  if (!p) throw new Error('Провайдер не настроен. Откройте Настройки.');
+  if (!p) throw new Error(NO_PROVIDER_MESSAGE);
   const onUsage = (u: UsageInfo & { role: Role; model: string }) =>
     emit({ type: 'usage', role: u.role, model: u.model,
       promptTokens: u.promptTokens, completionTokens: u.completionTokens, ms: u.ms });

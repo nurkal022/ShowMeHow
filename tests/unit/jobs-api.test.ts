@@ -7,7 +7,7 @@ import { GET as getJobRoute } from '@/app/api/jobs/[id]/route';
 import { POST as postCancel } from '@/app/api/jobs/[id]/cancel/route';
 import { GET as getStream } from '@/app/api/jobs/[id]/stream/route';
 import { createJob, appendEvent, __clearForTests } from '@/lib/jobs';
-import { saveSettings } from '@/lib/settings';
+import { saveSettings, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import type { JobRequest } from '@/lib/jobs';
 import type { PipelineEvent } from '@/lib/types';
 
@@ -34,7 +34,7 @@ describe('POST /api/generate', () => {
     const res = await postGenerate(req);
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toBe('Провайдер не настроен. Откройте Настройки.');
+    expect(body.error).toBe(NO_PROVIDER_MESSAGE);
     // Никаких побочных эффектов: job не создан ни в памяти, ни на диске.
     expect(jobsDirEntries()).toHaveLength(0);
   });

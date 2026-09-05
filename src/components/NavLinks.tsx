@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 const LINKS = [
   { href: '/', label: 'Создать' },
   { href: '/library', label: 'Библиотека' },
-  { href: '/settings', label: 'Настройки' },
 ];
 
 export default function NavLinks() {

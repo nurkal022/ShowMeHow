@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadSettings, saveSettings, activeProvider, dataDir, resolveMode } from '@/lib/settings';
+import { loadSettings, saveSettings, activeProvider, dataDir, resolveMode, envProvider } from '@/lib/settings';
 
 describe('settings', () => {
   beforeEach(() => {
@@ -64,5 +64,51 @@ describe('resolveMode', () => {
 
   it('falls back to default max when nothing is saved', () => {
     expect(resolveMode(undefined)).toBe('max');
+  });
+});
+
+describe('провайдер из переменных окружения', () => {
+  const saved = { ...process.env };
+  afterEach(() => { process.env = { ...saved }; });
+
+  it('нет ключа или модели -> null', () => {
+    delete process.env.SHOWMEHOW_API_KEY;
+    delete process.env.SHOWMEHOW_MODEL;
+    expect(envProvider()).toBeNull();
+    process.env.SHOWMEHOW_API_KEY = 'k';
+    expect(envProvider()).toBeNull();
+  });
+
+  it('ключ и модель заданы -> профиль с дефолтным baseURL', () => {
+    process.env.SHOWMEHOW_API_KEY = 'k';
+    process.env.SHOWMEHOW_MODEL = 'm';
+    delete process.env.SHOWMEHOW_BASE_URL;
+    delete process.env.SHOWMEHOW_VISION_MODEL;
+    const p = envProvider()!;
+    expect(p.apiKey).toBe('k');
+    expect(p.generationModel).toBe('m');
+    expect(p.baseURL).toBe('https://api.openai.com/v1');
+    expect(p.visionModel).toBe('');
+  });
+
+  it('все переменные заданы -> все поля из окружения', () => {
+    process.env.SHOWMEHOW_API_KEY = 'k';
+    process.env.SHOWMEHOW_MODEL = 'gen';
+    process.env.SHOWMEHOW_BASE_URL = 'http://local/v1';
+    process.env.SHOWMEHOW_VISION_MODEL = 'vis';
+    const p = envProvider()!;
+    expect(p.baseURL).toBe('http://local/v1');
+    expect(p.visionModel).toBe('vis');
+  });
+
+  it('окружение побеждает settings.json', () => {
+    process.env.SHOWMEHOW_API_KEY = 'k';
+    process.env.SHOWMEHOW_MODEL = 'from-env';
+    const fromFile = {
+      activeProviderId: 'a', qualityMode: 'max' as const,
+      providers: [{ id: 'a', name: 'file', baseURL: 'http://file/v1', apiKey: 'f',
+        generationModel: 'from-file', visionModel: '' }],
+    };
+    expect(activeProvider(fromFile)!.generationModel).toBe('from-env');
   });
 });
