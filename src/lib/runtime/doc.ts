@@ -13,7 +13,9 @@ export const UIKIT_DOC = `
 - SimUI.button({name:'kick', label:'Толчок', onClick:function(){...}})
 - SimUI.presets({items:[{label:'Холостой ход', values:{rpm:800}},
     {label:'Трасса', values:{rpm:2600}}]}) — двигает слайдеры по их name
-- SimUI.speed({values:[0.25,0.5,1,2], value:1}) -> {get()} — множитель dt, замедление
+- SimUI.speed({values:[0.25,0.5,1,2], value:1}) -> {get()} — ОБЯЗАТЕЛЕН. Множитель dt.
+    Первую секунду get() плавно разгоняется от нуля: симуляция открывается спокойно,
+    а не рывком. Умножай dt на get() в каждом кадре.
 - SimUI.playPause({onPlay:..., onPause:..., onReset:...}) — ОБЯЗАТЕЛЬНО
 
 Информация (докируется по углам, сворачивается, на мобиле свёрнута):

@@ -272,12 +272,30 @@ export const KIT_WIDGETS_JS = `
     wrap.appendChild(lab);
     wrap.appendChild(box);
     p.appendChild(wrap);
+    // Разгон: симуляция открывается неподвижной и за WARMUP_MS выходит на
+    // выбранный множитель по косинусу. Инструмент нужен для показа на занятии,
+    // а рывок с первого кадра читается как сбой, а не как начало демонстрации.
+    var WARMUP_MS = 900;
+    var startedAt = null;
+    function warm() {
+      if (startedAt == null) startedAt = (window.performance && performance.now) ?
+        performance.now() : Date.now();
+      var now = (window.performance && performance.now) ? performance.now() : Date.now();
+      var k = (now - startedAt) / WARMUP_MS;
+      if (k >= 1) return 1;
+      if (k <= 0) return 0;
+      return 0.5 - 0.5 * Math.cos(Math.PI * k);
+    }
     K.__register({
       kind: 'speed', name: o.name || 'speed', label: 'Скорость времени',
       get: function () { return cur; },
       set: function (v) { cur = Number(v); sync(); if (o.onChange) o.onChange(cur); },
+      restart: function () { startedAt = null; },
     });
-    return { get: function () { return cur; } };
+    return {
+      get: function () { return cur * warm(); },
+      restart: function () { startedAt = null; },
+    };
   }
 
   function goals(list) {

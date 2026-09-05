@@ -293,6 +293,51 @@ describe('SimUI.chart', () => {
   }, 20000);
 });
 
+describe('разгон времени в SimUI.speed', () => {
+  const WARM_DEMO = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>warm</title>
+<style>html,body{margin:0;height:100%;overflow:hidden}canvas{position:fixed;top:0;left:0}</style>
+</head><body><canvas id="c"></canvas><script>
+(function () {
+  var cv = document.getElementById('c'), ctx = cv.getContext('2d');
+  var st = { t: 0 }, running = true, last = null;
+  function resetSim() { st = { t: 0 }; }
+  function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+  SimUI.title('Разгон');
+  var sp = SimUI.speed({ values: [1], value: 1 });
+  SimUI.playPause({ onPlay: function () { running = true; last = null; },
+    onPause: function () { running = false; }, onReset: resetSim });
+  SimUI.expose({ getState: function () { return { t: st.t }; }, reset: resetSim });
+  function loop(now) {
+    if (last == null) last = now;
+    var dt = Math.min(0.05, (now - last) / 1000) * sp.get();
+    last = now;
+    if (running) st.t += dt;
+    ctx.fillStyle = '#101318'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#4f8ff7'; ctx.fillRect((st.t * 60) % 400, 40, 30, 30);
+    requestAnimationFrame(loop);
+  }
+  addEventListener('resize', resize); resize(); requestAnimationFrame(loop);
+})();
+</script></body></html>`;
+
+  it('первые кадры идут медленнее установившегося темпа', async () => {
+    const s = await openSession(instrument(WARM_DEMO));
+    try {
+      await s.wait(300);
+      const early = await s.evaluate<{ t: number }>('window.__smh.state()');
+      await s.wait(2000);
+      const late = await s.evaluate<{ t: number }>('window.__smh.state()');
+      // За первые 300 мс разгона накопится заметно меньше, чем 300 мс модельного
+      // времени; после разгона множитель ровно 1, поэтому за 2 с прибавится ~2 с.
+      expect(early.t).toBeLessThan(0.2);
+      expect(late.t - early.t).toBeGreaterThan(1.7);
+      expect(s.errors()).toEqual([]);
+    } finally {
+      await s.close();
+    }
+  }, 60000);
+});
+
 describe('мост интроспекции __smh', () => {
   it('KIT_EXPOSE_JS входит в UIKIT_JS и определяет window.__smh', async () => {
     const { KIT_EXPOSE_JS } = await import('@/lib/runtime/kit-expose');

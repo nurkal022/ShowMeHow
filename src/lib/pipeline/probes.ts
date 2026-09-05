@@ -232,6 +232,11 @@ export async function runProbes(s: RenderSession): Promise<ProbeReport> {
     }
   }
 
+  // «Сброс» перезапускает разгон времени в SimUI.speed. Проба слайдеров ниже
+  // сравнивает темп за два соседних окна — окно, попавшее на разгон, дало бы
+  // расхождение само по себе. Пережидаем разгон целиком.
+  await s.wait(1100);
+
   // --- 4. Слайдеры влияют на симуляцию ---
   const controls = await safe<ControlInfo[]>(
     () => s.evaluate<ControlInfo[]>('window.__smh ? window.__smh.controls() : []'),

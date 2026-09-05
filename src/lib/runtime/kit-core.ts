@@ -97,7 +97,12 @@ window.SimUI = (function () {
       b1.textContent = playing ? '⏸ Пауза' : '▶ Пуск';
       (playing ? o.onPlay : o.onPause)();
     };
-    b2.onclick = function () { o.onReset(); };
+    b2.onclick = function () {
+      for (var i = 0; i < controls.length; i++) {
+        if (controls[i].restart) controls[i].restart();
+      }
+      o.onReset();
+    };
     window.addEventListener('sim-pause', function () { if (playing) b1.onclick(); });
     window.addEventListener('sim-play', function () { if (!playing) b1.onclick(); });
     window.addEventListener('sim-reset', function () { o.onReset(); });
