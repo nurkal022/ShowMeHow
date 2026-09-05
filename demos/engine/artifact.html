@@ -309,7 +309,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
   function efficiency(epsilon) { return 1 - Math.pow(epsilon, 1 - GAMMA); }
 
   // ---------- Состояние симуляции ----------
-  var rpm = 600;             // об/мин, слайдер
+  var rpm = 120;             // об/мин, слайдер; демонстрационное значение —
+                             // полный цикл около секунды, такт различим глазом
   var theta = 0;             // накопленный угол поворота коленвала, рад
   var running = true;
   var lastFrame = null;
@@ -423,11 +424,20 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     if (theta - chartTheta >= CHART_STEP) chartTheta = theta;
   }
 
+  /**
+   * Дистанция камеры от пропорций окна: на широком и коротком экране объект
+   * иначе обрезается сверху.
+   */
+  function cameraDistance() {
+    var aspect = window.innerWidth / Math.max(1, window.innerHeight);
+    return 5.4 * Math.max(1, 1.15 / Math.min(aspect, 1.6));
+  }
+
   // dt = 0 в паузе: облёт обязан замереть вместе с механизмом.
   function updateCamera(dt) {
     if (autoRotate) {
       orbitAngle += 0.15 * dt;
-      var Rc = 5.4;
+      var Rc = cameraDistance();
       camera.position.set(
         CENTER.x + Rc * Math.sin(orbitAngle),
         CENTER.y + 0.55,
@@ -477,8 +487,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     value: 'auto',
     onChange: function (v) {
       autoRotate = v === 'auto';
-      if (v === 'side') { camera.position.set(0, CENTER.y + 0.4, 5.4); camera.lookAt(CENTER); }
-      if (v === 'top') { camera.position.set(0, CENTER.y + 5.4, 0.01); camera.lookAt(CENTER); }
+      var Rc = cameraDistance();
+      if (v === 'side') { camera.position.set(0, CENTER.y + 0.4, Rc); camera.lookAt(CENTER); }
+      if (v === 'top') { camera.position.set(0, CENTER.y + Rc, 0.01); camera.lookAt(CENTER); }
     },
   });
   SimUI.toggle({
