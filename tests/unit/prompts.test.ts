@@ -87,6 +87,30 @@ describe('GENERATION_RULES', () => {
   });
 });
 
+describe('демонстрационные начальные значения', () => {
+  it('планировщик требует наблюдаемого масштаба времени', () => {
+    expect(P.PLANNER_SYSTEM).toContain('1-10');
+    expect(P.PLANNER_SYSTEM.toLowerCase()).toContain('демонстрац');
+  });
+  it('правила генерации требуют наблюдаемости и обязательного SimUI.speed', () => {
+    expect(P.GENERATION_RULES).toContain('SimUI.speed');
+    expect(P.GENERATION_RULES).toContain('1-10');
+  });
+  it('правила требуют всех четырёх качеств сразу, а не одного акцента', () => {
+    const r = P.GENERATION_RULES.toLowerCase();
+    for (const q of ['точн', 'наглядн', 'интерактив', 'приборы']) {
+      expect(r, `нет требования «${q}»`).toContain(q);
+    }
+  });
+  it('акценты удалены', () => {
+    expect(P).not.toHaveProperty('STYLE_HINTS');
+    expect(P).not.toHaveProperty('STYLE_NAMES');
+  });
+  it('каркас демонстрирует разгон через speed.get()', () => {
+    expect(P.EXAMPLE_SKELETON).toContain('speed.get()');
+  });
+});
+
 describe('EXAMPLE_SKELETON исполняется в браузере', () => {
   afterAll(() => closeBrowser());
 
