@@ -6,8 +6,8 @@ import { POST as postGenerate } from '@/app/api/generate/route';
 import { GET as getJobRoute } from '@/app/api/jobs/[id]/route';
 import { POST as postCancel } from '@/app/api/jobs/[id]/cancel/route';
 import { GET as getStream } from '@/app/api/jobs/[id]/stream/route';
-import { createJob, appendEvent, setStatus, __clearForTests } from '@/lib/jobs';
-import { submit, __resetLimitsForTests } from '@/lib/limits';
+import { createJob, getJob, appendEvent, setStatus, __clearForTests } from '@/lib/jobs';
+import { submit, finish, __resetLimitsForTests } from '@/lib/limits';
 import { saveSettings, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import type { JobRequest } from '@/lib/jobs';
 import type { AuthUser } from '@/lib/auth/users';
@@ -167,6 +167,36 @@ describe('изоляция владельцев в роутах заданий',
     expect((await getJobRoute(new Request('http://t'), { params: params() })).status).toBe(200);
     expect((await postCancel(new Request('http://t', { method: 'POST' }),
       { params: params() })).status).toBe(200);
+  });
+});
+
+// Главная регрессия к Critical: статус 'running' обязан ставить сам обработчик
+// /api/generate — внутри колбэка, который он передаёт в submit. Задание здесь ведётся
+// через настоящий роут, а не через самописный колбэк: тест, который сам зовёт
+// setStatus в своём start, проверял бы собственную копию исправленного роута и
+// прошёл бы на сломанном коде.
+describe('подъём задания из очереди через /api/generate', () => {
+  it('обработчик сам переводит дозапущенное задание в running', async () => {
+    process.env.SHOWMEHOW_API_KEY = 'test-key';
+    process.env.SHOWMEHOW_MODEL = 'test-model';
+    try {
+      // Оба серверных слота заняты чужими заданиями.
+      submit('occupant-1', OTHER_USER.id, () => {});
+      submit('occupant-2', '33333333-3333-3333-3333-333333333333', () => {});
+
+      const res = await postGenerate(generateRequest());
+      expect(res.status).toBe(200);
+      const { jobId } = (await res.json()) as { jobId: string };
+      expect((await getJob(TEST_USER.id, jobId))!.status).toBe('queued');
+
+      // Слот освободился — задание обязано стартовать и получить свой статус.
+      finish('occupant-1');
+      // Проверяется именно состояние задания в хранилище, а не переменная теста.
+      expect((await getJob(TEST_USER.id, jobId))!.status).toBe('running');
+    } finally {
+      delete process.env.SHOWMEHOW_API_KEY;
+      delete process.env.SHOWMEHOW_MODEL;
+    }
   });
 });
 
