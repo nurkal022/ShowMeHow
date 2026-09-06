@@ -711,10 +711,15 @@ body:hover .present-exit { opacity: .85; }
   font-family: inherit; color: var(--text-2); line-height: 1.55; max-height: 190px; overflow-y: auto;
 }
 
-@media (max-width: 1080px) {
-  .stand-form { width: 380px; min-width: 380px; padding: 18px 16px 36px; }
+/* Ширина колонки подчинена одному числу: кит сворачивает панель в кнопку
+   «Параметры» уже,  чем 640px. Стенд не должен обещать меньше, чем покажет
+   настоящая симуляция, поэтому сцена обязана оставаться шире этого порога —
+   сначала ужимается форма, а когда и это не спасает, колонки встают друг под
+   друга и сцена получает всю ширину. */
+@media (max-width: 1180px) {
+  .stand-form { width: 340px; min-width: 340px; padding: 18px 14px 36px; }
 }
-@media (max-width: 900px) {
+@media (max-width: 1020px) {
   .stand { flex-direction: column; height: auto; }
   .stand-form { width: auto; min-width: 0; border-right: none; order: 2; }
   .stand-view { order: 1; position: sticky; top: var(--nav-h); z-index: 5; padding: 12px 12px 0; }
