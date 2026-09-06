@@ -28,8 +28,11 @@ export function kitPreviewDoc(): string {
      непрозрачный холст, и тот закрыл бы собой образ. Только явный dark. */
   :root { color-scheme: dark; }
   html, body { background: transparent; overflow: hidden; }
-  /* Панель на стенде уже, чем в симуляции: рядом с ней должен остаться образ. */
-  .sim-panel { width: 216px; }
+  /* Панель на стенде уже, чем в симуляции: рядом с ней должен остаться образ.
+     И ниже: сцена стенда — не полное окно, и в настоящей симуляции панель
+     такой высоты поместилась бы, а здесь упиралась бы в край кадра и
+     обрезалась. Внутренняя прокрутка оставляет её целой. */
+  .sim-panel { width: 216px; max-height: calc(100% - 24px); overflow-y: auto; }
   .sim-panel, .sim-corner > * { animation: kit-in .22s ease-out; }
   @keyframes kit-in { from { opacity: 0; transform: translateY(-6px); } }
   @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
