@@ -15,28 +15,36 @@ import { IconPlay } from '../../icons';
 
 /**
  * Огрублённая основа слова: русские окончания меняются («преломление» против
- * «преломления»), а точное совпадение из-за этого промахивалось бы. Шести букв
- * хватает, чтобы отличить «маятник» от «магнита», и мало, чтобы склейка вроде
- * «свет» цепляла всё подряд.
+ * «преломления»), и точное совпадение из-за этого промахивалось бы.
  */
 function stem(word: string): string {
-  return word.toLowerCase().replace('ё', 'е').slice(0, 6);
+  return word.toLowerCase().replace(/ё/g, 'е').replace(/[^а-яa-z0-9]/g, '').slice(0, 6);
 }
 
 const STOP = new Set(['через', 'между', 'закон']);
 
+/**
+ * Сравнение идёт по словам целиком, а не подстрокой: основа из шести букв
+ * подстрокой цепляет чужое — «автомат» из информатики находился в слове
+ * «автоматически» любого запроса. Разница длин до трёх букв оставляет
+ * склонения («преломления» к «преломление»), но отсекает другое слово.
+ */
+function wordsMatch(a: string, b: string): boolean {
+  return stem(a) === stem(b) && Math.abs(a.length - b.length) <= 3;
+}
+
 /** Насколько симуляция похожа на то, что человек собирает сейчас. */
 export function matchScore(sim: SimulationMeta, section: Section): number {
   const hay = `${sim.title} ${sim.prompt} ${sim.subject} ${sim.tags.join(' ')}`
-    .toLowerCase().replace(/ё/g, 'е');
+    .toLowerCase().replace(/ё/g, 'е').split(/[^а-яa-z0-9-]+/).filter(Boolean);
   let score = 0;
   for (const phenomenon of section.phenomena) {
     for (const word of phenomenon.split(/\s+/)) {
       if (word.length < 6 || STOP.has(word.toLowerCase())) continue;
-      if (hay.includes(stem(word))) score += 3;
+      if (hay.some((h) => wordsMatch(h, word))) score += 3;
     }
   }
-  if (hay.includes(stem(section.label))) score += 2;
+  if (hay.some((h) => wordsMatch(h, section.label))) score += 2;
   return score;
 }
 
