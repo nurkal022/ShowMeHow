@@ -33,6 +33,10 @@ beforeEach(async () => {
   const b = await createUser('stranger@example.com', 'пароль123');
   mine = `${SESSION_COOKIE}=${await createSession(a.id)}`;
   theirs = `${SESSION_COOKIE}=${await createSession(b.id)}`;
+  // Набор про изоляцию владельцев, а не про первый вход: помечаем примеры
+  // разложенными, иначе список каждого пользователя начинался бы с десяти демок
+  // (их автозасев проверяется отдельно в demo-seed.test.ts).
+  await pool.query('UPDATE users SET demos_seeded_at = now()');
   const meta = await createSimulation(
     a.id, { title: 'т', prompt: 'п', subject: 'Физика', tags: [] }, '<html>x</html>');
   simId = meta.id;

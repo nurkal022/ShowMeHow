@@ -12,6 +12,7 @@ export default function Library() {
   const [sort, setSort] = useState<Sort>('recent');
   const [error, setError] = useState('');
   const [installing, setInstalling] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   async function load() {
     try {
@@ -22,6 +23,8 @@ export default function Library() {
     } catch (err) {
       setError('Не удалось загрузить библиотеку');
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   }
   useEffect(() => { load(); }, []);
@@ -103,17 +106,23 @@ export default function Library() {
 
       {error && <p className="error-box" style={{ marginTop: 16 }}>{error}</p>}
 
-      {sims.length === 0 && !error && (
+      {loading && sims.length === 0 && (
+        <div className="cards">
+          {Array.from({ length: 8 }, (_, i) => <div key={i} className="sim-card skeleton" />)}
+        </div>
+      )}
+
+      {!loading && sims.length === 0 && !error && (
         <div className="empty-library">
           <IconLibrary size={34} />
           <div>
             <h2>Здесь пока пусто</h2>
-            <p className="muted">Создайте первую симуляцию или начните с готовых примеров.</p>
+            <p className="muted">Опишите явление — симуляция появится здесь.</p>
           </div>
           <div className="row">
             <a className="btn btn-primary" href="/">Создать симуляцию</a>
             <button className="btn" onClick={installDemos} disabled={installing}>
-              {installing ? 'Устанавливаю…' : 'Загрузить примеры'}
+              {installing ? 'Возвращаю…' : 'Вернуть примеры'}
             </button>
           </div>
         </div>

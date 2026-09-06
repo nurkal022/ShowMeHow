@@ -14,7 +14,8 @@
     "eval": "tsx evals/run.ts",
     "seed": "tsx scripts/seed-demos.ts",
     "migrate": "tsx scripts/migrate.ts",
-    "migrate:data": "tsx scripts/migrate-to-db.ts"
+    "migrate:data": "tsx scripts/migrate-to-db.ts",
+    "demos:thumbs": "tsx scripts/demo-thumbs.ts"
   },
   "dependencies": {
     "next": "^15.5.20",

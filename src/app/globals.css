@@ -615,3 +615,9 @@ body:hover .present-exit { opacity: .85; }
   .navlinks > a span { display: none; }
 }
 .menu-head strong { font-size: 13.5px; word-break: break-word; }
+
+/* Скелет карточки: первый заход раскладывает примеры, и сетка не должна
+   мигать словом «пусто», пока ответ в пути. */
+.sim-card.skeleton { height: 260px; border-style: dashed; background: var(--surface-2); opacity: .5; }
+@keyframes skeleton-breathe { 50% { opacity: .28; } }
+.sim-card.skeleton { animation: skeleton-breathe 1.6s ease-in-out infinite; }

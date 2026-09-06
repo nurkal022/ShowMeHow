@@ -4,6 +4,7 @@ import { instrument } from './artifact';
 import { renderArtifact, type RenderFn } from './renderer';
 import { createSimulation, saveThumbnail } from './storage';
 import { getRepo } from './db/repo';
+import { db } from './db/client';
 
 export interface DemoEntry {
   slug: string;
@@ -27,6 +28,25 @@ interface DemoMetaFile {
   mode?: '2d' | '3d';
   keywords?: string[];
   exemplar?: boolean;
+}
+
+/** Имя файла с заранее снятым превью внутри каталога демки. */
+export const THUMBNAIL_FILE = 'thumbnail.png';
+
+/**
+ * Готовое превью демки, снятое заранее скриптом demos:thumbs. Демки статичны,
+ * и картинка у всех пользователей одинаковая, поэтому снимать её заново на
+ * каждую установку незачем: именно этот рендер и делал установку небыстрой.
+ * Если файла нет (только что добавленная демка) — вернётся null, и вызывающий
+ * снимет превью сам.
+ */
+export function bundledThumbnail(slug: string): Buffer | null {
+  const file = path.join(demosRoot(), slug, THUMBNAIL_FILE);
+  try {
+    return fs.readFileSync(file);
+  } catch {
+    return null;
+  }
 }
 
 export function demosRoot(): string {
@@ -91,15 +111,42 @@ async function runInstallDemos(
       continue;
     }
     const html = instrument(demo.html);
-    const report = await render(html);
+    // Превью берём готовое; браузер поднимаем, только если его ещё не сняли.
+    let thumbnail = bundledThumbnail(demo.slug);
+    if (!thumbnail) {
+      const report = await render(html);
+      thumbnail = report.screenshots[1] ?? report.screenshots[0] ?? null;
+    }
     const meta = await createSimulation(
       ownerId,
       { title: demo.title, prompt: demo.prompt, subject: demo.subject, tags: demo.tags, demo: demo.slug },
       html,
     );
-    const thumbnail = report.screenshots[1] ?? report.screenshots[0];
     if (thumbnail) await saveThumbnail(ownerId, meta.id, thumbnail);
     installed.push(demo.slug);
   }
   return { installed, skipped };
+}
+
+/**
+ * Раскладывает встроенные примеры в библиотеку пользователя ровно один раз.
+ *
+ * Флаг занимается условным UPDATE до самой установки: два параллельных запроса
+ * (открытая библиотека в двух вкладках) не начнут установку оба — второй увидит
+ * rowCount 0 и выйдет. Если установка сорвалась, флаг снимается обратно, и
+ * следующий заход попробует снова.
+ *
+ * Повторно примеры не возвращаются: удалил их пользователь — значит, не нужны.
+ */
+export async function ensureDemosForUser(userId: string): Promise<boolean> {
+  const claimed = await db().query(
+    'UPDATE users SET demos_seeded_at = now() WHERE id = $1 AND demos_seeded_at IS NULL', [userId]);
+  if (!claimed.rowCount) return false;
+  try {
+    await installDemos(userId);
+    return true;
+  } catch (e) {
+    await db().query('UPDATE users SET demos_seeded_at = NULL WHERE id = $1', [userId]);
+    throw e;
+  }
 }
