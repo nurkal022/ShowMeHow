@@ -47,7 +47,10 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
 
   return (
     <form className="auth-card" onSubmit={submit}>
-      <h1>{isLogin ? 'Вход' : 'Регистрация'}</h1>
+      <h1>{isLogin ? 'С возвращением' : 'Создать аккаунт'}</h1>
+      <p className="muted">
+        {isLogin ? 'Войдите, чтобы открыть свою библиотеку.' : 'Десять генераций в пробной версии.'}
+      </p>
       <label>Почта
         <input className="input" type="email" value={email} autoComplete="email" required
           onChange={(e) => setEmail(e.target.value)} />
@@ -61,9 +64,9 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
       <button className="btn btn-primary" type="submit" disabled={busy}>
         {busy ? 'Минуту…' : isLogin ? 'Войти' : 'Зарегистрироваться'}
       </button>
-      <p className="muted">
-        {isLogin ? 'Ещё нет аккаунта? ' : 'Уже есть аккаунт? '}
-        <a href={isLogin ? '/register' : '/login'}>{isLogin ? 'Зарегистрироваться' : 'Войти'}</a>
+      <p className="muted" style={{ textAlign: 'center' }}>
+        {isLogin ? 'Нет аккаунта? ' : 'Уже есть аккаунт? '}
+        <a href={isLogin ? '/register' : '/login'}>{isLogin ? 'Регистрация' : 'Вход'}</a>
       </p>
     </form>
   );

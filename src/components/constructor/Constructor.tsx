@@ -7,21 +7,26 @@ interface Props {
   disabled: boolean;
   onCreate: (prompt: string) => void;
   onEditText: (prompt: string) => void;
+  /** Значения из настроек пользователя: подставляются как стартовые. */
+  defaultLevel?: Level;
+  defaultStyle?: Style;
 }
 
 /**
  * Четыре шага вместо пустого поля: раздел и явление → как показать → чем управлять →
  * для кого. На выходе — обычный текстовый промпт, который уходит в тот же пайплайн.
  */
-export default function Constructor({ disabled, onCreate, onEditText }: Props) {
+export default function Constructor({
+  disabled, onCreate, onEditText, defaultLevel, defaultStyle,
+}: Props) {
   const [section, setSection] = useState('');
   const [phenomenon, setPhenomenon] = useState('');
   const [custom, setCustom] = useState('');
   const [mode, setMode] = useState<'2d' | '3d'>('2d');
-  const [style, setStyle] = useState<Style>('schematic');
+  const [style, setStyle] = useState<Style>(defaultStyle ?? 'schematic');
   const [params, setParams] = useState<string[]>([]);
   const [auto, setAuto] = useState(true);
-  const [level, setLevel] = useState<Level>('grade10to11');
+  const [level, setLevel] = useState<Level>(defaultLevel ?? 'grade10to11');
 
   const current = sectionByKey(section);
   const chosen = custom.trim() || phenomenon;
@@ -119,9 +124,9 @@ export default function Constructor({ disabled, onCreate, onEditText }: Props) {
       </div>
 
       <div className="ctor-step">
-        <span className="label">Что уйдёт модели</span>
+        <span className="label">Готовый запрос</span>
         <p className="ctor-preview">{preview || 'Выберите раздел и явление — здесь появится готовый текст.'}</p>
-        <div className="composer-row">
+        <div className="ctor-actions">
           <button type="button" className="btn btn-primary" disabled={disabled || !complete}
             onClick={() => onCreate(preview)}>Создать</button>
           <button type="button" className="btn" disabled={!complete}

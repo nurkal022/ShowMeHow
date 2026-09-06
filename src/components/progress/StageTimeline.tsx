@@ -1,6 +1,7 @@
 'use client';
 import { STAGE_LABELS, type StageInfo } from './deriveProgress';
 import { stageCopy } from './stepCopy';
+import { IconCheck } from '../icons';
 
 function formatDuration(ms: number): string {
   const sec = Math.round(ms / 1000);
@@ -30,7 +31,7 @@ export default function StageTimeline({ stages, now }: { stages: StageInfo[]; no
           }
           return (
             <div key={s.stage} className={`stage-chip stage-${s.status}`}>
-              {s.status === 'done' && <span className="stage-check">✓</span>}
+              {s.status === 'done' && <span className="stage-check"><IconCheck size={13} /></span>}
               <span className="stage-chip-label">{STAGE_LABELS[s.stage]}</span>
               {suffix && <span className="stage-chip-suffix">{suffix}</span>}
             </div>

@@ -42,7 +42,7 @@ export default function ProgressView({ events }: { events: PipelineEvent[] }) {
       {state.refineRounds.length > 0 && (
         <RefinePanel rounds={state.refineRounds} feedback={state.judgeFeedback} />
       )}
-      {state.warnings.map((w, i) => <div className="warn-banner" key={i}>⚠ {w}</div>)}
+      {state.warnings.map((w, i) => <div className="warn-banner" key={i}>{w}</div>)}
       {state.terminal?.type === 'error' && (
         <div className="error-box">{state.terminal.message}</div>
       )}

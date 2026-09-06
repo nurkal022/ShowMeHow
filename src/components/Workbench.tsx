@@ -3,14 +3,33 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { PipelineEvent, QualityMode } from '@/lib/types';
 import type { JobStatus } from '@/lib/jobs';
+import type { UserPrefs } from '@/lib/auth/prefs';
 import { historyLabel } from '@/lib/history-label';
 import ProgressView from './progress/ProgressView';
 import PreviewFrame from './PreviewFrame';
 import Constructor from './constructor/Constructor';
+import { useVoiceInput } from './useVoiceInput';
+import {
+  IconClose, IconDownload, IconHistory, IconImage, IconMic,
+  IconPlay, IconPlus, IconSend, IconSliders, IconSpark, IconWand,
+} from './icons';
 
 type Phase = 'idle' | 'generating' | 'ready' | 'error';
 
 const ACTIVE_JOB_KEY = 'showmehow-active-job';
+
+const SUGGESTIONS = [
+  'Диффузия молекул духов в комнате',
+  'Маятник с изменяемой длиной нити',
+  'Преломление луча на границе двух сред',
+  'Орбита спутника вокруг планеты',
+];
+
+const QUALITY_OPTIONS: [QualityMode, string, string][] = [
+  ['max', 'Максимум', '3–6 мин'],
+  ['standard', 'Стандарт', '1–3 мин'],
+  ['fast', 'Быстро', '~1 мин'],
+];
 
 /**
  * Что делать при восстановлении job из localStorage при монтировании, в зависимости
@@ -26,22 +45,21 @@ export function restoredJobAction(status: JobStatus): 'reconnect' | 'open' | 'ca
   return 'error';
 }
 
-interface QuotaInfo {
-  limit: number | null;
-  used: number;
-  remaining: number | null;
-}
+interface QuotaInfo { limit: number | null; used: number; remaining: number | null }
+interface Message { role: 'user' | 'bot'; text: string }
 
 export default function Workbench() {
   const search = useSearchParams();
   const [phase, setPhase] = useState<Phase>('idle');
   const [events, setEvents] = useState<PipelineEvent[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [html, setHtml] = useState<string | null>(null);
   const [simId, setSimId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [mode, setMode] = useState<QualityMode>('max');
-  // Способ ввода: конструктор собирает промпт по шагам, «свой текст» — обычное поле.
-  const [inputMode, setInputMode] = useState<'constructor' | 'text'>('text');
+  const [prefs, setPrefs] = useState<UserPrefs>({});
+  const [showConstructor, setShowConstructor] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
@@ -49,15 +67,22 @@ export default function Workbench() {
   const [cancelling, setCancelling] = useState(false);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
-  // Мобильные вкладки: на узком экране видна только одна колонка. На десктопе (≥900px)
+  // Мобильные вкладки: на узком экране видна только одна колонка. На десктопе
   // переключатель скрыт CSS и обе колонки показываются одновременно.
   const [activeTab, setActiveTab] = useState<'create' | 'preview'>('create');
   const fileRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const threadEndRef = useRef<HTMLDivElement>(null);
   // Strict Mode в dev монтирует компонент дважды — mount-эффект должен отработать
   // ровно один раз, иначе реплей job-стрима запустится параллельно и продублирует события.
   const didInit = useRef(false);
   // jobId, к стриму которого мы сейчас подключены (защита от повторного connect к тому же job).
   const connectedJobRef = useRef<string | null>(null);
+
+  const voice = useVoiceInput((text) => {
+    setPrompt((prev) => (prev ? `${prev} ${text}` : text));
+    textRef.current?.focus();
+  });
 
   function clearActiveJob() {
     localStorage.removeItem(ACTIVE_JOB_KEY);
@@ -67,10 +92,22 @@ export default function Workbench() {
 
   useEffect(() => { fetchQuota(); }, []);
 
-  // Квота нужна только для отображения строки под кнопкой «Создать» — не критична,
-  // поэтому молча игнорируем сетевые ошибки и оставляем quota равной null (строка
-  // просто не показывается). Перечитываем и после успешной генерации — она тратит
-  // квоту, и число «осталось» должно обновиться без перезагрузки страницы.
+  // Лента всегда прокручена к последнему событию — иначе прогресс уезжает за край.
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, events.length, phase]);
+
+  // Поле ввода растёт под текст, но не больше max-height из CSS.
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+  }, [prompt]);
+
+  // Квота и настройки нужны только для оформления композера — не критичны,
+  // поэтому молча игнорируем сетевые ошибки. Перечитываем и после успешной
+  // генерации: она тратит квоту, и остаток должен обновиться без перезагрузки.
   async function fetchQuota() {
     try {
       const res = await fetch('/api/me');
@@ -78,6 +115,10 @@ export default function Workbench() {
       const body = await res.json();
       setQuota(body.quota ?? null);
       setQuotaMessage(body.quotaMessage ?? null);
+      const p: UserPrefs = body.prefs ?? {};
+      setPrefs(p);
+      if (p.quality) setMode(p.quality);
+      if (p.startWithConstructor) setShowConstructor(true);
     } catch {
       // см. комментарий выше
     }
@@ -181,6 +222,10 @@ export default function Workbench() {
     }
   }
 
+  function say(role: Message['role'], text: string) {
+    setMessages((prev) => [...prev, { role, text }]);
+  }
+
   async function consumeJobStream(res: Response) {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
@@ -200,6 +245,7 @@ export default function Workbench() {
           if (e.type === 'done') {
             sawTerminal = true;
             clearActiveJob();
+            say('bot', 'Готово. Симуляция справа — можно показывать или дорабатывать.');
             // Готовый результат — на мобиле сразу показываем вкладку превью.
             setActiveTab('preview');
             await openSimulation(e.simulationId);
@@ -265,6 +311,8 @@ export default function Workbench() {
   }
 
   async function generate(text: string) {
+    setShowConstructor(false);
+    say('user', text);
     setPhase('generating'); setEvents([]); setError(null); setHtml(null); setCancelling(false);
     try {
       const res = await fetch('/api/generate', {
@@ -309,6 +357,7 @@ export default function Workbench() {
   // «Доводка» пульсировал бы бесконечно даже после того, как результат уже показан.
   async function refine(instruction: string) {
     if (!simId) return;
+    say('user', instruction);
     setPhase('generating'); setError(null);
     setEvents([{ type: 'stage', stage: 'refining', status: 'start', at: Date.now() }]);
     function closeRefiningStage() {
@@ -321,8 +370,12 @@ export default function Workbench() {
       });
       const body = await res.json();
       closeRefiningStage();
-      if (res.ok) { setHtml(body.html); setPhase('ready'); loadHistory(simId); }
-      else { setError(body.error ?? `Ошибка сервера (${res.status})`); setPhase('error'); }
+      if (res.ok) {
+        setHtml(body.html); setPhase('ready'); loadHistory(simId);
+        say('bot', 'Готово, обновил.');
+      } else {
+        setError(body.error ?? `Ошибка сервера (${res.status})`); setPhase('error');
+      }
     } catch (err) {
       closeRefiningStage();
       setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
@@ -344,128 +397,182 @@ export default function Workbench() {
     if (!hasSim && quota?.remaining === 0) return;
     setPrompt('');
     // Пока открыта симуляция (simId есть) — любой запрос это доработка,
-    // даже после ошибки; новая генерация только после «+ начать новую».
+    // даже после ошибки; новая генерация только после «Новая симуляция».
     if (simId) refine(text);
     else generate(text);
   }
 
+  function startNew() {
+    setPhase('idle'); setSimId(null); setHtml(null); setEvents([]); setError(null);
+    setHistory([]); setMessages([]); setImage(null); clearActiveJob();
+    setActiveTab('create');
+  }
+
   const hasSim = simId !== null;
+  const busy = phase === 'generating';
+  const outOfQuota = !hasSim && quota?.remaining === 0;
+  const empty = messages.length === 0 && events.length === 0 && !hasSim;
+  const voiceOn = voice.supported && prefs.voiceInput !== false;
 
   return (
     <div className={`workbench tab-${activeTab}`}>
       <div className="mobile-tabs" role="tablist" aria-label="Разделы">
-        <button
-          role="tab"
-          aria-selected={activeTab === 'create'}
+        <button role="tab" aria-selected={activeTab === 'create'}
           className={activeTab === 'create' ? 'active' : ''}
-          onClick={() => setActiveTab('create')}
-        >
-          Создать
-        </button>
-        <button
-          role="tab"
-          aria-selected={activeTab === 'preview'}
+          onClick={() => setActiveTab('create')}>Диалог</button>
+        <button role="tab" aria-selected={activeTab === 'preview'}
           className={activeTab === 'preview' ? 'active' : ''}
-          onClick={() => setActiveTab('preview')}
-        >
-          Превью
-        </button>
+          onClick={() => setActiveTab('preview')}>Симуляция</button>
       </div>
+
       <aside className="chat-pane">
-        <h2>{hasSim ? 'Доработка' : 'Новая симуляция'}</h2>
-        {hasSim && phase !== 'generating' && (
-          <button className="link-btn" onClick={() => {
-            setPhase('idle'); setSimId(null); setHtml(null); setEvents([]); setError(null);
-            setHistory([]); clearActiveJob();
-          }}>+ начать новую</button>
-        )}
-        <ProgressView events={events} />
-        {error && <div className="error-box">{error}</div>}
-        {phase === 'generating' && jobId && (
-          <button
-            className="link-btn danger"
-            disabled={cancelling}
-            onClick={cancelJob}
-          >
-            {cancelling ? 'Отменяю…' : '✕ Отменить'}
-          </button>
-        )}
-        {!hasSim && (
-          <div className="segmented input-switch" role="radiogroup" aria-label="Способ ввода">
-            {([['constructor', 'Конструктор'], ['text', 'Свой текст']] as const).map(([v, l]) => (
-              <button key={v} type="button" role="radio" aria-checked={inputMode === v}
-                className={inputMode === v ? 'segmented-item active' : 'segmented-item'}
-                onClick={() => setInputMode(v)}>{l}</button>
-            ))}
-          </div>
-        )}
-        {!hasSim && inputMode === 'constructor' && (
-          <Constructor
-            disabled={phase === 'generating' || quota?.remaining === 0}
-            onCreate={(text) => { if (phase !== 'generating') generate(text); }}
-            onEditText={(text) => { setPrompt(text); setInputMode('text'); }}
-          />
-        )}
-        <div className="composer" hidden={!hasSim && inputMode === 'constructor'}>
-          {!hasSim && (
-            <div className="composer-row">
-              <select
-                className="select"
-                aria-label="Режим качества"
-                value={mode}
-                disabled={phase === 'generating'}
-                onChange={(e) => setMode(e.target.value as QualityMode)}
-              >
-                <option value="max">Максимум (3-6 мин)</option>
-                <option value="standard">Стандарт (1-3 мин)</option>
-                <option value="fast">Быстрый (~1 мин)</option>
-              </select>
-              <button className="btn" disabled={phase === 'generating'} onClick={() => fileRef.current?.click()}>
-                {image ? '🖼 картинка ✓' : '🖼 картинка'}
-              </button>
-              <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
+        <div className="thread">
+          {(hasSim || messages.length > 0) && (
+            <div className="thread-top">
+              <span className="label">{hasSim ? 'Доработка' : 'Диалог'}</span>
+              {!busy && (
+                <button className="btn btn-sm btn-secondary" onClick={startNew}>
+                  <IconPlus size={16} />Новая
+                </button>
+              )}
             </div>
           )}
-          <textarea
-            className="input"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
-            }}
-            placeholder={hasSim
-              ? 'Что изменить? Например: сделай частицы медленнее'
-              : 'Опишите симуляцию. Например: диффузия молекул духов в комнате'}
-            rows={3}
-          />
-          <button
-            className="btn btn-primary"
-            disabled={phase === 'generating' || (!hasSim && quota?.remaining === 0)}
-            onClick={submit}
-          >
-            {phase === 'generating' ? 'Работаю…' : hasSim ? 'Доработать' : 'Создать'}
-          </button>
-          {!hasSim && quota && quota.limit !== null && (
-            quota.remaining === 0
-              ? <div className="quota-line quota-exhausted">{quotaMessage}</div>
-              : <div className="quota-line">Осталось {quota.remaining} из {quota.limit} генераций</div>
+
+          {empty && (
+            <div className="hero">
+              <h2>С чего начнём?</h2>
+              <p>Опишите явление — соберу интерактивную симуляцию.</p>
+              <div className="hero-suggestions">
+                {SUGGESTIONS.map((s) => (
+                  <button key={s} className="suggestion" onClick={() => setPrompt(s)}>
+                    <IconSpark size={17} />{s}
+                  </button>
+                ))}
+                <button className="suggestion" onClick={() => setShowConstructor(true)}>
+                  <IconWand size={17} />Собрать по шагам в конструкторе
+                </button>
+              </div>
+            </div>
           )}
+
+          {messages.map((m, i) => (
+            <div key={i} className={m.role === 'user' ? 'msg msg-user' : 'msg msg-bot'}>
+              <div className="bubble">{m.text}</div>
+            </div>
+          ))}
+
+          <ProgressView events={events} />
+          {error && <div className="error-box">{error}</div>}
+          {busy && jobId && (
+            <button className="btn btn-sm btn-danger" style={{ alignSelf: 'flex-start' }}
+              disabled={cancelling} onClick={cancelJob}>
+              <IconClose size={15} />{cancelling ? 'Отменяю…' : 'Отменить'}
+            </button>
+          )}
+          <div ref={threadEndRef} />
+        </div>
+
+        <div className="composer">
+          <div className="composer-wrap">
+            {showSettings && (
+              <div className="popover" role="dialog" aria-label="Настройки генерации">
+                <div className="field">
+                  <span>Качество</span>
+                  <div className="segmented">
+                    {QUALITY_OPTIONS.map(([v, label, hint]) => (
+                      <button key={v} type="button" title={hint} aria-pressed={mode === v}
+                        className={mode === v ? 'segmented-item active' : 'segmented-item'}
+                        disabled={busy} onClick={() => setMode(v)}>{label}</button>
+                    ))}
+                  </div>
+                  <span className="muted">{QUALITY_OPTIONS.find(([v]) => v === mode)?.[2]}</span>
+                </div>
+                <button className="btn btn-sm btn-secondary" onClick={() => setShowSettings(false)}>
+                  Готово
+                </button>
+              </div>
+            )}
+            <div className="composer-box">
+              <textarea
+                ref={textRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+                }}
+                placeholder={hasSim ? 'Что изменить?' : 'Опишите симуляцию'}
+                rows={1}
+                aria-label={hasSim ? 'Что изменить' : 'Описание симуляции'}
+              />
+              <div className="composer-tools">
+                {!hasSim && (
+                  <>
+                    <button className="icon-btn" title="Конструктор" aria-label="Конструктор"
+                      onClick={() => setShowConstructor(true)} disabled={busy}>
+                      <IconWand size={19} />
+                    </button>
+                    <button className={image ? 'icon-btn on' : 'icon-btn'} title="Картинка-образец"
+                      aria-label="Картинка-образец" disabled={busy}
+                      onClick={() => fileRef.current?.click()}>
+                      <IconImage size={19} />
+                    </button>
+                    <button className={showSettings ? 'icon-btn on' : 'icon-btn'} title="Качество"
+                      aria-label="Настройки генерации" disabled={busy}
+                      onClick={() => setShowSettings((v) => !v)}>
+                      <IconSliders size={19} />
+                    </button>
+                    <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
+                  </>
+                )}
+                <span className="spacer" />
+                {voiceOn && (
+                  <button className={voice.listening ? 'icon-btn rec' : 'icon-btn'}
+                    title={voice.listening ? 'Остановить запись' : 'Голосовой ввод'}
+                    aria-label="Голосовой ввод" aria-pressed={voice.listening}
+                    onClick={voice.toggle} disabled={busy}>
+                    <IconMic size={19} />
+                  </button>
+                )}
+                <button className="composer-send" onClick={submit}
+                  disabled={busy || !prompt.trim() || outOfQuota}
+                  title="Отправить" aria-label="Отправить">
+                  <IconSend size={19} />
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="composer-foot">
+            {image && <span className="attach-note"><IconImage size={14} />картинка добавлена</span>}
+            {voice.error && <span className="voice-hint">{voice.error}</span>}
+            <span className="spacer" />
+            {!hasSim && quota && quota.limit !== null && (
+              outOfQuota
+                ? <span className="quota-line quota-exhausted">{quotaMessage}</span>
+                : <span className="quota-line">Осталось {quota.remaining} из {quota.limit}</span>
+            )}
+          </div>
         </div>
       </aside>
+
       <section className="preview-pane">
-        {phase === 'generating' && (
+        {busy && (
           <button className="to-process-badge" onClick={() => setActiveTab('create')}>
-            идёт генерация → к процессу
+            идёт генерация — к процессу
           </button>
         )}
         <PreviewFrame html={html} />
         {simId && (
           <div className="preview-actions">
-            <a href={`/present/${simId}`} target="_blank" rel="noopener noreferrer">▶ Режим презентации</a>
-            <a href={`/api/simulations/${simId}/export`}>⬇ Экспорт HTML</a>
+            <a className="btn btn-sm btn-ghost" href={`/present/${simId}`} target="_blank" rel="noopener noreferrer">
+              <IconPlay size={16} />Презентация
+            </a>
+            <a className="btn btn-sm btn-ghost" href={`/api/simulations/${simId}/export`}>
+              <IconDownload size={16} />Экспорт
+            </a>
+            <span className="spacer" />
             {history.length > 0 && (
               <details className="history-dropdown">
-                <summary>История версий ({history.length})</summary>
+                <summary><IconHistory size={16} />&nbsp;Версии ({history.length})</summary>
                 <ul>
                   {history.map((name) => (
                     <li key={name}>
@@ -479,6 +586,27 @@ export default function Workbench() {
           </div>
         )}
       </section>
+
+      {showConstructor && (
+        <div className="modal-backdrop" role="presentation"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowConstructor(false); }}>
+          <div className="modal" role="dialog" aria-modal="true" aria-label="Конструктор запроса">
+            <div className="modal-head">
+              <h2>Конструктор</h2>
+              <button className="icon-btn" aria-label="Закрыть" onClick={() => setShowConstructor(false)}>
+                <IconClose size={19} />
+              </button>
+            </div>
+            <Constructor
+              disabled={busy || outOfQuota}
+              defaultLevel={prefs.level}
+              defaultStyle={prefs.style}
+              onCreate={(text) => { if (!busy) generate(text); }}
+              onEditText={(text) => { setPrompt(text); setShowConstructor(false); textRef.current?.focus(); }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

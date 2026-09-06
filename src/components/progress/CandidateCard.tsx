@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { RubricScores } from '@/lib/types';
 import type { CandidateInfo } from './deriveProgress';
 import { candidateCopy } from './stepCopy';
+import { IconCheck } from '../icons';
 
 const SCORE_DIMS: { key: keyof RubricScores; label: string; cls: string }[] = [
   { key: 'physics', label: 'Физика', cls: 'dim-physics' },
@@ -28,14 +29,14 @@ export default function CandidateCard({ candidate }: { candidate: CandidateInfo 
       )}
       {candidate.critic && (
         candidate.critic.issues.length === 0 ? (
-          <div className="candidate-critic ok">✓ физика ок</div>
+          <div className="candidate-critic ok"><IconCheck size={14} />физика ок</div>
         ) : (
           <details
             className="candidate-critic warn"
             open={showIssues}
             onToggle={(e) => setShowIssues(e.currentTarget.open)}
           >
-            <summary>⚠ {candidate.critic.issues.length} замечаний</summary>
+            <summary>{candidate.critic.issues.length} замечаний</summary>
             <ul>
               {candidate.critic.issues.map((issue, i) => <li key={i}>{issue}</li>)}
             </ul>
@@ -45,8 +46,8 @@ export default function CandidateCard({ candidate }: { candidate: CandidateInfo 
       {candidate.probes && (
         <div className={candidate.probes.failed.length ? 'cand-probes warn' : 'cand-probes ok'}>
           {candidate.probes.failed.length === 0
-            ? `✓ пробы пройдены (${Math.round(candidate.probes.passRate * 100)}%)`
-            : `⚠ пробы: ${candidate.probes.failed.length} провал(ов)`}
+            ? `пробы пройдены (${Math.round(candidate.probes.passRate * 100)}%)`
+            : `пробы: ${candidate.probes.failed.length} провал(ов)`}
           {candidate.probes.failed.length > 0 && (
             <ul>{candidate.probes.failed.map((f) => <li key={f}>{f}</li>)}</ul>
           )}
