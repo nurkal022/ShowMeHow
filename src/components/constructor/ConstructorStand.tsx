@@ -6,6 +6,7 @@ import {
 } from './data';
 import { buildPrompt, isComplete, noteTags, type ConstructorDraft } from './buildPrompt';
 import Stage from './stage/Stage';
+import Examples from './stage/Examples';
 import { IconChevron, IconSend } from '../icons';
 
 interface Props {
@@ -171,6 +172,7 @@ export default function ConstructorStand({
           section, phenomenon: chosen, mode, style, instruments,
           parameters: params, notes: noteTags(notes), level,
         }} />
+        <Examples section={current} />
         <div className="stand-bar">
           <button className="btn btn-primary" disabled={disabled || !complete}
             onClick={() => onCreate(prompt)}>
