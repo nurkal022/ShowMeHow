@@ -22,6 +22,10 @@ export function kitPreviewDoc(): string {
 <html lang="ru"><head><meta charset="utf-8">
 <style>${UIKIT_CSS}</style>
 <style>
+  /* Кадр обязан объявить, что понимает обе схемы. Иначе при тёмной теме
+     страницы браузер видит расхождение со схемой документа внутри iframe и
+     подкладывает под него непрозрачный белый холст — сцена белеет целиком. */
+  :root { color-scheme: light dark; }
   html, body { background: transparent; overflow: hidden; }
   /* Панель на стенде уже, чем в симуляции: рядом с ней должен остаться образ. */
   .sim-panel { width: 216px; }
