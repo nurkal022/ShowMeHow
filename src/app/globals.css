@@ -1,22 +1,32 @@
 :root {
-  /* --- Design tokens (light educational system) --- */
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --surface-2: #f0f2f5;
-  --border: #e3e7ec;
-  --text: #161c26;
-  --muted: #5b6675;
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --accent-soft: #eef0fe;
-  --success: #0f9d58;
-  --danger: #e5484d;
-  --danger-soft: #fdecec;
-  --warn: #d98324;
-  --warn-soft: #fdf3e4;
+  /* --- Токены тёмной темы «научный прибор» --- */
+  --bg: #0d1117;
+  --surface: #151b24;
+  --surface-2: #1c232e;
+  --border: #28313d;
+  --text: #e6edf3;
+  --muted: #8b98a9;
+  --accent: #22d3ee;
+  --accent-hover: #67e8f9;
+  --accent-soft: #12313a;
+  --success: #3fb950;
+  --danger: #f85149;
+  --danger-soft: #2d1618;
+  --warn: #d29922;
+  --warn-soft: #2b2113;
 
-  --shadow-sm: 0 1px 2px rgba(22, 28, 38, .06), 0 1px 1px rgba(22, 28, 38, .04);
-  --shadow-md: 0 4px 12px rgba(22, 28, 38, .08), 0 2px 4px rgba(22, 28, 38, .04);
+  /* Линия фоновой миллиметровки. Она обязана быть на грани различимости:
+     чуть ярче — и текст читается поверх шума. */
+  --grid-line: rgba(120, 140, 170, .05);
+
+  /* Всё числовое на экране набирается этим шрифтом — это второй по силе
+     носитель характера после сетки. */
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  /* На тёмном фоне тень почти не видна, объём создаёт светлая внутренняя
+     граница сверху. */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .03);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .04);
 
   --r-sm: 8px;
   --r: 12px;
@@ -28,18 +38,40 @@
 
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 16px;
-  color-scheme: light;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--text);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  /* Миллиметровка: два градиента поверх сплошного фона, шаг 32px. */
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
 }
 h1, h2, h3, h4 { line-height: 1.25; font-weight: 700; letter-spacing: -.01em; }
 a { color: var(--accent); }
+
+/* Числовые значения: моноширинный шрифт и табличные цифры, чтобы столбцы
+   не «прыгали» при изменении значения. */
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: .95em;
+}
+
+/* Технические подписи панелей: капитель прибора. */
+.label {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
 
 /* Keyboard-navigation focus ring everywhere */
 :focus-visible {
@@ -114,7 +146,7 @@ a { color: var(--accent); }
   min-height: 44px; width: 100%;
   transition: border-color .12s ease, box-shadow .12s ease;
 }
-.input:hover, .select:hover { border-color: #c7cedb; }
+.input:hover, .select:hover { border-color: #3a4655; }
 .input:focus, .select:focus,
 .field input:focus, .field select:focus, .field textarea:focus {
   border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none;
@@ -136,8 +168,8 @@ a { color: var(--accent); }
   font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
   border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); flex-shrink: 0;
 }
-.badge-2d { color: #2a6ebb; background: #e9f2fd; border-color: #cfe2f7; }
-.badge-3d { color: #b3611a; background: #fdf1e4; border-color: #f5dcb8; }
+.badge-2d { color: #58a6ff; background: #0d2440; border-color: #1c3f66; }
+.badge-3d { color: #e3a047; background: #2b2113; border-color: #4a3a1c; }
 
 /* --- Workbench layout --- */
 .workbench { display: flex; height: calc(100vh - 61px); background: var(--bg); }
@@ -153,9 +185,9 @@ a { color: var(--accent); }
   flex-direction: column; gap: 4px; padding: 8px; pointer-events: none; }
 .sim-error-item { pointer-events: auto; display: flex; align-items: center;
   justify-content: space-between; gap: 10px; background: var(--danger-soft); border: 1px solid var(--danger);
-  color: #9a2d31; border-radius: var(--r-sm); padding: 6px 10px; font-size: 12px;
+  color: var(--danger); border-radius: var(--r-sm); padding: 6px 10px; font-size: 12px;
   box-shadow: var(--shadow-sm); }
-.sim-error-item button { background: none; border: none; color: #9a2d31; cursor: pointer;
+.sim-error-item button { background: none; border: none; color: var(--danger); cursor: pointer;
   font-size: 15px; line-height: 1; padding: 0 2px; }
 .preview-actions { display: flex; gap: 16px; padding: 8px 16px; align-items: center;
   background: var(--surface); border-top: 1px solid var(--border); flex-wrap: wrap; }
@@ -184,7 +216,7 @@ a { color: var(--accent); }
   color: #fff; font-weight: 600; }
 .composer button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .composer button:disabled { opacity: .6; cursor: default; }
-.error-box { background: var(--danger-soft); border: 1px solid var(--danger); color: #9a2d31;
+.error-box { background: var(--danger-soft); border: 1px solid var(--danger); color: var(--danger);
   border-radius: var(--r-sm); padding: 10px; font-size: 13px; }
 
 /* --- T2: mobile tabs + responsive workbench --- */
@@ -215,7 +247,7 @@ a { color: var(--accent); }
   /* Композер прилипает снизу прокручиваемой колонки создания. */
   .composer {
     position: sticky; bottom: 0; background: var(--surface);
-    padding: 8px 0 4px; box-shadow: 0 -6px 12px -8px rgba(22, 28, 38, .18);
+    padding: 8px 0 4px; box-shadow: 0 -6px 12px -8px rgba(0, 0, 0, .5);
   }
   .composer button.primary { min-height: 50px; font-size: 16px; }
 
@@ -240,7 +272,7 @@ a { color: var(--accent); }
 .stage-chip.stage-pending { opacity: .5; }
 .stage-chip.stage-active { color: var(--text); border-color: var(--accent); background: var(--accent-soft);
   animation: chip-pulse 1.4s ease-in-out infinite; }
-.stage-chip.stage-done { color: #0f9d58; border-color: #cdeedd; background: #eafbf1; }
+.stage-chip.stage-done { color: var(--success); border-color: #1c3b26; background: #10261a; }
 .stage-chip.stage-skipped { opacity: .35; }
 .stage-chip.stage-interrupted { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); opacity: .9; }
 
@@ -255,14 +287,14 @@ a { color: var(--accent); }
 .stage-progressbar-fill {
   height: 100%; border-radius: 999px; background: var(--accent);
   transition: width .5s ease;
-  background-image: linear-gradient(90deg, var(--accent), #7c74f0, var(--accent));
+  background-image: linear-gradient(90deg, var(--accent), #67e8f9, var(--accent));
   background-size: 200% 100%; animation: shimmer 1.6s linear infinite;
 }
 /* Галочка завершённого этапа появляется с «pop». */
 .stage-check { display: inline-block; animation: pop-in .3s ease-out; }
 /* Тонкое «бегущее» свечение активного чипа поверх пульса. */
 .stage-chip.stage-active {
-  background-image: linear-gradient(90deg, var(--accent-soft), #e4e6fd, var(--accent-soft));
+  background-image: linear-gradient(90deg, var(--accent-soft), #1a4652, var(--accent-soft));
   background-size: 200% 100%; animation: chip-pulse 1.4s ease-in-out infinite, shimmer 2s linear infinite;
 }
 .stage-caption { font-size: 12px; color: var(--muted); }
@@ -302,8 +334,8 @@ a { color: var(--accent); }
 .candidate-critic.warn summary { color: var(--warn); cursor: pointer; }
 .candidate-critic.warn ul { margin: 4px 0 0; padding-left: 16px; color: var(--muted); }
 .cand-probes { font-size: 12px; margin-top: 6px; }
-.cand-probes.ok { color: var(--ok, #2e7d4f); }
-.cand-probes.warn { color: var(--warn, #a35b00); }
+.cand-probes.ok { color: var(--ok, var(--success)); }
+.cand-probes.warn { color: var(--warn, var(--warn)); }
 .cand-probes ul { margin: 4px 0 0; padding-left: 16px; }
 .score-bars { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
 .score-bar-row { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }
@@ -324,7 +356,7 @@ a { color: var(--accent); }
 .refine-feedback summary { cursor: pointer; color: var(--accent); }
 .refine-feedback p { margin: 4px 0 0; color: var(--muted); }
 
-.warn-banner { background: var(--warn-soft); border: 1px solid var(--warn); color: #8a5417;
+.warn-banner { background: var(--warn-soft); border: 1px solid var(--warn); color: var(--warn);
   border-radius: var(--r-sm); padding: 8px 10px; font-size: 12px; }
 .cancel-banner { background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
   border-radius: var(--r-sm); padding: 10px; font-size: 13px; }
@@ -367,11 +399,11 @@ a { color: var(--accent); }
   position: fixed; top: 12px; left: 12px; z-index: 50;
   display: inline-flex; align-items: center; min-height: 40px;
   padding: 8px 14px; border-radius: 999px;
-  background: rgba(22, 28, 38, .55); color: #fff; text-decoration: none;
+  background: rgba(13, 17, 23, .72); color: #fff; text-decoration: none;
   font-size: 14px; font-weight: 600; backdrop-filter: blur(6px);
   transition: background .12s ease;
 }
-.present-exit:hover { background: rgba(22, 28, 38, .78); }
+.present-exit:hover { background: rgba(13, 17, 23, .9); }
 
 @media (max-width: 640px) {
   .library { padding: 16px; }
@@ -416,7 +448,7 @@ a { color: var(--accent); }
 
 /* --- Строка квоты и баннер очереди в композере --- */
 .quota-line { font-size: 12px; color: var(--muted); margin: 0; }
-.quota-line.quota-exhausted { color: #9a2d31; }
+.quota-line.quota-exhausted { color: var(--danger); }
 .queue-banner {
   background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
   border-radius: var(--r-sm); padding: 10px 12px; font-size: 13px;
