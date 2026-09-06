@@ -3,7 +3,7 @@
  * функция, кривая роста. Здесь ядро играет указатель: элемент, который
  * алгоритм сравнивает сейчас, или точку, в которой берут производную.
  */
-import { Axes, Core, Ghost, INK, type MotifProps } from './primitives';
+import { Axes, Core, Ghost, INK, SAFE_R, type MotifProps } from './primitives';
 
 /* ----------------------------- информатика ------------------------------ */
 
@@ -23,16 +23,27 @@ const BARS = [6, 2, 8, 1, 5, 9, 3, 7, 4];
 
 export function ArrayScan({ t, mode, style, knob }: MotifProps) {
   const n = BARS.length;
-  const x0 = 62, w = 27, gap = 6, base = 208;
+  const x0 = 66, w = 19, gap = 4, base = 196;
   // Шаг — дискретный: это и есть режим «пошагово», ради которого он в разделе.
   const step = Math.floor(t * (0.9 + knob * 2.2));
   const bars = bubbleState(BARS, step);
   const cursor = step % (n - 1);
   const cursorX = x0 + cursor * (w + gap) + w + gap / 2;
   const pairTop = base - (12 + Math.max(bars[cursor], bars[cursor + 1]) * 15);
-  const cursorY = Math.max(34, pairTop - 30);
+  const cursorY = Math.max(42, pairTop - 28);
+  // Корпус экрана вокруг сцены: информатика — единственный раздел, где предмет
+  // не физический, и рамка сразу говорит, что смотрим на работу программы.
+  const sx = x0 - 18, sw = Math.min(n * (w + gap) - gap + 36, SAFE_R - (x0 - 18));
+  const sy = 24, sh = base - sy + 30;
   return (
     <g>
+      <rect x={sx} y={sy} width={sw} height={sh} rx="12"
+        fill="#0b0e13" stroke={INK.line} strokeWidth="2.5" />
+      <rect x={sx + 8} y={sy + 8} width={sw - 16} height={sh - 16} rx="7"
+        fill="none" stroke={INK.line} strokeOpacity=".5" />
+      <path d={`M${sx + sw / 2 - 22} ${sy + sh + 10} h44`} stroke={INK.line}
+        strokeWidth="4" strokeLinecap="round" />
+      <path d={`M${sx + sw / 2} ${sy + sh} v10`} stroke={INK.line} strokeWidth="6" />
       {style === 'data' && <Ghost d={`M${x0 - 8} ${base} H${x0 + n * (w + gap)}`} />}
       {bars.map((v, i) => {
         const h = 12 + v * 15;
