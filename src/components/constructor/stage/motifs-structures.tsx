@@ -64,7 +64,7 @@ export function ArrayScan({ t, mode, style, knob }: MotifProps) {
 /* ------------------------------ математика ------------------------------ */
 
 export function Curve({ t, mode, style, knob }: MotifProps) {
-  const ox = 56, oy = 206, w = 300, h = 160;
+  const ox = 48, oy = 206, w = 246, h = 158;
   const k = 0.6 + knob * 1.4;
   // y = sin(kx), нормированная в окно: касательная в точке — это и есть производная.
   const fy = (u: number) => Math.sin(u * k * Math.PI * 2) * 0.42 + 0.5;
@@ -118,7 +118,7 @@ export function Population({ t, mode, style, knob }: MotifProps) {
     <g>
       <Axes x={ox} y={oy} w={w + 16} h={h + 18} labels={['t', 'N']} />
       <Ghost d={`M${ox} ${oy - h} H${ox + w + 8}`} />
-      <text x={ox + 26} y={oy - h - 7} fill={INK.muted} fontSize="9">ёмкость среды</text>
+      <text x={ox + w - 4} y={oy - h - 7} fill={INK.muted} fontSize="9" textAnchor="end">ёмкость среды</text>
       {/* Бледный след всей кривой: поле не пустует, пока голова ещё в начале. */}
       <path d={`M${curve(1)}`} fill="none" stroke={INK.accent} strokeOpacity=".18" strokeWidth="1.6" />
       <path d={`M${curve(front)}`} fill="none" stroke={INK.accent} strokeWidth="2.4" strokeLinecap="round" />

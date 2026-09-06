@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Instrument, Level, Style } from '../data';
 import { sectionByKey } from '../data';
 import { MOTIFS } from './motifs';
-import { IdleCore, NoteChips, VIEW_H, VIEW_W } from './primitives';
+import { IdleCore, VIEW_H, VIEW_W } from './primitives';
 import { kitPreviewDoc } from './kitPreviewDoc';
 
 export interface StageConfig {
@@ -102,7 +102,11 @@ export default function Stage({ config }: { config: StageConfig }) {
         instruments: config.instruments,
         // Ничего не выбрано — показываем то, что генератор выбрал бы сам:
         // панель обязана быть правдоподобной, а не заглушкой со словом «параметр».
-        parameters: (config.parameters.length ? config.parameters : section?.parameters ?? []).slice(0, 4),
+        // На пустом стенде тоже нужен хотя бы один ползунок: человек с первого
+        // взгляда должен увидеть, что такое прибор, а не пустую панель.
+        parameters: (config.parameters.length
+          ? config.parameters
+          : section?.parameters ?? ['параметр']).slice(0, 4),
         readoutLabel: CHART[config.section] ?? 'Величина',
         chartTitle: CHART[config.section] ?? 'График',
         tex: TEX[config.section],
@@ -121,14 +125,23 @@ export default function Stage({ config }: { config: StageConfig }) {
           preserveAspectRatio="xMidYMid meet" role="img"
           aria-label={`Образ: ${config.phenomenon || section?.label || 'симуляция'}`}>
           <Motif t={t} mode={config.mode} style={config.style} knob={knob} />
-          {config.notes.length > 0 && <NoteChips notes={config.notes.slice(0, 2)} />}
         </svg>
         <iframe ref={frameRef} className="stage-kit" srcDoc={doc}
           sandbox="allow-scripts" title="Приборы" tabIndex={-1} />
+        {/* Свои слова и подсказка набираются в HTML, а не в SVG: внутри сцены
+            текст масштабируется вместе с образом и вырастает вдвое против
+            остального интерфейса. Здесь у него настоящий кегль. */}
+        {config.notes.length > 0 && (
+          <div className="stage-tags">
+            {config.notes.slice(0, 3).map((n) => (
+              <span key={n} className="stage-tag">{n}</span>
+            ))}
+          </div>
+        )}
+        {!section && <p className="stage-hint">выберите тему — предмет превратится в неё</p>}
       </div>
       <p className="stage-note">
-        Приборы настоящие — такими они и будут. Образ показывает состав сцены,
-        саму физику соберёт генератор.
+        Приборы настоящие — такими они и будут. Образ — набросок: сцену соберёт генератор.
       </p>
     </div>
   );

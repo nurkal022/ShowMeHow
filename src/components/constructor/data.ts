@@ -153,9 +153,9 @@ export type Style = 'schematic' | 'realistic' | 'data';
 export type Level = 'grade7to9' | 'grade10to11' | 'students';
 
 export const STYLES: { value: Style; label: string; hint: string }[] = [
-  { value: 'schematic', label: 'Схема', hint: 'векторы, оси, обозначения — как в учебнике' },
-  { value: 'realistic', label: 'Реалистично', hint: 'объекты похожи на настоящие' },
-  { value: 'data', label: 'Данные', hint: 'упор на графики и показания' },
+  { value: 'schematic', label: 'Схема', hint: 'как в учебнике' },
+  { value: 'realistic', label: 'Реалистично', hint: 'похоже на настоящее' },
+  { value: 'data', label: 'Данные', hint: 'графики и числа' },
 ];
 
 export const LEVELS: { value: Level; label: string }[] = [

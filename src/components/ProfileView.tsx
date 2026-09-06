@@ -113,12 +113,12 @@ export default function ProfileView({ profile, quota }: Props) {
         <div className="divider" />
         <div className="row">
           <div className="row-label">
-            <strong>Начинать с конструктора</strong>
-            <span>Собирать описание по шагам, а не писать текст</span>
+            <strong>С чего начинать</strong>
+            <span>Стенд показывает, что получится; поле — чистый лист</span>
           </div>
           <span className="spacer" />
-          <Segmented value={prefs.startWithConstructor ? 'on' : 'off'}
-            options={[['off', 'Текст'], ['on', 'Конструктор']]}
+          <Segmented value={prefs.startWithConstructor === false ? 'off' : 'on'}
+            options={[['on', 'Стенд'], ['off', 'Поле']]}
             onChange={(v) => setPref('startWithConstructor', v === 'on')} />
         </div>
         <div className="divider" />

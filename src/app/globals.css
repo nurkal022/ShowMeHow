@@ -629,14 +629,19 @@ body:hover .present-exit { opacity: .85; }
 .stand { display: flex; height: calc(100vh - var(--nav-h)); background: var(--bg); }
 .stand-form {
   width: 424px; min-width: 424px; overflow-y: auto;
-  padding: 22px 22px 40px; display: flex; flex-direction: column; gap: 22px;
+  padding: 20px 20px 36px; display: flex; flex-direction: column; gap: 19px;
   border-right: 1px solid var(--border);
 }
-.stand-block { display: flex; flex-direction: column; gap: 10px; }
+.stand-block { display: flex; flex-direction: column; gap: 9px; }
+/* Плотнее обычного: подсказок много, и все они должны быть видны без прокрутки
+   до самого низа — иначе половина возможностей системы остаётся ненайденной. */
+.stand-form .chip { height: 28px; padding: 0 11px; font-size: 12.5px; }
+.stand-form .ctor-style { padding: 9px 10px; }
+.stand-form .ctor-style strong { font-size: 12.5px; }
 .stand-block h3 { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; font-weight: 600; }
 .stand-hint { font-size: 11.5px; font-weight: 400; color: var(--muted); }
 .stand-block .input { font-size: 13.5px; min-height: 38px; }
-.chip-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-wrap { display: flex; flex-wrap: wrap; gap: 5px; }
 .chip-own { border-style: dashed; }
 
 .stand-view {
@@ -709,4 +714,31 @@ body:hover .present-exit { opacity: .85; }
   .stand-form { width: auto; min-width: 0; border-right: none; order: 2; }
   .stand-view { order: 1; position: sticky; top: var(--nav-h); z-index: 5; padding: 12px 12px 0; }
   .stage-shell { flex: none; height: 44vh; min-height: 260px; }
+}
+
+/* Свои слова и подсказка сцены: HTML поверх кадра, чтобы кегль не зависел от
+   масштаба образа. Кликам не мешают — под ними живут приборы. */
+.stage-tags {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 3;
+  display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+  max-width: 60%; pointer-events: none;
+}
+.stage-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px; border-radius: var(--r-pill); font-size: 12.5px;
+  color: #f7a14f; background: rgba(247, 161, 79, .12); border: 1px solid rgba(247, 161, 79, .4);
+  animation: tag-in .25s ease-out;
+}
+.stage-tag::before { content: '+'; opacity: .7; }
+.stage-hint {
+  position: absolute; left: 0; right: 0; bottom: 76px; z-index: 3;
+  text-align: center; color: #8b95a3; font-size: 13px; pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  /* Нижняя панель стенда: на узком экране «Создать» занимает строку целиком,
+     остальное уходит под неё, а не рвётся посередине слова. */
+  .stand-bar { flex-wrap: wrap; gap: 10px 14px; }
+  .stand-bar .btn { width: 100%; }
+  .stand-bar .spacer { display: none; }
 }

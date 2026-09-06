@@ -36,6 +36,13 @@ export const VIEW_W = 400;
 export const VIEW_H = 260;
 
 /**
+ * Правый край безопасной зоны. Панель приборов кита докируется к правому верху
+ * кадра и занимает примерно четверть ширины — всё, что мотив рисует правее,
+ * окажется под ней. Мотивы держатся левее этой границы.
+ */
+export const SAFE_R = 296;
+
+/**
  * Ядро. Радиус не меняется между 2D и 3D — меняется только объём, и предмет
  * узнаётся как тот же самый.
  */
@@ -106,34 +113,6 @@ export function Ghost({ d }: { d: string }) {
  * Выноска с текстом — так на сцене появляются слова, которые человек дописал сам.
  * Ведущая линия от точки на сцене к подписи: язык технического чертежа.
  */
-/**
- * Слова, дописанные человеком, — тихой строкой поверху кадра.
- *
- * Ведущих линий к точкам сцены здесь намеренно нет: мы не знаем, к какому месту
- * относится «есть трение», и стрелка в произвольную точку соврала бы. Полоса
- * идёт по верху — единственная зона кадра, свободная от панелей кита.
- */
-export function NoteChips({ notes }: { notes: string[] }) {
-  const gap = 8;
-  const widths = notes.map((n) => n.length * 5.3 + 20);
-  const total = widths.reduce((a, b) => a + b, 0) + gap * (notes.length - 1);
-  let x = VIEW_W / 2 - total / 2;
-  return (
-    <g className="mot-tag">
-      {notes.map((n, i) => {
-        const at = x;
-        x += widths[i] + gap;
-        return (
-          <g key={n}>
-            <rect x={at} y={22} width={widths[i]} height="19" rx="9.5"
-              fill={INK.warm} fillOpacity=".13" stroke={INK.warm} strokeOpacity=".4" />
-            <text x={at + 9} y={35.5} fill={INK.warm} fontSize="10">+ {n}</text>
-          </g>
-        );
-      })}
-    </g>
-  );
-}
 
 /**
  * Покой: тема не выбрана — на сцене одно ядро. С него всё и начинается, и
@@ -145,9 +124,6 @@ export function IdleCore({ t, mode, style }: MotifProps) {
     <g>
       <circle cx={VIEW_W / 2} cy={y} r={54} fill={INK.accent} fillOpacity=".05" />
       <Core x={VIEW_W / 2} y={y} r={26} mode={mode} style={style} />
-      <text x={VIEW_W / 2} y={VIEW_H - 34} fill={INK.muted} fontSize="11" textAnchor="middle">
-        выберите тему — предмет превратится в неё
-      </text>
     </g>
   );
 }

@@ -404,6 +404,18 @@ export default function Workbench() {
     else generate(text);
   }
 
+  /**
+   * Возврат к стенду. Обязательно сбрасывает фазу: стенд показывается только в
+   * состоянии покоя, и после неудачной генерации фаза остаётся 'error' — кнопка
+   * «конструктор» тогда просто молчала бы.
+   */
+  function openStand() {
+    setInputMode('stand');
+    setPhase('idle');
+    setError(null);
+    setEvents([]);
+  }
+
   function startNew() {
     setPhase('idle'); setSimId(null); setHtml(null); setEvents([]); setError(null);
     setHistory([]); setMessages([]); setImage(null); clearActiveJob();
@@ -470,7 +482,7 @@ export default function Workbench() {
                     <IconSpark size={17} />{s}
                   </button>
                 ))}
-                <button className="suggestion" onClick={() => setInputMode('stand')}>
+                <button className="suggestion" onClick={openStand}>
                   <IconWand size={17} />Собрать по шагам в конструкторе
                 </button>
               </div>
@@ -531,7 +543,7 @@ export default function Workbench() {
                   <>
                     <button className="icon-btn" title="Собрать в конструкторе"
                       aria-label="Собрать в конструкторе" disabled={busy}
-                      onClick={() => setInputMode('stand')}>
+                      onClick={openStand}>
                       <IconWand size={19} />
                     </button>
                     <button className={image ? 'icon-btn on' : 'icon-btn'} title="Картинка-образец"

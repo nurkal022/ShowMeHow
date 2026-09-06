@@ -5,7 +5,7 @@
  * Положения считаются от времени формулами, а не CSS-анимацией: маятник с
  * длинной нитью действительно качается медленнее, и ползунок это показывает.
  */
-import { Core, Ghost, INK, VIEW_W, type MotifProps } from './primitives';
+import { Core, Ghost, INK, SAFE_R, type MotifProps } from './primitives';
 
 /** Детерминированный «шум»: одинаковая картинка при каждом рендере. */
 function noise(i: number, k: number): number {
@@ -56,14 +56,14 @@ export function Pendulum({ t, mode, style, knob }: MotifProps) {
 /* -------------------------------- оптика -------------------------------- */
 
 export function Beam({ t, mode, style, knob }: MotifProps) {
-  const sx = 56, sy = 130;
-  const lens = 236;
-  const focus = lens + 52 + knob * 76;
+  const sx = 34, sy = 130;
+  const lens = 178;
+  const focus = lens + 44 + knob * 62;
   const offsets = [-36, 0, 36];
   const dash = -((t * 34) % 16);
   return (
     <g>
-      {style === 'schematic' && <Ghost d={`M20 ${sy} H${VIEW_W - 20}`} />}
+      {style === 'schematic' && <Ghost d={`M18 ${sy} H${SAFE_R}`} />}
       {offsets.map((o) => (
         <g key={o}>
           <path d={`M${sx} ${sy} L${lens} ${sy + o}`} stroke={INK.accent} strokeOpacity=".75" strokeWidth="1.5" />
@@ -78,7 +78,7 @@ export function Beam({ t, mode, style, knob }: MotifProps) {
         stroke={INK.text} strokeOpacity=".45" />
       <circle cx={focus} cy={sy} r="3.5" fill={INK.warm} />
       <text x={focus} y={sy + 20} fill={INK.warm} fontSize="10" textAnchor="middle">F</text>
-      <path d={`M${VIEW_W - 26} 52 V208`} stroke={INK.line} strokeWidth="3" strokeLinecap="round" />
+      <path d={`M${SAFE_R} 52 V208`} stroke={INK.line} strokeWidth="3" strokeLinecap="round" />
       <Core x={sx} y={sy} r={14} mode={mode} style={style} />
     </g>
   );
@@ -87,7 +87,7 @@ export function Beam({ t, mode, style, knob }: MotifProps) {
 /* ---------------------------- термодинамика ----------------------------- */
 
 export function Piston({ t, mode, style, knob }: MotifProps) {
-  const x0 = 76, x1 = 286, y0 = 62, y1 = 206;
+  const x0 = 52, x1 = 254, y0 = 62, y1 = 206;
   const stroke = 40 + 38 * (0.5 + 0.5 * Math.sin((2 * Math.PI * t) / 2.8));
   const head = x1 - stroke;
 
@@ -106,14 +106,14 @@ export function Piston({ t, mode, style, knob }: MotifProps) {
       <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} rx="10"
         fill="#0b0e13" stroke={INK.line} strokeWidth="2.5" />
       <rect x={x0 + 3} y={y0 + 3} width={head - x0 - 3} height={y1 - y0 - 6} rx="8"
-        fill={INK.warm} fillOpacity={0.05 + knob * 0.14} className="mot-fade" />
+        fill={INK.warm} fillOpacity={0.03 + knob * 0.09} className="mot-fade" />
       {gas.map((g, i) => (
         <circle key={i} cx={g.px} cy={g.py} r={g.r} fill={INK.accent} fillOpacity=".85" />
       ))}
       {/* Поршень и шток */}
       <rect x={head} y={y0 + 3} width="13" height={y1 - y0 - 6} rx="4" fill={INK.line} />
       <rect x={head + 2} y={y0 + 3} width="4" height={y1 - y0 - 6} fill={INK.text} fillOpacity=".22" />
-      <path d={`M${head + 13} ${(y0 + y1) / 2} H${VIEW_W - 18}`}
+      <path d={`M${head + 13} ${(y0 + y1) / 2} H${SAFE_R}`}
         stroke={INK.line} strokeWidth="6" strokeLinecap="round" />
       {/* Нагрев снизу: волны тем быстрее, чем выше температура. */}
       {[0, 1, 2, 3].map((i) => {
@@ -172,7 +172,7 @@ export function Field({ t, mode, style, knob }: MotifProps) {
 /* -------------------------- молекулярная физика ------------------------- */
 
 export function Particles({ t, mode, style, knob }: MotifProps) {
-  const x0 = 76, x1 = 324, y0 = 56, y1 = 212;
+  const x0 = 44, x1 = 292, y0 = 56, y1 = 212;
   const speed = 12 + knob * 46;
   const dot = (i: number, time: number) => {
     // Отражения от стенок считаем «пилой»: частица честно отскакивает.
@@ -211,8 +211,8 @@ export function Particles({ t, mode, style, knob }: MotifProps) {
 /* ------------------------------ астрономия ------------------------------ */
 
 export function Orbit({ t, mode, style, knob }: MotifProps) {
-  const cx = 206, cy = 132;
-  const a = 118, b = 74;
+  const cx = 178, cy = 132;
+  const a = 104, b = 68;
   const period = 5.2 - knob * 3.2;
   const th = (2 * Math.PI * t) / period;
   // В 3D орбиту кладём под углом: плоскость видно, а не смотрим на неё в упор.
@@ -284,8 +284,11 @@ export function Flask({ t, mode, style, knob }: MotifProps) {
       <Core x={cx} y={bottom - 26} r={11} mode={mode} style={style} hue={mix('#5b9bf0', '#4fd6c8', knob)} />
       {style === 'schematic' && (
         <>
-          <Ghost d={`M${cx - bodyW - 22} ${level} h16`} />
-          <text x={cx - bodyW - 28} y={level + 3.5} fill={INK.muted} fontSize="10" textAnchor="end">V</text>
+          {/* Выноска цепляется за саму поверхность жидкости, а не висит рядом
+              с колбой: иначе она читается как отдельный обрывок разметки. */}
+          <Ghost d={`M${cx - halfW(level) - 4} ${level} h-18`} />
+          <text x={cx - halfW(level) - 26} y={level + 3.5} fill={INK.muted}
+            fontSize="10" textAnchor="end">V</text>
         </>
       )}
     </g>
