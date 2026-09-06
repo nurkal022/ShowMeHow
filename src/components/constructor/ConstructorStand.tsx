@@ -178,7 +178,11 @@ export default function ConstructorStand({
             onClick={() => onCreate(prompt)}>
             <IconSend size={17} />Создать
           </button>
-          <button className="link-btn" disabled={!complete} onClick={() => onWriteText(prompt)}>
+          {/* Кнопка доступна всегда: без неё человек, который хочет просто
+              печатать, оказывался заперт на стенде — пока ничего не выбрано,
+              переход в поле был выключен. Ничего не собрано — поле откроется
+              пустым, и это ровно то, чего он хотел. */}
+          <button className="link-btn" onClick={() => onWriteText(prompt)}>
             Открыть как текст
           </button>
           <span className="spacer" />
