@@ -8,3 +8,7 @@ test-results/
 e2e/.data/
 playwright-report/
 .env*
+
+# Одноразовые скрипты снятия скриншотов при работе над интерфейсом.
+.stand-*.mjs
+shot-tmp.mjs
