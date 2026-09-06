@@ -621,3 +621,92 @@ body:hover .present-exit { opacity: .85; }
 .sim-card.skeleton { height: 260px; border-style: dashed; background: var(--surface-2); opacity: .5; }
 @keyframes skeleton-breathe { 50% { opacity: .28; } }
 .sim-card.skeleton { animation: skeleton-breathe 1.6s ease-in-out infinite; }
+
+/* ================================ стенд =================================
+   Слева подсказки, справа образ. Сцена тёмная — это экран прибора внутри
+   светлого корпуса, и та же палитра, что у настоящих симуляций.
+   ======================================================================== */
+.stand { display: flex; height: calc(100vh - var(--nav-h)); background: var(--bg); }
+.stand-form {
+  width: 424px; min-width: 424px; overflow-y: auto;
+  padding: 22px 22px 40px; display: flex; flex-direction: column; gap: 22px;
+  border-right: 1px solid var(--border);
+}
+.stand-block { display: flex; flex-direction: column; gap: 10px; }
+.stand-block h3 { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; font-weight: 600; }
+.stand-hint { font-size: 11.5px; font-weight: 400; color: var(--muted); }
+.stand-block .input { font-size: 13.5px; min-height: 38px; }
+.chip-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-own { border-style: dashed; }
+
+.stand-view {
+  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  background: var(--bg-subtle); padding: 20px 20px 0; gap: 12px;
+}
+
+/* Сцена — экран прибора: ограниченный по размеру тёмный кадр со скруглением.
+   Приборы кита докируются к его углам, поэтому образ и панель читаются как
+   одно устройство, а не как две вещи, разнесённые по краям монитора. */
+.stage-shell { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; }
+.stage {
+  position: relative; width: 100%; max-width: 940px; flex: 1; min-height: 0;
+  border-radius: var(--r-lg); overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 50% -10%, #1b2432 0%, #12161d 46%, #0d1015 100%);
+  box-shadow: 0 18px 48px -22px rgba(16, 24, 40, .55), inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+.stage-art {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+}
+/* Подача «данные»: миллиметровка во весь кадр. Отдельным слоем поверх фона, а
+   не фоном сцены — иначе она затёрла бы градиент, который и создаёт глубину.
+   Внутрь SVG её класть нельзя: тот центрируется с полями, сетка обрывалась бы. */
+.stage-grid::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(125, 145, 175, .1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 145, 175, .1) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+/* Переход только по прозрачности: он нужен для перетекания круга в сферу.
+   Переход по transform заставлял ядро отставать от собственной траектории —
+   планета уезжала со своего следа, а маятник отставал от нити. */
+.stage-art .mot-fade { transition: opacity .4s ease; }
+.stage-art .mot-tag { animation: tag-in .3s ease-out; }
+@keyframes tag-in { from { opacity: 0; transform: translateY(4px); } }
+.stage-kit { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: transparent; }
+
+/* Честная подпись: образ показывает состав, а не результат. Без неё стенд
+   обещает больше, чем может, и человек ждёт от генерации точной копии. */
+.stage-note {
+  flex-shrink: 0; text-align: center; font-size: 12px; color: var(--muted);
+  padding: 2px 0 10px;
+}
+
+.stand-bar {
+  display: flex; align-items: center; gap: 14px; padding: 12px 20px;
+  background: var(--bg); border-top: 1px solid var(--border);
+}
+.stand-bar .spacer { flex: 1; }
+.stand-prompt { background: var(--bg); border-top: 1px solid var(--border); font-size: 12.5px; }
+.stand-prompt summary {
+  display: flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
+  padding: 10px 20px; color: var(--muted);
+}
+.stand-prompt summary::-webkit-details-marker { display: none; }
+.stand-prompt summary svg { transition: transform .15s ease; }
+.stand-prompt[open] summary svg { transform: rotate(180deg); }
+.stand-prompt pre {
+  margin: 0; padding: 0 20px 16px; white-space: pre-wrap; word-break: break-word;
+  font-family: inherit; color: var(--text-2); line-height: 1.55; max-height: 190px; overflow-y: auto;
+}
+
+@media (max-width: 1080px) {
+  .stand-form { width: 380px; min-width: 380px; padding: 18px 16px 36px; }
+}
+@media (max-width: 900px) {
+  .stand { flex-direction: column; height: auto; }
+  .stand-form { width: auto; min-width: 0; border-right: none; order: 2; }
+  .stand-view { order: 1; position: sticky; top: var(--nav-h); z-index: 5; padding: 12px 12px 0; }
+  .stage-shell { flex: none; height: 44vh; min-height: 260px; }
+}

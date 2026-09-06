@@ -7,7 +7,7 @@ import type { UserPrefs } from '@/lib/auth/prefs';
 import { historyLabel } from '@/lib/history-label';
 import ProgressView from './progress/ProgressView';
 import PreviewFrame from './PreviewFrame';
-import Constructor from './constructor/Constructor';
+import ConstructorStand from './constructor/ConstructorStand';
 import { useVoiceInput } from './useVoiceInput';
 import {
   IconClose, IconDownload, IconHistory, IconImage, IconMic,
@@ -58,7 +58,9 @@ export default function Workbench() {
   const [prompt, setPrompt] = useState('');
   const [mode, setMode] = useState<QualityMode>('max');
   const [prefs, setPrefs] = useState<UserPrefs>({});
-  const [showConstructor, setShowConstructor] = useState(false);
+  // Стенд — то, что человек видит первым: он показывает, что система умеет.
+  // Свободный текст остаётся на расстоянии одной кнопки.
+  const [inputMode, setInputMode] = useState<'stand' | 'text'>('stand');
   const [showSettings, setShowSettings] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +120,7 @@ export default function Workbench() {
       const p: UserPrefs = body.prefs ?? {};
       setPrefs(p);
       if (p.quality) setMode(p.quality);
-      if (p.startWithConstructor) setShowConstructor(true);
+      if (p.startWithConstructor === false) setInputMode('text');
     } catch {
       // см. комментарий выше
     }
@@ -311,7 +313,7 @@ export default function Workbench() {
   }
 
   async function generate(text: string) {
-    setShowConstructor(false);
+    setInputMode('text');
     say('user', text);
     setPhase('generating'); setEvents([]); setError(null); setHtml(null); setCancelling(false);
     try {
@@ -406,6 +408,7 @@ export default function Workbench() {
     setPhase('idle'); setSimId(null); setHtml(null); setEvents([]); setError(null);
     setHistory([]); setMessages([]); setImage(null); clearActiveJob();
     setActiveTab('create');
+    setInputMode(prefs.startWithConstructor === false ? 'text' : 'stand');
   }
 
   const hasSim = simId !== null;
@@ -413,6 +416,25 @@ export default function Workbench() {
   const outOfQuota = !hasSim && quota?.remaining === 0;
   const empty = messages.length === 0 && events.length === 0 && !hasSim;
   const voiceOn = voice.supported && prefs.voiceInput !== false;
+
+  // Пока ничего не начато — на экране стенд во всю ширину. Как только пошла
+  // генерация или открыта симуляция, возвращается обычная мастерская.
+  if (!hasSim && phase === 'idle' && inputMode === 'stand') {
+    return (
+      <ConstructorStand
+        disabled={busy || outOfQuota}
+        defaultLevel={prefs.level}
+        defaultStyle={prefs.style}
+        quotaNote={quota && quota.limit !== null && (
+          outOfQuota
+            ? <span className="quota-line quota-exhausted">{quotaMessage}</span>
+            : <span className="quota-line">Осталось {quota.remaining} из {quota.limit}</span>
+        )}
+        onCreate={(text) => { if (!busy) generate(text); }}
+        onWriteText={(text) => { setPrompt(text); setInputMode('text'); }}
+      />
+    );
+  }
 
   return (
     <div className={`workbench tab-${activeTab}`}>
@@ -448,7 +470,7 @@ export default function Workbench() {
                     <IconSpark size={17} />{s}
                   </button>
                 ))}
-                <button className="suggestion" onClick={() => setShowConstructor(true)}>
+                <button className="suggestion" onClick={() => setInputMode('stand')}>
                   <IconWand size={17} />Собрать по шагам в конструкторе
                 </button>
               </div>
@@ -507,8 +529,9 @@ export default function Workbench() {
               <div className="composer-tools">
                 {!hasSim && (
                   <>
-                    <button className="icon-btn" title="Конструктор" aria-label="Конструктор"
-                      onClick={() => setShowConstructor(true)} disabled={busy}>
+                    <button className="icon-btn" title="Собрать в конструкторе"
+                      aria-label="Собрать в конструкторе" disabled={busy}
+                      onClick={() => setInputMode('stand')}>
                       <IconWand size={19} />
                     </button>
                     <button className={image ? 'icon-btn on' : 'icon-btn'} title="Картинка-образец"
@@ -587,26 +610,6 @@ export default function Workbench() {
         )}
       </section>
 
-      {showConstructor && (
-        <div className="modal-backdrop" role="presentation"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowConstructor(false); }}>
-          <div className="modal" role="dialog" aria-modal="true" aria-label="Конструктор запроса">
-            <div className="modal-head">
-              <h2>Конструктор</h2>
-              <button className="icon-btn" aria-label="Закрыть" onClick={() => setShowConstructor(false)}>
-                <IconClose size={19} />
-              </button>
-            </div>
-            <Constructor
-              disabled={busy || outOfQuota}
-              defaultLevel={prefs.level}
-              defaultStyle={prefs.style}
-              onCreate={(text) => { if (!busy) generate(text); }}
-              onEditText={(text) => { setPrompt(text); setShowConstructor(false); textRef.current?.focus(); }}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
