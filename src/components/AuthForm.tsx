@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 
 /**
  * `next` приходит из query-строки — с точки зрения приложения это чужой ввод.
@@ -14,7 +14,6 @@ export function safeNextPath(raw: string | null | undefined): string {
 }
 
 export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
-  const router = useRouter();
   const search = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,8 +30,10 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
         body: JSON.stringify({ email, password }),
       });
       if (res.ok) {
-        router.push(safeNextPath(search.get('next')));
-        router.refresh();
+        // Полная перезагрузка, а не router.push: клиентский роутер Next кэширует
+        // ответы, полученные ДО появления куки сессии, и увёл бы обратно на вход.
+        window.location.assign(safeNextPath(search.get('next')));
+        return;
       } else {
         const body = await res.json().catch(() => ({}));
         setError(body.error ?? 'Не удалось войти. Попробуйте ещё раз.');
