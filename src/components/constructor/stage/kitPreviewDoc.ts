@@ -62,11 +62,13 @@ function build(cfg) {
     }
   }
   if (has('presets')) {
-    K.presets({ items: [
-      { label: 'Медленно', values: { p0: 15 } },
-      { label: 'Обычно', values: { p0: 40 } },
-      { label: 'Быстро', values: { p0: 85 } },
-    ] });
+    // onApply, а не только values: без ползунков пресет двигать нечего, и кнопка
+    // молчала бы в ответ на нажатие. Здесь она в любом случае крутит образ —
+    // ровно так же, как в готовой симуляции крутила бы её параметры.
+    var preset = function (label, v) {
+      return { label: label, values: { p0: v }, onApply: function () { post({ type: 'knob', value: v / 100 }); } };
+    };
+    K.presets({ items: [preset('Медленно', 15), preset('Обычно', 40), preset('Быстро', 85)] });
   }
   if (has('steps')) {
     K.button({ name: 'step', label: 'Следующий шаг', onClick: function () {} });
