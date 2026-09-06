@@ -6,6 +6,7 @@ import type { JobStatus } from '@/lib/jobs';
 import { historyLabel } from '@/lib/history-label';
 import ProgressView from './progress/ProgressView';
 import PreviewFrame from './PreviewFrame';
+import Constructor from './constructor/Constructor';
 
 type Phase = 'idle' | 'generating' | 'ready' | 'error';
 
@@ -39,6 +40,8 @@ export default function Workbench() {
   const [simId, setSimId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [mode, setMode] = useState<QualityMode>('max');
+  // Способ ввода: конструктор собирает промпт по шагам, «свой текст» — обычное поле.
+  const [inputMode, setInputMode] = useState<'constructor' | 'text'>('text');
   const [image, setImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
@@ -387,7 +390,23 @@ export default function Workbench() {
             {cancelling ? 'Отменяю…' : '✕ Отменить'}
           </button>
         )}
-        <div className="composer">
+        {!hasSim && (
+          <div className="segmented input-switch" role="radiogroup" aria-label="Способ ввода">
+            {([['constructor', 'Конструктор'], ['text', 'Свой текст']] as const).map(([v, l]) => (
+              <button key={v} type="button" role="radio" aria-checked={inputMode === v}
+                className={inputMode === v ? 'segmented-item active' : 'segmented-item'}
+                onClick={() => setInputMode(v)}>{l}</button>
+            ))}
+          </div>
+        )}
+        {!hasSim && inputMode === 'constructor' && (
+          <Constructor
+            disabled={phase === 'generating' || quota?.remaining === 0}
+            onCreate={(text) => { if (phase !== 'generating') generate(text); }}
+            onEditText={(text) => { setPrompt(text); setInputMode('text'); }}
+          />
+        )}
+        <div className="composer" hidden={!hasSim && inputMode === 'constructor'}>
           {!hasSim && (
             <div className="composer-row">
               <select
