@@ -72,19 +72,20 @@ export default function ConstructorStand({
 
   return (
     <div className="stand">
+      <h1 className="visually-hidden">Конструктор симуляции</h1>
       <div className="stand-form">
         <Block title="Что показываем" hint="например">
-          <div className="chip-wrap">
+          <div className="chip-wrap" role="group" aria-label="Раздел">
             {SECTIONS.map((s) => (
-              <button key={s.key} type="button"
+              <button key={s.key} type="button" aria-pressed={s.key === section}
                 className={s.key === section ? 'chip chip-action active' : 'chip chip-action'}
                 onClick={() => pickSection(s.key)}>{s.label}</button>
             ))}
           </div>
           {current && (
-            <div className="chip-wrap">
+            <div className="chip-wrap" role="group" aria-label="Явление">
               {current.phenomena.map((p) => (
-                <button key={p} type="button"
+                <button key={p} type="button" aria-pressed={p === phenomenon && !custom.trim()}
                   className={p === phenomenon && !custom.trim() ? 'chip chip-action active' : 'chip chip-action'}
                   onClick={() => { setPhenomenon(p); setCustom(''); }}>{p}</button>
               ))}
@@ -115,9 +116,10 @@ export default function ConstructorStand({
         </Block>
 
         <Block title="Что на панели" hint="включается справа">
-          <div className="chip-wrap">
+          <div className="chip-wrap" role="group" aria-label="Приборы на панели">
             {INSTRUMENTS.map((i) => (
               <button key={i.value} type="button" title={i.hint}
+                aria-pressed={instruments.includes(i.value)}
                 className={instruments.includes(i.value) ? 'chip chip-action active' : 'chip chip-action'}
                 onClick={() => setInstruments((v) => toggle(v, i.value))}>{i.label}</button>
             ))}
@@ -126,14 +128,15 @@ export default function ConstructorStand({
 
         <Block title="Чем управлять" hint={current ? 'например' : undefined}>
           {current ? (
-            <div className="chip-wrap">
+            <div className="chip-wrap" role="group" aria-label="Управляемые параметры">
               {current.parameters.map((p) => (
-                <button key={p} type="button"
+                <button key={p} type="button" aria-pressed={params.includes(p)}
                   className={params.includes(p) ? 'chip chip-action active' : 'chip chip-action'}
                   onClick={() => setParams((v) => toggle(v, p))}>{p}</button>
               ))}
               {params.filter((p) => !current.parameters.includes(p)).map((p) => (
                 <button key={p} type="button" className="chip chip-action active chip-own"
+                  aria-label={`Убрать параметр «${p}»`}
                   onClick={() => setParams((v) => v.filter((x) => x !== p))}>{p}</button>
               ))}
             </div>

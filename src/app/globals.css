@@ -656,6 +656,11 @@ body:hover .present-exit { opacity: .85; }
 .stage {
   position: relative; width: 100%; max-width: 940px; flex: 1; min-height: 0;
   border-radius: var(--r-lg); overflow: hidden;
+  /* Сцена — тёмный экран в любой теме приложения. Объявить это обязательно:
+     кадр приборов внутри тоже объявляет тёмную схему, и если окружение с ним
+     не совпадёт, браузер подложит под кадр непрозрачный холст и тот закроет
+     собой образ. Проверено опытом: совпадать должны именно эти двое. */
+  color-scheme: dark;
   background:
     radial-gradient(120% 90% at 50% -10%, #1b2432 0%, #12161d 46%, #0d1015 100%);
   box-shadow: 0 18px 48px -22px rgba(16, 24, 40, .55), inset 0 0 0 1px rgba(255, 255, 255, .05);
@@ -752,4 +757,11 @@ body:hover .present-exit { opacity: .85; }
   content: 'показать целиком'; position: absolute; right: 14px; bottom: 0;
   padding-left: 22px; font-size: 12px; color: var(--accent);
   background: linear-gradient(90deg, transparent, var(--accent-soft) 40%);
+}
+
+/* Заголовок для экранного диктора: на стенде нет видимого h1, но структура
+   страницы должна начинаться с него, а не сразу с подзаголовков блоков. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }

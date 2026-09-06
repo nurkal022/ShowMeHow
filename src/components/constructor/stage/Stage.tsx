@@ -105,7 +105,7 @@ export default function Stage({ config }: { config: StageConfig }) {
           <Motif t={t} mode={config.mode} style={config.style} knob={knob} />
         </svg>
         <iframe ref={frameRef} className="stage-kit" srcDoc={doc}
-          sandbox="allow-scripts" title="Приборы" tabIndex={-1} />
+          sandbox="allow-scripts" title="Панель приборов" />
         {/* Свои слова и подсказка набираются в HTML, а не в SVG: внутри сцены
             текст масштабируется вместе с образом и вырастает вдвое против
             остального интерфейса. Здесь у него настоящий кегль. */}

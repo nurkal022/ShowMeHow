@@ -22,10 +22,11 @@ export function kitPreviewDoc(): string {
 <html lang="ru"><head><meta charset="utf-8">
 <style>${UIKIT_CSS}</style>
 <style>
-  /* Кадр обязан объявить, что понимает обе схемы. Иначе при тёмной теме
-     страницы браузер видит расхождение со схемой документа внутри iframe и
-     подкладывает под него непрозрачный белый холст — сцена белеет целиком. */
-  :root { color-scheme: light dark; }
+  /* Схема кадра должна СОВПАДАТЬ со схемой сцены (у .stage она тоже dark).
+     Под sandbox схема страницы внутрь кадра не передаётся, и «light dark»
+     здесь разошлось бы с тёмным окружением: браузер подложил бы под кадр
+     непрозрачный холст, и тот закрыл бы собой образ. Только явный dark. */
+  :root { color-scheme: dark; }
   html, body { background: transparent; overflow: hidden; }
   /* Панель на стенде уже, чем в симуляции: рядом с ней должен остаться образ. */
   .sim-panel { width: 216px; }
@@ -36,13 +37,13 @@ export function kitPreviewDoc(): string {
 </head><body>
 <script>
 var KIT_SOURCE = ${scriptSafe(UIKIT_JS)};
-var chart = null, readouts = [], speed = null, frame = 0, t0 = Date.now();
+var chart = null, readouts = [], frame = 0, t0 = Date.now();
 
 function post(msg) { parent.postMessage(msg, '*'); }
 
 function build(cfg) {
   document.body.innerHTML = '';
-  chart = null; readouts = []; speed = null;
+  chart = null; readouts = [];
   // Свежий SimUI: замыкание кита держит ссылки на снятые узлы, переиспользовать нельзя.
   (0, eval)(KIT_SOURCE);
   var K = window.SimUI;
@@ -70,7 +71,7 @@ function build(cfg) {
   if (has('steps')) {
     K.button({ name: 'step', label: 'Следующий шаг', onClick: function () {} });
   }
-  speed = K.speed({ values: [0.5, 1, 2], value: 1 });
+  K.speed({ values: [0.5, 1, 2], value: 1 });
   K.playPause({ onPlay: function () {}, onPause: function () {}, onReset: function () {} });
 
   if (has('readout')) {
@@ -87,25 +88,36 @@ function build(cfg) {
 }
 
 // Приборы должны жить: цифры бегут, график рисуется. Иначе панель выглядит макетом.
+// Но не у всех: тот, кто просил систему не двигать картинку, не должен получить
+// бесконечно ползущий график — ему приборы показываются заполненными и статичными.
+var calm = matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 function tick() {
   frame++;
-  var t = (Date.now() - t0) / 1000;
+  var t = calm ? 4 : (Date.now() - t0) / 1000;
   var v = 50 + 40 * Math.sin(t * 1.1);
   for (var i = 0; i < readouts.length; i++) readouts[i].set(i === 0 ? v : t);
   if (chart && frame % 4 === 0) chart.push(t, [v]);
-  requestAnimationFrame(tick);
+  if (!calm) requestAnimationFrame(tick);
+}
+
+// В спокойном режиме приборы всё равно должны быть не пустыми: рисуем короткий
+// отрезок графика один раз, чтобы панель выглядела работающей, а не сломанной.
+function fillCalm() {
+  if (!chart) return;
+  for (var i = 0; i <= 40; i++) chart.push(i * 0.2, [50 + 40 * Math.sin(i * 0.22)]);
 }
 
 // Рукопожатие повторяется, пока не придёт ответ: кадр может успеть загрузиться
 // раньше, чем страница подпишется на сообщения, и один-единственный запрос
 // тогда пропал бы в пустоту, оставив стенд без приборов.
-var synced = false;
+var handshake = setInterval(function () { post({ type: 'ready' }); }, 250);
 addEventListener('message', function (e) {
   if (!e.data || e.data.type !== 'sync') return;
-  synced = true;
+  clearInterval(handshake);
   build(e.data.config);
+  if (calm) { fillCalm(); tick(); }
 });
-setInterval(function () { if (!synced) post({ type: 'ready' }); }, 250);
 requestAnimationFrame(tick);
 post({ type: 'ready' });
 </script>
