@@ -119,14 +119,16 @@ a { color: var(--accent); }
 .btn:hover { background: var(--surface-2); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .55; cursor: default; transform: none; }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Циановый акцент — светлая заливка, поэтому чернила на ней тёмные (а не
+   белые), иначе контраст проваливается: посчитано в отчёте задачи 1. */
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #04222a; }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn-secondary { background: var(--surface-2); border-color: var(--border); color: var(--text); }
 .btn-secondary:hover { background: var(--border); }
 .btn-ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--accent); }
 .btn-ghost:hover { background: var(--accent-soft); }
 .btn-danger { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
-.btn-danger:hover { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: var(--danger); color: #04222a; }
 
 .icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
