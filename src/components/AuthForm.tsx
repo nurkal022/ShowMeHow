@@ -48,16 +48,16 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
     <form className="auth-card" onSubmit={submit}>
       <h1>{isLogin ? 'Вход' : 'Регистрация'}</h1>
       <label>Почта
-        <input type="email" value={email} autoComplete="email" required
+        <input className="input" type="email" value={email} autoComplete="email" required
           onChange={(e) => setEmail(e.target.value)} />
       </label>
       <label>Пароль
-        <input type="password" value={password} required minLength={8}
+        <input className="input" type="password" value={password} required minLength={8}
           autoComplete={isLogin ? 'current-password' : 'new-password'}
           onChange={(e) => setPassword(e.target.value)} />
       </label>
       {error && <p className="error-box">{error}</p>}
-      <button className="primary" type="submit" disabled={busy}>
+      <button className="btn btn-primary" type="submit" disabled={busy}>
         {busy ? 'Минуту…' : isLogin ? 'Войти' : 'Зарегистрироваться'}
       </button>
       <p className="muted">

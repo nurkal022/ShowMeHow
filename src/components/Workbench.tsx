@@ -391,6 +391,7 @@ export default function Workbench() {
           {!hasSim && (
             <div className="composer-row">
               <select
+                className="select"
                 aria-label="Режим качества"
                 value={mode}
                 disabled={phase === 'generating'}
@@ -400,13 +401,14 @@ export default function Workbench() {
                 <option value="standard">Стандарт (1-3 мин)</option>
                 <option value="fast">Быстрый (~1 мин)</option>
               </select>
-              <button disabled={phase === 'generating'} onClick={() => fileRef.current?.click()}>
+              <button className="btn" disabled={phase === 'generating'} onClick={() => fileRef.current?.click()}>
                 {image ? '🖼 картинка ✓' : '🖼 картинка'}
               </button>
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
             </div>
           )}
           <textarea
+            className="input"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
@@ -418,7 +420,7 @@ export default function Workbench() {
             rows={3}
           />
           <button
-            className="primary"
+            className="btn btn-primary"
             disabled={phase === 'generating' || (!hasSim && quota?.remaining === 0)}
             onClick={submit}
           >

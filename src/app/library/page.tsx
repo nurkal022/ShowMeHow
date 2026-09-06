@@ -55,13 +55,13 @@ export default function Library() {
     <div className="library">
       <div className="library-head">
         <h1>Библиотека</h1>
-        <input placeholder="Поиск…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input" placeholder="Поиск…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {error && <p className="error-box">{error}</p>}
       {sims.length === 0 && (
         <div className="empty-library">
           <p className="muted">Пока пусто — создайте первую симуляцию или установите готовые примеры.</p>
-          <button onClick={installDemos} disabled={installing}>
+          <button className="btn btn-primary" onClick={installDemos} disabled={installing}>
             {installing ? 'Устанавливаю…' : 'Установить 10 примеров'}
           </button>
         </div>
@@ -82,7 +82,7 @@ export default function Library() {
             <div className="card-actions">
               <a href={`/present/${s.id}`} target="_blank" rel="noopener noreferrer">▶ Показать</a>
               <a href={`/api/simulations/${s.id}/export`}>⬇ Экспорт</a>
-              <button onClick={() => remove(s.id)}>Удалить</button>
+              <button className="btn btn-ghost btn-danger" onClick={() => remove(s.id)}>Удалить</button>
             </div>
           </div>
         ))}
