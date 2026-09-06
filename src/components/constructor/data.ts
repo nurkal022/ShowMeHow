@@ -23,6 +23,10 @@ export interface Section {
   parameters: string[];
   /** Приборы, которые включены при выборе раздела. Меняются одним кликом. */
   instruments: Instrument[];
+  /** Узнаваемый закон раздела для панели формулы (TeX). */
+  tex: string;
+  /** Что рисует график и что показывает табло. */
+  quantity: string;
 }
 
 export const SECTIONS: Section[] = [
@@ -36,6 +40,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['масса', 'длина', 'угол', 'начальная скорость', 'коэффициент трения', 'жёсткость пружины'],
     instruments: ['slider', 'readout', 'chart', 'formula'],
+    tex: 'T = 2\\pi\\sqrt{l/g}',
+    quantity: 'Энергия',
   },
   {
     key: 'optics',
@@ -47,6 +53,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['показатель преломления', 'угол падения', 'фокусное расстояние', 'длина волны', 'ширина щели', 'расстояние до экрана'],
     instruments: ['slider', 'readout', 'formula'],
+    tex: 'n_1\\sin\\alpha = n_2\\sin\\beta',
+    quantity: 'Освещённость',
   },
   {
     key: 'thermo',
@@ -58,6 +66,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['температура', 'давление', 'объём', 'теплоёмкость', 'масса вещества', 'мощность нагрева'],
     instruments: ['slider', 'readout', 'chart', 'presets'],
+    tex: 'pV = \\nu RT',
+    quantity: 'Давление',
   },
   {
     key: 'electro',
@@ -69,6 +79,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['заряд', 'расстояние между зарядами', 'напряжение', 'сопротивление', 'сила тока', 'индукция магнитного поля'],
     instruments: ['slider', 'readout', 'formula'],
+    tex: 'F = k\\dfrac{q_1 q_2}{r^2}',
+    quantity: 'Напряжённость',
   },
   {
     key: 'molecular',
@@ -80,6 +92,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['температура', 'число частиц', 'концентрация', 'объём сосуда', 'масса молекулы', 'давление'],
     instruments: ['slider', 'readout', 'chart'],
+    tex: '\\langle E \\rangle = \\tfrac{3}{2}kT',
+    quantity: 'Скорости',
   },
   {
     key: 'astro',
@@ -91,6 +105,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['масса центрального тела', 'скорость запуска', 'радиус орбиты', 'эксцентриситет', 'наклон орбиты', 'масштаб времени'],
     instruments: ['slider', 'readout', 'formula', 'presets'],
+    tex: 'T^2 \\sim a^3',
+    quantity: 'Расстояние',
   },
   {
     key: 'chemistry',
@@ -102,6 +118,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['концентрация', 'температура', 'катализатор', 'объём титранта', 'кислотность (pH)', 'давление'],
     instruments: ['slider', 'readout', 'chart', 'formula'],
+    tex: 'v = k[A][B]',
+    quantity: 'Концентрация',
   },
   {
     key: 'cs',
@@ -113,6 +131,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['размер массива', 'исходный порядок', 'скорость шагов', 'основание рекурсии', 'правило автомата', 'скорость обучения'],
     instruments: ['steps', 'readout', 'chart', 'presets'],
+    tex: 'O(n\\log n)',
+    quantity: 'Сравнений',
   },
   {
     key: 'math',
@@ -124,6 +144,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['коэффициент функции', 'положение точки', 'число слагаемых', 'число испытаний', 'шаг разбиения', 'масштаб осей'],
     instruments: ['slider', 'readout', 'chart', 'formula'],
+    tex: "f'(x_0) = \\lim_{\\Delta x \\to 0}\\dfrac{\\Delta f}{\\Delta x}",
+    quantity: 'Значение',
   },
   {
     key: 'biology',
@@ -135,6 +157,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['рождаемость', 'смертность', 'ёмкость среды', 'концентрация субстрата', 'сила стимула', 'частота'],
     instruments: ['slider', 'chart', 'readout'],
+    tex: '\\dfrac{dN}{dt} = rN\\left(1-\\dfrac{N}{K}\\right)',
+    quantity: 'Численность',
   },
   {
     key: 'earth',
@@ -146,6 +170,8 @@ export const SECTIONS: Section[] = [
     ],
     parameters: ['наклон оси', 'широта', 'время года', 'скорость плит', 'концентрация CO₂', 'глубина очага'],
     instruments: ['slider', 'readout', 'chart'],
+    tex: '\\varepsilon = 23{,}5^\\circ',
+    quantity: 'Освещённость',
   },
 ];
 

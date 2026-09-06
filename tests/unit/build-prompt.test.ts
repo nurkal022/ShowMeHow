@@ -107,6 +107,15 @@ describe('таблица разделов', () => {
     }
   });
 
+  it('у каждого раздела есть формула и величина для приборов', () => {
+    // Раньше эти строки лежали отдельной таблицей в Stage.tsx, и новый раздел
+    // молча оставался без формулы. Держим их рядом с самим разделом.
+    for (const s of SECTIONS) {
+      expect(s.tex.trim(), s.key).not.toBe('');
+      expect(s.quantity.trim(), s.key).not.toBe('');
+    }
+  });
+
   it('раздел не предлагает приборов, которых кит не умеет', () => {
     const known = new Set(INSTRUMENTS.map((i) => i.value));
     for (const s of SECTIONS) {

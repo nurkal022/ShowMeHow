@@ -314,6 +314,9 @@ export default function Workbench() {
 
   async function generate(text: string) {
     setInputMode('text');
+    // Поле могло остаться заполненным после «Открыть как текст»: запрос уже ушёл,
+    // и старая копия в композере выглядела бы как неотправленный черновик.
+    setPrompt('');
     say('user', text);
     setPhase('generating'); setEvents([]); setError(null); setHtml(null); setCancelling(false);
     try {
@@ -491,7 +494,7 @@ export default function Workbench() {
 
           {messages.map((m, i) => (
             <div key={i} className={m.role === 'user' ? 'msg msg-user' : 'msg msg-bot'}>
-              <div className="bubble">{m.text}</div>
+              <Bubble text={m.text} />
             </div>
           ))}
 
@@ -622,6 +625,25 @@ export default function Workbench() {
         )}
       </section>
 
+    </div>
+  );
+}
+
+/**
+ * Запрос, собранный стендом, длинный: за прозой идёт структурный блок. Целиком
+ * он занимал бы половину ленты, поэтому свёрнут до нескольких строк и
+ * разворачивается по клику — видеть отправленное целиком человек вправе.
+ */
+function Bubble({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 220;
+  if (!long) return <div className="bubble">{text}</div>;
+  return (
+    <div className={open ? 'bubble' : 'bubble bubble-clamped'} role="button" tabIndex={0}
+      title={open ? 'Свернуть' : 'Показать целиком'}
+      onClick={() => setOpen((v) => !v)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}>
+      {text}
     </div>
   );
 }

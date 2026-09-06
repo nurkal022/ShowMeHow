@@ -18,28 +18,6 @@ export interface StageConfig {
   level: Level;
 }
 
-/** Формулы для превью — узнаваемый закон раздела, а не заглушка. */
-const TEX: Record<string, string> = {
-  mechanics: 'T = 2\\pi\\sqrt{l/g}',
-  optics: 'n_1\\sin\\alpha = n_2\\sin\\beta',
-  thermo: 'pV = \\nu RT',
-  electro: 'F = k\\dfrac{q_1 q_2}{r^2}',
-  molecular: '\\langle E \\rangle = \\tfrac{3}{2}kT',
-  astro: 'T^2 \\sim a^3',
-  chemistry: 'v = k[A][B]',
-  cs: 'O(n\\log n)',
-  math: "f'(x_0) = \\lim_{\\Delta x \\to 0}\\dfrac{\\Delta f}{\\Delta x}",
-  biology: '\\dfrac{dN}{dt} = rN\\left(1-\\dfrac{N}{K}\\right)',
-  earth: '\\varepsilon = 23{,}5^\\circ',
-};
-
-const CHART: Record<string, string> = {
-  mechanics: 'Энергия', optics: 'Освещённость', thermo: 'Давление',
-  electro: 'Напряжённость', molecular: 'Скорости', astro: 'Расстояние',
-  chemistry: 'Концентрация', cs: 'Сравнений', math: 'Значение',
-  biology: 'Численность', earth: 'Освещённость',
-};
-
 /**
  * Сцена стенда: образ выбранного плюс настоящая панель приборов поверх него.
  *
@@ -107,9 +85,9 @@ export default function Stage({ config }: { config: StageConfig }) {
         parameters: (config.parameters.length
           ? config.parameters
           : section?.parameters ?? ['параметр']).slice(0, 4),
-        readoutLabel: CHART[config.section] ?? 'Величина',
-        chartTitle: CHART[config.section] ?? 'График',
-        tex: TEX[config.section],
+        readoutLabel: section?.quantity ?? 'Величина',
+        chartTitle: section?.quantity ?? 'График',
+        tex: section?.tex,
       },
     }, '*');
   }

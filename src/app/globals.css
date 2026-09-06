@@ -742,3 +742,14 @@ body:hover .present-exit { opacity: .85; }
   .stand-bar .btn { width: 100%; }
   .stand-bar .spacer { display: none; }
 }
+
+/* Длинный запрос в ленте свёрнут: разворачивается по клику. */
+.bubble-clamped {
+  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical;
+  overflow: hidden; cursor: pointer; position: relative;
+}
+.bubble-clamped::after {
+  content: 'показать целиком'; position: absolute; right: 14px; bottom: 0;
+  padding-left: 22px; font-size: 12px; color: var(--accent);
+  background: linear-gradient(90deg, transparent, var(--accent-soft) 40%);
+}
