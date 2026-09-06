@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createUser, EmailTakenError, normalizeEmail } from '@/lib/auth/users';
 import { createSession } from '@/lib/auth/session';
-import { setSessionCookie, MIN_PASSWORD_LENGTH } from '@/lib/auth/cookie';
+import { setSessionCookie, isSecureRequest, MIN_PASSWORD_LENGTH } from '@/lib/auth/cookie';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -17,7 +17,7 @@ export async function POST(req: Request) {
   try {
     const user = await createUser(email, password);
     const token = await createSession(user.id);
-    return setSessionCookie(NextResponse.json({ user }), token);
+    return setSessionCookie(NextResponse.json({ user }), token, isSecureRequest(req));
   } catch (e) {
     if (e instanceof EmailTakenError) {
       return NextResponse.json({ error: 'Такая почта уже зарегистрирована.' }, { status: 409 });

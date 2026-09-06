@@ -3,7 +3,7 @@ import { findUserByEmail, normalizeEmail } from '@/lib/auth/users';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
 import { isLimited, recordFailure } from '@/lib/auth/rate-limit';
-import { setSessionCookie } from '@/lib/auth/cookie';
+import { setSessionCookie, isSecureRequest } from '@/lib/auth/cookie';
 
 // Один и тот же текст для неизвестной почты и неверного пароля: иначе форма входа
 // превращается в способ узнать, кто зарегистрирован.
@@ -49,5 +49,5 @@ export async function POST(req: Request) {
 
   const token = await createSession(found.id);
   const user = { id: found.id, email: found.email, role: found.role };
-  return setSessionCookie(NextResponse.json({ user }), token);
+  return setSessionCookie(NextResponse.json({ user }), token, isSecureRequest(req));
 }
