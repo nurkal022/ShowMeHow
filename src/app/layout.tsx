@@ -2,7 +2,7 @@ import './globals.css';
 import NavLinks from '@/components/NavLinks';
 import { currentUserFromCookies } from '@/lib/auth/session';
 
-export const metadata = { title: 'ShowMeHow' };
+export const metadata = { title: 'Teseract' };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await currentUserFromCookies();
@@ -10,7 +10,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="ru">
       <body>
         <nav className="topnav">
-          <span className="brand"><span className="brand-mark">🔬</span>ShowMeHow</span>
+          <span className="brand"><span className="brand-mark">🔬</span>Teseract</span>
           <NavLinks user={user ? { email: user.email, role: user.role } : undefined} />
         </nav>
         <main>{children}</main>
