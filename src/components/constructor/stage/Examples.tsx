@@ -39,10 +39,14 @@ export function matchScore(sim: SimulationMeta, section: Section): number {
     .toLowerCase().replace(/ё/g, 'е').split(/[^а-яa-z0-9-]+/).filter(Boolean);
   let score = 0;
   for (const phenomenon of section.phenomena) {
-    for (const word of phenomenon.split(/\s+/)) {
-      if (word.length < 6 || STOP.has(word.toLowerCase())) continue;
-      if (hay.some((h) => wordsMatch(h, word))) score += 3;
-    }
+    // Совпасть должны ВСЕ значимые слова явления, а не любое одно: по одному
+    // слову «клеточный автомат» из информатики находил «клеточную мембрану»
+    // осмоса. Короткие слова («луча», «в графе») не в счёт — они ничего не
+    // различают, и требовать их значило бы не найти ничего.
+    const words = phenomenon.split(/\s+/)
+      .filter((w) => w.length >= 6 && !STOP.has(w.toLowerCase()));
+    if (!words.length) continue;
+    if (words.every((w) => hay.some((h) => wordsMatch(h, w)))) score += 3;
   }
   if (hay.some((h) => wordsMatch(h, section.label))) score += 2;
   return score;
