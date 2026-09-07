@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Instrument, Level, Style } from '../data';
 import { sectionByKey } from '../data';
 import { MOTIFS } from './motifs';
-import { IdleCore, VIEW_H, VIEW_W } from './primitives';
+import { IdleCore, STAGE_W, VIEW_H } from './primitives';
 import { kitPreviewDoc } from './kitPreviewDoc';
 
 export interface StageConfig {
@@ -29,6 +29,10 @@ export interface StageConfig {
 export default function Stage({ config }: { config: StageConfig }) {
   const [t, setT] = useState(0);
   const [knob, setKnob] = useState(0.4);
+  // Сколько места по краям заняли приборы (в px кадра). Кадр сообщает это сам,
+  // и образ вписывается в чистый прямоугольник между ними: ничего важного не
+  // окажется под панелью, а выключенный прибор освобождает место образу.
+  const [edges, setEdges] = useState({ left: 0, right: 0 });
   const frameRef = useRef<HTMLIFrameElement>(null);
   const doc = useMemo(() => kitPreviewDoc(), []);
   const section = sectionByKey(config.section);
@@ -64,6 +68,10 @@ export default function Stage({ config }: { config: StageConfig }) {
       const data = e.data as { type?: string; value?: number };
       if (data?.type === 'ready') sync();
       if (data?.type === 'knob' && typeof data.value === 'number') setKnob(data.value);
+      if (data?.type === 'layout') {
+        const l = e.data as { left?: number; right?: number };
+        setEdges({ left: Math.round(l.left ?? 0), right: Math.round(l.right ?? 0) });
+      }
     }
     addEventListener('message', onMessage);
     return () => removeEventListener('message', onMessage);
@@ -99,7 +107,8 @@ export default function Stage({ config }: { config: StageConfig }) {
   return (
     <div className="stage-shell">
       <div className={config.style === 'data' ? 'stage stage-grid' : 'stage'}>
-        <svg className="stage-art" viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        <svg className="stage-art" viewBox={`0 0 ${STAGE_W} ${VIEW_H}`}
+          style={{ left: edges.left + 12, right: edges.right + 12 }}
           preserveAspectRatio="xMidYMid meet" role="img"
           aria-label={`Образ: ${config.phenomenon || section?.label || 'симуляция'}`}>
           <Motif t={t} mode={config.mode} style={config.style} knob={knob} />

@@ -129,7 +129,9 @@ export function Population({ t, mode, style, knob }: MotifProps) {
     <g>
       <Axes x={ox} y={oy} w={w + 16} h={h + 18} labels={['t', 'N']} />
       <Ghost d={`M${ox} ${oy - h} H${ox + w + 8}`} />
-      <text x={ox + w - 4} y={oy - h - 7} fill={INK.muted} fontSize="9" textAnchor="end">ёмкость среды</text>
+      {/* Под линией, а не над ней: сверху подпись стояла на пути точки, которая
+          к концу роста выходит на ёмкость и налезала на текст. */}
+      <text x={ox + w - 4} y={oy - h + 12} fill={INK.muted} fontSize="9" textAnchor="end">ёмкость среды</text>
       {/* Бледный след всей кривой: поле не пустует, пока голова ещё в начале. */}
       <path d={`M${curve(1)}`} fill="none" stroke={INK.accent} strokeOpacity=".18" strokeWidth="1.6" />
       <path d={`M${curve(front)}`} fill="none" stroke={INK.accent} strokeWidth="2.4" strokeLinecap="round" />

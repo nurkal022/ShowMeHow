@@ -51,9 +51,13 @@ body { margin:0; background:var(--sim-bg); color:var(--sim-text);
 .smh-collapse-btn { position:absolute; top:6px; right:6px; z-index:3; width:28px; height:28px;
   border-radius:8px; border:1px solid #2a3341; background:var(--sim-panel); color:var(--sim-text);
   font-size:13px; line-height:1; cursor:pointer; padding:0; }
-[data-smh-panel].smh-collapsed { width:auto!important; min-width:0!important; max-width:none!important;
-  height:auto!important; min-height:0!important; max-height:none!important;
-  padding:6px!important; overflow:hidden!important; }
+/* Свёрнутая панель — квадрат ровно под кнопку. Раньше она схлопывалась по
+   содержимому (width:auto с одной абсолютной кнопкой — это 14×14 px), а
+   overflow:hidden отрезал кнопку, торчавшую за этот край: развернуть панель
+   обратно было невозможно, клик попадал в пустоту. */
+[data-smh-panel].smh-collapsed { width:40px!important; min-width:0!important; max-width:none!important;
+  height:40px!important; min-height:0!important; max-height:none!important;
+  padding:0!important; overflow:hidden!important; box-sizing:border-box!important; }
 [data-smh-panel].smh-collapsed > *:not(.smh-collapse-btn) { display:none!important; }
 
 .sim-corner { position:fixed; z-index:9; display:flex; flex-direction:column; gap:10px; }

@@ -62,6 +62,11 @@ describe('collapse layer', () => {
   it('UIKIT_CSS defines collapse styles', () => {
     expect(UIKIT_CSS).toContain('.smh-collapse-btn');
     expect(UIKIT_CSS).toContain('.smh-collapsed');
+    // Свёрнутая панель обязана оставаться квадратом под кнопку: раньше она
+    // схлопывалась до 14×14 px, overflow:hidden отрезал кнопку «развернуть»,
+    // и открыть панель обратно было невозможно.
+    expect(UIKIT_CSS).toMatch(/\.smh-collapsed \{[^}]*width:40px/);
+    expect(UIKIT_CSS).toMatch(/\.smh-collapsed \{[^}]*height:40px/);
   });
 });
 

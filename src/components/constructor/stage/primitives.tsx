@@ -43,6 +43,13 @@ export const VIEW_H = 260;
 export const SAFE_R = 296;
 
 /**
+ * Ширина кадра, которую видит образ. Правее SAFE_R мотивы ничего не рисуют, и
+ * показывать пустую полосу до VIEW_W значило бы сдвигать всё влево от центра
+ * чистого прямоугольника. Кадр обрезается по безопасной зоне с небольшим полем.
+ */
+export const STAGE_W = SAFE_R + 20;
+
+/**
  * Ядро. Радиус не меняется между 2D и 3D — меняется только объём, и предмет
  * узнаётся как тот же самый.
  */
@@ -122,8 +129,8 @@ export function IdleCore({ t, mode, style }: MotifProps) {
   const y = VIEW_H / 2 - 8 + Math.sin(t * 1.2) * 5;
   return (
     <g>
-      <circle cx={VIEW_W / 2} cy={y} r={54} fill={INK.accent} fillOpacity=".05" />
-      <Core x={VIEW_W / 2} y={y} r={26} mode={mode} style={style} />
+      <circle cx={STAGE_W / 2} cy={y} r={54} fill={INK.accent} fillOpacity=".05" />
+      <Core x={STAGE_W / 2} y={y} r={26} mode={mode} style={style} />
     </g>
   );
 }
