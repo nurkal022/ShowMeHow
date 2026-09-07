@@ -809,3 +809,10 @@ body:hover .present-exit { opacity: .85; }
 }
 .stand-prompt-text:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
 .stand-prompt-note { display: flex; gap: 12px; align-items: center; padding: 0 20px 12px; color: var(--muted); font-size: 12px; }
+
+/* Раскрытый блок текста не должен сжимать сцену до высоты, на которой приборы
+   снова ложатся друг на друга: у сцены есть нижний предел, колонка прокручивается. */
+@media (min-width: 901px) {
+  .stand-view { overflow-y: auto; }
+  .stage-shell { min-height: 420px; flex-shrink: 0; }
+}
