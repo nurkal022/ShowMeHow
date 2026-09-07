@@ -799,3 +799,13 @@ body:hover .present-exit { opacity: .85; }
   color: #fff; background: rgba(16, 24, 40, .38); opacity: 0; transition: opacity .12s ease;
 }
 .stage-example:hover .stage-example-play { opacity: 1; }
+
+/* Запрос на стенде правится на месте, не уходя из образа. */
+.stand-prompt-text {
+  display: block; width: calc(100% - 40px); margin: 0 20px 12px; padding: 10px 12px;
+  font: inherit; font-size: 13px; line-height: 1.5; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-sm);
+  resize: vertical; min-height: 96px;
+}
+.stand-prompt-text:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+.stand-prompt-note { display: flex; gap: 12px; align-items: center; padding: 0 20px 12px; color: var(--muted); font-size: 12px; }

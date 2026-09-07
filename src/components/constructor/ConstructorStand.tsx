@@ -41,6 +41,10 @@ export default function ConstructorStand({
   const [notes, setNotes] = useState('');
   const [level, setLevel] = useState<Level>(defaultLevel ?? 'grade10to11');
   const [showText, setShowText] = useState(false);
+  // Текст, поправленный руками. null — текст следует за формой. Как только
+  // человек что-то изменил в самом тексте, форма его больше не перезаписывает:
+  // иначе одно случайное касание чипа стёрло бы правку.
+  const [edited, setEdited] = useState<string | null>(null);
 
   const current = sectionByKey(section);
   const chosen = custom.trim() || phenomenon;
@@ -52,6 +56,8 @@ export default function ConstructorStand({
   const prompt = useMemo(() => (complete ? buildPrompt(draft) : ''),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [section, chosen, mode, style, level, instruments.join(), params.join(), notes]);
+
+  const finalPrompt = edited ?? prompt;
 
   function pickSection(key: string) {
     const next = sectionByKey(key);
@@ -175,14 +181,14 @@ export default function ConstructorStand({
         <Examples section={current} />
         <div className="stand-bar">
           <button className="btn btn-primary" disabled={disabled || !complete}
-            onClick={() => onCreate(prompt)}>
+            onClick={() => onCreate(finalPrompt)}>
             <IconSend size={17} />Создать
           </button>
           {/* Кнопка доступна всегда: без неё человек, который хочет просто
               печатать, оказывался заперт на стенде — пока ничего не выбрано,
               переход в поле был выключен. Ничего не собрано — поле откроется
               пустым, и это ровно то, чего он хотел. */}
-          <button className="link-btn" onClick={() => onWriteText(prompt)}>
+          <button className="link-btn" onClick={() => onWriteText(finalPrompt)}>
             Открыть как текст
           </button>
           <span className="spacer" />
@@ -191,8 +197,20 @@ export default function ConstructorStand({
         {complete && (
           <details className="stand-prompt" open={showText}
             onToggle={(e) => setShowText(e.currentTarget.open)}>
-            <summary><IconChevron size={15} />Запрос целиком</summary>
-            <pre>{prompt}</pre>
+            <summary><IconChevron size={15} />Запрос целиком{edited !== null && ' · правился вручную'}</summary>
+            {/* Редактируется на месте: образ и приборы остаются перед глазами,
+                а уточнить можно словом. «Создать» отправит именно этот текст. */}
+            <textarea className="stand-prompt-text" value={finalPrompt} rows={7}
+              aria-label="Текст запроса"
+              onChange={(e) => setEdited(e.target.value)} />
+            {edited !== null && (
+              <div className="stand-prompt-note">
+                Форма больше не меняет этот текст.
+                <button type="button" className="link-btn" onClick={() => setEdited(null)}>
+                  Пересобрать из формы
+                </button>
+              </div>
+            )}
           </details>
         )}
       </div>
