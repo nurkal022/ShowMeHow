@@ -2,12 +2,13 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { IconLibrary, IconLogout, IconMonitor, IconMoon, IconPlus, IconSun, IconUser } from './icons';
+import { IconLab, IconLibrary, IconLogout, IconMonitor, IconMoon, IconPlus, IconSun, IconUser } from './icons';
 import { applyTheme, readStoredTheme, storeTheme, type Theme } from '@/lib/theme';
 
 const LINKS = [
   { href: '/', label: 'Создать', Icon: IconPlus },
   { href: '/library', label: 'Библиотека', Icon: IconLibrary },
+  { href: '/labs', label: 'Лаборатории', Icon: IconLab },
 ];
 
 const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof IconSun }[] = [

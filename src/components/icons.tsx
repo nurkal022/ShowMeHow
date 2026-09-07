@@ -78,3 +78,15 @@ export const IconSpark = svg(<>
 export const IconKey = svg(<>
   <circle cx="8" cy="12" r="4.2" /><path d="M12.2 12H21M18 12v3M15 12v2" />
 </>);
+
+/** Лаборатория: колба с жидкостью — раздел VR-лабораторий и кнопка «В VR». */
+export const IconLab = svg(<>
+  <path d="M9.5 3h5M10 3v6.2L4.6 18.4A2 2 0 0 0 6.3 21.5h11.4a2 2 0 0 0 1.7-3.1L14 9.2V3" />
+  <path d="M7.2 15.5h9.6" opacity=".6" />
+</>);
+
+/** Очки VR — для кнопки входа в сцену. */
+export const IconVr = svg(<>
+  <path d="M3 9.5A2.5 2.5 0 0 1 5.5 7h13A2.5 2.5 0 0 1 21 9.5v5a2.5 2.5 0 0 1-2.5 2.5h-3l-2.2-2.6a1.7 1.7 0 0 0-2.6 0L8.5 17h-3A2.5 2.5 0 0 1 3 14.5z" />
+  <circle cx="8" cy="12" r="1.2" opacity=".6" /><circle cx="16" cy="12" r="1.2" opacity=".6" />
+</>);

@@ -15,20 +15,23 @@
     "seed": "tsx scripts/seed-demos.ts",
     "migrate": "tsx scripts/migrate.ts",
     "migrate:data": "tsx scripts/migrate-to-db.ts",
-    "demos:thumbs": "tsx scripts/demo-thumbs.ts"
+    "demos:thumbs": "tsx scripts/demo-thumbs.ts",
+    "labs:thumbs": "tsx scripts/lab-thumbs.ts"
   },
   "dependencies": {
     "next": "^15.5.20",
     "openai": "^6.45.0",
     "pg": "^8.23.0",
     "playwright": "^1.61.1",
+    "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
-    "@types/pg": "^8.23.1",
     "@types/node": "^26.1.0",
+    "@types/pg": "^8.23.1",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "tsx": "^4.23.0",

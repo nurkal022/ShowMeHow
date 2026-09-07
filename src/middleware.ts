@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/lib/auth/session-cookie';
 
-const PUBLIC_PREFIXES = ['/login', '/register', '/api/auth/'];
+// /lab/ и /labs/ — сцены лабораторий: они открыты без входа, потому что их
+// открывают в VR-очках, где вводить пароль мучительно, а секретов в них нет.
+// Список лабораторий (/labs без файла) остаётся за логином — см. matcher.
+const PUBLIC_PREFIXES = ['/login', '/register', '/api/auth/', '/lab/', '/labs/'];
 
 /**
  * Дешёвый фильтр, а не гарантия: middleware исполняется в Edge-рантайме и не может
