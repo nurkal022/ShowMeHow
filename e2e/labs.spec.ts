@@ -20,3 +20,18 @@ test('список лабораторий закрыт для гостя', async
   await page.goto('/labs');
   await expect(page).toHaveURL(/\/login/);
 });
+
+test('в разделе четыре карточки, а «Создать лабораторию» отвечает «Скоро»', async ({ page }) => {
+  await page.request.post('/api/auth/register',
+    { data: { email: `labs-${Date.now()}@example.com`, password: 'labs-demo-pass-123' } });
+  await page.goto('/labs');
+  await expect(page.locator('.lab-card')).toHaveCount(4);
+  await expect(page.getByRole('heading', { name: 'Внутри клетки' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Создать лабораторию' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Скоро');
+  await expect(dialog).toContainText('в работе');
+  await dialog.getByRole('button', { name: 'Понятно' }).click();
+  await expect(dialog).toHaveCount(0);
+});

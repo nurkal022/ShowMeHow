@@ -405,18 +405,25 @@ function buildHud({ title, hint, stations, renderer }) {
   const stBox = root.querySelector('.hud-stations');
   const actions = root.querySelector('.hud-actions');
   const vrBox = root.querySelector('.hud-vr');
-  const vrBtn = VRButton.createButton(renderer);
-  vrBtn.removeAttribute('style');
-  vrBtn.className = 'hud-vrbtn';
-  vrBox.appendChild(vrBtn);
-  // VRButton пишет по-английски; переводим, не мешая ему обновлять текст.
-  const ru = { 'ENTER VR': 'Войти в VR', 'EXIT VR': 'Выйти из VR', 'VR NOT SUPPORTED': 'VR недоступен',
-    'VR NOT ALLOWED': 'VR запрещён', 'WEBXR NOT AVAILABLE': 'Нужен HTTPS для VR', 'WEBXR NEEDS HTTPS': 'Нужен HTTPS для VR' };
-  new MutationObserver(() => {
-    const t = vrBtn.textContent.trim();
-    if (ru[t]) vrBtn.textContent = ru[t];
-  }).observe(vrBtn, { childList: true, characterData: true, subtree: true });
-  setTimeout(() => { const t = vrBtn.textContent.trim(); if (ru[t]) vrBtn.textContent = ru[t]; }, 300);
+  // Кнопку входа в VR добавляем, только если браузер действительно умеет immersive-vr.
+  // По http (боевой стенд без сертификата) WebXR недоступен, и вечная надпись
+  // «VR недоступен» читалась бы как поломка, а не как честное состояние. Как только
+  // сайт откроется по HTTPS, кнопка появится сама — правки кода не нужно.
+  navigator.xr?.isSessionSupported?.('immersive-vr').then((ok) => {
+    if (!ok) return;
+    const vrBtn = VRButton.createButton(renderer);
+    vrBtn.removeAttribute('style');
+    vrBtn.className = 'hud-vrbtn';
+    vrBox.appendChild(vrBtn);
+    // VRButton пишет по-английски; переводим, не мешая ему обновлять текст.
+    const ru = { 'ENTER VR': 'Войти в VR', 'EXIT VR': 'Выйти из VR', 'VR NOT SUPPORTED': 'VR недоступен',
+      'VR NOT ALLOWED': 'VR запрещён', 'WEBXR NOT AVAILABLE': 'Нужен HTTPS для VR', 'WEBXR NEEDS HTTPS': 'Нужен HTTPS для VR' };
+    new MutationObserver(() => {
+      const t = vrBtn.textContent.trim();
+      if (ru[t]) vrBtn.textContent = ru[t];
+    }).observe(vrBtn, { childList: true, characterData: true, subtree: true });
+    setTimeout(() => { const t = vrBtn.textContent.trim(); if (ru[t]) vrBtn.textContent = ru[t]; }, 300);
+  }).catch(() => {});
 
   const hud = { root, current: null, onStation: null,
     markStation(st) {

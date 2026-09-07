@@ -8,6 +8,12 @@ import { IconLab, IconPlay, IconPlus, IconVr } from '@/components/icons';
 export default function LabsView({ labs }: { labs: LabEntry[] }) {
   const [vrFor, setVrFor] = useState<LabEntry | null>(null);
   const [soon, setSoon] = useState(false);
+  // WebXR живёт только в защищённом контексте (HTTPS или localhost). Пока боевой
+  // стенд отдаётся по http, вход в VR предлагать нечестно — прячем его и говорим,
+  // чего не хватает. null — «ещё не знаем»: на сервере isSecureContext недоступен,
+  // и без этого состояния подсказка мигала бы при гидрации.
+  const [secure, setSecure] = useState<boolean | null>(null);
+  useEffect(() => { setSecure(window.isSecureContext); }, []);
   return (
     <div className="library labs">
       <div className="library-head">
@@ -17,9 +23,15 @@ export default function LabsView({ labs }: { labs: LabEntry[] }) {
         </button>
       </div>
       <p className="muted labs-lead">
-        Трёхмерные сцены, в которые можно войти с ноутбука мышью или в очках Quest.
+        Трёхмерные сцены: открываются в браузере и рассматриваются мышью.
         Наведите на предмет — появится подпись; предметы берутся руками.
       </p>
+      {secure === false && (
+        <p className="muted labs-note">
+          Вход в очках Quest появится, когда сайт откроется по HTTPS: WebXR работает
+          только на защищённом соединении. Сами сцены доступны уже сейчас.
+        </p>
+      )}
       <div className="cards">
         {labs.map((lab) => (
           <article key={lab.slug} className="sim-card lab-card">
@@ -36,9 +48,11 @@ export default function LabsView({ labs }: { labs: LabEntry[] }) {
                 <a className="btn btn-sm" href={labUrl(lab.slug)} target="_blank" rel="noopener">
                   <IconPlay size={15} />Открыть
                 </a>
-                <button type="button" className="btn btn-sm btn-ghost" onClick={() => setVrFor(lab)}>
-                  <IconVr size={16} />В VR
-                </button>
+                {secure && (
+                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => setVrFor(lab)}>
+                    <IconVr size={16} />В VR
+                  </button>
+                )}
               </div>
             </div>
           </article>
