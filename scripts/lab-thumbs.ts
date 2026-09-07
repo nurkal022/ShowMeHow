@@ -12,7 +12,8 @@ async function main(): Promise<void> {
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   try {
     for (const lab of LABS) {
-      const page = await browser.newPage({ viewport: { width: 960, height: 600 } });
+      // Локальный сервер может идти по самоподписанному https — сертификат не проверяем.
+      const page = await browser.newPage({ viewport: { width: 960, height: 600 }, ignoreHTTPSErrors: true });
       await page.goto(`${base}/lab/${lab.slug}`, { waitUntil: 'networkidle' });
       await page.addStyleTag({ content: '.hud{display:none}' });
       await page.waitForTimeout(2500);

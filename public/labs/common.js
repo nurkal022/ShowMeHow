@@ -422,11 +422,14 @@ function buildHud({ title, hint, stations, renderer }) {
     markStation(st) {
       hud.current = st;
       stBox.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.name === st.name));
+      // Кнопки действий, привязанные к станции, видны только на ней.
+      actions.querySelectorAll('button').forEach((b) => { if (b.dataset.station) b.hidden = b.dataset.station !== st.name; });
     },
-    /** Кнопка действия для мыши; в VR та же операция живёт на 3D-кнопке. */
-    action(label, fn) {
+    /** Кнопка действия для мыши; в VR та же операция живёт на 3D-кнопке. station — показывать только на этой станции. */
+    action(label, fn, station) {
       const b = document.createElement('button');
       b.type = 'button'; b.textContent = label; b.onclick = fn;
+      if (station) { b.dataset.station = station; b.hidden = hud.current ? hud.current.name !== station : false; }
       actions.appendChild(b);
       return b;
     },

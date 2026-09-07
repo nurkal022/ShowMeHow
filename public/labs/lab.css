@@ -16,6 +16,7 @@ canvas { display: block; }
 .hud-actions { grid-row: 3; justify-self: center; align-self: end; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
   background: rgba(14,18,28,.7); padding: 6px; border-radius: 999px; backdrop-filter: blur(8px); }
 .hud-actions:empty { display: none; }
+.hud button[hidden] { display: none; }
 .hud-vr { grid-row: 3; justify-self: end; align-self: end; }
 .hud button, .hud-vrbtn { font: inherit; font-size: 13px; color: #eef2f7; background: transparent; border: 1px solid transparent;
   padding: 7px 13px; border-radius: 999px; cursor: pointer; }
