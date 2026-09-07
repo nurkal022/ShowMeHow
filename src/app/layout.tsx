@@ -5,7 +5,7 @@ import { THEME_BOOT_SCRIPT } from '@/lib/theme';
 import { IconLogo } from '@/components/icons';
 
 export const metadata = {
-  title: 'Teseract',
+  title: 'Tesseract',
   description: 'Интерактивные симуляции по описанию',
 };
 
@@ -26,7 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <nav className="topnav">
           <span className="brand">
-            <span className="brand-mark"><IconLogo size={15} /></span>Teseract
+            <span className="brand-mark"><IconLogo size={15} /></span>Tesseract
           </span>
           <NavLinks user={user ? { email: user.email, role: user.role } : undefined} />
         </nav>

@@ -7,7 +7,13 @@
  */
 export type Theme = 'light' | 'dark' | 'system';
 
-export const THEME_KEY = 'teseract-theme';
+export const THEME_KEY = 'tesseract-theme';
+/**
+ * Ключ, под которым тема хранилась до исправления написания имени. Читается,
+ * пока новый пуст: иначе у всех, кто выбрал тёмную тему, она молча сбросилась
+ * бы на светлую при первом же заходе после переименования.
+ */
+export const THEME_KEY_LEGACY = 'teseract-theme';
 export const THEMES: Theme[] = ['light', 'dark', 'system'];
 
 export function isTheme(v: unknown): v is Theme {
@@ -22,7 +28,8 @@ export function resolveTheme(theme: Theme, prefersDark: boolean): 'light' | 'dar
 
 /** Скрипт, который выполняется в <head> до отрисовки тела страницы. */
 export const THEME_BOOT_SCRIPT = `(function(){try{
-var t=localStorage.getItem(${JSON.stringify(THEME_KEY)})||'light';
+var t=localStorage.getItem(${JSON.stringify(THEME_KEY)})
+  ||localStorage.getItem(${JSON.stringify(THEME_KEY_LEGACY)})||'light';
 if(t==='system')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
 document.documentElement.setAttribute('data-theme',t);
 }catch(e){document.documentElement.setAttribute('data-theme','light');}})()`;
@@ -36,7 +43,7 @@ export function applyTheme(theme: Theme): void {
 
 export function readStoredTheme(): Theme | null {
   try {
-    const raw = localStorage.getItem(THEME_KEY);
+    const raw = localStorage.getItem(THEME_KEY) ?? localStorage.getItem(THEME_KEY_LEGACY);
     return isTheme(raw) ? raw : null;
   } catch {
     return null;

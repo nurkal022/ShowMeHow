@@ -34,7 +34,7 @@ async function signUp(email: string): Promise<{ cookie: string; id: string }> {
 }
 
 beforeAll(async () => {
-  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'teseract-demo-seed-'));
+  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tesseract-demo-seed-'));
   process.env.SHOWMEHOW_DATA_DIR = dataDir;
   if (!pool) return;
   await resetSchema(pool, SCHEMA);
