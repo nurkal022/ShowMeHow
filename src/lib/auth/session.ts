@@ -64,14 +64,40 @@ export function readCookie(req: Request, name: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Пользователь с временным паролем для приложения не вошёл: строгие варианты
+ * возвращают null, и любой роут отвечает 401. Так новые роуты закрыты по
+ * умолчанию, даже если автор не вспомнил о флаге.
+ */
+function withSettledPassword(user: AuthUser | null): AuthUser | null {
+  return user && !user.mustChangePassword ? user : null;
+}
+
+async function tokenFromCookies(): Promise<string | undefined> {
+  const { cookies } = await import('next/headers');
+  const store = await cookies();
+  return store.get(SESSION_COOKIE)?.value;
+}
+
 /** Для роутов: токен берётся из заголовка запроса, а не из next/headers — так роут тестируется вызовом. */
 export async function currentUserFromRequest(req: Request): Promise<AuthUser | null> {
-  return resolveSession(readCookie(req, SESSION_COOKIE));
+  return withSettledPassword(await resolveSession(readCookie(req, SESSION_COOKIE)));
 }
 
 /** Для серверных компонентов и страниц, где Request недоступен. */
 export async function currentUserFromCookies(): Promise<AuthUser | null> {
-  const { cookies } = await import('next/headers');
-  const store = await cookies();
-  return resolveSession(store.get(SESSION_COOKIE)?.value);
+  return withSettledPassword(await resolveSession(await tokenFromCookies()));
+}
+
+/**
+ * Разрешающий вариант: пропускает и пользователя с временным паролем.
+ * Только для GET /api/me, POST /api/me/password и POST /api/auth/logout.
+ */
+export async function currentUserAllowingPasswordChange(req: Request): Promise<AuthUser | null> {
+  return resolveSession(readCookie(req, SESSION_COOKIE));
+}
+
+/** Разрешающий вариант для корневого layout: он показывает форму смены пароля. */
+export async function currentUserAllowingPasswordChangeFromCookies(): Promise<AuthUser | null> {
+  return resolveSession(await tokenFromCookies());
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { currentUserFromRequest, SESSION_COOKIE, readCookie } from '@/lib/auth/session';
+import { currentUserAllowingPasswordChange, SESSION_COOKIE, readCookie } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
 import { findUserPasswordHash, updatePassword } from '@/lib/auth/users';
 import { verifyPassword } from '@/lib/auth/password';
@@ -13,7 +13,8 @@ import crypto from 'node:crypto';
  * Текущая сессия остаётся живой, чтобы не выкидывать человека из интерфейса.
  */
 export async function POST(req: Request) {
-  const user = await currentUserFromRequest(req);
+  // Разрешающий вариант: сюда приходит человек с временным паролем.
+  const user = await currentUserAllowingPasswordChange(req);
   if (!user) return unauthorized();
   let body: { currentPassword?: string; newPassword?: string };
   try {
@@ -26,9 +27,13 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: `Новый пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов.` }, { status: 400 });
   }
-  const hash = await findUserPasswordHash(user.id);
-  if (!hash || !verifyPassword(currentPassword ?? '', hash)) {
-    return NextResponse.json({ error: 'Текущий пароль указан неверно.' }, { status: 403 });
+  // При временном пароле текущий не спрашиваем: человек только что вошёл с ним,
+  // а школьник его уже не помнит.
+  if (!user.mustChangePassword) {
+    const hash = await findUserPasswordHash(user.id);
+    if (!hash || !verifyPassword(currentPassword ?? '', hash)) {
+      return NextResponse.json({ error: 'Текущий пароль указан неверно.' }, { status: 403 });
+    }
   }
   await updatePassword(user.id, newPassword);
   const token = readCookie(req, SESSION_COOKIE);

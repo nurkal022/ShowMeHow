@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
-import { currentUserFromRequest } from '@/lib/auth/session';
+import { currentUserFromRequest, currentUserAllowingPasswordChange } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
 import { quotaStatus, QUOTA_EXHAUSTED_MESSAGE } from '@/lib/quota';
 import { getProfile, updateProfile } from '@/lib/auth/users';
 import { sanitizeDisplayName } from '@/lib/auth/prefs';
 
 export async function GET(req: Request) {
-  const user = await currentUserFromRequest(req);
+  // Разрешающий вариант: форма смены временного пароля узнаёт о флаге отсюда.
+  const user = await currentUserAllowingPasswordChange(req);
   if (!user) return unauthorized();
   const [quota, profile] = await Promise.all([quotaStatus(user), getProfile(user.id)]);
   // Текст сообщения об исчерпанной квоте живёт в серверном lib/quota.ts (там же, где

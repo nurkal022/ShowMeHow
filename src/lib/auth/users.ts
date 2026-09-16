@@ -178,10 +178,24 @@ export async function updateProfile(
   return { ...current, displayName, prefs };
 }
 
-/** Смена пароля. Все прочие сессии не трогаем — этим занимается вызывающий роут. */
+/**
+ * Смена пароля человеком. Снимает флаг временного пароля: новый пароль придумал
+ * он сам. Прочие сессии удаляет вызывающий роут.
+ */
 export async function updatePassword(userId: string, newPassword: string): Promise<void> {
-  await db().query('UPDATE users SET password_hash = $2 WHERE id = $1',
+  await db().query('UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1',
     [userId, hashPassword(newPassword)]);
+}
+
+/**
+ * Выдача временного пароля (скрипт, позже кабинет и админка). Человек обязан
+ * сменить его при входе; старые сессии удаляются тем же оператором.
+ */
+export async function setTemporaryPassword(userId: string, plain: string): Promise<void> {
+  await db().query(
+    `WITH dropped AS (DELETE FROM sessions WHERE user_id = $1)
+     UPDATE users SET password_hash = $2, must_change_password = true WHERE id = $1`,
+    [userId, hashPassword(plain)]);
 }
 
 export async function findUserPasswordHash(userId: string): Promise<string | null> {
