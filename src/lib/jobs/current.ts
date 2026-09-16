@@ -1,5 +1,6 @@
-import { hasDb } from '../db/client';
+import { db, hasDb } from '../db/client';
 import { createMemoryJobStore } from './store-memory';
+import { createPgJobStore } from './store-pg';
 import type { Job, JobStore } from './store';
 
 // Драйвер в памяти живёт на globalThis: в next dev роуты и встроенный воркер
@@ -39,7 +40,6 @@ export async function getOwnedJob(ownerId: string, id: string): Promise<Job | nu
   return job && job.ownerId === ownerId ? job : null;
 }
 
-// Временная заглушка: задача 4 заменит её драйвером createPgJobStore.
 function createPgStore(): JobStore {
-  throw new Error('драйвер заданий для Postgres ещё не подключён');
+  return createPgJobStore(db());
 }
