@@ -27,10 +27,16 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: `Новый пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов.` }, { status: 400 });
   }
-  // При временном пароле текущий не спрашиваем: человек только что вошёл с ним,
-  // а школьник его уже не помнит.
-  if (!user.mustChangePassword) {
-    const hash = await findUserPasswordHash(user.id);
+  const hash = await findUserPasswordHash(user.id);
+  if (user.mustChangePassword) {
+    // При временном пароле текущий не спрашиваем: человек только что вошёл с ним,
+    // а школьник его уже не помнит. Но оставить временный нельзя — его знают
+    // учитель и все, кто видел листок.
+    if (hash && verifyPassword(newPassword, hash)) {
+      return NextResponse.json(
+        { error: 'Новый пароль должен отличаться от временного.' }, { status: 400 });
+    }
+  } else {
     if (!hash || !verifyPassword(currentPassword ?? '', hash)) {
       return NextResponse.json({ error: 'Текущий пароль указан неверно.' }, { status: 403 });
     }

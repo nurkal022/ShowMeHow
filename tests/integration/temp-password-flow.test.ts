@@ -79,6 +79,15 @@ describe.skipIf(!pool)('временный пароль', () => {
     expect((await login(post({ identifier: 'petrov.p.sch12', password: 'мой-новый-пароль' }))).status).toBe(200);
   });
 
+  it('новый пароль, совпадающий с временным, отклоняется, флаг остаётся', async () => {
+    const cookie = await flaggedStudent();
+    const same = await changePassword(post({ newPassword: 'лиса-дом-семь' }, cookie));
+    expect(same.status).toBe(400);
+    expect((await same.json()).error).toBe('Новый пароль должен отличаться от временного.');
+    expect((await (await me(get(cookie))).json()).user.mustChangePassword).toBe(true);
+    expect((await listSims(get(cookie))).status).toBe(401);
+  });
+
   it('после снятия флага текущий пароль снова обязателен', async () => {
     const cookie = await flaggedStudent();
     await changePassword(post({ newPassword: 'мой-новый-пароль' }, cookie));
