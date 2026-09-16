@@ -5,6 +5,9 @@
  */
 export const LOGIN_RE = /^[a-z0-9][a-z0-9._-]{2,39}$/;
 
+/** Длиннее не бывает ни почта (RFC 5321), ни логин: такой ввод не ищем в базе. */
+export const MAX_IDENTIFIER_LENGTH = 254;
+
 export type Identifier = { kind: 'email'; value: string } | { kind: 'login'; value: string };
 
 export function normalizeIdentifier(raw: string): string {

@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 const WINDOW_MS = 15 * 60 * 1000;
 
 /**
@@ -37,8 +39,13 @@ export function recordFailure(key: string): void {
   attempts.set(key, fresh);
 }
 
-const idKey = (identifier: string) => `id:${identifier}`;
-const ipAllKey = (ip: string) => `ip-all:${ip}`;
+/**
+ * Идентификатор и IP приходят от клиента и могут весить мегабайты: в карту
+ * кладём их sha256, иначе поток таких запросов раздувал бы память процесса.
+ */
+const digest = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
+const idKey = (identifier: string) => `id:${digest(identifier)}`;
+const ipAllKey = (ip: string) => `ip-all:${digest(ip)}`;
 
 /**
  * Вход закрыт, если исчерпан счётчик IP или (когда идентификатор задан) его
@@ -64,4 +71,8 @@ export function recordLoginFailure(ip: string, identifier: string | null): void 
 
 export function __resetAttemptsForTests(): void {
   attempts.clear();
+}
+
+export function __attemptKeysForTests(): string[] {
+  return [...attempts.keys()];
 }

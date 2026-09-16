@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   isLimited, recordFailure, __resetAttemptsForTests,
-  isLoginBlocked, recordLoginFailure, IDENTIFIER_LIMIT, IP_LIMIT,
+  isLoginBlocked, recordLoginFailure, IDENTIFIER_LIMIT, IP_LIMIT, __attemptKeysForTests,
 } from '@/lib/auth/rate-limit';
 
 describe('rate-limit', () => {
@@ -70,5 +70,21 @@ describe('лимит входа по двум счётчикам', () => {
     expect(isLoginBlocked(IP, null)).toBe(false);
     recordLoginFailure(IP, null);
     expect(isLoginBlocked(IP, null)).toBe(true);
+  });
+});
+
+describe('ключи счётчиков', () => {
+  beforeEach(() => __resetAttemptsForTests());
+
+  it('мегабайтный идентификатор и IP не попадают в карту как есть', () => {
+    const huge = 'я'.repeat(1_000_000);
+    const hugeIp = '1'.repeat(1_000_000);
+    for (let i = 0; i < 10; i++) recordLoginFailure(hugeIp, huge);
+    const keys = __attemptKeysForTests();
+    expect(keys).toHaveLength(2);
+    for (const k of keys) expect(k.length).toBeLessThan(100);
+    // Хеш не ломает сам счётчик.
+    expect(isLoginBlocked('10.0.0.1', huge)).toBe(true);
+    expect(isLoginBlocked('10.0.0.1', huge + 'x')).toBe(false);
   });
 });

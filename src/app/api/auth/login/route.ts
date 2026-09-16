@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { findUserByIdentifier, type AuthUser } from '@/lib/auth/users';
-import { normalizeIdentifier } from '@/lib/auth/identifier';
+import { normalizeIdentifier, MAX_IDENTIFIER_LENGTH } from '@/lib/auth/identifier';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { createSession, sessionTtlMs } from '@/lib/auth/session';
 import { isLoginBlocked, recordLoginFailure } from '@/lib/auth/rate-limit';
@@ -23,8 +23,14 @@ export async function POST(req: Request) {
   // Старые клиенты присылают поле email — принимаем его как идентификатор.
   const raw = body.identifier ?? body.email;
   const password = body.password;
+  // Заголовок клиент подделывает как угодно — счётчик IP лишь первый, слабый барьер.
+  // Настоящая защита — счётчик идентификатора; доверие к прокси (SHOWMEHOW_TRUST_PROXY)
+  // появится в цикле 1.
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'local';
-  const key = typeof raw === 'string' && raw.trim() ? normalizeIdentifier(raw) : null;
+  const normalized = typeof raw === 'string' ? normalizeIdentifier(raw) : '';
+  // Пустой или сверхдлинный ввод аккаунту принадлежать не может: такой запрос
+  // считается неудачей только по IP и до базы не доходит.
+  const key = normalized && normalized.length <= MAX_IDENTIFIER_LENGTH ? normalized : null;
 
   // Лимит проверяем ДО обращения к базе, но не расходуем на самой проверке:
   // расход происходит только при подтверждённой неудаче, см. fail() ниже.
