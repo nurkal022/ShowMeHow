@@ -26,9 +26,10 @@ export const QUOTA_EXHAUSTED_MESSAGE = quotaExhaustedMessage(TRIAL_LIMIT, false)
  * Израсходованное считается по журналу заданий, а не отдельным счётчиком в users:
  * два источника правды рано или поздно разойдутся. Тратят квоту только успешно
  * завершённые генерации — отменённые и упавшие не считаются. Лимит зависит от
- * членств (см. generationLimit).
+ * членств (см. generationLimit). Членства обязательны: забытый аргумент молча
+ * занизил бы лимит учителя до пробного.
  */
-export async function quotaStatus(user: AuthUser, memberships: Membership[] = []): Promise<QuotaStatus> {
+export async function quotaStatus(user: AuthUser, memberships: Membership[]): Promise<QuotaStatus> {
   const limit = generationLimit(user, memberships);
   if (limit === null) {
     return { limit: null, used: 0, remaining: null };

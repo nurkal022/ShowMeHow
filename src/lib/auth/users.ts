@@ -126,11 +126,6 @@ export async function findUserByIdentifier(raw: string): Promise<StoredUser | nu
   return r ? { ...toAuthUser(r), passwordHash: r.password_hash, disabledAt: r.disabled_at } : null;
 }
 
-export async function findUserById(id: string): Promise<AuthUser | null> {
-  const { rows } = await db().query<UserRow>(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1`, [id]);
-  return rows[0] ? toAuthUser(rows[0]) : null;
-}
-
 /** Для резолва сессии: заблокированный пользователь не существует для приложения. */
 export async function findActiveUserById(id: string): Promise<AuthUser | null> {
   const { rows } = await db().query<UserRow>(

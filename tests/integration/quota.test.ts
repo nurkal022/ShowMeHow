@@ -37,7 +37,7 @@ describe.skipIf(!pool)('квота', () => {
     for (let i = 0; i < TRIAL_LIMIT; i++) await addJob(u.id, 'done');
     await addJob(u.id, 'cancelled');
     await addJob(u.id, 'error');
-    expect(await quotaStatus(u)).toEqual({ limit: TRIAL_LIMIT, used: TRIAL_LIMIT, remaining: 0 });
+    expect(await quotaStatus(u, [])).toEqual({ limit: TRIAL_LIMIT, used: TRIAL_LIMIT, remaining: 0 });
   });
 
   it('у админа лимита нет', async () => {
@@ -45,7 +45,7 @@ describe.skipIf(!pool)('квота', () => {
     const admin = await createUser('boss@example.com', 'пароль123');
     delete process.env.SHOWMEHOW_ADMIN_EMAIL;
     await addJob(admin.id, 'done');
-    expect(await quotaStatus(admin)).toEqual({ limit: null, used: 0, remaining: null });
+    expect(await quotaStatus(admin, [])).toEqual({ limit: null, used: 0, remaining: null });
   });
 
   it('исчерпанная квота даёт 403 из /api/generate и не создаёт задания', async () => {
