@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  navSections, canGenerate, sessionKind, generationLimit, hasStaffRole, isPlatformAdmin,
+  navSections, homeRedirect, canGenerate, sessionKind, generationLimit, hasStaffRole, isPlatformAdmin,
   ALL_NAV_SECTIONS, TRIAL_LIMIT,
 } from '@/lib/org/policy';
 import { resolveOrgSettings, type OrgSettings } from '@/lib/org/settings';
@@ -102,6 +102,24 @@ describe('разделы навигации', () => {
     expect(keys(navSections(USER, [member('student')]))).toEqual(['library', 'labs']);
     expect(keys(navSections(USER, [member('student', { studentsCanGenerate: true })])))
       .toEqual(['create', 'library', 'labs']);
+  });
+});
+
+describe('посадочная страница «/»', () => {
+  it('без права генерации — в библиотеку', () => {
+    expect(homeRedirect(USER, [member('student')])).toBe('/library');
+  });
+  it('с правом генерации — остаёмся на «/»', () => {
+    expect(homeRedirect(USER, [])).toBeNull();
+    expect(homeRedirect(USER, [member('teacher')])).toBeNull();
+    expect(homeRedirect(ADMIN, [member('student')])).toBeNull();
+    expect(homeRedirect(USER, [member('student', { studentsCanGenerate: true })])).toBeNull();
+  });
+  it('цель переадресации — видимый раздел, отличный от «/», петли нет', () => {
+    const memberships = [member('student')];
+    const target = homeRedirect(USER, memberships);
+    expect(target).not.toBe('/');
+    expect(navSections(USER, memberships).map((s) => s.href)).toContain(target);
   });
 });
 

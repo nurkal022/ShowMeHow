@@ -5,7 +5,7 @@ import { quotaStatus, quotaExhaustedMessage } from '@/lib/quota';
 import { getProfile, updateProfile } from '@/lib/auth/users';
 import { sanitizeDisplayName } from '@/lib/auth/prefs';
 import { listMemberships } from '@/lib/org/access';
-import { hasStaffRole } from '@/lib/org/policy';
+import { canGenerate, hasStaffRole } from '@/lib/org/policy';
 
 export async function GET(req: Request) {
   // Разрешающий вариант: форма смены временного пароля узнаёт о флаге отсюда.
@@ -24,6 +24,8 @@ export async function GET(req: Request) {
     quota,
     profile,
     prefs: profile?.prefs ?? {},
+    // Клиентские страницы (пустая библиотека) прячут по нему призыв «Создать».
+    canGenerate: canGenerate(user, memberships),
     ...(quotaMessage ? { quotaMessage } : {}),
   });
 }

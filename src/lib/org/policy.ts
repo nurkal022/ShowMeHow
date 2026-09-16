@@ -74,3 +74,12 @@ export function navSections(user: PolicyUser, memberships: Membership[]): NavSec
   const allowCreate = canGenerate(user, memberships);
   return ALL_NAV_SECTIONS.filter((s) => s.key !== 'create' || allowCreate);
 }
+
+/**
+ * Куда отправить с «/» (там форма генерации). Ученик без права генерации
+ * попадает в библиотеку: навигация раздел «Создать» ему уже не показывает.
+ * null — остаться на «/». Библиотека сама никуда не переадресует, петли нет.
+ */
+export function homeRedirect(user: PolicyUser, memberships: Membership[]): string | null {
+  return canGenerate(user, memberships) ? null : '/library';
+}

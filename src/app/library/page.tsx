@@ -13,6 +13,9 @@ export default function Library() {
   const [error, setError] = useState('');
   const [installing, setInstalling] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Пока ответ не пришёл, кнопку «Создать» не показываем: ученику без права
+  // генерации она вела бы на форму, которая всё равно откажет.
+  const [canCreate, setCanCreate] = useState(false);
 
   async function load() {
     try {
@@ -28,6 +31,12 @@ export default function Library() {
     }
   }
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    fetch('/api/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => setCanCreate(body?.canGenerate === true))
+      .catch(() => setCanCreate(false));
+  }, []);
 
   async function remove(id: string) {
     if (!confirm('Удалить симуляцию?')) return;
@@ -120,7 +129,7 @@ export default function Library() {
             <p className="muted">Опишите явление — симуляция появится здесь.</p>
           </div>
           <div className="row">
-            <a className="btn btn-primary" href="/">Создать симуляцию</a>
+            {canCreate && <a className="btn btn-primary" href="/">Создать симуляцию</a>}
             <button className="btn" onClick={installDemos} disabled={installing}>
               {installing ? 'Возвращаю…' : 'Вернуть примеры'}
             </button>

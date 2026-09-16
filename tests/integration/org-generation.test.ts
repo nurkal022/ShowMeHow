@@ -94,6 +94,16 @@ describe.skipIf(!pool)('генерация и квота в организаци
     expect(await r.json()).toEqual({ error: GENERATION_FORBIDDEN_MESSAGE });
   });
 
+  it('/api/me сообщает право на генерацию: библиотека прячет по нему кнопку «Создать»', async () => {
+    const canGen = async (u: AuthUser) =>
+      (await (await me(new Request('http://t', { headers: { cookie: await cookieFor(u) } }))).json()).canGenerate;
+    expect(await canGen(student)).toBe(false);
+    expect(await canGen(teacher)).toBe(true);
+    expect(await canGen(await createUser('solo@example.com', 'пароль123'))).toBe(true);
+    await updateOrgSettings(org.id, { studentsCanGenerate: true });
+    expect(await canGen(student)).toBe(true);
+  });
+
   it('ученик проходит, когда организация разрешила генерацию', async () => {
     await updateOrgSettings(org.id, { studentsCanGenerate: true });
     const res = await generate(await cookieFor(student));
