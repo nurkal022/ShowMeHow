@@ -13,9 +13,15 @@ export function safeNextPath(raw: string | null | undefined): string {
   return raw;
 }
 
+/** Вход принимает почту или логин; регистрация — только почту, как раньше. */
+export function authRequestBody(mode: 'login' | 'register', identifier: string, password: string):
+  { identifier: string; password: string } | { email: string; password: string } {
+  return mode === 'login' ? { identifier, password } : { email: identifier, password };
+}
+
 export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
   const search = useSearchParams();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -27,7 +33,7 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
     try {
       const res = await fetch(`/api/auth/${isLogin ? 'login' : 'register'}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(authRequestBody(mode, identifier, password)),
       });
       if (res.ok) {
         // Полная перезагрузка, а не router.push: клиентский роутер Next кэширует
@@ -51,10 +57,18 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
       <p className="muted">
         {isLogin ? 'Войдите, чтобы открыть свою библиотеку.' : 'Десять генераций в пробной версии.'}
       </p>
-      <label>Почта
-        <input className="input" type="email" value={email} autoComplete="email" required
-          onChange={(e) => setEmail(e.target.value)} />
-      </label>
+      {isLogin ? (
+        <label>Почта или логин
+          <input className="input" type="text" value={identifier} autoComplete="username" required
+            autoCapitalize="none" spellCheck={false}
+            onChange={(e) => setIdentifier(e.target.value)} />
+        </label>
+      ) : (
+        <label>Почта
+          <input className="input" type="email" value={identifier} autoComplete="email" required
+            onChange={(e) => setIdentifier(e.target.value)} />
+        </label>
+      )}
       <label>Пароль
         <input className="input" type="password" value={password} required minLength={8}
           autoComplete={isLogin ? 'current-password' : 'new-password'}

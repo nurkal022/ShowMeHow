@@ -1,10 +1,12 @@
 import './globals.css';
 import NavLinks from '@/components/NavLinks';
+import ForcePasswordChange from '@/components/ForcePasswordChange';
 import { currentUserAllowingPasswordChangeFromCookies } from '@/lib/auth/session';
 import { userContact, userLabel } from '@/lib/auth/identifier';
+import { listMemberships } from '@/lib/org/access';
+import { ALL_NAV_SECTIONS, navSections } from '@/lib/org/policy';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
 import { IconLogo } from '@/components/icons';
-import ForcePasswordChange from '@/components/ForcePasswordChange';
 
 export const metadata = {
   title: 'Tesseract',
@@ -15,6 +17,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Разрешающий вариант: только layout узнаёт о временном пароле и подменяет страницу.
   const user = await currentUserAllowingPasswordChangeFromCookies();
   const mustChangePassword = !!user?.mustChangePassword;
+  // Разделы считаются на сервере по членствам; без входа видны все, как раньше.
+  const sections = user && !mustChangePassword
+    ? navSections(user, await listMemberships(user.id))
+    : [...ALL_NAV_SECTIONS];
   return (
     // data-theme проставляет скрипт ниже до отрисовки, поэтому значение на сервере
     // и на клиенте расходится намеренно — предупреждение о гидрации здесь ложное.
@@ -33,7 +39,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <span className="brand-mark"><IconLogo size={15} /></span>Tesseract
           </span>
           {!mustChangePassword && (
-            <NavLinks user={user ? { label: userContact(user), role: user.role } : undefined} />
+            <NavLinks sections={sections}
+              user={user ? { label: userContact(user), role: user.role } : undefined} />
           )}
         </nav>
         <main>

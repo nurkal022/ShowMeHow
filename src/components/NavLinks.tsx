@@ -4,12 +4,19 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { IconLab, IconLibrary, IconLogout, IconMonitor, IconMoon, IconPlus, IconSun, IconUser } from './icons';
 import { applyTheme, readStoredTheme, storeTheme, type Theme } from '@/lib/theme';
+import type { NavSection, NavSectionKey } from '@/lib/org/policy';
 
-const LINKS = [
-  { href: '/', label: 'Создать', Icon: IconPlus },
-  { href: '/library', label: 'Библиотека', Icon: IconLibrary },
-  { href: '/labs', label: 'Лаборатории', Icon: IconLab },
-];
+// Иконки живут на клиенте: компонент нельзя передать из серверного layout.
+const ICONS: Record<NavSectionKey, typeof IconPlus> = {
+  create: IconPlus,
+  library: IconLibrary,
+  labs: IconLab,
+};
+
+export function isSectionActive(href: string, pathname: string | null): boolean {
+  if (!pathname) return false;
+  return href === '/' ? pathname === '/' : pathname.startsWith(href);
+}
 
 const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof IconSun }[] = [
   { value: 'light', label: 'Светлая', Icon: IconSun },
@@ -19,7 +26,7 @@ const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof IconSun }[] = [
 
 interface NavUser { label: string; role: string }
 
-export default function NavLinks({ user }: { user?: NavUser }) {
+export default function NavLinks({ sections, user }: { sections: NavSection[]; user?: NavUser }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -67,10 +74,10 @@ export default function NavLinks({ user }: { user?: NavUser }) {
   return (
     <>
       <div className="navlinks">
-        {LINKS.map(({ href, label, Icon }) => {
-          const active = href === '/' ? pathname === '/' : pathname?.startsWith(href);
+        {sections.map(({ key, href, label }) => {
+          const Icon = ICONS[key];
           return (
-            <Link key={href} href={href} className={active ? 'active' : ''}>
+            <Link key={key} href={href} className={isSectionActive(href, pathname) ? 'active' : ''}>
               <Icon size={17} /><span style={{ marginLeft: 7 }}>{label}</span>
             </Link>
           );

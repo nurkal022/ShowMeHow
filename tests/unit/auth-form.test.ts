@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { safeNextPath } from '@/components/AuthForm';
+import { safeNextPath, authRequestBody } from '@/components/AuthForm';
 
 describe('safeNextPath', () => {
   it('пропускает обычный внутренний путь', () => {
@@ -23,5 +23,16 @@ describe('safeNextPath', () => {
     expect(safeNextPath(null)).toBe('/');
     expect(safeNextPath(undefined)).toBe('/');
     expect(safeNextPath('')).toBe('/');
+  });
+});
+
+describe('authRequestBody', () => {
+  it('вход отправляет identifier', () => {
+    expect(authRequestBody('login', 'ivanov.i.sch12', 'пароль123'))
+      .toEqual({ identifier: 'ivanov.i.sch12', password: 'пароль123' });
+  });
+  it('регистрация по-прежнему отправляет email', () => {
+    expect(authRequestBody('register', 'a@example.com', 'пароль123'))
+      .toEqual({ email: 'a@example.com', password: 'пароль123' });
   });
 });
