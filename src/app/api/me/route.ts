@@ -1,19 +1,24 @@
 import { NextResponse } from 'next/server';
 import { currentUserFromRequest, currentUserAllowingPasswordChange } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
-import { quotaStatus, QUOTA_EXHAUSTED_MESSAGE } from '@/lib/quota';
+import { quotaStatus, quotaExhaustedMessage } from '@/lib/quota';
 import { getProfile, updateProfile } from '@/lib/auth/users';
 import { sanitizeDisplayName } from '@/lib/auth/prefs';
+import { listMemberships } from '@/lib/org/access';
+import { hasStaffRole } from '@/lib/org/policy';
 
 export async function GET(req: Request) {
   // Разрешающий вариант: форма смены временного пароля узнаёт о флаге отсюда.
   const user = await currentUserAllowingPasswordChange(req);
   if (!user) return unauthorized();
-  const [quota, profile] = await Promise.all([quotaStatus(user), getProfile(user.id)]);
+  const memberships = await listMemberships(user.id);
+  const [quota, profile] = await Promise.all([quotaStatus(user, memberships), getProfile(user.id)]);
   // Текст сообщения об исчерпанной квоте живёт в серверном lib/quota.ts (там же, где
   // импорт 'pg') — клиентский компонент не может импортировать его напрямую, поэтому
   // строку отдаём в ответе, и только когда остаток действительно нулевой.
-  const quotaMessage = quota.remaining === 0 ? QUOTA_EXHAUSTED_MESSAGE : undefined;
+  const quotaMessage = quota.limit !== null && quota.remaining === 0
+    ? quotaExhaustedMessage(quota.limit, hasStaffRole(memberships))
+    : undefined;
   return NextResponse.json({
     user,
     quota,

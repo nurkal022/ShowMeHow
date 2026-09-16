@@ -7,7 +7,7 @@ import type { QuotaStatus } from '@/lib/quota';
 import { applyTheme, storeTheme, readStoredTheme, type Theme } from '@/lib/theme';
 import { IconKey, IconSliders } from './icons';
 
-interface Props { profile: UserProfile; quota: QuotaStatus }
+interface Props { profile: UserProfile; quota: QuotaStatus; orgQuota: boolean }
 
 const THEME_LABELS: [Theme, string][] = [['light', 'Светлая'], ['dark', 'Тёмная'], ['system', 'Системная']];
 const QUALITY_LABELS: [NonNullable<UserPrefs['quality']>, string][] =
@@ -31,7 +31,7 @@ function Segmented<T extends string>({ value, options, onChange }: {
   );
 }
 
-export default function ProfileView({ profile, quota }: Props) {
+export default function ProfileView({ profile, quota, orgQuota }: Props) {
   const [name, setName] = useState(profile.displayName ?? '');
   const [prefs, setPrefs] = useState<UserPrefs>(profile.prefs);
   const [saved, setSaved] = useState(false);
@@ -97,7 +97,7 @@ export default function ProfileView({ profile, quota }: Props) {
             <strong>Генерации</strong>
             <span>{quota.limit === null
               ? 'Без ограничений'
-              : `${quota.used} из ${quota.limit} в пробной версии`}</span>
+              : `${quota.used} из ${quota.limit} ${orgQuota ? 'по лимиту организации' : 'в пробной версии'}`}</span>
           </div>
         </div>
         {quota.limit !== null && (

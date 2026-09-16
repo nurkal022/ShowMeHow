@@ -3,11 +3,13 @@ import {
   createJob, appendEvent, markCancelled, isCancelled, setStatus,
 } from '@/lib/jobs';
 import { reserveUser, releaseUser, submit, queuePosition } from '@/lib/limits';
-import { quotaStatus, QUOTA_EXHAUSTED_MESSAGE } from '@/lib/quota';
+import { quotaStatus, quotaExhaustedMessage } from '@/lib/quota';
 import { makeCtx, runPipeline, CancelledError } from '@/lib/pipeline/run';
 import { activeProvider, resolveMode, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
+import { listMemberships } from '@/lib/org/access';
+import { canGenerate, hasStaffRole, GENERATION_FORBIDDEN_MESSAGE } from '@/lib/org/policy';
 import type { QualityMode } from '@/lib/types';
 
 export const maxDuration = 600;
@@ -22,6 +24,11 @@ interface GenerateInput {
 export async function POST(req: Request) {
   const user = await currentUserFromRequest(req);
   if (!user) return unauthorized();
+  // Право проверяется до резервации слота: ученику без разрешения нечего занимать.
+  const memberships = await listMemberships(user.id);
+  if (!canGenerate(user, memberships)) {
+    return NextResponse.json({ error: GENERATION_FORBIDDEN_MESSAGE }, { status: 403 });
+  }
   const { prompt, imageDataUrl, mode: bodyMode } =
     (await req.json()) as {
       prompt: string; imageDataUrl?: string; mode?: QualityMode;
@@ -40,10 +47,11 @@ export async function POST(req: Request) {
   }
   let jobId = '';
   try {
-    const quota = await quotaStatus(user);
-    if (quota.remaining !== null && quota.remaining <= 0) {
+    const quota = await quotaStatus(user, memberships);
+    if (quota.limit !== null && quota.remaining !== null && quota.remaining <= 0) {
       releaseUser(user.id);
-      return NextResponse.json({ error: QUOTA_EXHAUSTED_MESSAGE }, { status: 403 });
+      return NextResponse.json(
+        { error: quotaExhaustedMessage(quota.limit, hasStaffRole(memberships)) }, { status: 403 });
     }
     const mode = resolveMode(bodyMode);
     const job = await createJob(user.id, { prompt, mode, hasImage: !!imageDataUrl });

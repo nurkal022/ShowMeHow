@@ -33,6 +33,11 @@ vi.mock('@/lib/quota', async (orig) => ({
   ...(await orig<typeof import('@/lib/quota')>()),
   quotaStatus: async () => ({ limit: 10, used: 0, remaining: 10 }),
 }));
+// Роут /api/generate читает членства из базы; в юнит-тесте их нет — пользователь без организаций.
+vi.mock('@/lib/org/access', async (orig) => ({
+  ...(await orig<typeof import('@/lib/org/access')>()),
+  listMemberships: async () => [],
+}));
 vi.mock('@/lib/pipeline/run', async (orig) => ({
   ...(await orig<typeof import('@/lib/pipeline/run')>()),
   makeCtx: () => ({}),

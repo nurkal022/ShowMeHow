@@ -3,6 +3,8 @@ import { makeCtx, refineExisting } from '@/lib/pipeline/run';
 import { getArtifact } from '@/lib/storage';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
+import { listMemberships } from '@/lib/org/access';
+import { canGenerate, GENERATION_FORBIDDEN_MESSAGE } from '@/lib/org/policy';
 
 function isInvalidSegment(e: unknown): boolean {
   return e instanceof Error && e.message.includes('invalid path segment');
@@ -11,6 +13,11 @@ function isInvalidSegment(e: unknown): boolean {
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await currentUserFromRequest(req);
   if (!user) return unauthorized();
+  // Доработка — тоже работа модели: ученику без разрешения она закрыта так же,
+  // как генерация. Проверка идёт до поиска симуляции и ничего о ней не выдаёт.
+  if (!canGenerate(user, await listMemberships(user.id))) {
+    return NextResponse.json({ error: GENERATION_FORBIDDEN_MESSAGE }, { status: 403 });
+  }
   const { id } = await params;
   const { instruction } = await req.json();
   // Чужая и несуществующая симуляции дают 404, как во всех остальных роутах; попытка
