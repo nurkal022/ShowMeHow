@@ -15,6 +15,7 @@
     "seed": "tsx scripts/seed-demos.ts",
     "migrate": "tsx scripts/migrate.ts",
     "migrate:data": "tsx scripts/migrate-to-db.ts",
+    "org": "tsx scripts/org.ts",
     "demos:thumbs": "tsx scripts/demo-thumbs.ts",
     "labs:thumbs": "tsx scripts/lab-thumbs.ts"
   },
