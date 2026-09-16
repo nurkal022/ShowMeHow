@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { db, closeDb } from '../src/lib/db/client';
 import { applyMigrations } from './migrate';
-import { createUser, findUserByEmail } from '../src/lib/auth/users';
+import { createUser, findUserByIdentifier } from '../src/lib/auth/users';
 import { dataDir } from '../src/lib/settings';
 import type { SimulationMeta } from '../src/lib/types';
 
@@ -17,7 +17,7 @@ async function ensureAdmin(): Promise<string> {
   if (!email || !password) {
     throw new Error('Задайте SHOWMEHOW_ADMIN_EMAIL и SHOWMEHOW_ADMIN_PASSWORD');
   }
-  const existing = await findUserByEmail(email);
+  const existing = await findUserByIdentifier(email);
   if (existing) return existing.id;
   return (await createUser(email, password)).id;
 }

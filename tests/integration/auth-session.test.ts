@@ -3,7 +3,7 @@ import type { Pool } from 'pg';
 import { testDb, resetSchema } from '../db';
 import { applyMigrations } from '../../scripts/migrate';
 import { closeDb } from '@/lib/db/client';
-import { createUser, findUserByEmail, normalizeEmail, roleForEmail, EmailTakenError } from '@/lib/auth/users';
+import { createUser, findUserByIdentifier, normalizeEmail, roleForEmail, EmailTakenError } from '@/lib/auth/users';
 import { createSession, resolveSession, destroySession, readCookie, SESSION_COOKIE } from '@/lib/auth/session';
 
 const SCHEMA = 'auth_session_test';
@@ -68,9 +68,9 @@ describe.skipIf(!pool)('пользователи и сессии', () => {
     expect(await resolveSession('такого-нет')).toBeNull();
   });
 
-  it('пароль проверяется через findUserByEmail', async () => {
+  it('пароль проверяется через findUserByIdentifier', async () => {
     await createUser('d@example.com', 'пароль123');
-    const found = await findUserByEmail('D@Example.com');
+    const found = await findUserByIdentifier('D@Example.com');
     expect(found?.passwordHash.startsWith('scrypt$')).toBe(true);
   });
 });

@@ -17,7 +17,7 @@ const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof IconSun }[] = [
   { value: 'system', label: 'Как в системе', Icon: IconMonitor },
 ];
 
-interface NavUser { email: string; role: string }
+interface NavUser { label: string; role: string }
 
 export default function NavLinks({ user }: { user?: NavUser }) {
   const pathname = usePathname();
@@ -80,12 +80,12 @@ export default function NavLinks({ user }: { user?: NavUser }) {
         <div className="account" ref={boxRef}>
           <button type="button" className="avatar" aria-haspopup="menu" aria-expanded={open}
             aria-label="Меню аккаунта" onClick={() => setOpen((v) => !v)}>
-            {user.email.slice(0, 1)}
+            {user.label.slice(0, 1)}
           </button>
           {open && (
             <div className="menu" role="menu">
               <div className="menu-head">
-                <strong>{user.email}</strong>
+                <strong>{user.label}</strong>
                 <span>{user.role === 'admin' ? 'Администратор' : 'Пользователь'}</span>
               </div>
               <Link href="/profile" className="menu-item" role="menuitem" onClick={() => setOpen(false)}>

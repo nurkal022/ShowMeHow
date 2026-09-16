@@ -15,12 +15,11 @@ import type { PipelineEvent } from '@/lib/types';
 
 // В этих тестах роуты вызываются напрямую, без базы и cookie — резолвер сессии
 // подменяется пользователем, которого тест выставляет через session.current.
-const TEST_USER: AuthUser = {
-  id: '11111111-1111-1111-1111-111111111111', email: 'a@t', role: 'user',
-};
-const OTHER_USER: AuthUser = {
-  id: '22222222-2222-2222-2222-222222222222', email: 'b@t', role: 'user',
-};
+function testUser(id: string, email: string): AuthUser {
+  return { id, email, login: null, displayName: null, role: 'user', mustChangePassword: false };
+}
+const TEST_USER: AuthUser = testUser('11111111-1111-1111-1111-111111111111', 'a@t');
+const OTHER_USER: AuthUser = testUser('22222222-2222-2222-2222-222222222222', 'b@t');
 const session = vi.hoisted(() => ({ current: null as AuthUser | null }));
 vi.mock('@/lib/auth/session', async (orig) => ({
   ...(await orig<typeof import('@/lib/auth/session')>()),
@@ -207,8 +206,8 @@ describe('отмена задания, поднятого из очереди', 
   it('не освобождает третий слот', async () => {
     const users: AuthUser[] = [
       TEST_USER, OTHER_USER,
-      { id: '33333333-3333-3333-3333-333333333333', email: 'c@t', role: 'user' },
-      { id: '44444444-4444-4444-4444-444444444444', email: 'd@t', role: 'user' },
+      testUser('33333333-3333-3333-3333-333333333333', 'c@t'),
+      testUser('44444444-4444-4444-4444-444444444444', 'd@t'),
     ];
     const started: string[] = [];
     const ids: string[] = [];

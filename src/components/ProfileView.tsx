@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import type { UserProfile } from '@/lib/auth/users';
+import { userContact, userLabel } from '@/lib/auth/identifier';
 import type { UserPrefs } from '@/lib/auth/prefs';
 import type { QuotaStatus } from '@/lib/quota';
 import { applyTheme, storeTheme, readStoredTheme, type Theme } from '@/lib/theme';
@@ -58,7 +59,9 @@ export default function ProfileView({ profile, quota }: Props) {
     setTheme(next); storeTheme(next); applyTheme(next); setPref('theme', next);
   }
 
-  const initial = (profile.displayName || profile.email).slice(0, 1);
+  const label = userLabel(profile);
+  const contact = userContact(profile);
+  const initial = label.slice(0, 1);
   const usedPct = quota.limit ? Math.min(100, Math.round((quota.used / quota.limit) * 100)) : 0;
 
   return (
@@ -74,9 +77,10 @@ export default function ProfileView({ profile, quota }: Props) {
         <div className="row">
           <div className="avatar-lg">{initial}</div>
           <div className="row-label">
-            <strong>{profile.displayName || profile.email}</strong>
+            <strong>{label}</strong>
             <span>
-              {profile.displayName ? `${profile.email} · ` : ''}
+              {/* Без имени подписью уже служит почта или логин — второй раз её не повторяем. */}
+              {profile.displayName && contact ? `${contact} · ` : ''}
               {profile.role === 'admin' ? 'администратор' : 'пользователь'}
             </span>
           </div>

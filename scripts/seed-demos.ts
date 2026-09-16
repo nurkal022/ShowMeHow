@@ -1,7 +1,7 @@
 import { installDemos } from '../src/lib/demos';
 import { closeBrowser } from '../src/lib/renderer';
 import { closeDb } from '../src/lib/db/client';
-import { findUserByEmail } from '../src/lib/auth/users';
+import { findUserByIdentifier } from '../src/lib/auth/users';
 
 // Владелец больше не заглушка: демки устанавливаются существующему пользователю,
 // почта которого передаётся аргументом (npm run seed -- owner@example.com).
@@ -10,7 +10,7 @@ async function main() {
   if (!email) {
     throw new Error('укажите почту владельца: npm run seed -- owner@example.com');
   }
-  const user = await findUserByEmail(email);
+  const user = await findUserByIdentifier(email);
   if (!user) {
     throw new Error(`пользователь с почтой ${email} не найден`);
   }

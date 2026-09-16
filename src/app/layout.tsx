@@ -1,6 +1,7 @@
 import './globals.css';
 import NavLinks from '@/components/NavLinks';
 import { currentUserFromCookies } from '@/lib/auth/session';
+import { userContact } from '@/lib/auth/identifier';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
 import { IconLogo } from '@/components/icons';
 
@@ -28,7 +29,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <span className="brand">
             <span className="brand-mark"><IconLogo size={15} /></span>Tesseract
           </span>
-          <NavLinks user={user ? { email: user.email, role: user.role } : undefined} />
+          <NavLinks user={user ? { label: userContact(user), role: user.role } : undefined} />
         </nav>
         <main>{children}</main>
       </body>
