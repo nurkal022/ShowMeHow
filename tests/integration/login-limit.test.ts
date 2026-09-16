@@ -39,11 +39,18 @@ describe.skipIf(!pool)('класс за одним IP', () => {
     expect((await login(post({ identifier: 's30.sch12', password: 'пароль123' }))).status).toBe(200);
   });
 
-  it('пятьдесят входов в несуществующие аккаунты закрывают вход и верному паролю', async () => {
+  it('11-я попытка входа в существующий аккаунт блокируется', async () => {
     await createLoginUser({ login: 'real.sch12', displayName: null, password: 'пароль123', mustChangePassword: false });
-    for (let i = 0; i < 50; i++) {
-      expect((await login(post({ identifier: `ghost${i}`, password: 'пароль123' }))).status).toBe(401);
+    for (let i = 0; i < 10; i++) {
+      expect((await login(post({ identifier: 'real.sch12', password: 'опечатка1' }))).status).toBe(401);
     }
     expect((await login(post({ identifier: 'real.sch12', password: 'пароль123' }))).status).toBe(429);
+  });
+
+  it('11-я попытка с несуществующим логином блокируется так же, как с существующим', async () => {
+    for (let i = 0; i < 10; i++) {
+      expect((await login(post({ identifier: 'ghost.sch12', password: 'пароль123' }))).status).toBe(401);
+    }
+    expect((await login(post({ identifier: 'ghost.sch12', password: 'пароль123' }))).status).toBe(429);
   });
 });

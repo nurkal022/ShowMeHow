@@ -30,18 +30,18 @@ export async function POST(req: Request) {
       { error: 'Слишком много попыток входа. Попробуйте через пятнадцать минут.' }, { status: 429 });
   }
 
-  const fail = (accountExists: boolean) => {
-    recordLoginFailure(ip, key, accountExists);
+  const fail = () => {
+    recordLoginFailure(ip, key);
     return NextResponse.json({ error: WRONG }, { status: 401 });
   };
 
-  if (key === null || !password) return fail(false);
+  if (key === null || !password) return fail();
 
   const found = await findUserByIdentifier(key);
   // Пароль сверяем всегда — даже когда аккаунт не найден, тогда против DUMMY_PASSWORD_HASH.
   // Результат в этом случае не имеет значения, важно лишь потратить то же время.
   const passwordOk = verifyPassword(password, found?.passwordHash ?? DUMMY_PASSWORD_HASH);
-  if (!found || !passwordOk) return fail(found !== null);
+  if (!found || !passwordOk) return fail();
 
   const token = await createSession(found.id);
   const { passwordHash: _ph, disabledAt: _da, ...user } = found;

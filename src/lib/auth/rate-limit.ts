@@ -1,9 +1,10 @@
 const WINDOW_MS = 15 * 60 * 1000;
 
-/** Неверный пароль к одному существующему аккаунту. */
+/**
+ * Неверный пароль к одному идентификатору — считается одинаково для существующего
+ * и несуществующего аккаунта, иначе разница между 401 и 429 сама стала бы оракулом.
+ */
 export const IDENTIFIER_LIMIT = 10;
-/** Входы в несуществующие аккаунты с одного IP — перебор логинов. */
-export const UNKNOWN_IP_LIMIT = 50;
 /**
  * Любые неудачи с одного IP. Школа выходит в интернет через один адрес, поэтому
  * порог высокий: класс с опечатками до него не доходит.
@@ -37,28 +38,28 @@ export function recordFailure(key: string): void {
 }
 
 const idKey = (identifier: string) => `id:${identifier}`;
-const ipUnknownKey = (ip: string) => `ip-unknown:${ip}`;
 const ipAllKey = (ip: string) => `ip-all:${ip}`;
 
 /**
- * Вход закрыт, если исчерпан счётчик идентификатора или любой счётчик IP.
- * Исчерпанный IP закрывает и верные входы: иначе перебор одного частого пароля
- * по списку логинов продолжал бы находить совпадения (неудачи — 429, успехи — 200).
+ * Вход закрыт, если исчерпан счётчик IP или (когда идентификатор задан) его
+ * собственный счётчик. Исчерпанный IP закрывает и верные входы: иначе перебор
+ * одного частого пароля по списку логинов продолжал бы находить совпадения
+ * (неудачи — 429, успехи — 200).
  */
 export function isLoginBlocked(ip: string, identifier: string | null): boolean {
   return isLimited(ipAllKey(ip), IP_LIMIT)
-    || isLimited(ipUnknownKey(ip), UNKNOWN_IP_LIMIT)
     || (identifier !== null && isLimited(idKey(identifier), IDENTIFIER_LIMIT));
 }
 
 /**
- * accountExists сообщает только вызывающий роут; клиент видит одинаковый 401
- * в обоих случаях, поэтому разделение счётчиков оракула не создаёт.
+ * Счётчик идентификатора растёт на любой неудаче — существует аккаунт или нет.
+ * Если бы несуществующие идентификаторы его не трогали, ответ (401 против 429
+ * после десятой попытки) сам выдавал бы, зарегистрирован ли идентификатор.
+ * Так оба случая после одинакового числа попыток дают одинаковый код ответа.
  */
-export function recordLoginFailure(ip: string, identifier: string | null, accountExists: boolean): void {
+export function recordLoginFailure(ip: string, identifier: string | null): void {
   recordFailure(ipAllKey(ip));
-  if (accountExists && identifier !== null) recordFailure(idKey(identifier));
-  else recordFailure(ipUnknownKey(ip));
+  if (identifier !== null) recordFailure(idKey(identifier));
 }
 
 export function __resetAttemptsForTests(): void {
