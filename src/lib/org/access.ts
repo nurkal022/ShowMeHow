@@ -79,10 +79,16 @@ export async function requireOrgRole(
   return toMembership(row);
 }
 
-/** Админ организации группы или учитель, которому группа назначена. */
+/**
+ * Админ организации группы или учитель, которому группа назначена.
+ * Архивная группа считается отсутствующей для всех, включая админа платформы;
+ * архивная организация прав не даёт через orgRoleOf, а админ платформы видит её,
+ * как и в requireOrgRole.
+ */
 export async function canManageGroup(user: AuthUser, groupId: string): Promise<boolean> {
   if (!isUuid(groupId)) return false;
-  const { rows } = await db().query<{ org_id: string }>('SELECT org_id FROM groups WHERE id = $1', [groupId]);
+  const { rows } = await db().query<{ org_id: string }>(
+    'SELECT org_id FROM groups WHERE id = $1 AND archived_at IS NULL', [groupId]);
   const group = rows[0];
   if (!group) return false;
   if (isPlatformAdmin(user)) return true;

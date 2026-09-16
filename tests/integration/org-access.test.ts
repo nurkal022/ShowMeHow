@@ -157,6 +157,38 @@ describe.skipIf(!pool)('доступ в организации', () => {
     expect(await canManageGroup(orgAdmin, g.id)).toBe(false);
   });
 
+  it('архивная группа считается отсутствующей', async () => {
+    const g = await createGroup(sch.id, '7А');
+    await assignTeacher(g.id, teacher.id);
+    await pool!.query('UPDATE groups SET archived_at = now() WHERE id = $1', [g.id]);
+    expect(await canManageGroup(teacher, g.id)).toBe(false);
+    expect(await canManageGroup(orgAdmin, g.id)).toBe(false);
+    expect(await canManageGroup(admin, g.id)).toBe(false);
+    await expect(addToGroup(g.id, student.id)).rejects.toThrow('Группа не найдена.');
+    await expect(assignTeacher(g.id, orgAdmin.id)).rejects.toThrow('Группа не найдена.');
+    const { rows } = await pool!.query(
+      'SELECT (SELECT count(*) FROM group_members)::int AS m, (SELECT count(*) FROM group_teachers)::int AS t');
+    expect(rows[0]).toEqual({ m: 0, t: 1 });
+  });
+
+  it('в группу архивной организации нельзя добавить ни ученика, ни учителя', async () => {
+    const g = await createGroup(sch.id, '7А');
+    await pool!.query('UPDATE organizations SET archived_at = now() WHERE id = $1', [sch.id]);
+    await expect(addToGroup(g.id, student.id)).rejects.toThrow('Группа не найдена.');
+    await expect(assignTeacher(g.id, teacher.id)).rejects.toThrow('Группа не найдена.');
+    const { rows } = await pool!.query(
+      'SELECT (SELECT count(*) FROM group_members)::int AS m, (SELECT count(*) FROM group_teachers)::int AS t');
+    expect(rows[0]).toEqual({ m: 0, t: 0 });
+  });
+
+  it('поиск группы нормализует пробелы так же, как создание', async () => {
+    const g = await createGroup(sch.id, '  7   А ');
+    expect(g.title).toBe('7 А');
+    expect((await findGroupByTitle(sch.id, '7  А'))?.id).toBe(g.id);
+    expect((await findGroupByTitle(sch.id, ' 7\tА'))?.id).toBe(g.id);
+    await expect(createGroup(sch.id, '7    А')).rejects.toThrow('Группа «7 А» уже есть в этой организации.');
+  });
+
   it('создание организации: занятый и кривой слаг — отказ, ничего не создано', async () => {
     await expect(createOrganization({ slug: 'SCH12', name: 'Дубль', kind: 'school' }))
       .rejects.toThrow('Слаг «sch12» уже занят.');

@@ -17,15 +17,20 @@ function toGroup(r: GroupRow): Group {
   return { id: r.id, orgId: r.org_id, title: r.title };
 }
 
+/** Одна нормализация для поиска и создания: иначе «7  А» не нашлась бы после создания. */
+function normalizeGroupTitle(title: string): string {
+  return title.trim().replace(/\s+/g, ' ');
+}
+
 export async function findGroupByTitle(orgId: string, title: string): Promise<Group | null> {
   const { rows } = await db().query<GroupRow>(
     'SELECT id, org_id, title FROM groups WHERE org_id = $1 AND title = $2 AND archived_at IS NULL',
-    [orgId, title.trim()]);
+    [orgId, normalizeGroupTitle(title)]);
   return rows[0] ? toGroup(rows[0]) : null;
 }
 
 export async function createGroup(orgId: string, title: string): Promise<Group> {
-  const clean = title.trim().replace(/\s+/g, ' ');
+  const clean = normalizeGroupTitle(title);
   if (!clean) throw new OrgError('Укажите название группы.');
   if (clean.length > MAX_GROUP_TITLE) {
     throw new OrgError(`Название группы должно быть не длиннее ${MAX_GROUP_TITLE} символов.`);
@@ -40,12 +45,24 @@ export async function createGroup(orgId: string, title: string): Promise<Group> 
 }
 
 /**
+ * Архивная группа и группа архивной организации для записи не существуют.
+ * Без проверки id Postgres ответил бы ошибкой типа, а не «не найдено».
+ */
+async function requireActiveGroup(groupId: string): Promise<void> {
+  if (!isUuid(groupId)) throw new OrgError('Группа не найдена.');
+  const { rows } = await db().query(
+    `SELECT 1 FROM groups g JOIN organizations o ON o.id = g.org_id
+     WHERE g.id = $1 AND g.archived_at IS NULL AND o.archived_at IS NULL`, [groupId]);
+  if (rows.length === 0) throw new OrgError('Группа не найдена.');
+}
+
+/**
  * Единственный путь записи в group_members. Схема не может проверить, что ученик
  * состоит в организации группы (для этого нужны составные ключи во всех таблицах),
  * поэтому инвариант держит эта функция.
  */
 export async function addToGroup(groupId: string, userId: string): Promise<void> {
-  if (!isUuid(groupId)) throw new OrgError('Группа не найдена.');
+  await requireActiveGroup(groupId);
   const { rows } = await db().query(
     `SELECT 1 FROM groups g JOIN memberships m ON m.org_id = g.org_id
      WHERE g.id = $1 AND m.user_id = $2`, [groupId, userId]);
@@ -57,7 +74,7 @@ export async function addToGroup(groupId: string, userId: string): Promise<void>
 }
 
 export async function assignTeacher(groupId: string, userId: string): Promise<void> {
-  if (!isUuid(groupId)) throw new OrgError('Группа не найдена.');
+  await requireActiveGroup(groupId);
   const { rows } = await db().query(
     `SELECT 1 FROM groups g JOIN memberships m ON m.org_id = g.org_id
      WHERE g.id = $1 AND m.user_id = $2 AND m.role IN ('teacher', 'org_admin')`, [groupId, userId]);
