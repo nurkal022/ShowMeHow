@@ -59,7 +59,17 @@ export function createListener(factory: () => ListenClient, opts: { retryMs?: nu
   function ensure(): void {
     if (closed || client || connecting) return;
     connecting = true;
-    const c = factory();
+    let c: ListenClient;
+    try {
+      c = factory();
+    } catch (e) {
+      // Фабрика упала синхронно (например, битая строка подключения) — не
+      // застреваем в "connecting", а планируем обычный повтор.
+      connecting = false;
+      console.error('Не удалось создать соединение LISTEN:', e);
+      schedule();
+      return;
+    }
     let dropped = false;
     const drop = (err?: unknown) => {
       if (dropped) return;
@@ -85,8 +95,17 @@ export function createListener(factory: () => ListenClient, opts: { retryMs?: nu
         await c.query('LISTEN job_events');
         await c.query('LISTEN job_queue');
         connecting = false;
-        if (dropped || closed) {
-          if (closed) await c.end().catch(() => {});
+        if (closed) {
+          await c.end().catch(() => {});
+          return;
+        }
+        if (dropped) {
+          // Обрыв пришёл, пока это самое подключение ещё было в процессе:
+          // drop() уже мог запланировать повтор и увидеть его "съеденным"
+          // таймером, который сработал раньше, чем эта попытка осела (её
+          // ensure() гасит вызовом на строке выше). Гарантируем ровно один
+          // отложенный повтор здесь — иначе слушатель молча замирает навсегда.
+          schedule();
           return;
         }
         client = c;
@@ -94,7 +113,17 @@ export function createListener(factory: () => ListenClient, opts: { retryMs?: nu
         wakeAll();
       } catch (e) {
         connecting = false;
-        drop(e);
+        if (closed) {
+          await c.end().catch(() => {});
+          return;
+        }
+        if (dropped) {
+          // Тот же случай, что и в успешном пути выше: попытка провалилась уже
+          // после обрыва, а её собственный повтор мог быть съеден чужим таймером.
+          schedule();
+        } else {
+          drop(e);
+        }
       }
     })();
   }
@@ -106,11 +135,18 @@ export function createListener(factory: () => ListenClient, opts: { retryMs?: nu
         set = new Set();
         jobSubs.set(jobId, set);
       }
-      set.add(cb);
+      const subs = set;
+      subs.add(cb);
       ensure();
+      let unsubscribed = false;
       return () => {
-        set!.delete(cb);
-        if (set!.size === 0) jobSubs.delete(jobId);
+        // Идемпотентно: повторный вызов той же отписки — обычный паттерн
+        // (обработчик отмены + finally) и не должен задеть подписчика,
+        // который успел занять тот же jobId после первой отписки.
+        if (unsubscribed) return;
+        unsubscribed = true;
+        subs.delete(cb);
+        if (subs.size === 0 && jobSubs.get(jobId) === subs) jobSubs.delete(jobId);
       };
     },
     onQueue(cb) {
