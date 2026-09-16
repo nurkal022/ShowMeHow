@@ -43,7 +43,7 @@ describe.skipIf(!pool)('миграция 004 на базе прежней схе
       "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ('h1', $1, now() + interval '1 day')",
       [oldId]);
 
-    expect(await applyMigrations(p)).toEqual(['004_organizations.sql']);
+    expect(await applyMigrations(p, { until: '004_organizations.sql' })).toEqual(['004_organizations.sql']);
 
     const { rows } = await p.query<{ login: string | null; must_change_password: boolean; disabled_at: Date | null }>(
       'SELECT login, must_change_password, disabled_at FROM users WHERE id = $1', [oldId]);

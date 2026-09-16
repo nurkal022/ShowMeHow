@@ -10,8 +10,10 @@ function migrationsDir(): string {
 /**
  * Применяет непринятые миграции по возрастанию имени, каждую в своей транзакции.
  * Идемпотентен: уже применённые имена лежат в schema_migrations и пропускаются.
+ * `until` нужен тестам миграций: остановиться после указанного файла, наполнить базу
+ * данными прежней схемы и только потом накатить следующую миграцию.
  */
-export async function applyMigrations(pool: Pool): Promise<string[]> {
+export async function applyMigrations(pool: Pool, opts: { until?: string } = {}): Promise<string[]> {
   await pool.query(
     'CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
   const done = new Set(
@@ -19,7 +21,10 @@ export async function applyMigrations(pool: Pool): Promise<string[]> {
   const applied: string[] = [];
   const files = fs.readdirSync(migrationsDir()).filter((f) => f.endsWith('.sql')).sort();
   for (const file of files) {
-    if (done.has(file)) continue;
+    if (done.has(file)) {
+      if (opts.until !== undefined && file === opts.until) break;
+      continue;
+    }
     const sql = fs.readFileSync(path.join(migrationsDir(), file), 'utf8');
     const client = await pool.connect();
     try {
@@ -34,6 +39,7 @@ export async function applyMigrations(pool: Pool): Promise<string[]> {
     } finally {
       client.release();
     }
+    if (opts.until !== undefined && file === opts.until) break;
   }
   return applied;
 }
