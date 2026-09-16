@@ -26,8 +26,10 @@ describe('временный пароль', () => {
     expect(seen).toEqual([TEMP_PASSWORD_WORDS.length, TEMP_PASSWORD_WORDS.length, TEMP_PASSWORD_WORDS.length]);
   });
 
-  it('словарь: не меньше 40 разных коротких слов строчной кириллицей без ё и й', () => {
-    expect(TEMP_PASSWORD_WORDS.length).toBeGreaterThanOrEqual(40);
+  it('словарь: не меньше 200 разных коротких слов строчной кириллицей без ё и й', () => {
+    // 200 слов в третьей степени — 8 миллионов вариантов: меньше делает перебор
+    // по предсказуемым логинам реальным даже под лимитом неудачных входов.
+    expect(TEMP_PASSWORD_WORDS.length).toBeGreaterThanOrEqual(200);
     expect(new Set(TEMP_PASSWORD_WORDS).size).toBe(TEMP_PASSWORD_WORDS.length);
     for (const w of TEMP_PASSWORD_WORDS) expect(w).toMatch(/^[а-еж-ик-я]{3,6}$/);
   });
@@ -35,10 +37,17 @@ describe('временный пароль', () => {
   it('в словаре нет слов, отличающихся одной буквой', () => {
     const close = (a: string, b: string) =>
       a.length === b.length && [...a].filter((ch, k) => ch !== b[k]).length === 1;
-    for (const a of TEMP_PASSWORD_WORDS) {
-      for (const b of TEMP_PASSWORD_WORDS) {
-        if (a !== b) expect(close(a, b), `${a} и ${b}`).toBe(false);
-      }
-    }
+    // Сравниваем все пары и собираем нарушения одним списком: при 200+ словах
+    // по expect на пару отчёт был бы нечитаемым.
+    const pairs: string[] = [];
+    TEMP_PASSWORD_WORDS.forEach((a, i) => {
+      for (const b of TEMP_PASSWORD_WORDS.slice(i + 1)) if (close(a, b)) pairs.push(`${a} и ${b}`);
+    });
+    expect(pairs).toEqual([]);
+  });
+
+  it('самый короткий пароль из словаря не короче минимальной длины', () => {
+    const shortest = Math.min(...TEMP_PASSWORD_WORDS.map((w) => w.length));
+    expect(shortest * 3 + 2).toBeGreaterThanOrEqual(MIN_PASSWORD_LENGTH);
   });
 });
