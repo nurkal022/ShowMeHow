@@ -91,7 +91,9 @@ export async function currentUserFromCookies(): Promise<AuthUser | null> {
 
 /**
  * Разрешающий вариант: пропускает и пользователя с временным паролем.
- * Только для GET /api/me, POST /api/me/password и POST /api/auth/logout.
+ * Реальные вызывающие обоих вариантов ниже — GET /api/me, POST /api/me/password
+ * (эта функция) и корневой layout (следующая функция, без Request).
+ * POST /api/auth/logout пользователя вообще не резолвит.
  */
 export async function currentUserAllowingPasswordChange(req: Request): Promise<AuthUser | null> {
   return resolveSession(readCookie(req, SESSION_COOKIE));

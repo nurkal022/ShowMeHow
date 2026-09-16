@@ -1,9 +1,10 @@
 import './globals.css';
 import NavLinks from '@/components/NavLinks';
-import { currentUserFromCookies } from '@/lib/auth/session';
-import { userContact } from '@/lib/auth/identifier';
+import { currentUserAllowingPasswordChangeFromCookies } from '@/lib/auth/session';
+import { userContact, userLabel } from '@/lib/auth/identifier';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
 import { IconLogo } from '@/components/icons';
+import ForcePasswordChange from '@/components/ForcePasswordChange';
 
 export const metadata = {
   title: 'Tesseract',
@@ -11,7 +12,9 @@ export const metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const user = await currentUserFromCookies();
+  // Разрешающий вариант: только layout узнаёт о временном пароле и подменяет страницу.
+  const user = await currentUserAllowingPasswordChangeFromCookies();
+  const mustChangePassword = !!user?.mustChangePassword;
   return (
     // data-theme проставляет скрипт ниже до отрисовки, поэтому значение на сервере
     // и на клиенте расходится намеренно — предупреждение о гидрации здесь ложное.
@@ -29,9 +32,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <span className="brand">
             <span className="brand-mark"><IconLogo size={15} /></span>Tesseract
           </span>
-          <NavLinks user={user ? { label: userContact(user), role: user.role } : undefined} />
+          {!mustChangePassword && (
+            <NavLinks user={user ? { label: userContact(user), role: user.role } : undefined} />
+          )}
         </nav>
-        <main>{children}</main>
+        <main>
+          {user && mustChangePassword ? <ForcePasswordChange label={userLabel(user)} /> : children}
+        </main>
       </body>
     </html>
   );
