@@ -131,6 +131,23 @@ export async function findUserById(id: string): Promise<AuthUser | null> {
   return rows[0] ? toAuthUser(rows[0]) : null;
 }
 
+/** Для резолва сессии: заблокированный пользователь не существует для приложения. */
+export async function findActiveUserById(id: string): Promise<AuthUser | null> {
+  const { rows } = await db().query<UserRow>(
+    `SELECT ${USER_COLUMNS} FROM users WHERE id = $1 AND disabled_at IS NULL`, [id]);
+  return rows[0] ? toAuthUser(rows[0]) : null;
+}
+
+/**
+ * Блокировка: отметка и удаление всех сессий одним оператором, чтобы между ними
+ * не проскочил запрос. Данные пользователя не трогаются.
+ */
+export async function disableUser(userId: string): Promise<void> {
+  await db().query(
+    `WITH dropped AS (DELETE FROM sessions WHERE user_id = $1)
+     UPDATE users SET disabled_at = now() WHERE id = $1`, [userId]);
+}
+
 /**
  * Профиль отделён от AuthUser намеренно: AuthUser — то, что нужно для проверки
  * доступа на каждом запросе, и он не должен раздуваться настройками интерфейса.

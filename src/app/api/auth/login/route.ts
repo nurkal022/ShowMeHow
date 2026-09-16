@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
-import { findUserByIdentifier } from '@/lib/auth/users';
+import { findUserByIdentifier, type AuthUser } from '@/lib/auth/users';
 import { normalizeIdentifier } from '@/lib/auth/identifier';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
-import { createSession } from '@/lib/auth/session';
+import { createSession, sessionTtlMs } from '@/lib/auth/session';
 import { isLoginBlocked, recordLoginFailure } from '@/lib/auth/rate-limit';
 import { setSessionCookie, isSecureRequest } from '@/lib/auth/cookie';
+import { listMemberships } from '@/lib/org/access';
+import { sessionKind } from '@/lib/org/policy';
 
 // Один и тот же текст для неизвестного аккаунта и неверного пароля: иначе форма входа
 // превращается в способ узнать, кто зарегистрирован.
 const WRONG = 'Неверный логин, почта или пароль.';
+const DISABLED = 'Аккаунт заблокирован. Обратитесь к администратору организации.';
 
 // Хеш-пустышка того же формата и стоимости scrypt, что и у настоящих паролей.
 // Сверяем с ним пароль, когда аккаунт не найден: иначе время ответа выдаёт,
@@ -43,7 +46,17 @@ export async function POST(req: Request) {
   const passwordOk = verifyPassword(password, found?.passwordHash ?? DUMMY_PASSWORD_HASH);
   if (!found || !passwordOk) return fail();
 
-  const token = await createSession(found.id);
-  const { passwordHash: _ph, disabledAt: _da, ...user } = found;
-  return setSessionCookie(NextResponse.json({ user }), token, isSecureRequest(req));
+  // О блокировке узнаёт только тот, кто знает пароль: с неверным — обычный 401 выше.
+  // Неудачу в счётчик не пишем — верный пароль это не подбор.
+  if (found.disabledAt) {
+    return NextResponse.json({ error: DISABLED }, { status: 403 });
+  }
+
+  const kind = sessionKind(found, await listMemberships(found.id));
+  const token = await createSession(found.id, kind);
+  const user: AuthUser = {
+    id: found.id, email: found.email, login: found.login, displayName: found.displayName,
+    role: found.role, mustChangePassword: found.mustChangePassword,
+  };
+  return setSessionCookie(NextResponse.json({ user }), token, isSecureRequest(req), sessionTtlMs(kind));
 }

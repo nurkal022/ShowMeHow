@@ -19,13 +19,16 @@ export function isSecureRequest(req: Request): boolean {
   }
 }
 
-export function setSessionCookie(res: NextResponse, token: string, secure: boolean): NextResponse {
+/** Срок cookie совпадает со сроком сессии в базе: у ученика 12 часов, у остальных 30 дней. */
+export function setSessionCookie(
+  res: NextResponse, token: string, secure: boolean, ttlMs: number = SESSION_TTL_MS,
+): NextResponse {
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
     secure,
     path: '/',
-    maxAge: Math.floor(SESSION_TTL_MS / 1000),
+    maxAge: Math.floor(ttlMs / 1000),
   });
   return res;
 }
