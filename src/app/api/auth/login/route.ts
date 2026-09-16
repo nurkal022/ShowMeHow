@@ -3,7 +3,7 @@ import { findUserByIdentifier } from '@/lib/auth/users';
 import { normalizeIdentifier } from '@/lib/auth/identifier';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { createSession } from '@/lib/auth/session';
-import { isLimited, recordFailure } from '@/lib/auth/rate-limit';
+import { isLoginBlocked, recordLoginFailure } from '@/lib/auth/rate-limit';
 import { setSessionCookie, isSecureRequest } from '@/lib/auth/cookie';
 
 // Один и тот же текст для неизвестного аккаунта и неверного пароля: иначе форма входа
@@ -21,24 +21,27 @@ export async function POST(req: Request) {
   const raw = body.identifier ?? body.email;
   const password = body.password;
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'local';
-  const key = typeof raw === 'string' && raw.trim() ? normalizeIdentifier(raw) : undefined;
+  const key = typeof raw === 'string' && raw.trim() ? normalizeIdentifier(raw) : null;
 
-  if (isLimited(ip) || (key !== undefined && isLimited(key))) {
+  // Лимит проверяем ДО обращения к базе, но не расходуем на самой проверке:
+  // расход происходит только при подтверждённой неудаче, см. fail() ниже.
+  if (isLoginBlocked(ip, key)) {
     return NextResponse.json(
       { error: 'Слишком много попыток входа. Попробуйте через пятнадцать минут.' }, { status: 429 });
   }
 
-  const fail = () => {
-    recordFailure(ip);
-    if (key !== undefined) recordFailure(key);
+  const fail = (accountExists: boolean) => {
+    recordLoginFailure(ip, key, accountExists);
     return NextResponse.json({ error: WRONG }, { status: 401 });
   };
 
-  if (key === undefined || !password) return fail();
+  if (key === null || !password) return fail(false);
 
   const found = await findUserByIdentifier(key);
+  // Пароль сверяем всегда — даже когда аккаунт не найден, тогда против DUMMY_PASSWORD_HASH.
+  // Результат в этом случае не имеет значения, важно лишь потратить то же время.
   const passwordOk = verifyPassword(password, found?.passwordHash ?? DUMMY_PASSWORD_HASH);
-  if (!found || !passwordOk) return fail();
+  if (!found || !passwordOk) return fail(found !== null);
 
   const token = await createSession(found.id);
   const { passwordHash: _ph, disabledAt: _da, ...user } = found;

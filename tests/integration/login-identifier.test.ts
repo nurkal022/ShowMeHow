@@ -40,7 +40,12 @@ describe.skipIf(!pool)('вход по логину и по почте', () => {
     });
     const res = await login(post({ identifier: ' Ivanov.I.Sch12 ', password: 'пароль123' }));
     expect(res.status).toBe(200);
-    const body = await (await me(new Request('http://t', { headers: { cookie: cookieOf(res) } }))).json();
+    const cookie = cookieOf(res);
+    const loginBody = await res.json();
+    expect(Object.keys(loginBody.user).sort()).toEqual(
+      ['displayName', 'email', 'id', 'login', 'mustChangePassword', 'role'].sort(),
+    );
+    const body = await (await me(new Request('http://t', { headers: { cookie } }))).json();
     expect(body.user).toMatchObject({
       email: null, login: 'ivanov.i.sch12', displayName: 'Иванов Иван', role: 'user', mustChangePassword: false,
     });
