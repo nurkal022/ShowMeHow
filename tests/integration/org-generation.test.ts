@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import crypto from 'node:crypto';
 import { testDb, resetSchema } from '../db';
 import { applyMigrations } from '../../scripts/migrate';
@@ -9,18 +9,9 @@ import { createOrganization, addMember, updateOrgSettings, type Organization } f
 import { listMemberships } from '@/lib/org/access';
 import { GENERATION_FORBIDDEN_MESSAGE } from '@/lib/org/policy';
 import { quotaStatus, quotaExhaustedMessage, QUOTA_EXHAUSTED_MESSAGE, TRIAL_LIMIT } from '@/lib/quota';
-import { __resetLimitsForTests } from '@/lib/limits';
-import { __clearForTests } from '@/lib/jobs';
 import { POST as postGenerate } from '@/app/api/generate/route';
 import { POST as postRefine } from '@/app/api/simulations/[id]/refine/route';
 import { GET as me } from '@/app/api/me/route';
-
-// Пайплайн поднимает Chromium и зовёт модель — здесь он повисает и ничего не делает.
-vi.mock('@/lib/pipeline/run', async (orig) => ({
-  ...(await orig<typeof import('@/lib/pipeline/run')>()),
-  makeCtx: () => ({}),
-  runPipeline: () => new Promise<void>(() => {}),
-}));
 
 const SCHEMA = 'org_generation_test';
 const pool = testDb(SCHEMA);
@@ -51,8 +42,6 @@ beforeAll(async () => {
   await applyMigrations(pool);
 });
 beforeEach(async () => {
-  __clearForTests();
-  __resetLimitsForTests();
   process.env.SHOWMEHOW_API_KEY = 'test-key';
   process.env.SHOWMEHOW_MODEL = 'test-model';
   if (!pool) return;
