@@ -27,7 +27,7 @@ beforeAll(async () => {
   await applyMigrations(pool);
 });
 beforeEach(async () => {
-  __resetAttemptsForTests();
+  await __resetAttemptsForTests();
   if (!pool) return;
   await pool.query('TRUNCATE organizations, users CASCADE');
 });

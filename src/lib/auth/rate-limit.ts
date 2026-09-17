@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
+import { db, hasDb } from '../db/client';
 
-const WINDOW_MS = 15 * 60 * 1000;
+const WINDOW_MINUTES = 15;
+const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Неверный пароль к одному идентификатору — считается одинаково для существующего
@@ -13,35 +16,113 @@ export const IDENTIFIER_LIMIT = 10;
  */
 export const IP_LIMIT = 300;
 
-const attempts = new Map<string, number[]>();
+export interface AttemptStore {
+  /** Неудачи по ключу за последние пятнадцать минут. */
+  count(key: string): Promise<number>;
+  add(key: string): Promise<void>;
+  /** Удаляет попытки старше суток; возвращает число удалённых. */
+  purge(): Promise<number>;
+  /** Для тестов: ключи, под которыми лежат попытки. */
+  keys(): Promise<string[]>;
+  /** Для тестов: удаляет все попытки. */
+  clear(): Promise<void>;
+}
 
 /**
- * Скользящее окно в памяти процесса. В базу хранилище переносит цикл 1.
- * Пустые окна удаляются, чтобы карта не росла от одних проверок.
+ * Хранилище в памяти процесса — для запуска без базы (разработка и юнит-тесты).
+ * Проверка ничего не создаёт, а запись отбрасывает вышедшие из окна попытки ключа,
+ * поэтому карта не растёт от одних проверок.
  */
-function pruned(key: string): number[] {
-  const now = Date.now();
-  const fresh = (attempts.get(key) ?? []).filter((t) => now - t < WINDOW_MS);
-  if (fresh.length) attempts.set(key, fresh);
-  else attempts.delete(key);
-  return fresh;
+export function createMemoryAttemptStore(now: () => number = Date.now): AttemptStore {
+  const attempts = new Map<string, number[]>();
+  const fresh = (key: string, t: number) => (attempts.get(key) ?? []).filter((at) => t - at < WINDOW_MS);
+  return {
+    async count(key) {
+      return fresh(key, now()).length;
+    },
+    async add(key) {
+      const t = now();
+      attempts.set(key, [...fresh(key, t), t]);
+    },
+    async purge() {
+      const t = now();
+      let removed = 0;
+      for (const [key, list] of attempts) {
+        const kept = list.filter((at) => t - at <= DAY_MS);
+        removed += list.length - kept.length;
+        if (kept.length) attempts.set(key, kept);
+        else attempts.delete(key);
+      }
+      return removed;
+    },
+    async keys() {
+      return [...attempts.keys()];
+    },
+    async clear() {
+      attempts.clear();
+    },
+  };
+}
+
+/**
+ * Счётчики в базе: их видят все экземпляры веба, и рестарт их не обнуляет.
+ * Строки старше суток удаляет уборщик воркера (purgeOldAttempts).
+ */
+export function createPgAttemptStore(): AttemptStore {
+  return {
+    async count(key) {
+      const { rows } = await db().query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM login_attempts
+         WHERE key = $1 AND at > now() - interval '${WINDOW_MINUTES} minutes'`, [key]);
+      return rows[0].n;
+    },
+    async add(key) {
+      await db().query('INSERT INTO login_attempts (key) VALUES ($1)', [key]);
+    },
+    async purge() {
+      const r = await db().query("DELETE FROM login_attempts WHERE at < now() - interval '1 day'");
+      return r.rowCount ?? 0;
+    },
+    async keys() {
+      const { rows } = await db().query<{ key: string }>('SELECT DISTINCT key FROM login_attempts ORDER BY key');
+      return rows.map((r) => r.key);
+    },
+    async clear() {
+      await db().query('DELETE FROM login_attempts');
+    },
+  };
+}
+
+let override: AttemptStore | null = null;
+let memory: AttemptStore | null = null;
+let pg: AttemptStore | null = null;
+
+/**
+ * Как getJobStore(): Postgres при заданном DATABASE_URL, память без него. В продакшне
+ * работа без базы — ошибка конфигурации: счётчики в памяти не общие для процессов.
+ */
+function attempts(): AttemptStore {
+  if (override) return override;
+  if (hasDb()) return (pg ??= createPgAttemptStore());
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('DATABASE_URL не задан: в продакшне лимиты входа без базы данных запрещены');
+  }
+  return (memory ??= createMemoryAttemptStore());
 }
 
 /** Проверка БЕЗ расхода попытки. */
-export function isLimited(key: string, max: number = IDENTIFIER_LIMIT): boolean {
-  return pruned(key).length >= max;
+export async function isLimited(key: string, max: number = IDENTIFIER_LIMIT): Promise<boolean> {
+  return (await attempts().count(key)) >= max;
 }
 
 /** Расходует одну попытку. Успешный вход лимит не трогает. */
-export function recordFailure(key: string): void {
-  const fresh = pruned(key);
-  fresh.push(Date.now());
-  attempts.set(key, fresh);
+export async function recordFailure(key: string): Promise<void> {
+  await attempts().add(key);
 }
 
 /**
- * Идентификатор и IP приходят от клиента и могут весить мегабайты: в карту
- * кладём их sha256, иначе поток таких запросов раздувал бы память процесса.
+ * Идентификатор и IP приходят от клиента и могут весить мегабайты: в хранилище
+ * кладём их sha256, иначе поток таких запросов раздувал бы память и таблицу.
  */
 const digest = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 const idKey = (identifier: string) => `id:${digest(identifier)}`;
@@ -52,10 +133,16 @@ const ipAllKey = (ip: string) => `ip-all:${digest(ip)}`;
  * собственный счётчик. Исчерпанный IP закрывает и верные входы: иначе перебор
  * одного частого пароля по списку логинов продолжал бы находить совпадения
  * (неудачи — 429, успехи — 200).
+ *
+ * ip === null — адрес клиента неизвестен (нет доверенного прокси, см. clientIp):
+ * счётчик IP тогда не ведётся, иначе все запросы делили бы один ключ и триста
+ * чужих ошибок закрывали бы вход всему сайту.
  */
-export function isLoginBlocked(ip: string, identifier: string | null): boolean {
-  return isLimited(ipAllKey(ip), IP_LIMIT)
-    || (identifier !== null && isLimited(idKey(identifier), IDENTIFIER_LIMIT));
+export async function isLoginBlocked(ip: string | null, identifier: string | null): Promise<boolean> {
+  const checks: Promise<boolean>[] = [];
+  if (ip !== null) checks.push(isLimited(ipAllKey(ip), IP_LIMIT));
+  if (identifier !== null) checks.push(isLimited(idKey(identifier), IDENTIFIER_LIMIT));
+  return (await Promise.all(checks)).some(Boolean);
 }
 
 /**
@@ -64,15 +151,26 @@ export function isLoginBlocked(ip: string, identifier: string | null): boolean {
  * после десятой попытки) сам выдавал бы, зарегистрирован ли идентификатор.
  * Так оба случая после одинакового числа попыток дают одинаковый код ответа.
  */
-export function recordLoginFailure(ip: string, identifier: string | null): void {
-  recordFailure(ipAllKey(ip));
-  if (identifier !== null) recordFailure(idKey(identifier));
+export async function recordLoginFailure(ip: string | null, identifier: string | null): Promise<void> {
+  if (ip !== null) await recordFailure(ipAllKey(ip));
+  if (identifier !== null) await recordFailure(idKey(identifier));
 }
 
-export function __resetAttemptsForTests(): void {
-  attempts.clear();
+/** Удаляет попытки старше суток. Вызывается уборщиком воркера. */
+export async function purgeOldAttempts(): Promise<number> {
+  return attempts().purge();
 }
 
-export function __attemptKeysForTests(): string[] {
-  return [...attempts.keys()];
+/** Подмена хранилища в тестах; null возвращает автоматический выбор. */
+export function __setAttemptStoreForTests(store: AttemptStore | null): void {
+  override = store;
+}
+
+/** Очищает текущее хранилище: память процесса или таблицу login_attempts. */
+export async function __resetAttemptsForTests(): Promise<void> {
+  await attempts().clear();
+}
+
+export async function __attemptKeysForTests(): Promise<string[]> {
+  return attempts().keys();
 }

@@ -4,11 +4,14 @@ import { applyMigrations } from '../../scripts/migrate';
 import { closeDb } from '@/lib/db/client';
 import { POST as login } from '@/app/api/auth/login/route';
 import { createLoginUser } from '@/lib/auth/users';
-import { __resetAttemptsForTests } from '@/lib/auth/rate-limit';
+import { __resetAttemptsForTests, recordLoginFailure } from '@/lib/auth/rate-limit';
 
 const SCHEMA = 'login_limit_test';
 const pool = testDb(SCHEMA);
 const SCHOOL_IP = { 'x-forwarded-for': '203.0.113.20' };
+
+// Тест различает клиентов по x-forwarded-for — так приложение работает за Caddy.
+process.env.SHOWMEHOW_TRUST_PROXY = '1';
 
 function post(body: unknown): Request {
   return new Request('http://t', {
@@ -22,7 +25,7 @@ beforeAll(async () => {
   await applyMigrations(pool);
 });
 beforeEach(async () => {
-  __resetAttemptsForTests();
+  await __resetAttemptsForTests();
   if (!pool) return;
   await pool.query('TRUNCATE organizations, users CASCADE');
 });
@@ -52,5 +55,18 @@ describe.skipIf(!pool)('класс за одним IP', () => {
       expect((await login(post({ identifier: 'ghost.sch12', password: 'пароль123' }))).status).toBe(401);
     }
     expect((await login(post({ identifier: 'ghost.sch12', password: 'пароль123' }))).status).toBe(429);
+  });
+
+  it('исчерпанный счётчик IP закрывает вход за прокси, а без прокси заголовок не учитывается', async () => {
+    await createLoginUser({ login: 'teacher.sch12', displayName: null, password: 'пароль123', mustChangePassword: false });
+    for (let i = 0; i < 300; i++) await recordLoginFailure('203.0.113.20', `ghost${i}.sch12`);
+    const right = () => login(post({ identifier: 'teacher.sch12', password: 'пароль123' }));
+    expect((await right()).status).toBe(429);
+    delete process.env.SHOWMEHOW_TRUST_PROXY;
+    try {
+      expect((await right()).status).toBe(200);
+    } finally {
+      process.env.SHOWMEHOW_TRUST_PROXY = '1';
+    }
   });
 });

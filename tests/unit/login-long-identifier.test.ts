@@ -8,6 +8,9 @@ vi.mock('@/lib/auth/users', async (orig) => ({
   findUserByIdentifier: (...args: unknown[]) => findUserByIdentifier(...(args as [])),
 }));
 
+// Адрес из x-forwarded-for учитывается только за доверенным прокси.
+process.env.SHOWMEHOW_TRUST_PROXY = '1';
+
 const { POST: login } = await import('@/app/api/auth/login/route');
 
 function post(body: unknown): Request {
@@ -19,8 +22,8 @@ function post(body: unknown): Request {
 }
 
 describe('вход со сверхдлинным идентификатором', () => {
-  beforeEach(() => {
-    __resetAttemptsForTests();
+  beforeEach(async () => {
+    await __resetAttemptsForTests();
     findUserByIdentifier.mockClear();
   });
 
@@ -30,7 +33,7 @@ describe('вход со сверхдлинным идентификатором'
     expect(await res.json()).toEqual({ error: 'Неверный логин, почта или пароль.' });
     expect(findUserByIdentifier).not.toHaveBeenCalled();
     // Остался только счётчик IP.
-    expect(__attemptKeysForTests()).toHaveLength(1);
+    expect(await __attemptKeysForTests()).toHaveLength(1);
   });
 
   it('идентификатор допустимой длины по-прежнему ищется в базе', async () => {

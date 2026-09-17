@@ -43,7 +43,7 @@ beforeAll(async () => {
   await applyMigrations(pool);
 });
 beforeEach(async () => {
-  __resetAttemptsForTests();
+  await __resetAttemptsForTests();
   if (!pool) return;
   await pool.query('TRUNCATE organizations, users CASCADE');
 });
@@ -93,7 +93,7 @@ describe.skipIf(!pool)('скрипт управления организация
       .toEqual({ studentsCanGenerate: true, studentLongSessions: false, teacherGenerationLimit: 40 });
 
     const second = passwordFrom(await run('reset-password', '--user', 'kim.a.sch12'));
-    __resetAttemptsForTests();
+    await __resetAttemptsForTests();
     expect((await login(post({ identifier: 'kim.a.sch12', password: first }))).status).toBe(401);
     expect((await login(post({ identifier: 'kim.a.sch12', password: second }))).status).toBe(200);
 

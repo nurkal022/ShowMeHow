@@ -34,7 +34,7 @@ beforeAll(async () => {
   await applyMigrations(pool);
 });
 beforeEach(async () => {
-  __resetAttemptsForTests();
+  await __resetAttemptsForTests();
   if (!pool) return;
   await pool.query('DELETE FROM sessions; DELETE FROM users;');
 });
@@ -89,7 +89,7 @@ describe.skipIf(!pool)('профиль и настройки', () => {
     expect((await me(get(cookieA))).status).toBe(200);
     expect((await me(get(cookieB))).status).toBe(401);
 
-    __resetAttemptsForTests();
+    await __resetAttemptsForTests();
     const relogin = await login(post({ email: 'u@example.com', password: 'новыйпароль1' }));
     expect(relogin.status).toBe(200);
   });

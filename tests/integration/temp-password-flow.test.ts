@@ -36,7 +36,7 @@ beforeAll(async () => {
   await applyMigrations(pool);
 });
 beforeEach(async () => {
-  __resetAttemptsForTests();
+  await __resetAttemptsForTests();
   if (!pool) return;
   process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-temp-pw-'));
   await pool.query('TRUNCATE organizations, users CASCADE');
@@ -74,7 +74,7 @@ describe.skipIf(!pool)('временный пароль', () => {
     expect((await (await me(get(cookie))).json()).user.mustChangePassword).toBe(false);
     expect((await listSims(get(cookie))).status).toBe(200);
 
-    __resetAttemptsForTests();
+    await __resetAttemptsForTests();
     expect((await login(post({ identifier: 'petrov.p.sch12', password: 'лиса-дом-семь' }))).status).toBe(401);
     expect((await login(post({ identifier: 'petrov.p.sch12', password: 'мой-новый-пароль' }))).status).toBe(200);
   });

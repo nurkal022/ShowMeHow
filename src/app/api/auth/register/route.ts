@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createUser, EmailTakenError, normalizeEmail } from '@/lib/auth/users';
 import { createSession } from '@/lib/auth/session';
 import { setSessionCookie, isSecureRequest, MIN_PASSWORD_LENGTH } from '@/lib/auth/cookie';
+import { MAX_IDENTIFIER_LENGTH } from '@/lib/auth/identifier';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -9,6 +10,12 @@ export async function POST(req: Request) {
   const { email, password } = (await req.json()) as { email?: string; password?: string };
   if (!email || !EMAIL_RE.test(normalizeEmail(email))) {
     return NextResponse.json({ error: 'Введите корректный адрес почты.' }, { status: 400 });
+  }
+  // Вход не ищет идентификаторы длиннее MAX_IDENTIFIER_LENGTH: с такой почтой
+  // аккаунт был бы создан, но войти в него было бы нельзя.
+  if (normalizeEmail(email).length > MAX_IDENTIFIER_LENGTH) {
+    return NextResponse.json(
+      { error: `Адрес почты должен быть не длиннее ${MAX_IDENTIFIER_LENGTH} символов.` }, { status: 400 });
   }
   if (!password || password.length < MIN_PASSWORD_LENGTH) {
     return NextResponse.json(

@@ -10,6 +10,9 @@ import { SESSION_COOKIE } from '@/lib/auth/session';
 import { __resetAttemptsForTests } from '@/lib/auth/rate-limit';
 import * as passwordModule from '@/lib/auth/password';
 
+// Тест различает клиентов по x-forwarded-for — так приложение работает за Caddy.
+process.env.SHOWMEHOW_TRUST_PROXY = '1';
+
 const SCHEMA = 'auth_api_test';
 const pool = testDb(SCHEMA);
 
@@ -32,7 +35,7 @@ beforeAll(async () => {
   await applyMigrations(pool);
 });
 beforeEach(async () => {
-  __resetAttemptsForTests();
+  await __resetAttemptsForTests();
   if (!pool) return;
   await pool.query('DELETE FROM sessions; DELETE FROM users;');
 });
@@ -80,6 +83,20 @@ describe.skipIf(!pool)('api аутентификации', () => {
       await login(post({ email: 'e@example.com', password: 'неверный1' }));
     }
     expect((await login(post({ email: 'e@example.com', password: 'пароль123' }))).status).toBe(429);
+  });
+
+  it('почту длиннее 254 символов не регистрирует: войти с ней было бы нельзя', async () => {
+    const tooLong = `${'a'.repeat(243)}@example.com`;
+    expect(tooLong).toHaveLength(255);
+    const res = await register(post({ email: tooLong, password: 'пароль123' }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Адрес почты должен быть не длиннее 254 символов.' });
+    const { rows } = await pool!.query('SELECT 1 FROM users');
+    expect(rows).toHaveLength(0);
+
+    const longest = `${'a'.repeat(242)}@example.com`;
+    expect((await register(post({ email: longest, password: 'пароль123' }))).status).toBe(200);
+    expect((await login(post({ email: longest, password: 'пароль123' }))).status).toBe(200);
   });
 
   it('лимит по почте не обходится сменой x-forwarded-for', async () => {

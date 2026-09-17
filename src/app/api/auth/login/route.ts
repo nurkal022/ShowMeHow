@@ -4,6 +4,7 @@ import { normalizeIdentifier, MAX_IDENTIFIER_LENGTH } from '@/lib/auth/identifie
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { createSession, sessionTtlMs } from '@/lib/auth/session';
 import { isLoginBlocked, recordLoginFailure } from '@/lib/auth/rate-limit';
+import { clientIp } from '@/lib/auth/client-ip';
 import { setSessionCookie, isSecureRequest } from '@/lib/auth/cookie';
 import { listMemberships } from '@/lib/org/access';
 import { sessionKind } from '@/lib/org/policy';
@@ -23,24 +24,24 @@ export async function POST(req: Request) {
   // Старые клиенты присылают поле email — принимаем его как идентификатор.
   const raw = body.identifier ?? body.email;
   const password = body.password;
-  // Заголовок клиент подделывает как угодно — счётчик IP лишь первый, слабый барьер.
-  // Настоящая защита — счётчик идентификатора; доверие к прокси (SHOWMEHOW_TRUST_PROXY)
-  // появится в цикле 1.
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'local';
+  // Заголовок клиент подделывает как угодно, поэтому адрес берём только за своим
+  // прокси (SHOWMEHOW_TRUST_PROXY=1); без него ip = null и счётчик IP не ведётся.
+  // Счётчик IP — лишь первый барьер, настоящая защита — счётчик идентификатора.
+  const ip = clientIp(req);
   const normalized = typeof raw === 'string' ? normalizeIdentifier(raw) : '';
   // Пустой или сверхдлинный ввод аккаунту принадлежать не может: такой запрос
-  // считается неудачей только по IP и до базы не доходит.
+  // считается неудачей только по IP (если адрес известен) и до базы не доходит.
   const key = normalized && normalized.length <= MAX_IDENTIFIER_LENGTH ? normalized : null;
 
   // Лимит проверяем ДО обращения к базе, но не расходуем на самой проверке:
   // расход происходит только при подтверждённой неудаче, см. fail() ниже.
-  if (isLoginBlocked(ip, key)) {
+  if (await isLoginBlocked(ip, key)) {
     return NextResponse.json(
       { error: 'Слишком много попыток входа. Попробуйте через пятнадцать минут.' }, { status: 429 });
   }
 
-  const fail = () => {
-    recordLoginFailure(ip, key);
+  const fail = async () => {
+    await recordLoginFailure(ip, key);
     return NextResponse.json({ error: WRONG }, { status: 401 });
   };
 

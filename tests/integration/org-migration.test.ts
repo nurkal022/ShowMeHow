@@ -7,7 +7,7 @@ import { applyMigrations } from '../../scripts/migrate';
 import { closeDb } from '@/lib/db/client';
 import { hashPassword } from '@/lib/auth/password';
 import { POST as login } from '@/app/api/auth/login/route';
-import { __resetAttemptsForTests } from '@/lib/auth/rate-limit';
+import { __setAttemptStoreForTests, createMemoryAttemptStore } from '@/lib/auth/rate-limit';
 
 const SCHEMA = 'org_migration_test';
 const pool = testDb(SCHEMA);
@@ -51,12 +51,18 @@ describe.skipIf(!pool)('миграция 004 на базе прежней схе
     const s = await p.query<{ sliding: boolean }>('SELECT sliding FROM sessions');
     expect(s.rows[0].sliding).toBe(true);
 
-    __resetAttemptsForTests();
-    const res = await login(new Request('http://t', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'old@example.com', password: 'пароль123' }),
-    }));
-    expect(res.status).toBe(200);
+    // Таблицы login_attempts (миграция 005) в схеме 004 ещё нет — лимиты входа
+    // здесь держим в памяти; проверяется вход на схеме 004, а не хранилище лимитов.
+    __setAttemptStoreForTests(createMemoryAttemptStore());
+    try {
+      const res = await login(new Request('http://t', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'old@example.com', password: 'пароль123' }),
+      }));
+      expect(res.status).toBe(200);
+    } finally {
+      __setAttemptStoreForTests(null);
+    }
   });
 
   it('не пускает пользователя без почты и без логина и держит логин уникальным', async () => {
