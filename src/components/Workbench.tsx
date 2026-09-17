@@ -97,6 +97,8 @@ export default function Workbench() {
   const didInit = useRef(false);
   // jobId, к стриму которого мы сейчас подключены (защита от повторного connect к тому же job).
   const connectedJobRef = useRef<string | null>(null);
+  // Подключение к потоку задания: уход со страницы обрывает и чтение, и попытки переподключиться.
+  const streamAbortRef = useRef<AbortController | null>(null);
 
   const voice = useVoiceInput((text) => {
     setPrompt((prev) => (prev ? `${prev} ${text}` : text));
@@ -110,6 +112,7 @@ export default function Workbench() {
   }
 
   useEffect(() => { fetchQuota(); }, []);
+  useEffect(() => () => streamAbortRef.current?.abort(), []);
 
   // Лента всегда прокручена к последнему событию — иначе прогресс уезжает за край.
   useEffect(() => {
@@ -254,10 +257,14 @@ export default function Workbench() {
     setMessages((prev) => [...prev, { role, text }]);
   }
 
-  async function consumeJobStream(res: Response, kind: JobKind): Promise<'terminal' | 'dropped'> {
+  /** Читает поток до конца. terminal — задание завершилось; received — сколько событий пришло. */
+  async function consumeJobStream(
+    res: Response, kind: JobKind,
+  ): Promise<{ terminal: boolean; received: number }> {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
+    let received = 0;
     try {
       for (;;) {
         const { done, value } = await reader.read();
@@ -269,6 +276,7 @@ export default function Workbench() {
           // Строки `: ping` — сердцебиение потока, событий в них нет.
           if (!part.startsWith('data: ')) continue;
           const e = JSON.parse(part.slice(6)) as PipelineEvent;
+          received++;
           setEvents((prev) => [...prev, e]);
           if (e.type === 'done') {
             clearActiveJob();
@@ -278,51 +286,64 @@ export default function Workbench() {
             await openSimulation(e.simulationId);
             // Квоту тратит только генерация.
             if (kind === 'generate') fetchQuota();
-            return 'terminal';
+            return { terminal: true, received };
           }
           if (e.type === 'error') {
             clearActiveJob();
             // Текст ошибки уже показывает ProgressView из этого же события.
             setPhase('error');
-            return 'terminal';
+            return { terminal: true, received };
           }
           if (e.type === 'cancelled') {
             clearActiveJob();
             // Отменённая доработка оставляет открытой прежнюю версию симуляции.
             setPhase(kind === 'refine' ? 'ready' : 'idle');
-            return 'terminal';
+            return { terminal: true, received };
           }
         }
       }
     } catch {
       // Обрыв посреди чтения — то же, что закрытие без терминального события.
     }
-    return 'dropped';
+    return { terminal: false, received };
   }
 
   async function connectToJob(id: string, kind: JobKind) {
     // Идемпотентность по jobId: второй вызов не открывает параллельное подключение.
     if (connectedJobRef.current === id) return;
     connectedJobRef.current = id;
+    const abort = new AbortController();
+    streamAbortRef.current = abort;
     setJobKind(kind);
     setPhase('generating');
+    // Больше всего событий, принесённых одним подключением. Обрыв после нового
+    // прогресса начинает отсчёт попыток заново; пустые переподключения — нет.
+    let seen = 0;
     try {
       for (let attempt = 0; ; attempt++) {
         // Каждое подключение начинает реплей с чистого листа — дублей не будет.
         setEvents([]);
         let res: Response | null = null;
         try {
-          res = await fetch(`/api/jobs/${id}/stream`);
+          res = await fetch(`/api/jobs/${id}/stream`, { signal: abort.signal });
         } catch {
           res = null;   // сеть или рестарт веба — попробуем ещё раз
         }
+        if (abort.signal.aborted) return;
         if (res && !res.ok && res.status < 500) {
           clearActiveJob();
           setError(res.status === 404 ? 'Задание не найдено' : `Ошибка сервера (${res.status})`);
           setPhase('error');
           return;
         }
-        if (res && res.ok && (await consumeJobStream(res, kind)) === 'terminal') return;
+        if (res && res.ok) {
+          const { terminal, received } = await consumeJobStream(res, kind);
+          if (terminal || abort.signal.aborted) return;
+          if (received > seen) {
+            seen = received;
+            attempt = 0;
+          }
+        }
         const delay = reconnectDelay(attempt);
         if (delay === null) {
           // Ключ не чистим: задание может ещё идти, перезагрузка страницы подхватит его.
@@ -330,10 +351,15 @@ export default function Workbench() {
           setPhase('error');
           return;
         }
-        await new Promise((r) => setTimeout(r, delay));
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, delay);
+          abort.signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+        });
+        if (abort.signal.aborted) return;
       }
     } finally {
       if (connectedJobRef.current === id) connectedJobRef.current = null;
+      if (streamAbortRef.current === abort) streamAbortRef.current = null;
     }
   }
 
@@ -343,6 +369,7 @@ export default function Workbench() {
     // и старая копия в композере выглядела бы как неотправленный черновик.
     setPrompt('');
     say('user', text);
+    setJobKind('generate');
     setPhase('generating'); setEvents([]); setError(null); setHtml(null); setCancelling(false);
     try {
       const res = await fetch('/api/generate', {
@@ -386,6 +413,7 @@ export default function Workbench() {
   async function refine(instruction: string) {
     if (!simId) return;
     say('user', instruction);
+    setJobKind('refine');
     setPhase('generating'); setError(null); setEvents([]); setCancelling(false);
     try {
       const res = await fetch(`/api/simulations/${simId}/refine`, {
@@ -520,7 +548,7 @@ export default function Workbench() {
           {busy && jobKind === 'refine' && (
             <div className="msg msg-bot"><div className="bubble">Дорабатываю…</div></div>
           )}
-          <ProgressView events={events} />
+          <ProgressView events={events} kind={jobKind} />
           {error && <div className="error-box">{error}</div>}
           {busy && jobId && (
             <button className="btn btn-sm btn-danger" style={{ alignSelf: 'flex-start' }}
@@ -617,7 +645,7 @@ export default function Workbench() {
       <section className="preview-pane">
         {busy && (
           <button className="to-process-badge" onClick={() => setActiveTab('create')}>
-            идёт генерация — к процессу
+            {jobKind === 'refine' ? 'идёт доработка — к процессу' : 'идёт генерация — к процессу'}
           </button>
         )}
         <PreviewFrame html={html} />
@@ -637,7 +665,7 @@ export default function Workbench() {
                   {history.map((name) => (
                     <li key={name}>
                       <span>{historyLabel(name)}</span>
-                      <button onClick={() => restoreVersion(name)}>Восстановить</button>
+                      <button disabled={busy} onClick={() => restoreVersion(name)}>Восстановить</button>
                     </li>
                   ))}
                 </ul>

@@ -13,7 +13,7 @@ import type { Job, JobStatus, JobStore, NewJob } from '@/lib/jobs/store';
 import { HIGH_PRIORITY } from '@/lib/jobs/policy';
 import {
   GENERATION_BUSY_MESSAGE, EMPTY_PROMPT_MESSAGE, INVALID_REQUEST_MESSAGE, INVALID_IMAGE_MESSAGE,
-  MAX_IMAGE_DATA_URL_LENGTH,
+  MAX_IMAGE_DATA_URL_LENGTH, MAX_PROMPT_LENGTH, PROMPT_TOO_LONG_MESSAGE,
 } from '@/lib/jobs/messages';
 import { FINISHED_WITHOUT_RESULT_MESSAGE } from '@/lib/jobs/store';
 import { saveSettings, NO_PROVIDER_MESSAGE } from '@/lib/settings';
@@ -119,6 +119,18 @@ describe('POST /api/generate', () => {
       const res = await postGenerate(generateRequest({ prompt: '   ' }));
       expect(res.status).toBe(400);
       expect((await res.json()).error).toBe(EMPTY_PROMPT_MESSAGE);
+    });
+  });
+
+  it('слишком длинный запрос — 400, в базу не пишется; ровно на пределе — принимается', async () => {
+    await withProvider(async () => {
+      const res = await postGenerate(generateRequest({ prompt: 'я'.repeat(MAX_PROMPT_LENGTH + 1) }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe(PROMPT_TOO_LONG_MESSAGE);
+      expect((await store.stats()).queued).toBe(0);
+      // Пробелы по краям не считаются: предел относится к самому тексту.
+      const edge = ' ' + 'я'.repeat(MAX_PROMPT_LENGTH) + ' ';
+      expect((await postGenerate(generateRequest({ prompt: edge }))).status).toBe(200);
     });
   });
 

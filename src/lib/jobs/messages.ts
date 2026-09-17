@@ -14,3 +14,10 @@ export const INVALID_REQUEST_MESSAGE =
 export const MAX_IMAGE_DATA_URL_LENGTH = 8_000_000;
 export const INVALID_IMAGE_MESSAGE =
   'Прикрепите картинку в обычном формате (PNG, JPEG и т. п.) размером не больше 6 МБ.';
+/** Текст заявки пишется в базу и уходит модели; стенд-конструктор собирает длинные запросы. */
+export const MAX_PROMPT_LENGTH = 20_000;
+export const PROMPT_TOO_LONG_MESSAGE =
+  'Описание слишком длинное: сократите его до 20\u00a0000 символов.';
+export const MAX_INSTRUCTION_LENGTH = 4000;
+export const INSTRUCTION_TOO_LONG_MESSAGE =
+  'Просьба слишком длинная: сократите её до 4000 символов.';

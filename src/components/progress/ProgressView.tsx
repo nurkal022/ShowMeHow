@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import type { PipelineEvent } from '@/lib/types';
+import type { JobKind } from '@/lib/jobs/store';
 import { deriveProgress } from './deriveProgress';
 import StageTimeline from './StageTimeline';
 import PlanCard from './PlanCard';
@@ -15,7 +16,9 @@ import { queuedCopy } from './stepCopy';
  * тикающее «сейчас» для отображения секунд у активного чипа; это чисто UI-таймер,
  * не влияющий на derive() и останавливающийся, как только нет ни одного активного этапа.
  */
-export default function ProgressView({ events }: { events: PipelineEvent[] }) {
+export default function ProgressView(
+  { events, kind = 'generate' }: { events: PipelineEvent[]; kind?: JobKind },
+) {
   const state = useMemo(() => deriveProgress(events), [events]);
   const [now, setNow] = useState(() => Date.now());
   const hasActiveStage = state.stages.some((s) => s.status === 'active');
@@ -47,7 +50,9 @@ export default function ProgressView({ events }: { events: PipelineEvent[] }) {
         <div className="error-box">{state.terminal.message}</div>
       )}
       {state.terminal?.type === 'cancelled' && (
-        <div className="cancel-banner">Генерация отменена</div>
+        <div className="cancel-banner">
+          {kind === 'refine' ? 'Доработка отменена' : 'Генерация отменена'}
+        </div>
       )}
     </div>
   );

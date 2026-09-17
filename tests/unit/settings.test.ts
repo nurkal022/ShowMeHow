@@ -62,6 +62,12 @@ describe('resolveMode', () => {
     expect(resolveMode(undefined)).toBe('standard');
   });
 
+  it('неизвестный режим из тела не проходит — берётся сохранённый', () => {
+    saveSettings({ ...loadSettings(), qualityMode: 'fast' });
+    expect(resolveMode('turbo')).toBe('fast');
+    expect(resolveMode(42)).toBe('fast');
+  });
+
   it('falls back to default max when nothing is saved', () => {
     expect(resolveMode(undefined)).toBe('max');
   });

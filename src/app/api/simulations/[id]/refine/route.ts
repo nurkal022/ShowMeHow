@@ -4,9 +4,10 @@ import { getJobStore } from '@/lib/jobs/current';
 import { ActiveJobExistsError } from '@/lib/jobs/store';
 import { jobPriority } from '@/lib/jobs/policy';
 import {
-  EMPTY_INSTRUCTION_MESSAGE, INVALID_REQUEST_MESSAGE, REFINE_BUSY_MESSAGE,
-  SIMULATION_NOT_FOUND_MESSAGE,
+  EMPTY_INSTRUCTION_MESSAGE, INSTRUCTION_TOO_LONG_MESSAGE, INVALID_REQUEST_MESSAGE,
+  MAX_INSTRUCTION_LENGTH, REFINE_BUSY_MESSAGE, SIMULATION_NOT_FOUND_MESSAGE,
 } from '@/lib/jobs/messages';
+import { readJsonObject } from '@/lib/jobs/request-body';
 import { activeProvider, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
@@ -30,13 +31,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: GENERATION_FORBIDDEN_MESSAGE }, { status: 403 });
   }
   const { id } = await params;
-  const body = await readBody(req);
+  const body = await readJsonObject(req);
   if (!body) {
     return NextResponse.json({ error: INVALID_REQUEST_MESSAGE }, { status: 400 });
   }
   const instruction = typeof body.instruction === 'string' ? body.instruction.trim() : '';
   if (!instruction) {
     return NextResponse.json({ error: EMPTY_INSTRUCTION_MESSAGE }, { status: 400 });
+  }
+  if (instruction.length > MAX_INSTRUCTION_LENGTH) {
+    return NextResponse.json({ error: INSTRUCTION_TOO_LONG_MESSAGE }, { status: 400 });
   }
   // Чужая и несуществующая симуляции дают 404; обход каталога в id — 400.
   try {
@@ -64,16 +68,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: REFINE_BUSY_MESSAGE }, { status: 409 });
     }
     throw e;
-  }
-}
-
-/** null — тело не JSON-объект: такой запрос не от нашего клиента, но 500 он не заслуживает. */
-async function readBody(req: Request): Promise<{ instruction?: unknown } | null> {
-  try {
-    const body: unknown = await req.json();
-    return body !== null && typeof body === 'object' && !Array.isArray(body)
-      ? body as { instruction?: unknown } : null;
-  } catch {
-    return null;
   }
 }

@@ -74,9 +74,11 @@ export const NO_PROVIDER_MESSAGE =
   'и перезапустите сервер.';
 
 /**
- * Резолвит режим качества для запроса: явный `mode` в теле запроса побеждает,
- * иначе используем сохранённый пользователем qualityMode из настроек.
+ * Резолвит режим качества для запроса: известный `mode` из тела запроса побеждает,
+ * иначе (нет или неизвестное значение) — сохранённый qualityMode из настроек.
  */
-export function resolveMode(bodyMode: QualityMode | undefined): QualityMode {
-  return bodyMode ?? loadSettings().qualityMode;
+export function resolveMode(bodyMode: unknown): QualityMode {
+  return QUALITY_MODES.includes(bodyMode as QualityMode)
+    ? bodyMode as QualityMode
+    : loadSettings().qualityMode;
 }

@@ -9,10 +9,12 @@ import { __setJobStoreForTests } from '@/lib/jobs/current';
 import type { JobStore } from '@/lib/jobs/store';
 import {
   REFINE_BUSY_MESSAGE, EMPTY_INSTRUCTION_MESSAGE, INVALID_REQUEST_MESSAGE,
+  MAX_INSTRUCTION_LENGTH, INSTRUCTION_TOO_LONG_MESSAGE,
 } from '@/lib/jobs/messages';
 import { __setRepoForTests, createMemoryRepo } from '@/lib/db/repo';
 import { createSimulation } from '@/lib/storage';
 import type { AuthUser } from '@/lib/auth/users';
+import { NO_PROVIDER_MESSAGE } from '@/lib/settings';
 
 const OWNER: AuthUser = {
   id: '11111111-1111-1111-1111-111111111111', email: 'a@t', login: null, displayName: null,
@@ -76,6 +78,29 @@ describe('POST /api/simulations/[id]/refine', () => {
     const res = await refine(simId, { instruction: '  ' });
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe(EMPTY_INSTRUCTION_MESSAGE);
+  });
+
+  it('инструкция не строка — 400 как пустая', async () => {
+    const res = await refine(simId, { instruction: 42 });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe(EMPTY_INSTRUCTION_MESSAGE);
+  });
+
+  it('слишком длинная инструкция — 400, в базу не пишется; ровно на пределе — принимается', async () => {
+    const res = await refine(simId, { instruction: 'я'.repeat(MAX_INSTRUCTION_LENGTH + 1) });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe(INSTRUCTION_TOO_LONG_MESSAGE);
+    expect((await store.stats()).queued).toBe(0);
+    expect((await refine(simId, { instruction: ' ' + 'я'.repeat(MAX_INSTRUCTION_LENGTH) + ' ' })).status)
+      .toBe(200);
+  });
+
+  it('без провайдера — 400, задания нет', async () => {
+    delete process.env.SHOWMEHOW_API_KEY;
+    const res = await refine(simId);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe(NO_PROVIDER_MESSAGE);
+    expect((await store.stats()).queued).toBe(0);
   });
 
   it('нечитаемое тело — 400, а не 500', async () => {

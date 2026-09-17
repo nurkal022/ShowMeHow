@@ -351,6 +351,7 @@ svg { flex-shrink: 0; }
 .history-dropdown li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; font-size: 12.5px; }
 .history-dropdown li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history-dropdown li button { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 12.5px; }
+.history-dropdown li button:disabled { color: var(--muted); cursor: default; }
 
 /* вкладки на узком экране */
 .mobile-tabs { display: none; }

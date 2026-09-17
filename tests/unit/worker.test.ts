@@ -185,6 +185,28 @@ describe('воркер', () => {
     expect((await store.get(job.id))?.simulationId).toBe(simId);
   });
 
+  it('доработка: финальное done несёт id целевой симуляции, и оно одно', async () => {
+    const target = crypto.randomUUID();
+    const deps: ExecuteDeps = {
+      makeCtx: (emit) => ({ emit }) as unknown as Ctx,
+      runPipeline: async () => { throw new Error('не должно вызываться'); },
+      refineExisting: async (ctx, _owner, id, _instruction, opts) => {
+        await opts?.onSaved?.(id);
+        ctx.emit({ type: 'done', simulationId: id });
+      },
+    };
+    const job = await store.create({
+      ownerId: crypto.randomUUID(), kind: 'refine', priority: 0,
+      request: { instruction: 'медленнее' }, targetSimulationId: target,
+    });
+    const w = makeWorker((j, io) => executeJob(j, io, deps));
+    await w.fill();
+    await w.idle();
+    expect(await store.get(job.id)).toMatchObject({ status: 'done', simulationId: target });
+    const events = (await store.events(job.id, 0)).map((e) => e.event);
+    expect(events.filter((e) => e.type === 'done')).toEqual([{ type: 'done', simulationId: target }]);
+  });
+
   it('сбой записи сохранения — ошибка задания, запись в журнал, слот свободен', async () => {
     const log = vi.fn();
     const failing: JobStore = {
