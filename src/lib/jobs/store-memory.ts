@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type { PipelineEvent } from '../types';
 import { reapDecision } from './policy';
 import {
-  ActiveJobExistsError, LEASE_SECONDS, LOST_TWICE_MESSAGE, REAP_GRACE_SECONDS, REQUEUE_WARNING,
+  ActiveJobExistsError, LEASE_SECONDS, LEGACY_RUNNING_GRACE_SECONDS, LOST_TWICE_MESSAGE, REAP_GRACE_SECONDS, REQUEUE_WARNING,
   WORKER_ALIVE_SECONDS, outcomeEvent,
   type ClaimedJob, type Job, type JobStore, type ReapedJob, type StoredEvent,
 } from './store';
@@ -15,11 +15,16 @@ interface Row extends ClaimedJob {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export interface MemoryJobStore extends JobStore {
+  /** Для тестов: превращает задание в строку прежнего кода — running без аренды. */
+  __makeLegacyRunningForTests(id: string, createdAtMs: number): void;
+}
+
 /**
  * Драйвер для тестов и для dev без базы. Даёт те же гарантии, что Postgres, но только
  * внутри одного процесса.
  */
-export function createMemoryJobStore(opts: { now?: () => number } = {}): JobStore {
+export function createMemoryJobStore(opts: { now?: () => number } = {}): MemoryJobStore {
   const now = opts.now ?? Date.now;
   const rows = new Map<string, Row>();
   const log = new Map<string, StoredEvent[]>();
@@ -178,8 +183,13 @@ export function createMemoryJobStore(opts: { now?: () => number } = {}): JobStor
     async reap() {
       const out: ReapedJob[] = [];
       const deadline = now() - REAP_GRACE_SECONDS * 1000;
+      const legacyDeadline = now() - LEGACY_RUNNING_GRACE_SECONDS * 1000;
+      const expired = (r: Row) => (r.lockedUntil === null
+        // Без аренды бывает только строка прежнего кода.
+        ? Date.parse(r.startedAt ?? r.createdAt) < legacyDeadline
+        : r.lockedUntil < deadline);
       for (const r of rows.values()) {
-        if (r.status !== 'running' || r.lockedUntil === null || r.lockedUntil >= deadline) continue;
+        if (r.status !== 'running' || !expired(r)) continue;
         const decision = reapDecision(r);
         if (decision === 'requeue') {
           r.status = 'queued';
@@ -232,6 +242,16 @@ export function createMemoryJobStore(opts: { now?: () => number } = {}): JobStor
         workersAlive: alive,
         lastWorkerSeenSec: last === null ? null : Math.floor((now() - last) / 1000),
       };
+    },
+
+    __makeLegacyRunningForTests(id, createdAtMs) {
+      const r = rows.get(id);
+      if (!r) return;
+      r.status = 'running';
+      release(r);
+      r.attempts = 0;
+      r.startedAt = null;
+      r.createdAt = iso(createdAtMs);
     },
 
     subscribe(id, onChange) {

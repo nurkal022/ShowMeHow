@@ -4,8 +4,8 @@ import type { PipelineEvent } from '../types';
 import { reapDecision } from './policy';
 import { listenJobEvents, listenQueue } from './listener';
 import {
-  ActiveJobExistsError, LEASE_SECONDS, LOST_TWICE_MESSAGE, REAP_GRACE_SECONDS, REQUEUE_WARNING,
-  WORKER_ALIVE_SECONDS, outcomeEvent,
+  ActiveJobExistsError, LEASE_SECONDS, LEGACY_RUNNING_GRACE_SECONDS, LOST_TWICE_MESSAGE,
+  REAP_GRACE_SECONDS, REQUEUE_WARNING, WORKER_ALIVE_SECONDS, outcomeEvent,
   type Job, type JobKind, type JobRequest, type JobStatus, type JobStore,
   type ReapedJob, type StoredEvent,
 } from './store';
@@ -245,7 +245,12 @@ export function createPgJobStore(
         }>(
           `SELECT id, attempts, cancel_requested_at IS NOT NULL AS cancel_requested, simulation_id
            FROM jobs
-           WHERE status = 'running' AND locked_until < now() - ${SECONDS(REAP_GRACE_SECONDS)}
+           WHERE status = 'running'
+             AND (locked_until < now() - ${SECONDS(REAP_GRACE_SECONDS)}
+                  -- claim всегда ставит аренду, finish снимает её вместе с итогом:
+                  -- running без аренды остаётся только от прежнего кода.
+                  OR (locked_until IS NULL
+                      AND coalesce(started_at, created_at) < now() - ${SECONDS(LEGACY_RUNNING_GRACE_SECONDS)}))
            FOR UPDATE SKIP LOCKED`);
         const out: ReapedJob[] = [];
         for (const r of rows) {

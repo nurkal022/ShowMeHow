@@ -32,6 +32,12 @@ async function cleanStore() {
       await pool!.query(
         "UPDATE jobs SET locked_until = now() - interval '5 minutes' WHERE status = 'running'");
     },
+    makeLegacyRunning: async (id: string, ageSec: number) => {
+      await pool!.query(
+        `UPDATE jobs SET status = 'running', locked_by = NULL, locked_until = NULL, attempts = 0,
+                started_at = NULL, created_at = now() - make_interval(secs => $2)
+         WHERE id = $1`, [id, ageSec]);
+    },
   };
 }
 

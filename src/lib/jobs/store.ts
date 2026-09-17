@@ -118,6 +118,12 @@ export class ActiveJobExistsError extends Error {
 export const LEASE_SECONDS = 60;
 /** Запас сверх аренды, после которого уборщик считает воркер потерянным. */
 export const REAP_GRACE_SECONDS = 30;
+/**
+ * running без аренды пишет только прежний код (до очереди в базе): он вёл генерацию
+ * в веб-процессе до 10 минут. Уборщик ждёт дольше этого срока, чтобы не запустить
+ * вторую генерацию, пока старый веб ещё работает во время выкладки.
+ */
+export const LEGACY_RUNNING_GRACE_SECONDS = 15 * 60;
 /** Воркер жив, если его видели за это время. */
 export const WORKER_ALIVE_SECONDS = 60;
 

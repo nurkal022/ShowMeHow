@@ -9,5 +9,8 @@ jobStoreContract('память', async () => {
     store,
     owner: async () => crypto.randomUUID(),
     expireLeases: async () => { clock += 5 * 60_000; },
+    makeLegacyRunning: async (id, ageSec) => {
+      store.__makeLegacyRunningForTests(id, clock - ageSec * 1000);
+    },
   };
 });

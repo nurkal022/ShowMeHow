@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import crypto from 'node:crypto';
 import {
-  ActiveJobExistsError, LOST_TWICE_MESSAGE, REQUEUE_WARNING,
+  ActiveJobExistsError, LEGACY_RUNNING_GRACE_SECONDS, LOST_TWICE_MESSAGE, REQUEUE_WARNING,
   type JobStore, type NewJob,
 } from '@/lib/jobs/store';
 
@@ -11,6 +11,11 @@ export interface ContractEnv {
   owner(): Promise<string>;
   /** Сдвигает все аренды в прошлое дальше порога уборщика. */
   expireLeases(): Promise<void>;
+  /**
+   * Делает из задания строку прежнего кода: running без аренды и без started_at,
+   * attempts = 0, создана ageSec секунд назад.
+   */
+  makeLegacyRunning(id: string, ageSec: number): Promise<void>;
 }
 
 const REQUEST = { prompt: 'маятник', mode: 'fast' as const, hasImage: false };
@@ -219,6 +224,24 @@ export function jobStoreContract(label: string, setup: () => Promise<ContractEnv
         expect(await store.claim('w2')).toBeNull();
         expect(await store.reap()).toEqual([]);
       }
+    });
+
+    it('уборщик возвращает в очередь running без аренды, оставшееся от прежнего кода', async () => {
+      const owner = await env.owner();
+      const job = await store.create(gen(owner));
+      await store.claim('w1');
+      await env.makeLegacyRunning(job.id, LEGACY_RUNNING_GRACE_SECONDS - 60);
+      // Прежний веб мог ещё вести эту генерацию: свежую строку не трогаем.
+      expect(await store.reap()).toEqual([]);
+      await expect(store.create(gen(owner))).rejects.toBeInstanceOf(ActiveJobExistsError);
+      await env.makeLegacyRunning(job.id, LEGACY_RUNNING_GRACE_SECONDS + 60);
+      expect(await store.reap()).toEqual([{ id: job.id, decision: 'requeue' }]);
+      expect((await store.get(job.id))?.status).toBe('queued');
+      expect((await store.events(job.id, 0)).at(-1)?.event)
+        .toEqual({ type: 'warning', message: REQUEUE_WARNING });
+      const again = await store.claim('w2');
+      expect(again).toMatchObject({ id: job.id, attempts: 1 });
+      expect(await store.reap()).toEqual([]);
     });
 
     it('живая аренда уборщика не касается', async () => {
