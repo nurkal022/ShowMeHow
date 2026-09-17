@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  restoredJobAction, doneMessage, reconnectDelay, nextReconnect, pauseUnlessAborted,
+  restoredJobAction, doneMessage, reconnectDelay, nextReconnect, pauseUnlessAborted, applyStreamEvent,
 } from '@/components/Workbench';
+import type { PipelineEvent } from '@/lib/types';
 
 // Регрессия: задание в статусе 'queued' (стоит в очереди, ещё не стартовало) раньше
 // проваливалось в ветку "иначе" при восстановлении из localStorage и трактовалось как
@@ -131,5 +132,48 @@ describe('pauseUnlessAborted', () => {
     const abort = new AbortController();
     abort.abort();
     await pauseUnlessAborted(60_000, abort.signal);
+  });
+});
+
+describe('applyStreamEvent', () => {
+  const plan: PipelineEvent = { type: 'stage', stage: 'planning', status: 'start', at: 1 };
+  const planEnd: PipelineEvent = { type: 'stage', stage: 'planning', status: 'end', at: 2 };
+  const warn: PipelineEvent = { type: 'warning', message: 'осторожно' };
+
+  /** Прогоняет подключение: index — сколько событий журнала это подключение уже принесло. */
+  function connect(shown: PipelineEvent[], incoming: PipelineEvent[]): PipelineEvent[] {
+    let index = 0;
+    let out = shown;
+    for (const e of incoming) {
+      out = applyStreamEvent(out, index, e);
+      if (e.type !== 'queued') index++;
+    }
+    return out;
+  }
+
+  it('первое подключение показывает всё по порядку', () => {
+    expect(connect([], [{ type: 'queued', position: 2 }, plan, planEnd]))
+      .toEqual([{ type: 'queued', position: 2 }, plan, planEnd]);
+  });
+
+  it('реплей после переподключения не дублирует и не стирает показанное', () => {
+    const shown = [plan, planEnd];
+    const same = applyStreamEvent(shown, 0, plan);
+    // Та же ссылка: React не перерисует прогресс.
+    expect(same).toBe(shown);
+    expect(connect(shown, [plan, planEnd, warn])).toEqual([plan, planEnd, warn]);
+  });
+
+  it('позиции в очереди не сбивают сопоставление с журналом', () => {
+    const shown: PipelineEvent[] = [{ type: 'queued', position: 3 }, { type: 'queued', position: 2 }, plan];
+    expect(connect(shown, [{ type: 'queued', position: 1 }, plan, planEnd])).toEqual([
+      { type: 'queued', position: 3 }, { type: 'queued', position: 2 }, plan,
+      { type: 'queued', position: 1 }, planEnd,
+    ]);
+  });
+
+  it('реплей короче показанного ничего не удаляет', () => {
+    const shown = [plan, planEnd, warn];
+    expect(connect(shown, [plan])).toBe(shown);
   });
 });

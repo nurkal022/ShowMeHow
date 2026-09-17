@@ -94,6 +94,24 @@ export function nextReconnect(
   return { attempt: attempt + 1, seen, delay: reconnectDelay(attempt) };
 }
 
+/**
+ * Событие потока в показанный список. Журнал задания только дописывается, и каждое
+ * подключение отдаёт его с начала в том же порядке, поэтому событие журнала с номером
+ * index (с нуля, в этом подключении) уже показано, если показанных событий журнала больше.
+ * Позиции в очереди в журнал не входят и просто дописываются. Если ничего не изменилось,
+ * возвращается тот же массив: прогресс не перерисовывается и не сворачивается.
+ */
+export function applyStreamEvent(
+  shown: PipelineEvent[], index: number, e: PipelineEvent,
+): PipelineEvent[] {
+  if (e.type !== 'queued') {
+    let logShown = 0;
+    for (const s of shown) if (s.type !== 'queued') logShown++;
+    if (index < logShown) return shown;
+  }
+  return [...shown, e];
+}
+
 /** Пауза, которую прерывает отмена. Слушатель отмены снимается, как только пауза кончилась. */
 export function pauseUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
   if (signal.aborted) return Promise.resolve();
@@ -314,6 +332,7 @@ export default function Workbench() {
     const decoder = new TextDecoder();
     let buf = '';
     let received = 0;
+    let logIndex = 0;
     let planned = false;
     try {
       for (;;) {
@@ -328,7 +347,10 @@ export default function Workbench() {
           if (!part.startsWith('data: ')) continue;
           const e = JSON.parse(part.slice(6)) as PipelineEvent;
           received++;
-          setEvents((prev) => [...prev, e]);
+          const index = logIndex;
+          if (e.type !== 'queued') logIndex++;
+          // Реплей после переподключения дописывает только новое: прогресс не мигает.
+          setEvents((prev) => applyStreamEvent(prev, index, e));
           if (e.type === 'done') {
             clearActiveJob();
             say('bot', doneMessage(kind));
@@ -368,10 +390,10 @@ export default function Workbench() {
     setJobKind(kind);
     setPhase('generating');
     let reconnect: ReconnectState = { attempt: 0, seen: 0 };
+    // Показанное не стирается между подключениями: реплей сверяется с ним (applyStreamEvent).
+    setEvents([]);
     try {
       for (;;) {
-        // Каждое подключение начинает реплей с чистого листа — дублей не будет.
-        setEvents([]);
         let res: Response | null = null;
         try {
           res = await fetch(`/api/jobs/${id}/stream`, { signal: abort.signal });
