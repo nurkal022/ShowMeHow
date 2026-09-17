@@ -1,81 +1,115 @@
-import { getJob, subscribe } from '@/lib/jobs';
+import { getJobStore, getOwnedJob } from '@/lib/jobs/current';
+import { isTerminalEvent, terminalEventFor, type JobStatus } from '@/lib/jobs/store';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import type { PipelineEvent } from '@/lib/types';
 
 export const maxDuration = 600;
 
+/** Сверка с базой на случай потерянного NOTIFY; заодно держит соединение живым. */
+const RECONCILE_MS = 5000;
+/** Как часто ожидающее задание узнаёт своё место в очереди. */
+const POSITION_MS = 3000;
+
 type P = { params: Promise<{ id: string }> };
 
-function isTerminal(e: PipelineEvent): boolean {
-  return e.type === 'done' || e.type === 'error' || e.type === 'cancelled';
-}
-
 export async function GET(req: Request, { params }: P) {
-  // Стрим отдаёт весь журнал пайплайна, поэтому владение проверяется так же
-  // строго, как в остальных роутах: нет сессии — 401, чужое задание — 404.
+  // Поток отдаёт весь журнал пайплайна: нет сессии — 401, чужое задание — 404.
   const user = await currentUserFromRequest(req);
   if (!user) {
     return new Response(JSON.stringify({ error: 'Требуется вход в систему.' }),
       { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
   const { id } = await params;
-  const job = await getJob(user.id, id);
+  const job = await getOwnedJob(user.id, id);
   if (!job) return new Response(null, { status: 404 });
 
+  const store = getJobStore();
   const encoder = new TextEncoder();
+  const cleanups: (() => void)[] = [];
   let closed = false;
-  let unsubscribe: (() => void) | null = null;
+  let lastSeq = 0;
+  let lastStatus: JobStatus = job.status;
+  let lastPosition = 0;
+  let pulling: Promise<void> | null = null;
+  let pullAgain = false;
 
-  const stream = new ReadableStream({
+  function cleanup(): void {
+    closed = true;
+    for (const c of cleanups.splice(0)) c();
+  }
+
+  const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const send = (e: PipelineEvent) => {
+      const shutdown = () => {
         if (closed) return;
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
-        } catch {
-          closed = true;
-          return;
-        }
-        if (isTerminal(e)) {
-          // Терминальное событие всегда закрывает поток — done/error/cancelled
-          // навсегда завершают job, дальнейших событий не будет.
-          closed = true;
-          unsubscribe?.();
-          try {
-            controller.close();
-          } catch {
-            // уже закрыт
-          }
-        }
+        cleanup();
+        try { controller.close(); } catch { /* уже закрыт */ }
+      };
+      const write = (chunk: string) => {
+        if (closed) return;
+        try { controller.enqueue(encoder.encode(chunk)); } catch { cleanup(); }
+      };
+      const send = (e: PipelineEvent) => {
+        write(`data: ${JSON.stringify(e)}\n\n`);
+        if (isTerminalEvent(e)) shutdown();
       };
 
-      // Инвариант «не теряем и не дублируем события»: подписываемся ПЕРЕД чтением
-      // снапшота job.events. Пока идёт реплей снапшота (см. ниже), любые события,
-      // прилетевшие через subscribe-колбэк, складываются в буфер `live`, а не
-      // отправляются немедленно. После того как снапшот полностью реплеен,
-      // добираем из `live` только «хвост» — события с индексом ≥ длины снапшота
-      // (то, что уже попало в снапшот, в live не дублируем). Дальше live-события
-      // отправляются сразу же по мере появления.
-      const live: PipelineEvent[] = [];
-      let replaying = true;
-      unsubscribe = subscribe(id, (e) => {
-        if (replaying) {
-          live.push(e);
-        } else {
-          send(e);
+      // Дочитывает журнал после lastSeq. Инвариант «без потерь и дублей» держит seq:
+      // уведомления, сверка и реплей сходятся в одну очередь чтений.
+      async function pullOnce(): Promise<void> {
+        const readTail = async () => {
+          for (const r of await store.events(id, lastSeq)) {
+            if (closed) return;
+            lastSeq = r.seq;
+            send(r.event);
+          }
+        };
+        await readTail();
+        if (closed) return;
+        const current = await store.get(id);
+        if (!current) { shutdown(); return; }
+        lastStatus = current.status;
+        const fallback = terminalEventFor(current);
+        if (fallback) {
+          // Статус и терминальное событие пишутся одной транзакцией: если статус
+          // терминальный, событие уже в журнале. Его нет только у старых записей.
+          await readTail();
+          if (!closed) send(fallback);
         }
-      });
+      }
 
-      const snapshot = job.events.slice();
-      for (const e of snapshot) send(e);
-      replaying = false;
-      for (let i = snapshot.length; i < live.length; i++) send(live[i]);
+      function pull(): Promise<void> {
+        if (pulling) { pullAgain = true; return pulling; }
+        pulling = (async () => {
+          do {
+            pullAgain = false;
+            try { await pullOnce(); } catch (e) { console.error(`Поток задания ${id}:`, e); }
+          } while (pullAgain && !closed);
+        })().finally(() => { pulling = null; });
+        return pulling;
+      }
+
+      async function reportPosition(): Promise<void> {
+        if (closed || lastStatus !== 'queued') return;
+        try {
+          const position = await store.position(id);
+          if (position > 0 && position !== lastPosition) send({ type: 'queued', position });
+          lastPosition = position;
+        } catch (e) {
+          console.error(`Позиция задания ${id}:`, e);
+        }
+      }
+
+      // Подписка до реплея: всё, что появится во время чтения, дочитает pullAgain.
+      cleanups.push(store.subscribe(id, () => { void pull(); }));
+      const reconcile = setInterval(() => { write(': ping\n\n'); void pull(); }, RECONCILE_MS);
+      const position = setInterval(() => { void reportPosition(); }, POSITION_MS);
+      cleanups.push(() => clearInterval(reconcile), () => clearInterval(position));
+      void pull().then(reportPosition);
     },
     cancel() {
-      // Клиент отключился (например, вкладка закрыта до конца генерации) —
-      // просто отписываемся, job продолжает жить и завершится независимо от стрима.
-      closed = true;
-      unsubscribe?.();
+      // Клиент ушёл — задание живёт дальше, просто перестаём читать.
+      cleanup();
     },
   });
 
@@ -84,6 +118,8 @@ export async function GET(req: Request, { params }: P) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
+      // Для прокси, которые смотрят на этот заголовок; Caddy настроен flush_interval -1.
+      'X-Accel-Buffering': 'no',
     },
   });
 }

@@ -2,149 +2,213 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { POST as postGenerate } from '@/app/api/generate/route';
 import { GET as getJobRoute } from '@/app/api/jobs/[id]/route';
 import { POST as postCancel } from '@/app/api/jobs/[id]/cancel/route';
 import { GET as getStream } from '@/app/api/jobs/[id]/stream/route';
-import { createJob, getJob, appendEvent, setStatus, __clearForTests } from '@/lib/jobs';
-import { submit, finish, __resetLimitsForTests } from '@/lib/limits';
+import { createMemoryJobStore } from '@/lib/jobs/store-memory';
+import { __setJobStoreForTests } from '@/lib/jobs/current';
+import type { JobStore, NewJob } from '@/lib/jobs/store';
+import { HIGH_PRIORITY } from '@/lib/jobs/policy';
+import { GENERATION_BUSY_MESSAGE, EMPTY_PROMPT_MESSAGE } from '@/lib/jobs/messages';
 import { saveSettings, NO_PROVIDER_MESSAGE } from '@/lib/settings';
-import type { JobRequest } from '@/lib/jobs';
+import { DEFAULT_ORG_SETTINGS } from '@/lib/org/settings';
+import type { Membership } from '@/lib/org/types';
 import type { AuthUser } from '@/lib/auth/users';
 import type { PipelineEvent } from '@/lib/types';
 
-// В этих тестах роуты вызываются напрямую, без базы и cookie — резолвер сессии
-// подменяется пользователем, которого тест выставляет через session.current.
-function testUser(id: string, email: string): AuthUser {
+function user(id: string, email: string): AuthUser {
   return { id, email, login: null, displayName: null, role: 'user', mustChangePassword: false };
 }
-const TEST_USER: AuthUser = testUser('11111111-1111-1111-1111-111111111111', 'a@t');
-const OTHER_USER: AuthUser = testUser('22222222-2222-2222-2222-222222222222', 'b@t');
-const session = vi.hoisted(() => ({ current: null as AuthUser | null }));
+const TEST_USER = user('11111111-1111-1111-1111-111111111111', 'a@t');
+const OTHER_USER = user('22222222-2222-2222-2222-222222222222', 'b@t');
+
+// Роуты вызываются напрямую, без базы и cookie: пользователя и членства выставляет тест.
+const session = vi.hoisted(() => ({ current: null as AuthUser | null, memberships: [] as unknown[] }));
 vi.mock('@/lib/auth/session', async (orig) => ({
   ...(await orig<typeof import('@/lib/auth/session')>()),
   currentUserFromRequest: async () => session.current,
   currentUserFromCookies: async () => session.current,
 }));
-
-// Роут /api/generate зовёт базу за квотой и поднимает настоящий Chromium — в юнит-тесте
-// подменяются оба: квота всегда свободна, пайплайн повисает и не завершает задание.
 vi.mock('@/lib/quota', async (orig) => ({
   ...(await orig<typeof import('@/lib/quota')>()),
   quotaStatus: async () => ({ limit: 10, used: 0, remaining: 10 }),
 }));
-// Роут /api/generate читает членства из базы; в юнит-тесте их нет — пользователь без организаций.
 vi.mock('@/lib/org/access', async (orig) => ({
   ...(await orig<typeof import('@/lib/org/access')>()),
-  listMemberships: async () => [],
-}));
-vi.mock('@/lib/pipeline/run', async (orig) => ({
-  ...(await orig<typeof import('@/lib/pipeline/run')>()),
-  makeCtx: () => ({}),
-  runPipeline: () => new Promise<void>(() => {}),
+  listMemberships: async () => session.memberships,
 }));
 
-const REQUEST: JobRequest = { prompt: 'маятник', mode: 'standard', hasImage: false };
+const REQUEST = { prompt: 'маятник', mode: 'standard' as const, hasImage: false };
+let store: JobStore;
 
-function generateRequest(): Request {
-  return new Request('http://t/api/generate', {
-    method: 'POST', body: JSON.stringify({ prompt: 'маятник' }),
+const params = (id: string) => ({ params: Promise.resolve({ id }) });
+const newJob = (ownerId = TEST_USER.id): NewJob =>
+  ({ ownerId, kind: 'generate', priority: 0, request: REQUEST });
+
+function generateRequest(body: object = { prompt: 'маятник' }): Request {
+  return new Request('http://t/api/generate', { method: 'POST', body: JSON.stringify(body) });
+}
+
+function withProvider<T>(fn: () => Promise<T>): Promise<T> {
+  process.env.SHOWMEHOW_API_KEY = 'test-key';
+  process.env.SHOWMEHOW_MODEL = 'test-model';
+  return fn().finally(() => {
+    delete process.env.SHOWMEHOW_API_KEY;
+    delete process.env.SHOWMEHOW_MODEL;
   });
+}
+
+/** Читатель SSE: пропускает комментарии `: ping`, отдаёт события по одному. */
+function sse(res: Response) {
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  const queue: PipelineEvent[] = [];
+  let buf = '';
+  let ended = false;
+  function drain() {
+    let idx = buf.indexOf('\n\n');
+    while (idx !== -1) {
+      const frame = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      if (frame.startsWith('data: ')) queue.push(JSON.parse(frame.slice(6)));
+      idx = buf.indexOf('\n\n');
+    }
+  }
+  async function next(): Promise<PipelineEvent | null> {
+    while (queue.length === 0 && !ended) {
+      const { value, done } = await reader.read();
+      if (done) ended = true;
+      else { buf += decoder.decode(value, { stream: true }); drain(); }
+    }
+    return queue.shift() ?? null;
+  }
+  async function rest(): Promise<PipelineEvent[]> {
+    const out: PipelineEvent[] = [];
+    for (let e = await next(); e; e = await next()) out.push(e);
+    return out;
+  }
+  return { next, rest, cancel: () => reader.cancel() };
 }
 
 beforeEach(() => {
   process.env.SHOWMEHOW_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'smh-jobs-api-'));
-  // Персистентность заданий отключена отсутствием DATABASE_URL: хранилище работает в памяти.
   delete process.env.DATABASE_URL;
   session.current = TEST_USER;
-  __clearForTests();
-  __resetLimitsForTests();
+  session.memberships = [];
+  store = createMemoryJobStore();
+  __setJobStoreForTests(store);
 });
 
 describe('POST /api/generate', () => {
-  it('returns 400 and creates no job when no provider is configured', async () => {
+  it('без провайдера отвечает 400 и задания не создаёт', async () => {
     saveSettings({ activeProviderId: null, providers: [], qualityMode: 'standard' });
-    const req = new Request('http://t/api/generate', {
-      method: 'POST',
-      body: JSON.stringify({ prompt: 'маятник' }),
-    });
-    const res = await postGenerate(req);
+    const res = await postGenerate(generateRequest());
     expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.error).toBe(NO_PROVIDER_MESSAGE);
+    expect((await res.json()).error).toBe(NO_PROVIDER_MESSAGE);
+    expect((await store.stats()).queued).toBe(0);
   });
 
-  // Регрессия: между hasActive и submit стояли два await (квота и INSERT задания),
-  // поэтому два одновременных POST одного пользователя проходили проверку оба.
-  it('вторая генерация того же пользователя отбивается 409, в том числе параллельная', async () => {
-    process.env.SHOWMEHOW_API_KEY = 'test-key';
-    process.env.SHOWMEHOW_MODEL = 'test-model';
-    try {
-      const first = await postGenerate(generateRequest());
-      expect(first.status).toBe(200);
-      const second = await postGenerate(generateRequest());
-      expect(second.status).toBe(409);
-      expect((await second.json()).error)
-        .toBe('У вас уже идёт генерация. Дождитесь её окончания или отмените.');
-
-      __clearForTests();
-      __resetLimitsForTests();
-      // Два запроса без единого await между ними: слот должен достаться одному.
-      const [a, b] = await Promise.all([postGenerate(generateRequest()),
-        postGenerate(generateRequest())]);
-      expect([a.status, b.status].sort()).toEqual([200, 409]);
-    } finally {
-      delete process.env.SHOWMEHOW_API_KEY;
-      delete process.env.SHOWMEHOW_MODEL;
-    }
+  it('пустой запрос — 400', async () => {
+    await withProvider(async () => {
+      const res = await postGenerate(generateRequest({ prompt: '   ' }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe(EMPTY_PROMPT_MESSAGE);
+    });
   });
 
   it('без сессии отвечает 401', async () => {
     session.current = null;
-    const res = await postGenerate(new Request('http://t/api/generate', {
-      method: 'POST', body: JSON.stringify({ prompt: 'маятник' }),
-    }));
-    expect(res.status).toBe(401);
-  });
-});
-
-describe('POST /api/jobs/[id]/cancel', () => {
-  it('returns 404 for an unknown job', async () => {
-    const res = await postCancel(new Request('http://t', { method: 'POST' }),
-      { params: Promise.resolve({ id: 'nope' }) });
-    expect(res.status).toBe(404);
+    expect((await postGenerate(generateRequest())).status).toBe(401);
   });
 
-  it('returns {ok:true} for a known job and is idempotent', async () => {
-    const job = await createJob(TEST_USER.id, REQUEST);
-    const params = Promise.resolve({ id: job.id });
-    const res1 = await postCancel(new Request('http://t', { method: 'POST' }), { params });
-    expect(res1.status).toBe(200);
-    expect(await res1.json()).toEqual({ ok: true });
-    const res2 = await postCancel(new Request('http://t', { method: 'POST' }), { params });
-    expect(res2.status).toBe(200);
-    expect(await res2.json()).toEqual({ ok: true });
+  it('ставит задание в очередь с картинкой и обычным приоритетом', async () => {
+    await withProvider(async () => {
+      const res = await postGenerate(generateRequest(
+        { prompt: 'маятник', mode: 'fast', imageDataUrl: 'data:image/png;base64,AA' }));
+      expect(res.status).toBe(200);
+      const { jobId } = await res.json();
+      expect(await store.get(jobId)).toMatchObject({
+        ownerId: TEST_USER.id, kind: 'generate', status: 'queued', priority: 0,
+        request: { prompt: 'маятник', mode: 'fast', hasImage: true },
+      });
+      expect((await store.claim('w1'))?.imageDataUrl).toBe('data:image/png;base64,AA');
+    });
+  });
+
+  it('учитель получает высокий приоритет', async () => {
+    const teacher: Membership = {
+      orgId: 'o1', orgSlug: 'sch12', orgName: 'Школа №12', orgKind: 'school', role: 'teacher',
+      settings: { ...DEFAULT_ORG_SETTINGS },
+    };
+    session.memberships = [teacher];
+    await withProvider(async () => {
+      const { jobId } = await (await postGenerate(generateRequest())).json();
+      expect((await store.get(jobId))?.priority).toBe(HIGH_PRIORITY);
+    });
+  });
+
+  it('вторая генерация того же человека — 409, в том числе параллельная', async () => {
+    await withProvider(async () => {
+      expect((await postGenerate(generateRequest())).status).toBe(200);
+      const second = await postGenerate(generateRequest());
+      expect(second.status).toBe(409);
+      expect((await second.json()).error).toBe(GENERATION_BUSY_MESSAGE);
+
+      __setJobStoreForTests(createMemoryJobStore());
+      const [a, b] = await Promise.all([postGenerate(generateRequest()), postGenerate(generateRequest())]);
+      expect([a.status, b.status].sort()).toEqual([200, 409]);
+    });
   });
 });
 
 describe('GET /api/jobs/[id]', () => {
-  it('returns 404 for an unknown job', async () => {
-    const res = await getJobRoute(new Request('http://t'), { params: Promise.resolve({ id: 'nope' }) });
-    expect(res.status).toBe(404);
+  it('неизвестное задание — 404', async () => {
+    expect((await getJobRoute(new Request('http://t'), params('nope'))).status).toBe(404);
+    expect((await getJobRoute(new Request('http://t'), params(crypto.randomUUID()))).status).toBe(404);
   });
 
-  it('returns the job without an events array', async () => {
-    const job = await createJob(TEST_USER.id, REQUEST);
-    appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 });
-    const res = await getJobRoute(new Request('http://t'), { params: Promise.resolve({ id: job.id }) });
+  it('отдаёт задание без владельца, аренды и журнала', async () => {
+    const job = await store.create(newJob());
+    const res = await getJobRoute(new Request('http://t'), params(job.id));
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body).toEqual({
-      id: job.id, status: 'queued', createdAt: job.createdAt, request: REQUEST,
+    expect(await res.json()).toEqual({
+      id: job.id, kind: 'generate', status: 'queued', createdAt: job.createdAt, request: REQUEST,
     });
-    expect(body.events).toBeUndefined();
-    // Владелец наружу не отдаётся — клиенту он не нужен.
-    expect(body.ownerId).toBeUndefined();
+  });
+
+  it('готовое задание несёт id симуляции', async () => {
+    const job = await store.create(newJob());
+    await store.claim('w1');
+    const simId = crypto.randomUUID();
+    await store.finish(job.id, 'w1', { status: 'done', simulationId: simId });
+    const body = await (await getJobRoute(new Request('http://t'), params(job.id))).json();
+    expect(body).toMatchObject({ status: 'done', simulationId: simId });
+  });
+});
+
+describe('POST /api/jobs/[id]/cancel', () => {
+  const cancel = (id: string) => postCancel(new Request('http://t', { method: 'POST' }), params(id));
+
+  it('неизвестное задание — 404', async () => {
+    expect((await cancel('nope')).status).toBe(404);
+  });
+
+  it('ожидающее отменяется сразу, повтор безвреден', async () => {
+    const job = await store.create(newJob());
+    expect(await (await cancel(job.id)).json()).toEqual({ ok: true });
+    expect(await (await cancel(job.id)).json()).toEqual({ ok: true });
+    expect((await store.get(job.id))?.status).toBe('cancelled');
+    expect(await store.events(job.id, 0)).toEqual([{ seq: 1, event: { type: 'cancelled' } }]);
+  });
+
+  it('идущее получает флаг отмены, статус меняет воркер', async () => {
+    const job = await store.create(newJob());
+    await store.claim('w1');
+    expect((await cancel(job.id)).status).toBe(200);
+    expect(await store.get(job.id)).toMatchObject({ status: 'running', cancelRequested: true });
+    expect((await store.heartbeat('w1', 'h', 1, [job.id])).cancelRequested).toEqual([job.id]);
   });
 });
 
@@ -152,184 +216,72 @@ describe('GET /api/jobs/[id]', () => {
 // и мог отменить чужую генерацию — все три роута заданий обязаны проверять владельца.
 describe('изоляция владельцев в роутах заданий', () => {
   it('без сессии — 401, чужое задание — 404', async () => {
-    const job = await createJob(TEST_USER.id, REQUEST);
-    const params = () => Promise.resolve({ id: job.id });
+    const job = await store.create(newJob());
+    const post = () => new Request('http://t', { method: 'POST' });
 
     session.current = null;
-    expect((await getJobRoute(new Request('http://t'), { params: params() })).status).toBe(401);
-    expect((await getStream(new Request('http://t'), { params: params() })).status).toBe(401);
-    expect((await postCancel(new Request('http://t', { method: 'POST' }),
-      { params: params() })).status).toBe(401);
+    expect((await getJobRoute(new Request('http://t'), params(job.id))).status).toBe(401);
+    expect((await getStream(new Request('http://t'), params(job.id))).status).toBe(401);
+    expect((await postCancel(post(), params(job.id))).status).toBe(401);
 
     session.current = OTHER_USER;
-    expect((await getJobRoute(new Request('http://t'), { params: params() })).status).toBe(404);
-    expect((await getStream(new Request('http://t'), { params: params() })).status).toBe(404);
-    expect((await postCancel(new Request('http://t', { method: 'POST' }),
-      { params: params() })).status).toBe(404);
-
-    session.current = TEST_USER;
-    expect((await getJobRoute(new Request('http://t'), { params: params() })).status).toBe(200);
-    expect((await postCancel(new Request('http://t', { method: 'POST' }),
-      { params: params() })).status).toBe(200);
+    expect((await getJobRoute(new Request('http://t'), params(job.id))).status).toBe(404);
+    expect((await getStream(new Request('http://t'), params(job.id))).status).toBe(404);
+    expect((await postCancel(post(), params(job.id))).status).toBe(404);
+    expect((await store.get(job.id))?.status).toBe('queued');
   });
 });
-
-// Главная регрессия к Critical: статус 'running' обязан ставить сам обработчик
-// /api/generate — внутри колбэка, который он передаёт в submit. Задание здесь ведётся
-// через настоящий роут, а не через самописный колбэк: тест, который сам зовёт
-// setStatus в своём start, проверял бы собственную копию исправленного роута и
-// прошёл бы на сломанном коде.
-describe('подъём задания из очереди через /api/generate', () => {
-  it('обработчик сам переводит дозапущенное задание в running', async () => {
-    process.env.SHOWMEHOW_API_KEY = 'test-key';
-    process.env.SHOWMEHOW_MODEL = 'test-model';
-    try {
-      // Оба серверных слота заняты чужими заданиями.
-      submit('occupant-1', OTHER_USER.id, () => {});
-      submit('occupant-2', '33333333-3333-3333-3333-333333333333', () => {});
-
-      const res = await postGenerate(generateRequest());
-      expect(res.status).toBe(200);
-      const { jobId } = (await res.json()) as { jobId: string };
-      expect((await getJob(TEST_USER.id, jobId))!.status).toBe('queued');
-
-      // Слот освободился — задание обязано стартовать и получить свой статус.
-      finish('occupant-1');
-      // Проверяется именно состояние задания в хранилище, а не переменная теста.
-      expect((await getJob(TEST_USER.id, jobId))!.status).toBe('running');
-    } finally {
-      delete process.env.SHOWMEHOW_API_KEY;
-      delete process.env.SHOWMEHOW_MODEL;
-    }
-  });
-});
-
-// Регрессия: задание, поднятое из очереди, оставалось в статусе 'queued', и роут
-// отмены принимал его за не стартовавшее — markCancelled освобождал слот, физически
-// занятый живым Chromium, и на сервере оказывалось три параллельных генерации.
-describe('отмена задания, поднятого из очереди', () => {
-  it('не освобождает третий слот', async () => {
-    const users: AuthUser[] = [
-      TEST_USER, OTHER_USER,
-      testUser('33333333-3333-3333-3333-333333333333', 'c@t'),
-      testUser('44444444-4444-4444-4444-444444444444', 'd@t'),
-    ];
-    const started: string[] = [];
-    const ids: string[] = [];
-    for (const u of users) {
-      const job = await createJob(u.id, REQUEST);
-      ids.push(job.id);
-      // Колбэк повторяет то, что делает роут: статус ставится в момент старта.
-      submit(job.id, u.id, () => { setStatus(job.id, 'running'); started.push(job.id); });
-    }
-    expect(started).toEqual([ids[0], ids[1]]);
-
-    // Первое задание кончилось — третье поднимается из очереди и обязано стать running.
-    appendEvent(ids[0], { type: 'done', simulationId: '55555555-5555-5555-5555-555555555555' });
-    expect(started).toEqual([ids[0], ids[1], ids[2]]);
-
-    session.current = users[2];
-    const res = await postCancel(new Request('http://t', { method: 'POST' }),
-      { params: Promise.resolve({ id: ids[2] }) });
-    expect(res.status).toBe(200);
-    // Четвёртое НЕ стартовало: слот занят живым пайплайном третьего, который сам
-    // закроется по флагу отмены.
-    expect(started).toEqual([ids[0], ids[1], ids[2]]);
-  });
-});
-
-async function readAllSSE(res: Response): Promise<PipelineEvent[]> {
-  const reader = res.body!.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  const events: PipelineEvent[] = [];
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let idx: number;
-    // eslint-disable-next-line no-cond-assign
-    while ((idx = buf.indexOf('\n\n')) !== -1) {
-      const frame = buf.slice(0, idx);
-      buf = buf.slice(idx + 2);
-      if (frame.startsWith('data: ')) events.push(JSON.parse(frame.slice(6)));
-    }
-  }
-  return events;
-}
 
 describe('GET /api/jobs/[id]/stream', () => {
-  it('returns 404 for an unknown job', async () => {
-    const res = await getStream(new Request('http://t'), { params: Promise.resolve({ id: 'nope' }) });
-    expect(res.status).toBe(404);
+  it('неизвестное задание — 404', async () => {
+    expect((await getStream(new Request('http://t'), params('nope'))).status).toBe(404);
   });
 
-  it('replays past events, delivers live events, and closes on the terminal event', async () => {
-    const job = await createJob(TEST_USER.id, REQUEST);
-    appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 });
-    appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'end', at: 2 });
+  it('реплей, живые события без дублей и закрытие на терминальном', async () => {
+    const job = await store.create(newJob());
+    await store.claim('w1');
+    await store.appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'start', at: 1 }, 'w1');
+    await store.appendEvent(job.id, { type: 'stage', stage: 'planning', status: 'end', at: 2 }, 'w1');
 
-    const res = await getStream(new Request('http://t'), { params: Promise.resolve({ id: job.id }) });
+    const res = await getStream(new Request('http://t'), params(job.id));
     expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('text/event-stream');
+    const s = sse(res);
+    expect(await s.next()).toEqual({ type: 'stage', stage: 'planning', status: 'start', at: 1 });
+    expect(await s.next()).toEqual({ type: 'stage', stage: 'planning', status: 'end', at: 2 });
 
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    const events: PipelineEvent[] = [];
-    const readFrames = () => {
-      let idx: number;
-      // eslint-disable-next-line no-cond-assign
-      while ((idx = buf.indexOf('\n\n')) !== -1) {
-        const frame = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        if (frame.startsWith('data: ')) events.push(JSON.parse(frame.slice(6)));
-      }
-    };
+    await store.appendEvent(job.id, { type: 'warning', message: 'осторожно' }, 'w1');
+    expect(await s.next()).toEqual({ type: 'warning', message: 'осторожно' });
 
-    // Реплей: два уже накопленных события должны прийти первыми.
-    while (events.length < 2) {
-      const { value } = await reader.read();
-      buf += decoder.decode(value!, { stream: true });
-      readFrames();
-    }
-    expect(events).toEqual([
-      { type: 'stage', stage: 'planning', status: 'start', at: 1 },
-      { type: 'stage', stage: 'planning', status: 'end', at: 2 },
-    ]);
-
-    // Live: новое событие, добавленное после того как стрим уже открыт, доезжает.
-    appendEvent(job.id, { type: 'warning', message: 'осторожно' });
-    while (events.length < 3) {
-      const { value } = await reader.read();
-      buf += decoder.decode(value!, { stream: true });
-      readFrames();
-    }
-    expect(events[2]).toEqual({ type: 'warning', message: 'осторожно' });
-
-    // Терминальное событие закрывает поток: done → reader.read() возвращает done:true
-    // после доставки самого события, без дублирования и потери.
-    appendEvent(job.id, { type: 'done', simulationId: 'sim-1' });
-    let finished = false;
-    while (!finished) {
-      const { value, done } = await reader.read();
-      if (value) {
-        buf += decoder.decode(value, { stream: true });
-        readFrames();
-      }
-      if (done) finished = true;
-    }
-    expect(events).toHaveLength(4);
-    expect(events[3]).toEqual({ type: 'done', simulationId: 'sim-1' });
-    // Никаких дублей.
-    expect(new Set(events.map((e) => JSON.stringify(e))).size).toBe(4);
+    await store.finish(job.id, 'w1', { status: 'done', simulationId: 'sim-1' });
+    expect(await s.rest()).toEqual([{ type: 'done', simulationId: 'sim-1' }]);
   });
 
-  it('closes immediately after replay when the job is already terminal', async () => {
-    const job = await createJob(TEST_USER.id, REQUEST);
-    appendEvent(job.id, { type: 'done', simulationId: 'sim-2' });
+  it('завершённое задание: реплей и сразу закрытие', async () => {
+    const job = await store.create(newJob());
+    await store.cancelQueued(job.id);
+    const s = sse(await getStream(new Request('http://t'), params(job.id)));
+    expect(await s.rest()).toEqual([{ type: 'cancelled' }]);
+  });
 
-    const res = await getStream(new Request('http://t'), { params: Promise.resolve({ id: job.id }) });
-    const events = await readAllSSE(res);
-    expect(events).toEqual([{ type: 'done', simulationId: 'sim-2' }]);
+  it('пока задание в очереди, поток сообщает позицию и её изменения', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      await store.create(newJob(OTHER_USER.id));
+      const mine = await store.create(newJob());
+      const s = sse(await getStream(new Request('http://t'), params(mine.id)));
+      expect(await s.next()).toEqual({ type: 'queued', position: 2 });
+      await store.claim('w1');                 // первое задание ушло из очереди
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(await s.next()).toEqual({ type: 'queued', position: 1 });
+      await store.claim('w1');
+      await store.appendEvent(mine.id, { type: 'stage', stage: 'planning', status: 'start', at: 5 }, 'w1');
+      expect(await s.next()).toEqual({ type: 'stage', stage: 'planning', status: 'start', at: 5 });
+      // Позиция в журнал не пишется.
+      expect((await store.events(mine.id, 0)).map((e) => e.event.type)).toEqual(['stage']);
+      await s.cancel();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

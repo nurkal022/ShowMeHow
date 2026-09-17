@@ -6,8 +6,6 @@ import { closeDb } from '@/lib/db/client';
 import { createUser } from '@/lib/auth/users';
 import { createSession, SESSION_COOKIE } from '@/lib/auth/session';
 import { quotaStatus, TRIAL_LIMIT, QUOTA_EXHAUSTED_MESSAGE } from '@/lib/quota';
-import { __resetLimitsForTests } from '@/lib/limits';
-import { __clearForTests } from '@/lib/jobs';
 import { POST as postGenerate } from '@/app/api/generate/route';
 
 const pool = testDb('quota_test');
@@ -19,17 +17,15 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   if (!pool) return;
-  await pool.query('DELETE FROM jobs; DELETE FROM sessions; DELETE FROM users;');
-  __clearForTests();
-  __resetLimitsForTests();
+  await pool.query('DELETE FROM job_events; DELETE FROM jobs; DELETE FROM sessions; DELETE FROM users;');
 });
 afterAll(async () => { await pool?.end(); await closeDb(); });
 
 describe.skipIf(!pool)('квота', () => {
-  async function addJob(ownerId: string, status: string) {
+  async function addJob(ownerId: string, status: string, kind = 'generate') {
     await pool!.query(
-      "INSERT INTO jobs (id, owner_id, status, request) VALUES ($1,$2,$3,'{}'::jsonb)",
-      [crypto.randomUUID(), ownerId, status]);
+      "INSERT INTO jobs (id, owner_id, status, request, kind) VALUES ($1,$2,$3,'{}'::jsonb,$4)",
+      [crypto.randomUUID(), ownerId, status, kind]);
   }
 
   it('считает только успешные генерации', async () => {
@@ -38,6 +34,13 @@ describe.skipIf(!pool)('квота', () => {
     await addJob(u.id, 'cancelled');
     await addJob(u.id, 'error');
     expect(await quotaStatus(u, [])).toEqual({ limit: TRIAL_LIMIT, used: TRIAL_LIMIT, remaining: 0 });
+  });
+
+  it('доработки квоту не тратят', async () => {
+    const u = await createUser('r@example.com', 'пароль123');
+    await addJob(u.id, 'done');
+    for (let i = 0; i < 5; i++) await addJob(u.id, 'done', 'refine');
+    expect(await quotaStatus(u, [])).toEqual({ limit: TRIAL_LIMIT, used: 1, remaining: TRIAL_LIMIT - 1 });
   });
 
   it('у админа лимита нет', async () => {

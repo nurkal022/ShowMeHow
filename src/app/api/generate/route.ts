@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import {
-  createJob, appendEvent, markCancelled, isCancelled, setStatus,
-} from '@/lib/jobs';
-import { reserveUser, releaseUser, submit, queuePosition } from '@/lib/limits';
+import { getJobStore } from '@/lib/jobs/current';
+import { ActiveJobExistsError } from '@/lib/jobs/store';
+import { jobPriority } from '@/lib/jobs/policy';
+import { EMPTY_PROMPT_MESSAGE, GENERATION_BUSY_MESSAGE } from '@/lib/jobs/messages';
 import { quotaStatus, quotaExhaustedMessage } from '@/lib/quota';
-import { makeCtx, runPipeline, CancelledError } from '@/lib/pipeline/run';
 import { activeProvider, resolveMode, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
@@ -14,78 +13,47 @@ import type { QualityMode } from '@/lib/types';
 
 export const maxDuration = 600;
 
-interface GenerateInput {
-  ownerId: string;
-  prompt: string;
-  imageDataUrl?: string;
-  mode: QualityMode;
-}
-
+/**
+ * Веб только ставит заявку в очередь: пайплайн и Chromium живут в воркере.
+ * «Одна генерация на человека» держит уникальный индекс базы, а не память процесса,
+ * поэтому второй одновременный POST получает 409 без всякой резервации.
+ */
 export async function POST(req: Request) {
   const user = await currentUserFromRequest(req);
   if (!user) return unauthorized();
-  // Право проверяется до резервации слота: ученику без разрешения нечего занимать.
   const memberships = await listMemberships(user.id);
   if (!canGenerate(user, memberships)) {
     return NextResponse.json({ error: GENERATION_FORBIDDEN_MESSAGE }, { status: 403 });
   }
-  const { prompt, imageDataUrl, mode: bodyMode } =
-    (await req.json()) as {
-      prompt: string; imageDataUrl?: string; mode?: QualityMode;
-    };
-  // Провайдер проверяется ДО createJob: если он не настроен, job не создаётся вовсе —
-  // клиент получает 400 без побочных эффектов (никакого осиротевшего задания).
+  const body = (await req.json()) as { prompt?: unknown; imageDataUrl?: unknown; mode?: QualityMode };
+  const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+  if (!prompt) {
+    return NextResponse.json({ error: EMPTY_PROMPT_MESSAGE }, { status: 400 });
+  }
+  // Провайдер проверяется до создания задания: без него воркеру нечего делать.
   if (!activeProvider()) {
     return NextResponse.json({ error: NO_PROVIDER_MESSAGE }, { status: 400 });
   }
-  // Резервация СИНХРОННО закрепляет за пользователем единственную генерацию —
-  // до первого await, иначе два одновременных POST прошли бы проверку оба
-  // (и заняли бы оба слота сервера, и переступили бы квоту на единицу).
-  if (!reserveUser(user.id)) {
+  const quota = await quotaStatus(user, memberships);
+  if (quota.limit !== null && quota.remaining !== null && quota.remaining <= 0) {
     return NextResponse.json(
-      { error: 'У вас уже идёт генерация. Дождитесь её окончания или отмените.' }, { status: 409 });
+      { error: quotaExhaustedMessage(quota.limit, hasStaffRole(memberships)) }, { status: 403 });
   }
-  let jobId = '';
+  const imageDataUrl = typeof body.imageDataUrl === 'string' && body.imageDataUrl
+    ? body.imageDataUrl : undefined;
   try {
-    const quota = await quotaStatus(user, memberships);
-    if (quota.limit !== null && quota.remaining !== null && quota.remaining <= 0) {
-      releaseUser(user.id);
-      return NextResponse.json(
-        { error: quotaExhaustedMessage(quota.limit, hasStaffRole(memberships)) }, { status: 403 });
-    }
-    const mode = resolveMode(bodyMode);
-    const job = await createJob(user.id, { prompt, mode, hasImage: !!imageDataUrl });
-    jobId = job.id;
-    // 'running' ставится внутри start, а не после возврата из submit: только так
-    // задание, поднятое из очереди освободившимся слотом, тоже получает свой статус.
-    const state = submit(jobId, user.id, () => {
-      setStatus(jobId, 'running');
-      void runDetached(jobId, { ownerId: user.id, prompt, imageDataUrl, mode });
+    const job = await getJobStore().create({
+      ownerId: user.id,
+      kind: 'generate',
+      priority: jobPriority(user, memberships),
+      request: { prompt, mode: resolveMode(body.mode), hasImage: !!imageDataUrl },
+      imageDataUrl,
     });
-    if (state === 'queued') {
-      appendEvent(jobId, { type: 'queued', position: queuePosition(jobId) });
-    }
+    return NextResponse.json({ jobId: job.id });
   } catch (e) {
-    // До submit резервация ещё висит на пользователе; после него она уже снята
-    // и повторный releaseUser безвреден.
-    releaseUser(user.id);
+    if (e instanceof ActiveJobExistsError) {
+      return NextResponse.json({ error: GENERATION_BUSY_MESSAGE }, { status: 409 });
+    }
     throw e;
-  }
-  return NextResponse.json({ jobId });
-}
-
-async function runDetached(jobId: string, input: GenerateInput): Promise<void> {
-  try {
-    // makeCtx конструируется здесь (не в POST), потому что emit должен писать
-    // в конкретный jobId через appendEvent — привязка к job происходит на границе
-    // detached-запуска, а не в обработчике HTTP-запроса.
-    const ctx = makeCtx((e) => appendEvent(jobId, e));
-    await runPipeline(ctx, input, () => isCancelled(jobId));
-  } catch (e) {
-    if (e instanceof CancelledError) {
-      markCancelled(jobId);
-    } else {
-      appendEvent(jobId, { type: 'error', message: e instanceof Error ? e.message : String(e) });
-    }
   }
 }
