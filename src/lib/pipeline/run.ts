@@ -74,7 +74,14 @@ function planSummary(spec: PlanSpec): PlanSummary {
 
 export async function runPipeline(
   ctx: Ctx,
-  input: { ownerId: string; prompt: string; imageDataUrl?: string; mode: QualityMode },
+  input: {
+    ownerId: string; prompt: string; imageDataUrl?: string; mode: QualityMode;
+    /**
+     * Вызывается сразу после сохранения, до превью и события done. Воркер записывает
+     * id в задание: повторная попытка после потери воркера не создаст вторую симуляцию.
+     */
+    onSaved?: (simulationId: string) => Promise<void>;
+  },
   signal?: () => boolean,
 ): Promise<SimulationMeta> {
   function checkCancelled(): void {
@@ -213,6 +220,7 @@ export async function runPipeline(
     tags: spec.learningGoals.slice(0, 3),
     warning: warnings.length ? warnings.join(' ') : undefined,
   }, best.html);
+  await input.onSaved?.(meta.id);
   const shot = best.render.screenshots[1] ?? best.render.screenshots[0];
   if (shot) await saveThumbnail(input.ownerId, meta.id, shot);
   emitStage(ctx, 'saving', 'end');
@@ -231,9 +239,15 @@ async function refineHtml(ctx: Ctx, html: string, feedback: string): Promise<str
 
 export async function refineExisting(
   ctx: Ctx, ownerId: string, id: string, instruction: string,
+  opts: { signal?: () => boolean; onSaved?: (simulationId: string) => Promise<void> } = {},
 ): Promise<void> {
+  function checkCancelled(): void {
+    if (opts.signal?.()) throw new CancelledError();
+  }
+
   const html = await getArtifact(ownerId, id);
   if (html === null) throw new Error('Симуляция не найдена');
+  checkCancelled();
   emitStage(ctx, 'refining', 'start');
   try {
     let refined = await refineHtml(ctx, html, instruction);
@@ -250,7 +264,10 @@ export async function refineExisting(
     if (forbidden.length > 0) {
       throw new Error('Правка внесла запрещённые внешние ресурсы: ' + forbidden.join(', '));
     }
+    // Последняя точка отмены: после записи артефакта отменять уже нечего.
+    checkCancelled();
     await updateArtifact(ownerId, id, refined);
+    await opts.onSaved?.(id);
     const shot = report.screenshots[1] ?? report.screenshots[0];
     if (shot) await saveThumbnail(ownerId, id, shot);
   } finally {

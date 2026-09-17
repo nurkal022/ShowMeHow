@@ -288,6 +288,22 @@ describe('runPipeline', () => {
     expect(events.filter((e) => e.type === 'judge-verdict')).toHaveLength(1);
     expect(events.filter((e) => e.type === 'refine-round')).toHaveLength(1);
   });
+
+  it('onSaved получает id сразу после сохранения, до события done', async () => {
+    const { ctx } = fakeCtx();
+    const order: string[] = [];
+    const emit = ctx.emit;
+    ctx.emit = (e) => { if (e.type === 'done') order.push('done'); emit(e); };
+    const meta = await runPipeline(ctx, {
+      ownerId: OWNER, prompt: 'маятник', mode: 'fast',
+      onSaved: async (id) => {
+        // Симуляция уже в хранилище: повторная попытка по этому id найдёт готовый результат.
+        expect(await getMeta(OWNER, id)).not.toBeNull();
+        order.push(`saved:${id}`);
+      },
+    });
+    expect(order).toEqual([`saved:${meta.id}`, 'done']);
+  });
 });
 
 describe('refineExisting', () => {
@@ -338,6 +354,45 @@ describe('refineExisting', () => {
     await expect(refineExisting(ctx, OWNER, meta.id, 'сделай медленнее'))
       .rejects.toThrow(/запрещённые внешние ресурсы/i);
     expect(await getArtifact(OWNER, meta.id)).toBe('<html>old</html>');
+  });
+
+  it('отмена до правки: CancelledError, артефакт и история не тронуты', async () => {
+    const meta = await createSimulation(
+      OWNER, { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
+    const { ctx } = fakeCtx();
+    await expect(refineExisting(ctx, OWNER, meta.id, 'медленнее', { signal: () => true }))
+      .rejects.toBeInstanceOf(CancelledError);
+    expect(callsByRole(ctx.chat, 'refiner')).toHaveLength(0);
+    expect(await getArtifact(OWNER, meta.id)).toBe('<html>old</html>');
+    expect(await listHistory(OWNER, meta.id)).toEqual([]);
+  });
+
+  it('отмена во время правки: до записи артефакта', async () => {
+    const meta = await createSimulation(
+      OWNER, { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
+    const { ctx } = fakeCtx();
+    // Первая проверка (перед правкой) пропускает, вторая (перед записью) останавливает.
+    let checks = 0;
+    const signal = () => checks++ > 0;
+    await expect(refineExisting(ctx, OWNER, meta.id, 'медленнее', { signal }))
+      .rejects.toBeInstanceOf(CancelledError);
+    expect(callsByRole(ctx.chat, 'refiner')).toHaveLength(1);
+    expect(await getArtifact(OWNER, meta.id)).toBe('<html>old</html>');
+  });
+
+  it('onSaved вызывается с id после записи артефакта', async () => {
+    const meta = await createSimulation(
+      OWNER, { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
+    const { ctx, events } = fakeCtx();
+    const saved: string[] = [];
+    await refineExisting(ctx, OWNER, meta.id, 'медленнее', {
+      onSaved: async (id) => {
+        expect(await getArtifact(OWNER, id)).toContain('showmehow-runtime');
+        expect(events.some((e) => e.type === 'done')).toBe(false);
+        saved.push(id);
+      },
+    });
+    expect(saved).toEqual([meta.id]);
   });
 });
 
