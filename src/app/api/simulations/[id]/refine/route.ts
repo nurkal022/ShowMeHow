@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
-import { makeCtx, refineExisting } from '@/lib/pipeline/run';
 import { getArtifact } from '@/lib/storage';
+import { getJobStore } from '@/lib/jobs/current';
+import { ActiveJobExistsError } from '@/lib/jobs/store';
+import { jobPriority } from '@/lib/jobs/policy';
+import {
+  EMPTY_INSTRUCTION_MESSAGE, INVALID_REQUEST_MESSAGE, REFINE_BUSY_MESSAGE,
+  SIMULATION_NOT_FOUND_MESSAGE,
+} from '@/lib/jobs/messages';
+import { activeProvider, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
 import { listMemberships } from '@/lib/org/access';
@@ -10,36 +17,63 @@ function isInvalidSegment(e: unknown): boolean {
   return e instanceof Error && e.message.includes('invalid path segment');
 }
 
+/**
+ * Доработка — такое же задание, как генерация: её выполняет воркер, и Chromium
+ * больше не поднимается в веб-процессе в обход очереди. Квоту она не тратит.
+ */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await currentUserFromRequest(req);
   if (!user) return unauthorized();
-  // Доработка — тоже работа модели: ученику без разрешения она закрыта так же,
-  // как генерация. Проверка идёт до поиска симуляции и ничего о ней не выдаёт.
-  if (!canGenerate(user, await listMemberships(user.id))) {
+  // Право проверяется до поиска симуляции и ничего о ней не выдаёт.
+  const memberships = await listMemberships(user.id);
+  if (!canGenerate(user, memberships)) {
     return NextResponse.json({ error: GENERATION_FORBIDDEN_MESSAGE }, { status: 403 });
   }
   const { id } = await params;
-  const { instruction } = await req.json();
-  // Чужая и несуществующая симуляции дают 404, как во всех остальных роутах; попытка
-  // обхода каталога в id (например "..%2Fevil") даёт 400, как и в соседних роутах;
-  // 500 остаётся только за настоящими сбоями пайплайна.
+  const body = await readBody(req);
+  if (!body) {
+    return NextResponse.json({ error: INVALID_REQUEST_MESSAGE }, { status: 400 });
+  }
+  const instruction = typeof body.instruction === 'string' ? body.instruction.trim() : '';
+  if (!instruction) {
+    return NextResponse.json({ error: EMPTY_INSTRUCTION_MESSAGE }, { status: 400 });
+  }
+  // Чужая и несуществующая симуляции дают 404; обход каталога в id — 400.
   try {
     if ((await getArtifact(user.id, id)) === null) {
-      return NextResponse.json({ error: 'Симуляция не найдена.' }, { status: 404 });
+      return NextResponse.json({ error: SIMULATION_NOT_FOUND_MESSAGE }, { status: 404 });
     }
   } catch (e) {
-    if (isInvalidSegment(e)) {
-      return NextResponse.json({ error: 'Симуляция не найдена.' }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'Симуляция не найдена.' }, { status: 404 });
+    const status = isInvalidSegment(e) ? 400 : 404;
+    return NextResponse.json({ error: SIMULATION_NOT_FOUND_MESSAGE }, { status });
   }
-  // Доработка квоту не тратит и ограничителю параллелизма не подчиняется:
-  // это правка уже созданной симуляции, а не новая генерация.
+  if (!activeProvider()) {
+    return NextResponse.json({ error: NO_PROVIDER_MESSAGE }, { status: 400 });
+  }
   try {
-    await refineExisting(makeCtx(() => {}), user.id, id, instruction);
-    return NextResponse.json({ html: await getArtifact(user.id, id) });
+    const job = await getJobStore().create({
+      ownerId: user.id,
+      kind: 'refine',
+      priority: jobPriority(user, memberships),
+      request: { instruction },
+      targetSimulationId: id,
+    });
+    return NextResponse.json({ jobId: job.id });
   } catch (e) {
-    return NextResponse.json({ error: String(e instanceof Error ? e.message : e) },
-      { status: 500 });
+    if (e instanceof ActiveJobExistsError) {
+      return NextResponse.json({ error: REFINE_BUSY_MESSAGE }, { status: 409 });
+    }
+    throw e;
+  }
+}
+
+/** null — тело не JSON-объект: такой запрос не от нашего клиента, но 500 он не заслуживает. */
+async function readBody(req: Request): Promise<{ instruction?: unknown } | null> {
+  try {
+    const body: unknown = await req.json();
+    return body !== null && typeof body === 'object' && !Array.isArray(body)
+      ? body as { instruction?: unknown } : null;
+  } catch {
+    return null;
   }
 }
