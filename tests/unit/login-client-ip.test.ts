@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { __resetAttemptsForTests } from '@/lib/auth/rate-limit';
 
+// Юнит-тест: хранилище попыток только в памяти, базу не трогаем даже при заданном DATABASE_URL.
+delete process.env.DATABASE_URL;
+
 // База не нужна: аккаунтов нет, а сверка пароля подменена быстрой, чтобы
 // триста с лишним запросов не тратили время на scrypt.
 vi.mock('@/lib/auth/users', async (orig) => ({

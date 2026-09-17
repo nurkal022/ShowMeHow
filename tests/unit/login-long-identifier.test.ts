@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { __resetAttemptsForTests, __attemptKeysForTests } from '@/lib/auth/rate-limit';
 
+// Юнит-тест: хранилище попыток только в памяти, базу не трогаем даже при заданном DATABASE_URL.
+delete process.env.DATABASE_URL;
+
 // База не нужна: сверхдлинный идентификатор не должен до неё доходить.
 const findUserByIdentifier = vi.fn(async () => null);
 vi.mock('@/lib/auth/users', async (orig) => ({

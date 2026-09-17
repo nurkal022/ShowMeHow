@@ -5,6 +5,9 @@ import {
   purgeOldAttempts, createMemoryAttemptStore, __setAttemptStoreForTests,
 } from '@/lib/auth/rate-limit';
 
+// Юнит-тест: хранилище попыток только в памяти, базу не трогаем даже при заданном DATABASE_URL.
+delete process.env.DATABASE_URL;
+
 describe('rate-limit', () => {
   beforeEach(async () => { await __resetAttemptsForTests(); });
 
@@ -118,5 +121,24 @@ describe('хранилище попыток в памяти', () => {
     } finally {
       __setAttemptStoreForTests(null);
     }
+  });
+});
+
+describe('тестовые помощники вне vitest', () => {
+  it('отказываются стирать и читать счётчики', async () => {
+    const saved = process.env.VITEST;
+    delete process.env.VITEST;
+    try {
+      await expect(__resetAttemptsForTests()).rejects.toThrow(/только в тестах/);
+      await expect(__attemptKeysForTests()).rejects.toThrow(/только в тестах/);
+    } finally {
+      process.env.VITEST = saved;
+    }
+    // Под vitest те же вызовы снова работают.
+    await __resetAttemptsForTests();
+    await recordLoginFailure('10.0.0.1', 'kept');
+    expect(await __attemptKeysForTests()).toHaveLength(2);
+    await __resetAttemptsForTests();
+    expect(await __attemptKeysForTests()).toEqual([]);
   });
 });

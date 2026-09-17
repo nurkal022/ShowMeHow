@@ -8,12 +8,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: Request) {
   const { email, password } = (await req.json()) as { email?: string; password?: string };
-  if (!email || !EMAIL_RE.test(normalizeEmail(email))) {
+  const normalized = email ? normalizeEmail(email) : '';
+  if (!normalized || !EMAIL_RE.test(normalized)) {
     return NextResponse.json({ error: 'Введите корректный адрес почты.' }, { status: 400 });
   }
   // Вход не ищет идентификаторы длиннее MAX_IDENTIFIER_LENGTH: с такой почтой
   // аккаунт был бы создан, но войти в него было бы нельзя.
-  if (normalizeEmail(email).length > MAX_IDENTIFIER_LENGTH) {
+  if (normalized.length > MAX_IDENTIFIER_LENGTH) {
     return NextResponse.json(
       { error: `Адрес почты должен быть не длиннее ${MAX_IDENTIFIER_LENGTH} символов.` }, { status: 400 });
   }
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
       { error: `Пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов.` }, { status: 400 });
   }
   try {
-    const user = await createUser(email, password);
+    const user = await createUser(normalized, password);
     const token = await createSession(user.id);
     return setSessionCookie(NextResponse.json({ user }), token, isSecureRequest(req));
   } catch (e) {

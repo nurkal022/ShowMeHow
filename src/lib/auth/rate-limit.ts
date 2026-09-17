@@ -22,11 +22,12 @@ export interface AttemptStore {
   add(key: string): Promise<void>;
   /** Удаляет попытки старше суток; возвращает число удалённых. */
   purge(): Promise<number>;
-  /** Для тестов: ключи, под которыми лежат попытки. */
-  keys(): Promise<string[]>;
-  /** Для тестов: удаляет все попытки. */
-  clear(): Promise<void>;
 }
+
+// Карты хранилищ в памяти — только для тестовых помощников внизу файла.
+const memoryMaps = new WeakMap<AttemptStore, Map<string, number[]>>();
+// Хранилища на базе — тестовые помощники работают с ними прямым SQL.
+const pgStores = new WeakSet<AttemptStore>();
 
 /**
  * Хранилище в памяти процесса — для запуска без базы (разработка и юнит-тесты).
@@ -36,7 +37,7 @@ export interface AttemptStore {
 export function createMemoryAttemptStore(now: () => number = Date.now): AttemptStore {
   const attempts = new Map<string, number[]>();
   const fresh = (key: string, t: number) => (attempts.get(key) ?? []).filter((at) => t - at < WINDOW_MS);
-  return {
+  const store: AttemptStore = {
     async count(key) {
       return fresh(key, now()).length;
     },
@@ -55,13 +56,9 @@ export function createMemoryAttemptStore(now: () => number = Date.now): AttemptS
       }
       return removed;
     },
-    async keys() {
-      return [...attempts.keys()];
-    },
-    async clear() {
-      attempts.clear();
-    },
   };
+  memoryMaps.set(store, attempts);
+  return store;
 }
 
 /**
@@ -69,7 +66,7 @@ export function createMemoryAttemptStore(now: () => number = Date.now): AttemptS
  * Строки старше суток удаляет уборщик воркера (purgeOldAttempts).
  */
 export function createPgAttemptStore(): AttemptStore {
-  return {
+  const store: AttemptStore = {
     async count(key) {
       const { rows } = await db().query<{ n: number }>(
         `SELECT count(*)::int AS n FROM login_attempts
@@ -83,14 +80,9 @@ export function createPgAttemptStore(): AttemptStore {
       const r = await db().query("DELETE FROM login_attempts WHERE at < now() - interval '1 day'");
       return r.rowCount ?? 0;
     },
-    async keys() {
-      const { rows } = await db().query<{ key: string }>('SELECT DISTINCT key FROM login_attempts ORDER BY key');
-      return rows.map((r) => r.key);
-    },
-    async clear() {
-      await db().query('DELETE FROM login_attempts');
-    },
   };
+  pgStores.add(store);
+  return store;
 }
 
 let override: AttemptStore | null = null;
@@ -166,11 +158,37 @@ export function __setAttemptStoreForTests(store: AttemptStore | null): void {
   override = store;
 }
 
-/** Очищает текущее хранилище: память процесса или таблицу login_attempts. */
-export async function __resetAttemptsForTests(): Promise<void> {
-  await attempts().clear();
+/**
+ * Тестовые помощники стирают и читают счётчики входа. Вне vitest они отказываются
+ * работать: случайный вызов в продакшне снял бы все лимиты.
+ */
+function assertTestRun(name: string): void {
+  if (!process.env.VITEST) throw new Error(`${name} доступен только в тестах`);
 }
 
+type TestTarget = { kind: 'memory'; map: Map<string, number[]> } | { kind: 'pg' };
+
+function testTarget(name: string): TestTarget {
+  const store = attempts();
+  const map = memoryMaps.get(store);
+  if (map) return { kind: 'memory', map };
+  if (pgStores.has(store)) return { kind: 'pg' };
+  throw new Error(`${name}: неизвестное хранилище попыток`);
+}
+
+/** Очищает текущее хранилище: память процесса или таблицу login_attempts. */
+export async function __resetAttemptsForTests(): Promise<void> {
+  assertTestRun('__resetAttemptsForTests');
+  const target = testTarget('__resetAttemptsForTests');
+  if (target.kind === 'memory') target.map.clear();
+  else await db().query('DELETE FROM login_attempts');
+}
+
+/** Ключи, под которыми лежат попытки в текущем хранилище. */
 export async function __attemptKeysForTests(): Promise<string[]> {
-  return attempts().keys();
+  assertTestRun('__attemptKeysForTests');
+  const target = testTarget('__attemptKeysForTests');
+  if (target.kind === 'memory') return [...target.map.keys()];
+  const { rows } = await db().query<{ key: string }>('SELECT DISTINCT key FROM login_attempts ORDER BY key');
+  return rows.map((r) => r.key);
 }
