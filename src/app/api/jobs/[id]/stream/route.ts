@@ -1,6 +1,7 @@
 import { getJobStore, getOwnedJob } from '@/lib/jobs/current';
 import { isTerminalEvent, terminalEventFor, type JobStatus } from '@/lib/jobs/store';
 import { currentUserFromRequest } from '@/lib/auth/session';
+import { RECONNECT_FRAME, STREAM_MAX_MS, registerStream } from '@/lib/jobs/open-streams';
 import type { PipelineEvent } from '@/lib/types';
 
 export const maxDuration = 600;
@@ -53,6 +54,22 @@ export async function GET(req: Request, { params }: P) {
         write(`data: ${JSON.stringify(e)}\n\n`);
         if (isTerminalEvent(e)) shutdown();
       };
+      // Плановое закрытие: клиент увидит `: reconnect` и сразу подключится снова.
+      const closeForReconnect = () => {
+        write(RECONNECT_FRAME);
+        shutdown();
+      };
+
+      // Рестарт веба ждёт, пока закроются все соединения: поток должен уметь закрыться
+      // по команде процесса. Если процесс уже останавливается — закрываемся сразу.
+      const unregister = registerStream(closeForReconnect);
+      if (!unregister) {
+        closeForReconnect();
+        return;
+      }
+      cleanups.push(unregister);
+      const lifetime = setTimeout(closeForReconnect, STREAM_MAX_MS);
+      cleanups.push(() => clearTimeout(lifetime));
 
       // Дочитывает журнал после lastSeq. Инвариант «без потерь и дублей» держит seq:
       // уведомления, сверка и реплей сходятся в одну очередь чтений.

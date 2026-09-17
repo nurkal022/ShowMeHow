@@ -16,6 +16,9 @@ import {
   MAX_IMAGE_DATA_URL_LENGTH, MAX_PROMPT_LENGTH, PROMPT_TOO_LONG_MESSAGE,
 } from '@/lib/jobs/messages';
 import { FINISHED_WITHOUT_RESULT_MESSAGE } from '@/lib/jobs/store';
+import {
+  STREAM_MAX_MS, __resetOpenStreamsForTests, closeAllStreams, openStreamCount,
+} from '@/lib/jobs/open-streams';
 import { saveSettings, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import { DEFAULT_ORG_SETTINGS } from '@/lib/org/settings';
 import type { Membership } from '@/lib/org/types';
@@ -64,11 +67,12 @@ function withProvider<T>(fn: () => Promise<T>): Promise<T> {
   });
 }
 
-/** Читатель SSE: пропускает комментарии `: ping`, отдаёт события по одному. */
+/** Читатель SSE: отдаёт события по одному, комментарии (`: ping`, `: reconnect`) копит отдельно. */
 function sse(res: Response) {
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   const queue: PipelineEvent[] = [];
+  const comments: string[] = [];
   let buf = '';
   let ended = false;
   function drain() {
@@ -77,6 +81,7 @@ function sse(res: Response) {
       const frame = buf.slice(0, idx);
       buf = buf.slice(idx + 2);
       if (frame.startsWith('data: ')) queue.push(JSON.parse(frame.slice(6)));
+      else if (frame.startsWith(':')) comments.push(frame);
       idx = buf.indexOf('\n\n');
     }
   }
@@ -93,7 +98,7 @@ function sse(res: Response) {
     for (let e = await next(); e; e = await next()) out.push(e);
     return out;
   }
-  return { next, rest, cancel: () => reader.cancel() };
+  return { next, rest, comments, cancel: () => reader.cancel() };
 }
 
 beforeEach(() => {
@@ -103,6 +108,7 @@ beforeEach(() => {
   session.memberships = [];
   store = createMemoryJobStore();
   __setJobStoreForTests(store);
+  __resetOpenStreamsForTests();
 });
 
 describe('POST /api/generate', () => {
@@ -323,6 +329,55 @@ describe('GET /api/jobs/[id]/stream', () => {
       const s = sse(await getStream(new Request('http://t'), params(job.id)));
       expect(await s.rest()).toEqual([expected]);
     });
+
+  it('поток учтён в реестре, пока открыт: терминальное событие и уход клиента снимают его', async () => {
+    const job = await store.create(newJob());
+    await store.claim('w1');
+    const first = sse(await getStream(new Request('http://t'), params(job.id)));
+    const second = sse(await getStream(new Request('http://t'), params(job.id)));
+    expect(openStreamCount()).toBe(2);
+    await second.cancel();
+    expect(openStreamCount()).toBe(1);
+    await store.finish(job.id, 'w1', { status: 'cancelled' });
+    expect(await first.rest()).toEqual([{ type: 'cancelled' }]);
+    expect(first.comments).not.toContain(': reconnect');
+    expect(openStreamCount()).toBe(0);
+  });
+
+  it('остановка процесса закрывает открытые потоки с `: reconnect`, новые — сразу', async () => {
+    const job = await store.create(newJob());
+    await store.claim('w1');
+    await store.appendEvent(job.id, { type: 'warning', message: 'идёт' }, 'w1');
+    const s = sse(await getStream(new Request('http://t'), params(job.id)));
+    expect(await s.next()).toEqual({ type: 'warning', message: 'идёт' });
+    expect(closeAllStreams()).toBe(1);
+    expect(await s.rest()).toEqual([]);
+    expect(s.comments).toEqual([': reconnect']);
+    expect((await store.get(job.id))?.status).toBe('running');
+
+    const late = sse(await getStream(new Request('http://t'), params(job.id)));
+    expect(await late.rest()).toEqual([]);
+    expect(late.comments).toEqual([': reconnect']);
+    expect(openStreamCount()).toBe(0);
+  });
+
+  it('поток живёт не дольше STREAM_MAX_MS и закрывается с `: reconnect`', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const job = await store.create(newJob());
+      await store.claim('w1');
+      const s = sse(await getStream(new Request('http://t'), params(job.id)));
+      await vi.advanceTimersByTimeAsync(STREAM_MAX_MS - 1);
+      expect(openStreamCount()).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await s.rest()).toEqual([]);
+      expect(s.comments.at(-1)).toBe(': reconnect');
+      expect(openStreamCount()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it('пока задание в очереди, поток сообщает позицию и её изменения', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });

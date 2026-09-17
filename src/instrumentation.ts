@@ -7,6 +7,13 @@
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // По SIGTERM `next start` ждёт закрытия всех соединений: открытые потоки мастерской
+    // закрываем сами, иначе рестарт веба висит до SIGKILL. Во время сборки обработчик
+    // не нужен — он только отменил бы выход по SIGTERM.
+    if (process.env.NEXT_PHASE !== 'phase-production-build') {
+      const { closeStreamsOnSigterm } = await import('./lib/jobs/open-streams');
+      closeStreamsOnSigterm();
+    }
     const { embeddedWorkerEnabled } = await import('./lib/worker/config');
     if (embeddedWorkerEnabled()) {
       const { startEmbeddedWorker } = await import('./lib/worker/embedded');
