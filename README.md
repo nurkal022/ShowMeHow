@@ -262,3 +262,24 @@ docker compose up --build
 ```bash
 SHOWMEHOW_TEST_DATABASE_URL=postgres://showmehow:showmehow@localhost:5434/showmehow
 ```
+
+### e2e
+
+`npm run test:e2e` поднимает `next dev` на порту 3300 со встроенным воркером
+(`SHOWMEHOW_EMBEDDED_WORKER=1`), данными в `./e2e/.data` и мок-провайдером на
+порту 3399: ключ, модели и адрес провайдера задаются окружением сервера и
+перекрывают `.env.local`, поэтому настоящая модель не вызывается. Порты 3300 и
+3399 должны быть свободны.
+
+Нужен запущенный Postgres. По умолчанию e2e работает с отдельной базой
+`tesseract_e2e` в контейнере `showmehow-pg`
+(`postgres://showmehow:showmehow@localhost:5434/tesseract_e2e`). Перед стартом
+сервера `e2e/prepare-db.ts` создаёт эту базу, если её нет, и накатывает
+миграции. Другой адрес задаётся переменной `SHOWMEHOW_E2E_DATABASE_URL`;
+`DATABASE_URL` из `.env.local` e2e не использует: спеки регистрируют людей и
+ставят задания в очередь, рабочей базе это не нужно.
+
+```bash
+npm run test:e2e
+SHOWMEHOW_E2E_DATABASE_URL=postgres://user:pass@localhost:5434/other_e2e npm run test:e2e
+```

@@ -24,9 +24,9 @@ const ARTIFACT = `<!DOCTYPE html><html><head><title>sim</title></head><body>
 // промпте генератора кандидата (не в планировщике/критике/судье/фиксере), поэтому
 // им можно отличить генераторный запрос, не совпадая случайно с другими ролями.
 const GENERATOR_MARKER = 'Каркас качественной симуляции';
-// Искусственная задержка перед ответом на генераторный запрос: даёт e2e-тесту отмены
-// окно, в которое клик «Отменить» гарантированно успевает до того, как кандидат сгенерован
-// (остальные роли отвечают мгновенно — не тормозим планировщика/критика/судью).
+// Задержка по умолчанию перед ответом на генераторный запрос (остальные роли отвечают
+// мгновенно). Спека отмены задаёт свою, долгую: отмена доходит до пайплайна только
+// через сердцебиение воркера, и кандидат не должен успеть сгенерироваться раньше.
 const GENERATOR_DELAY_MS = 1200;
 
 export type MockRole = 'planner' | 'judge' | 'critic' | 'html';
@@ -61,7 +61,10 @@ function reply(system: string): string {
   }
 }
 
-export function startMockProvider(port: number): Promise<() => Promise<void>> {
+export function startMockProvider(
+  port: number, opts: { generatorDelayMs?: number } = {},
+): Promise<() => Promise<void>> {
+  const delay = opts.generatorDelayMs ?? GENERATOR_DELAY_MS;
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => (body += c));
@@ -74,7 +77,7 @@ export function startMockProvider(port: number): Promise<() => Promise<void>> {
           choices: [{ message: { content: reply(system) } }],
         }));
       };
-      if (system.includes(GENERATOR_MARKER)) setTimeout(send, GENERATOR_DELAY_MS);
+      if (system.includes(GENERATOR_MARKER)) setTimeout(send, delay);
       else send();
     });
   });
