@@ -133,11 +133,24 @@ export function jobStoreContract(label: string, setup: () => Promise<ContractEnv
       await store.claim('w1');
       await store.requestCancel(b.id);
       await store.requestCancel(b.id);
-      const beat = await store.heartbeat('w1', 'host', 2);
+      const beat = await store.heartbeat('w1', 'host', 2, [a.id, b.id]);
       expect([...beat.leased].sort()).toEqual([a.id, b.id].sort());
       expect(beat.cancelRequested).toEqual([b.id]);
       expect((await store.get(b.id))?.cancelRequested).toBe(true);
-      expect(await store.heartbeat('w2', 'host', 0)).toEqual({ leased: [], cancelRequested: [] });
+      expect(await store.heartbeat('w2', 'host', 0, [a.id, b.id]))
+        .toEqual({ leased: [], cancelRequested: [] });
+    });
+
+    it('сердцебиение продлевает только перечисленные задания своего воркера', async () => {
+      const a = await store.create(gen(await env.owner()));
+      const b = await store.create(gen(await env.owner()));
+      await store.claim('w1');
+      await store.claim('w1');
+      await env.expireLeases();
+      const beat = await store.heartbeat('w1', 'host', 1, [a.id]);
+      expect(beat).toEqual({ leased: [a.id], cancelRequested: [] });
+      expect(await store.reap()).toEqual([{ id: b.id, decision: 'requeue' }]);
+      expect(await store.heartbeat('w1', 'host', 0, [])).toEqual({ leased: [], cancelRequested: [] });
     });
 
     it('position считает очередь с учётом приоритета; не в очереди — 0', async () => {
@@ -258,7 +271,7 @@ export function jobStoreContract(label: string, setup: () => Promise<ContractEnv
       await store.create(gen(await env.owner()));
       await store.create(gen(await env.owner()));
       await store.claim('w1');
-      await store.heartbeat('w1', 'host', 1);
+      await store.heartbeat('w1', 'host', 1, []);
       const s = await store.stats();
       expect(s).toMatchObject({ queued: 1, running: 1, workersAlive: 1 });
       expect(s.oldestQueuedSec).toBeGreaterThanOrEqual(0);

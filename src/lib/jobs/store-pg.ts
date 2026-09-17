@@ -216,7 +216,7 @@ export function createPgJobStore(
       });
     },
 
-    async heartbeat(workerId, host, running) {
+    async heartbeat(workerId, host, running, jobIds) {
       // Изменяющий CTE выполняется, даже если на него никто не ссылается.
       const { rows } = await pool.query<{ id: string; cancel: boolean }>(
         `WITH w AS (
@@ -224,10 +224,10 @@ export function createPgJobStore(
            ON CONFLICT (id) DO UPDATE SET seen_at = now(), running = EXCLUDED.running),
          j AS (
            UPDATE jobs SET locked_until = now() + ${SECONDS(LEASE_SECONDS)}
-           WHERE locked_by = $1 AND status = 'running'
+           WHERE locked_by = $1 AND status = 'running' AND id = ANY($4::uuid[])
            RETURNING id, cancel_requested_at)
          SELECT id, cancel_requested_at IS NOT NULL AS cancel FROM j`,
-        [workerId, host, running]);
+        [workerId, host, running, jobIds.filter((id) => UUID_RE.test(id))]);
       return {
         leased: rows.map((r) => r.id),
         cancelRequested: rows.filter((r) => r.cancel).map((r) => r.id),

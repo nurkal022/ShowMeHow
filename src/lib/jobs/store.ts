@@ -90,7 +90,11 @@ export interface JobStore {
   finish(id: string, workerId: string, outcome: JobOutcome): Promise<boolean>;
   requestCancel(id: string): Promise<void>;
   cancelQueued(id: string): Promise<boolean>;
-  heartbeat(workerId: string, host: string, running: number): Promise<HeartbeatResult>;
+  /**
+   * Отмечает воркер живым и продлевает аренду только перечисленных заданий, которые он
+   * держит. Задание без живой попытки в процессе не продлевается и достаётся уборщику.
+   */
+  heartbeat(workerId: string, host: string, running: number, jobIds: string[]): Promise<HeartbeatResult>;
   retireWorker(workerId: string): Promise<void>;
   reap(): Promise<ReapedJob[]>;
   /** Место в очереди с единицы; 0 — задание не ждёт. */

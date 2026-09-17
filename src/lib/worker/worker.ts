@@ -38,13 +38,18 @@ export interface Worker {
 }
 
 interface Slot {
+  jobId: string;
   cancel: boolean;
-  /** Аренду забрал уборщик: результат этой попытки никуда не пишется. */
+  /**
+   * Аренду забрал уборщик или задание взято заново: эта попытка ничего не пишет —
+   * ни событий, ни сохранения, ни итога — и только доигрывает до ближайшей проверки отмены.
+   */
   lost: boolean;
   done: Promise<void>;
 }
 
 export const SAVE_FAILED_MESSAGE = 'Не удалось записать результат генерации.';
+const STALE_ATTEMPT_MESSAGE = 'Попытка устарела: задание выполняется заново.';
 
 export function makeWorkerId(host: string = os.hostname()): string {
   return `${host}:${process.pid}:${crypto.randomBytes(3).toString('hex')}`;
@@ -58,8 +63,12 @@ function defaultLog(msg: string, err?: unknown): void {
 export function createWorker(opts: WorkerOptions): Worker {
   const host = opts.host ?? os.hostname();
   const id = opts.id ?? makeWorkerId(host);
-  const log = opts.log ?? defaultLog;
-  const slots = new Map<string, Slot>();
+  const customLog = opts.log ?? defaultLog;
+  /** Все идущие попытки, включая устаревшие: они занимают слоты и их ждёт stop. */
+  const attempts = new Set<Slot>();
+  /** Живая попытка по каждому заданию — только её аренду продлевает сердцебиение. */
+  const current = new Map<string, Slot>();
+  let started = false;
   let stopping = false;
   let filling: Promise<void> | null = null;
   let fillAgain = false;
@@ -69,6 +78,20 @@ export function createWorker(opts: WorkerOptions): Worker {
   let unsubscribeQueue: (() => void) | null = null;
   let beating: Promise<void> | null = null;
 
+  // Сломанный журнал не должен ронять цикл и оставлять необработанные отказы.
+  function log(msg: string, err?: unknown): void {
+    try {
+      customLog(msg, err);
+    } catch {
+      // писать больше некуда
+    }
+  }
+
+  function markLost(slot: Slot): void {
+    slot.lost = true;
+    if (current.get(slot.jobId) === slot) current.delete(slot.jobId);
+  }
+
   async function runSlot(job: ClaimedJob, slot: Slot): Promise<void> {
     // Записи событий идут цепочкой: emit синхронный, а порядок seq обязан совпасть
     // с порядком вызовов.
@@ -76,13 +99,17 @@ export function createWorker(opts: WorkerOptions): Worker {
     const io: JobIO = {
       emit(event) {
         // done пишет только finish — в одной транзакции со статусом.
-        if (event.type === 'done') return;
+        if (event.type === 'done' || slot.lost) return;
         chain = chain
-          .then(() => opts.store.appendEvent(job.id, event, id))
+          .then(() => (slot.lost ? null : opts.store.appendEvent(job.id, event, id)))
           .catch((e) => log(`Не удалось записать событие задания ${job.id}:`, e));
       },
       cancelled: () => slot.cancel || slot.lost,
       async markSaved(simulationId) {
+        if (slot.lost) {
+          log(`Задание ${job.id}: устаревшая попытка сохранила симуляцию ${simulationId}, в задание она не записана.`);
+          throw new Error(STALE_ATTEMPT_MESSAGE);
+        }
         try {
           await opts.store.markSaved(job.id, id, simulationId);
         } catch (e) {
@@ -98,23 +125,24 @@ export function createWorker(opts: WorkerOptions): Worker {
     } catch (e) {
       outcome = { status: 'error', message: e instanceof Error ? e.message : String(e) };
     }
-    if (outcome.status === 'error') log(`Задание ${job.id} завершилось ошибкой: ${outcome.message}`);
     await chain;
     if (slot.lost) {
-      log(`Задание ${job.id}: аренду забрал уборщик, результат попытки не записан.`);
+      log(`Задание ${job.id}: попытка устарела, её результат не записан.`);
       return;
     }
+    if (outcome.status === 'error') log(`Задание ${job.id} завершилось ошибкой: ${outcome.message}`);
     try {
       const ok = await opts.store.finish(job.id, id, outcome);
       if (!ok) log(`Задание ${job.id} уже не принадлежит воркеру ${id}.`);
     } catch (e) {
-      // Задание останется running; уборщик вернёт его, а повтор увидит simulation_id.
+      // Слот освобождается, и сердцебиение перестаёт продлевать аренду: уборщик вернёт
+      // задание, а повтор увидит simulation_id, если симуляция успела сохраниться.
       log(`Не удалось завершить задание ${job.id}:`, e);
     }
   }
 
   async function fillOnce(): Promise<void> {
-    while (!stopping && slots.size < opts.concurrency) {
+    while (!stopping && attempts.size < opts.concurrency) {
       let job: ClaimedJob | null;
       try {
         job = await opts.store.claim(id);
@@ -126,15 +154,21 @@ export function createWorker(opts: WorkerOptions): Worker {
       const claimed = job;
       // Уборщик вернул в очередь задание, которое ещё крутится здесь, и мы же взяли его
       // снова: прежняя попытка устарела и писать ничего не должна.
-      const stale = slots.get(claimed.id);
-      if (stale) stale.lost = true;
-      const slot: Slot = { cancel: claimed.cancelRequested, lost: false, done: Promise.resolve() };
-      slots.set(claimed.id, slot);
+      const stale = current.get(claimed.id);
+      if (stale) markLost(stale);
+      const slot: Slot = {
+        jobId: claimed.id, cancel: claimed.cancelRequested, lost: false, done: Promise.resolve(),
+      };
+      attempts.add(slot);
+      current.set(claimed.id, slot);
       log(`Воркер ${id} взял задание ${claimed.id} (${claimed.kind}, попытка ${claimed.attempts}).`);
-      slot.done = runSlot(claimed, slot).finally(() => {
-        if (slots.get(claimed.id) === slot) slots.delete(claimed.id);
-        void fill();
-      });
+      slot.done = runSlot(claimed, slot)
+        .catch((e) => log(`Попытка задания ${claimed.id} упала:`, e))
+        .finally(() => {
+          attempts.delete(slot);
+          if (current.get(claimed.id) === slot) current.delete(claimed.id);
+          void fill();
+        });
     }
   }
 
@@ -159,18 +193,17 @@ export function createWorker(opts: WorkerOptions): Worker {
   }
 
   async function beat(): Promise<void> {
-    // Задания, взятые после снимка, могли не попасть в UPDATE — их не считаем потерянными.
-    const known = [...slots.keys()];
+    // Снимок попыток до запроса. После ответа трогаем только эти объекты: задание могли
+    // за это время вернуть в очередь и взять заново, новая попытка в снимок не попала.
+    const live = [...current.values()].filter((s) => !s.lost);
     try {
-      const { leased, cancelRequested } = await opts.store.heartbeat(id, host, slots.size);
+      const { leased, cancelRequested } = await opts.store.heartbeat(
+        id, host, attempts.size, live.map((s) => s.jobId));
       const leasedSet = new Set(leased);
-      for (const jobId of cancelRequested) {
-        const s = slots.get(jobId);
-        if (s) s.cancel = true;
-      }
-      for (const jobId of known) {
-        const s = slots.get(jobId);
-        if (s && !leasedSet.has(jobId)) s.lost = true;
+      const cancelSet = new Set(cancelRequested);
+      for (const slot of live) {
+        if (cancelSet.has(slot.jobId)) slot.cancel = true;
+        if (!leasedSet.has(slot.jobId)) markLost(slot);
       }
     } catch (e) {
       log('Сердцебиение воркера не прошло:', e);
@@ -188,9 +221,17 @@ export function createWorker(opts: WorkerOptions): Worker {
     }
   }
 
+  function drainAll(): Promise<void> {
+    return (async () => {
+      while (attempts.size > 0) await Promise.all([...attempts].map((s) => s.done));
+    })();
+  }
+
   return {
     id,
     start() {
+      if (started || stopping) return;
+      started = true;
       unsubscribeQueue = opts.store.subscribeQueue(() => { void fill(); });
       // Таймеры держат процесс воркера живым, пока он не остановлен; stop их снимает.
       pollTimer = setInterval(() => { void fill(); }, opts.pollMs ?? 5000);
@@ -205,16 +246,14 @@ export function createWorker(opts: WorkerOptions): Worker {
     async stop() {
       stopping = true;
       unsubscribeQueue?.();
+      unsubscribeQueue = null;
       clearInterval(pollTimer);
       clearInterval(reapTimer);
       // Сердцебиение продолжается весь срок ожидания: иначе аренды истекут,
       // и другой воркер начнёт те же задания заново.
-      const all = (async () => {
-        while (slots.size > 0) await Promise.all([...slots.values()].map((s) => s.done));
-      })();
       let timer: NodeJS.Timeout | undefined;
       const drained = await Promise.race([
-        all.then(() => true),
+        drainAll().then(() => true),
         new Promise<boolean>((resolve) => { timer = setTimeout(() => resolve(false), opts.drainMs); }),
       ]);
       clearTimeout(timer);
@@ -224,10 +263,10 @@ export function createWorker(opts: WorkerOptions): Worker {
       await opts.store.retireWorker(id).catch((e) => log('Не удалось снять запись воркера:', e));
       return { drained };
     },
-    running: () => slots.size,
+    running: () => attempts.size,
     async idle() {
-      while (slots.size > 0 || filling) {
-        await Promise.all([...slots.values()].map((s) => s.done));
+      while (attempts.size > 0 || filling) {
+        await drainAll();
         await filling;
       }
     },

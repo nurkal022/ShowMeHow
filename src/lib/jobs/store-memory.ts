@@ -157,12 +157,13 @@ export function createMemoryJobStore(opts: { now?: () => number } = {}): JobStor
       return true;
     },
 
-    async heartbeat(workerId, _host, running) {
+    async heartbeat(workerId, _host, running, jobIds) {
       workers.set(workerId, { seenAt: now(), running });
       const leased: string[] = [];
       const cancelRequested: string[] = [];
-      for (const r of rows.values()) {
-        if (!owns(r, workerId)) continue;
+      for (const id of new Set(jobIds)) {
+        const r = rows.get(id);
+        if (!r || !owns(r, workerId)) continue;
         r.lockedUntil = now() + LEASE_SECONDS * 1000;
         leased.push(r.id);
         if (r.cancelRequested) cancelRequested.push(r.id);

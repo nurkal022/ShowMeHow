@@ -223,12 +223,124 @@ describe('воркер', () => {
     await vi.waitFor(() => expect(runs).toHaveLength(2));
     expect(runs[0].io.cancelled()).toBe(true);
     runs[0].finish({ status: 'error', message: 'старая попытка' });
-    await vi.waitFor(async () => expect((await store.events(job.id, 0)).length).toBe(1));
-    expect(w.running()).toBe(1);
+    await vi.waitFor(() => expect(w.running()).toBe(1));
+    expect((await store.events(job.id, 0)).length).toBe(1);
     expect((await store.get(job.id))?.status).toBe('running');
     runs[1].finish(done());
     await w.idle();
     expect((await store.get(job.id))?.status).toBe('done');
+  });
+
+  it('заменённая попытка не пишет ни событий, ни сохранения', async () => {
+    const { runs, execute } = controlled();
+    const job = await store.create(newJob());
+    const w = makeWorker(execute, { concurrency: 2 });
+    await w.fill();
+    clock += 5 * 60_000;
+    await w.reap();
+    await vi.waitFor(() => expect(runs).toHaveLength(2));
+    runs[0].io.emit({ type: 'warning', message: 'от старой попытки' });
+    await expect(runs[0].io.markSaved(crypto.randomUUID())).rejects.toThrow();
+    runs[0].finish(done());
+    await vi.waitFor(() => expect(w.running()).toBe(1));
+    expect((await store.events(job.id, 0)).map((e) => e.event))
+      .toEqual([{ type: 'warning', message: REQUEUE_WARNING }]);
+    expect(await store.get(job.id)).toMatchObject({ status: 'running', simulationId: null });
+  });
+
+  it('заменённая, но ещё идущая попытка занимает слот, и stop её ждёт', async () => {
+    const { runs, execute } = controlled();
+    await store.create(newJob());
+    const w = makeWorker(execute, { concurrency: 2 });
+    await w.fill();
+    clock += 5 * 60_000;
+    await w.reap();
+    await vi.waitFor(() => expect(runs).toHaveLength(2));
+    // Старая попытка ещё крутится: второй слот занят, новое задание ждёт.
+    await store.create(newJob());
+    await w.fill();
+    expect(runs).toHaveLength(2);
+    expect(w.running()).toBe(2);
+    const stopping = w.stop();
+    let settled = false;
+    void stopping.then(() => { settled = true; });
+    runs[1].finish(done());
+    await vi.waitFor(() => expect(w.running()).toBe(1));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(settled).toBe(false);
+    runs[0].finish(done());
+    expect(await stopping).toEqual({ drained: true });
+    expect((await store.stats()).queued).toBe(1);
+  });
+
+  it('сбой finish: слот свободен, аренда не продлевается, уборщик возвращает задание', async () => {
+    const log = vi.fn();
+    let failFinish = true;
+    const flaky: JobStore = {
+      ...store,
+      finish: async (...a) => {
+        if (failFinish) { failFinish = false; throw new Error('connection reset'); }
+        return store.finish(...a);
+      },
+    };
+    const job = await store.create(newJob());
+    const w = createWorker({
+      store: flaky, execute: async () => done(), concurrency: 1, drainMs: 1000,
+      id: 'w-finish', host: 'test', log,
+    });
+    await w.fill();
+    await vi.waitFor(() => expect(log).toHaveBeenCalledWith(expect.stringContaining(job.id), expect.any(Error)));
+    await vi.waitFor(() => expect(w.running()).toBe(0));
+    clock += 5 * 60_000;
+    await w.heartbeat();
+    await w.reap();
+    await vi.waitFor(async () => expect(await store.get(job.id)).toMatchObject({ status: 'done', attempts: 2 }));
+  });
+
+  it('гонка сердцебиения не теряет задание, взятое заново во время запроса', async () => {
+    const { runs, execute } = controlled();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const racy: JobStore = {
+      ...store,
+      // Запрос «увидел» задание уже в очереди: в продлённых его нет.
+      heartbeat: async () => { await gate; return { leased: [], cancelRequested: [] }; },
+    };
+    const job = await store.create(newJob());
+    const w = createWorker({
+      store: racy, execute, concurrency: 2, drainMs: 1000, id: 'w-race', host: 'test', log: () => {},
+    });
+    await w.fill();
+    const beat = w.heartbeat();
+    clock += 5 * 60_000;
+    await w.reap();
+    await vi.waitFor(() => expect(runs).toHaveLength(2));
+    release();
+    await beat;
+    expect(runs[0].io.cancelled()).toBe(true);
+    expect(runs[1].io.cancelled()).toBe(false);
+    runs[1].finish(done());
+    runs[0].finish(done());
+    await w.idle();
+    expect((await store.get(job.id))?.status).toBe('done');
+  });
+
+  it('бросающий журнал не роняет воркер', async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (e: unknown) => { rejections.push(e); };
+    process.on('unhandledRejection', onRejection);
+    try {
+      const job = await store.create(newJob());
+      const w = makeWorker(async () => { throw new Error('сломалось'); },
+        { log: () => { throw new Error('журнал сломан'); } });
+      await w.fill();
+      await w.idle();
+      await new Promise((r) => setTimeout(r, 10));
+      expect(rejections).toEqual([]);
+      expect(await store.get(job.id)).toMatchObject({ status: 'error' });
+    } finally {
+      process.off('unhandledRejection', onRejection);
+    }
   });
 
   describe('таймеры', () => {
@@ -257,6 +369,26 @@ describe('воркер', () => {
       expect(vi.getTimerCount()).toBe(0);
       await vi.advanceTimersByTimeAsync(1000);
       expect(calls).toEqual({ claim: 7, heartbeat: 4, reap: 2 });
+    });
+
+    it('повторный start не заводит вторые таймеры и подписку', async () => {
+      let subs = 0;
+      const counting: JobStore = {
+        ...store,
+        subscribeQueue: (cb) => { subs++; const off = store.subscribeQueue(cb); return () => { subs--; off(); }; },
+      };
+      const w = createWorker({
+        store: counting, execute: async () => done(), concurrency: 1, drainMs: 1000,
+        id: 'w-twice', host: 'test', log: () => {},
+      });
+      w.start();
+      const timers = vi.getTimerCount();
+      w.start();
+      expect(vi.getTimerCount()).toBe(timers);
+      expect(subs).toBe(1);
+      await w.stop();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(subs).toBe(0);
     });
 
     it('новое задание в очереди будит воркер без ожидания опроса', async () => {

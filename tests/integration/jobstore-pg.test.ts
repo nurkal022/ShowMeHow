@@ -206,8 +206,8 @@ describe.skipIf(!pool)('Postgres: то, чего нет у памяти', () => 
 
   it('сердцебиение пишет строку воркера', async () => {
     const env = await cleanStore();
-    await env.store.heartbeat('host:1:abc', 'host', 0);
-    await env.store.heartbeat('host:1:abc', 'host', 2);
+    await env.store.heartbeat('host:1:abc', 'host', 0, []);
+    await env.store.heartbeat('host:1:abc', 'host', 2, []);
     const { rows } = await pool!.query('SELECT id, host, running FROM workers');
     expect(rows).toEqual([{ id: 'host:1:abc', host: 'host', running: 2 }]);
   });
