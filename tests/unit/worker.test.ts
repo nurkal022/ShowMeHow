@@ -138,6 +138,23 @@ describe('воркер', () => {
     expect(await w.stop()).toEqual({ drained: false });
   });
 
+  it('по таймауту остановки идущие задания остаются уборщику, а не кончаются ошибкой', async () => {
+    const { runs, execute } = controlled();
+    const job = await store.create(newJob());
+    const w = makeWorker(execute, { drainMs: 20 });
+    await w.fill();
+    expect(await w.stop()).toEqual({ drained: false });
+    expect(runs[0].io.cancelled()).toBe(true);
+    // Закрытый браузер роняет рендер: пайплайн возвращает ошибку уже после остановки.
+    runs[0].io.emit({ type: 'warning', message: 'после остановки' });
+    runs[0].finish({ status: 'error', message: 'browser has been closed' });
+    await w.idle();
+    expect(await store.get(job.id)).toMatchObject({ status: 'running', error: null });
+    expect(await store.events(job.id, 0)).toEqual([]);
+    clock += 5 * 60_000;
+    expect(await store.reap()).toEqual([{ id: job.id, decision: 'requeue' }]);
+  });
+
   it('потерявший аренду воркер не завершает задание, его берёт другой', async () => {
     const { runs, execute } = controlled();
     const job = await store.create(newJob());

@@ -258,6 +258,12 @@ export function createWorker(opts: WorkerOptions): Worker {
       ]);
       clearTimeout(timer);
       clearInterval(heartbeatTimer);
+      if (!drained) {
+        // Дальше закрывается браузер, и недоделанные пайплайны упадут с его ошибкой.
+        // Потерянные попытки ничего не пишут: задания остаются running, и уборщик
+        // вернёт их в очередь, когда истечёт аренда.
+        for (const slot of attempts) markLost(slot);
+      }
       // Запоздалое сердцебиение после снятия записи вернуло бы воркер в число живых.
       await beating;
       await opts.store.retireWorker(id).catch((e) => log('Не удалось снять запись воркера:', e));
