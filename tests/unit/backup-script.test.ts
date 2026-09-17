@@ -191,6 +191,35 @@ describe.skipIf(!hasTools)('scripts/backup.sh', () => {
     expect(fs.readdirSync(file('data')).sort()).toEqual(['2026-09-17', 'mine.part']);
   });
 
+  it('недописанная копия-ссылка не ведёт rsync за пределы бэкапов', () => {
+    fakeDocker(false);
+    const outside = path.join(base, 'outside');
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, 'precious.txt'), 'не трогать');
+    fs.mkdirSync(file('data'), { recursive: true });
+    fs.symlinkSync(outside, file('data', '2026-09-17.part'));
+    const r = run('2026-09-17', HUGE_KEEP_DAYS);
+    expect(r.status).toBe(0);
+    expect(fs.readFileSync(path.join(outside, 'precious.txt'), 'utf8')).toBe('не трогать');
+    expect(fs.readdirSync(outside)).toEqual(['precious.txt']);
+    expect(fs.lstatSync(file('data', '2026-09-17')).isSymbolicLink()).toBe(false);
+    expect(fs.existsSync(file('data', '2026-09-17', 'simulations', 'a', 'artifact.html'))).toBe(true);
+    expect(fs.existsSync(file('data', '2026-09-17.part'))).toBe(false);
+  });
+
+  it('недописанный дамп-ссылка не ведёт запись за пределы бэкапов', () => {
+    fakeDocker(false);
+    const outside = path.join(base, 'outside.txt');
+    fs.writeFileSync(outside, 'не трогать');
+    fs.mkdirSync(file('db'), { recursive: true });
+    fs.symlinkSync(outside, file('db', '2026-09-17.sql.gz.part'));
+    const r = run('2026-09-17', HUGE_KEEP_DAYS);
+    expect(r.status).toBe(0);
+    expect(fs.readFileSync(outside, 'utf8')).toBe('не трогать');
+    expect(fs.lstatSync(file('db', '2026-09-17.sql.gz')).isSymbolicLink()).toBe(false);
+    expect(fs.existsSync(file('db', '2026-09-17.sql.gz.part'))).toBe(false);
+  });
+
   it('второй запуск, пока идёт первый, отказывается и ничего не пишет', async () => {
     fakeDocker(false);
     fs.mkdirSync(dest, { recursive: true });

@@ -50,6 +50,9 @@ done
 
 # 1. База. Пишем во временный файл: оборванный дамп не должен выглядеть готовым.
 dump="$DEST/db/$STAMP.sql.gz"
+# Прежний недописанный файл убираем до записи: если это ссылка, rm удаляет саму ссылку,
+# а запись через неё ушла бы за пределы бэкапов.
+rm -f -- "$dump.part"
 docker exec "$CONTAINER" pg_dump -U "$DB_USER" --no-owner "$DB_NAME" | gzip > "$dump.part"
 gzip -t < "$dump.part"
 mv "$dump.part" "$dump"
@@ -64,6 +67,9 @@ for d in "$DEST"/data/*; do
   [[ ! -L "$d" && -d "$d" && "$name" =~ $DATE_RE && "$name" != "$STAMP" ]] || continue
   prev="$d"
 done
+# То же для каталога: rsync --delete через ссылку стёр бы чужие файлы. Путь без
+# завершающего «/», поэтому rm удаляет ссылку, а не содержимое её цели.
+rm -rf -- "$target.part"
 rsync_args=(-a --delete)
 [ -n "$prev" ] && rsync_args+=(--link-dest="$prev")
 # Воркер пишет в data/ в любое время: исчезнувший во время копирования файл (код 24) —
