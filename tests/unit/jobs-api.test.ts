@@ -294,6 +294,8 @@ describe('GET /api/jobs/[id]/stream', () => {
     const res = await getStream(new Request('http://t'), params(job.id));
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('text/event-stream');
+    // Соединение потока не остаётся ждать в keep-alive: иначе остановка веба ждёт его таймаута.
+    expect(res.headers.get('Connection')).toBe('close');
     const s = sse(res);
     expect(await s.next()).toEqual({ type: 'stage', stage: 'planning', status: 'start', at: 1 });
     expect(await s.next()).toEqual({ type: 'stage', stage: 'planning', status: 'end', at: 2 });

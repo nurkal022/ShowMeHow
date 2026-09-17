@@ -134,7 +134,9 @@ export async function GET(req: Request, { params }: P) {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
+      // После конца потока соединение закрывается сразу: простаивающее keep-alive
+      // соединение задержало бы остановку веба на keepAliveTimeout.
+      Connection: 'close',
       // Для прокси, которые смотрят на этот заголовок; Caddy настроен flush_interval -1.
       'X-Accel-Buffering': 'no',
     },
