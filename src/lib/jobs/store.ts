@@ -138,13 +138,18 @@ export function outcomeEvent(o: JobOutcome): PipelineEvent {
   return { type: 'cancelled' };
 }
 
+export const FINISHED_WITHOUT_RESULT_MESSAGE = 'Генерация завершилась без результата. Попробуйте ещё раз.';
+
 /**
  * Терминальное событие по статусу. Нужно для старых записей: прежний код помечал
- * задание ошибкой при чтении и событие в журнал не добавлял.
+ * задание ошибкой при чтении и событие в журнал не добавлял. Для любого завершённого
+ * статуса событие есть, иначе поток такого задания висел бы до maxDuration.
  */
 export function terminalEventFor(job: Job): PipelineEvent | null {
-  if (job.status === 'done' && job.simulationId) {
-    return { type: 'done', simulationId: job.simulationId };
+  if (job.status === 'done') {
+    return job.simulationId
+      ? { type: 'done', simulationId: job.simulationId }
+      : { type: 'error', message: FINISHED_WITHOUT_RESULT_MESSAGE };
   }
   if (job.status === 'error') return { type: 'error', message: job.error ?? 'Ошибка генерации.' };
   if (job.status === 'cancelled') return { type: 'cancelled' };

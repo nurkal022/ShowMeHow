@@ -9,9 +9,13 @@ import { POST as postCancel } from '@/app/api/jobs/[id]/cancel/route';
 import { GET as getStream } from '@/app/api/jobs/[id]/stream/route';
 import { createMemoryJobStore } from '@/lib/jobs/store-memory';
 import { __setJobStoreForTests } from '@/lib/jobs/current';
-import type { JobStore, NewJob } from '@/lib/jobs/store';
+import type { Job, JobStatus, JobStore, NewJob } from '@/lib/jobs/store';
 import { HIGH_PRIORITY } from '@/lib/jobs/policy';
-import { GENERATION_BUSY_MESSAGE, EMPTY_PROMPT_MESSAGE } from '@/lib/jobs/messages';
+import {
+  GENERATION_BUSY_MESSAGE, EMPTY_PROMPT_MESSAGE, INVALID_REQUEST_MESSAGE, INVALID_IMAGE_MESSAGE,
+  MAX_IMAGE_DATA_URL_LENGTH,
+} from '@/lib/jobs/messages';
+import { FINISHED_WITHOUT_RESULT_MESSAGE } from '@/lib/jobs/store';
 import { saveSettings, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import { DEFAULT_ORG_SETTINGS } from '@/lib/org/settings';
 import type { Membership } from '@/lib/org/types';
@@ -115,6 +119,32 @@ describe('POST /api/generate', () => {
       const res = await postGenerate(generateRequest({ prompt: '   ' }));
       expect(res.status).toBe(400);
       expect((await res.json()).error).toBe(EMPTY_PROMPT_MESSAGE);
+    });
+  });
+
+  it('нечитаемое или пустое тело — 400, а не 500', async () => {
+    await withProvider(async () => {
+      for (const body of ['{не json', 'null', '"строка"']) {
+        const res = await postGenerate(new Request('http://t/api/generate', { method: 'POST', body }));
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe(INVALID_REQUEST_MESSAGE);
+      }
+      expect((await store.stats()).queued).toBe(0);
+    });
+  });
+
+  it('картинка не того формата или слишком большая — 400, в базу не пишется', async () => {
+    await withProvider(async () => {
+      const big = 'data:image/png;base64,' + 'A'.repeat(MAX_IMAGE_DATA_URL_LENGTH);
+      for (const imageDataUrl of ['javascript:alert(1)', 'data:text/html;base64,AA', 42, big]) {
+        const res = await postGenerate(generateRequest({ prompt: 'маятник', imageDataUrl }));
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe(INVALID_IMAGE_MESSAGE);
+      }
+      expect((await store.stats()).queued).toBe(0);
+      const edge = 'data:image/png;base64,' + 'A'.repeat(MAX_IMAGE_DATA_URL_LENGTH - 22);
+      expect(edge).toHaveLength(MAX_IMAGE_DATA_URL_LENGTH);
+      expect((await postGenerate(generateRequest({ prompt: 'маятник', imageDataUrl: edge }))).status).toBe(200);
     });
   });
 
@@ -263,6 +293,24 @@ describe('GET /api/jobs/[id]/stream', () => {
     const s = sse(await getStream(new Request('http://t'), params(job.id)));
     expect(await s.rest()).toEqual([{ type: 'cancelled' }]);
   });
+
+  // Завершённая запись без терминального события в журнале (битая или созданная руками)
+  // не должна держать поток до maxDuration.
+  it.each<[JobStatus, string | null, PipelineEvent]>([
+    ['done', 'sim-1', { type: 'done', simulationId: 'sim-1' }],
+    ['done', null, { type: 'error', message: FINISHED_WITHOUT_RESULT_MESSAGE }],
+    ['error', null, { type: 'error', message: 'сломалось' }],
+    ['cancelled', null, { type: 'cancelled' }],
+  ])('статус %s без события в журнале (simulationId %s): событие по записи и закрытие',
+    async (status, simulationId, expected) => {
+      const job = await store.create(newJob());
+      const row: Job = {
+        ...job, status, simulationId, error: status === 'error' ? 'сломалось' : null,
+      };
+      __setJobStoreForTests({ ...store, get: async () => row, events: async () => [] });
+      const s = sse(await getStream(new Request('http://t'), params(job.id)));
+      expect(await s.rest()).toEqual([expected]);
+    });
 
   it('пока задание в очереди, поток сообщает позицию и её изменения', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });

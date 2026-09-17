@@ -35,8 +35,9 @@ const QUALITY_OPTIONS: [QualityMode, string, string][] = [
  * Что делать при восстановлении job из localStorage при монтировании, в зависимости
  * от его текущего статуса на сервере. 'queued' обрабатывается так же, как 'running':
  * задание ещё живо (просто не стартовало), поэтому вместо ошибки мы переподключаемся
- * к SSE-потоку — реплей уже содержит событие { type: 'queued', position }, и дальше
- * job сам пришлёт стадии, когда до него дойдёт очередь.
+ * к SSE-потоку — пока задание ждёт, поток сразу после реплея присылает
+ * { type: 'queued', position } (место не хранится в журнале, а считается на лету
+ * и обновляется при изменении), а стадии придут, когда до задания дойдёт очередь.
  */
 export function restoredJobAction(status: JobStatus): 'reconnect' | 'open' | 'cancelled' | 'error' {
   if (status === 'running' || status === 'queued') return 'reconnect';

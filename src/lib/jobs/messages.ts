@@ -8,3 +8,9 @@ export const EMPTY_PROMPT_MESSAGE = 'Опишите, какую симуляци
 export const EMPTY_INSTRUCTION_MESSAGE = 'Опишите, что нужно изменить в симуляции.';
 export const JOB_NOT_FOUND_MESSAGE = 'Задание не найдено.';
 export const SIMULATION_NOT_FOUND_MESSAGE = 'Симуляция не найдена.';
+export const INVALID_REQUEST_MESSAGE =
+  'Не удалось прочитать запрос. Обновите страницу и попробуйте ещё раз.';
+/** Картинка-образец хранится в базе до конца задания; ~8 млн символов base64 — это около 6 МБ. */
+export const MAX_IMAGE_DATA_URL_LENGTH = 8_000_000;
+export const INVALID_IMAGE_MESSAGE =
+  'Прикрепите картинку в обычном формате (PNG, JPEG и т. п.) размером не больше 6 МБ.';
