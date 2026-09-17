@@ -5,6 +5,7 @@ import type { PipelineEvent, QualityMode } from '@/lib/types';
 import type { JobKind, JobStatus } from '@/lib/jobs/store';
 import type { UserPrefs } from '@/lib/auth/prefs';
 import { historyLabel } from '@/lib/history-label';
+import { RECONNECT_COMMENT } from '@/lib/jobs/sse';
 import ProgressView from './progress/ProgressView';
 import PreviewFrame from './PreviewFrame';
 import ConstructorStand from './constructor/ConstructorStand';
@@ -59,6 +60,51 @@ const RECONNECT_DELAYS_MS = [1000, 2000, 3000, 5000, 5000, 10000, 10000, 15000, 
 /** Пауза перед попыткой номер attempt (с нуля); null — пора сдаться. */
 export function reconnectDelay(attempt: number): number | null {
   return RECONNECT_DELAYS_MS[attempt] ?? null;
+}
+
+/** Пауза после планового закрытия потока: разброс, чтобы после рестарта веба не прийти толпой. */
+const PLANNED_RECONNECT_MIN_MS = 250;
+const PLANNED_RECONNECT_MAX_MS = 1000;
+
+export interface ReconnectState {
+  /** Номер следующей неудачной попытки подряд (с нуля). */
+  attempt: number;
+  /** Больше всего событий, принесённых одним подключением. */
+  seen: number;
+}
+
+/**
+ * Что делать после подключения, закрытого без терминального события. planned — сервер
+ * закрыл поток сам (`: reconnect`): рестарт веба или предел жизни потока; такие закрытия
+ * попыток не расходуют. Обрыв после нового прогресса начинает отсчёт заново, пустой
+ * реплей того же журнала — нет. delay null — пора сдаться.
+ */
+export function nextReconnect(
+  state: ReconnectState,
+  result: { planned: boolean; received: number },
+  random: () => number = Math.random,
+): ReconnectState & { delay: number | null } {
+  const progressed = result.received > state.seen;
+  const seen = progressed ? result.received : state.seen;
+  if (result.planned) {
+    const spread = PLANNED_RECONNECT_MAX_MS - PLANNED_RECONNECT_MIN_MS;
+    return { attempt: 0, seen, delay: PLANNED_RECONNECT_MIN_MS + Math.round(random() * spread) };
+  }
+  const attempt = progressed ? 0 : state.attempt;
+  return { attempt: attempt + 1, seen, delay: reconnectDelay(attempt) };
+}
+
+/** Пауза, которую прерывает отмена. Слушатель отмены снимается, как только пауза кончилась. */
+export function pauseUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const onAbort = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 interface QuotaInfo { limit: number | null; used: number; remaining: number | null }
@@ -257,14 +303,18 @@ export default function Workbench() {
     setMessages((prev) => [...prev, { role, text }]);
   }
 
-  /** Читает поток до конца. terminal — задание завершилось; received — сколько событий пришло. */
+  /**
+   * Читает поток до конца. terminal — задание завершилось; received — сколько событий пришло;
+   * planned — сервер закрыл поток сам и просит переподключиться.
+   */
   async function consumeJobStream(
     res: Response, kind: JobKind,
-  ): Promise<{ terminal: boolean; received: number }> {
+  ): Promise<{ terminal: boolean; received: number; planned: boolean }> {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
     let received = 0;
+    let planned = false;
     try {
       for (;;) {
         const { done, value } = await reader.read();
@@ -273,7 +323,8 @@ export default function Workbench() {
         const parts = buf.split('\n\n');
         buf = parts.pop()!;
         for (const part of parts) {
-          // Строки `: ping` — сердцебиение потока, событий в них нет.
+          // `: reconnect` — плановое закрытие; `: ping` — сердцебиение, событий в нём нет.
+          if (part === RECONNECT_COMMENT) planned = true;
           if (!part.startsWith('data: ')) continue;
           const e = JSON.parse(part.slice(6)) as PipelineEvent;
           received++;
@@ -286,26 +337,26 @@ export default function Workbench() {
             await openSimulation(e.simulationId);
             // Квоту тратит только генерация.
             if (kind === 'generate') fetchQuota();
-            return { terminal: true, received };
+            return { terminal: true, received, planned };
           }
           if (e.type === 'error') {
             clearActiveJob();
             // Текст ошибки уже показывает ProgressView из этого же события.
             setPhase('error');
-            return { terminal: true, received };
+            return { terminal: true, received, planned };
           }
           if (e.type === 'cancelled') {
             clearActiveJob();
             // Отменённая доработка оставляет открытой прежнюю версию симуляции.
             setPhase(kind === 'refine' ? 'ready' : 'idle');
-            return { terminal: true, received };
+            return { terminal: true, received, planned };
           }
         }
       }
     } catch {
       // Обрыв посреди чтения — то же, что закрытие без терминального события.
     }
-    return { terminal: false, received };
+    return { terminal: false, received, planned };
   }
 
   async function connectToJob(id: string, kind: JobKind) {
@@ -316,11 +367,9 @@ export default function Workbench() {
     streamAbortRef.current = abort;
     setJobKind(kind);
     setPhase('generating');
-    // Больше всего событий, принесённых одним подключением. Обрыв после нового
-    // прогресса начинает отсчёт попыток заново; пустые переподключения — нет.
-    let seen = 0;
+    let reconnect: ReconnectState = { attempt: 0, seen: 0 };
     try {
-      for (let attempt = 0; ; attempt++) {
+      for (;;) {
         // Каждое подключение начинает реплей с чистого листа — дублей не будет.
         setEvents([]);
         let res: Response | null = null;
@@ -336,25 +385,21 @@ export default function Workbench() {
           setPhase('error');
           return;
         }
+        let closed = { planned: false, received: 0 };
         if (res && res.ok) {
-          const { terminal, received } = await consumeJobStream(res, kind);
+          const { terminal, received, planned } = await consumeJobStream(res, kind);
           if (terminal || abort.signal.aborted) return;
-          if (received > seen) {
-            seen = received;
-            attempt = 0;
-          }
+          closed = { planned, received };
         }
-        const delay = reconnectDelay(attempt);
-        if (delay === null) {
+        const next = nextReconnect(reconnect, closed);
+        if (next.delay === null) {
           // Ключ не чистим: задание может ещё идти, перезагрузка страницы подхватит его.
           setError('Связь с сервером потеряна. Перезагрузите страницу — работа продолжается на сервере.');
           setPhase('error');
           return;
         }
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, delay);
-          abort.signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
-        });
+        reconnect = next;
+        await pauseUnlessAborted(next.delay, abort.signal);
         if (abort.signal.aborted) return;
       }
     } finally {
