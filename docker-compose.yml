@@ -1,3 +1,11 @@
+x-app-env: &app-env
+  DATABASE_URL: postgres://showmehow:${POSTGRES_PASSWORD:-showmehow}@db:5432/showmehow
+  SHOWMEHOW_API_KEY: ${SHOWMEHOW_API_KEY}
+  SHOWMEHOW_MODEL: ${SHOWMEHOW_MODEL}
+  SHOWMEHOW_BASE_URL: ${SHOWMEHOW_BASE_URL:-https://api.openai.com/v1}
+  SHOWMEHOW_VISION_MODEL: ${SHOWMEHOW_VISION_MODEL:-}
+  SHOWMEHOW_ADMIN_EMAIL: ${SHOWMEHOW_ADMIN_EMAIL:-}
+
 services:
   db:
     image: postgres:16-alpine
@@ -19,16 +27,28 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://showmehow:${POSTGRES_PASSWORD:-showmehow}@db:5432/showmehow
-      SHOWMEHOW_API_KEY: ${SHOWMEHOW_API_KEY}
-      SHOWMEHOW_MODEL: ${SHOWMEHOW_MODEL}
-      SHOWMEHOW_BASE_URL: ${SHOWMEHOW_BASE_URL:-https://api.openai.com/v1}
-      SHOWMEHOW_VISION_MODEL: ${SHOWMEHOW_VISION_MODEL:-}
-      SHOWMEHOW_ADMIN_EMAIL: ${SHOWMEHOW_ADMIN_EMAIL:-}
+      <<: *app-env
+      SHOWMEHOW_EMBEDDED_WORKER: "0"
     ports:
       - "3000:3000"
     volumes:
       - ./data:/app/data
+
+  # Тот же образ, другой процесс. Миграции прогоняет app при старте; пока их нет,
+  # воркер пишет ошибку захвата и повторяет попытку каждые пять секунд.
+  worker:
+    build: .
+    command: ["node", "--import", "tsx", "scripts/worker.ts"]
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      <<: *app-env
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      WORKER_DRAIN_SECONDS: ${WORKER_DRAIN_SECONDS:-600}
+    volumes:
+      - ./data:/app/data
+    stop_grace_period: 11m
 
 volumes:
   pgdata:
