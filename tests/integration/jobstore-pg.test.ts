@@ -145,6 +145,33 @@ describe.skipIf(!pool)('Postgres: то, чего нет у памяти', () => 
     offQueue();
   });
 
+  it('подписка по id в верхнем регистре получает уведомления', async () => {
+    const env = await cleanStore();
+    const newJob = async () => env.store.create({
+      ownerId: await env.owner(), kind: 'generate', priority: 0,
+      request: { prompt: 'p', mode: 'fast', hasImage: false },
+    });
+    const running = await newJob();
+    await env.store.claim('w1');
+    const queued = await newJob();
+    const onRunning = vi.fn();
+    const onQueued = vi.fn();
+    const offRunning = env.store.subscribe(running.id.toUpperCase(), onRunning);
+    const offQueued = env.store.subscribe(queued.id.toUpperCase(), onQueued);
+    await new Promise((r) => setTimeout(r, 300));
+    onRunning.mockClear();
+    onQueued.mockClear();
+    // Событие воркера (appendEvent) и событие из транзакции (cancelQueued по id в верхнем регистре).
+    await env.store.appendEvent(running.id, { type: 'warning', message: 'x' }, 'w1');
+    expect(await env.store.cancelQueued(queued.id.toUpperCase())).toBe(true);
+    await vi.waitFor(() => {
+      expect(onRunning).toHaveBeenCalled();
+      expect(onQueued).toHaveBeenCalled();
+    }, { timeout: 3000 });
+    offRunning();
+    offQueued();
+  });
+
   it('событие воркера ждёт идущего finish и после него не пишется', async () => {
     const env = await cleanStore();
     const job = await env.store.create({
@@ -169,8 +196,10 @@ describe.skipIf(!pool)('Postgres: то, чего нет у памяти', () => 
       await other.query('COMMIT');
       expect(await pending).toBeNull();
       expect(await env.store.events(job.id, 0)).toEqual([{ seq: 1, event: { type: 'cancelled' } }]);
-    } finally {
+    } catch (e) {
       await other.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
       other.release();
     }
   });

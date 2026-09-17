@@ -185,6 +185,11 @@ export function createMemoryJobStore(opts: { now?: () => number } = {}): JobStor
           release(r);
           push(r.id, { type: 'warning', message: REQUEUE_WARNING });
           notifyQueue();
+        } else if (decision === 'done') {
+          r.status = 'done';
+          r.error = null;
+          close(r);
+          push(r.id, outcomeEvent({ status: 'done', simulationId: r.simulationId! }));
         } else if (decision === 'fail') {
           r.status = 'error';
           r.error = LOST_TWICE_MESSAGE;

@@ -183,22 +183,46 @@ export function jobStoreContract(label: string, setup: () => Promise<ContractEnv
       expect((await store.get(job.id))?.status).toBe('cancelled');
     });
 
+    it('уборщик завершает успехом потерянное задание с сохранённой симуляцией', async () => {
+      for (const attempts of [1, 2]) {
+        const job = await store.create(gen(await env.owner(), { imageDataUrl: 'data:x' }));
+        for (let i = 0; i < attempts; i++) {
+          // Первые потери — до сохранения: обычный возврат в очередь.
+          if (i > 0) {
+            await env.expireLeases();
+            expect(await store.reap()).toEqual([{ id: job.id, decision: 'requeue' }]);
+          }
+          expect((await store.claim('w1'))?.id).toBe(job.id);
+        }
+        const simId = crypto.randomUUID();
+        await store.markSaved(job.id, 'w1', simId);
+        await env.expireLeases();
+        expect(await store.reap()).toEqual([{ id: job.id, decision: 'done' }]);
+        const done = await store.get(job.id);
+        expect(done).toMatchObject({ status: 'done', simulationId: simId, error: null, attempts });
+        expect(done?.finishedAt).not.toBeNull();
+        expect((await store.events(job.id, 0)).at(-1)?.event)
+          .toEqual({ type: 'done', simulationId: simId });
+        expect(await store.claim('w2')).toBeNull();
+        expect(await store.reap()).toEqual([]);
+      }
+    });
+
     it('живая аренда уборщика не касается', async () => {
       await store.create(gen(await env.owner()));
       await store.claim('w1');
       expect(await store.reap()).toEqual([]);
     });
 
-    it('markSaved запоминает симуляцию и переживает возврат в очередь', async () => {
+    it('markSaved запоминает симуляцию только от воркера-арендатора', async () => {
       const job = await store.create(gen(await env.owner()));
       await store.claim('w1');
       const simId = crypto.randomUUID();
       await store.markSaved(job.id, 'w2', crypto.randomUUID());
       expect((await store.get(job.id))?.simulationId).toBeNull();
       await store.markSaved(job.id, 'w1', simId);
-      await env.expireLeases();
-      await store.reap();
-      expect((await store.claim('w2'))?.simulationId).toBe(simId);
+      expect(await store.get(job.id)).toMatchObject({ status: 'running', simulationId: simId });
+      // Что уборщик делает с таким заданием — см. тест про сохранённую симуляцию.
     });
 
     it('subscribe сообщает о новых событиях, отписка прекращает', async () => {

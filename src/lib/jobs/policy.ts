@@ -16,13 +16,18 @@ export function jobPriority(user: Pick<AuthUser, 'role'>, memberships: Membershi
   return isPlatformAdmin(user) || hasStaffRole(memberships) ? HIGH_PRIORITY : 0;
 }
 
-export type ReapDecision = 'requeue' | 'fail' | 'cancel';
+export type ReapDecision = 'requeue' | 'fail' | 'cancel' | 'done';
 
 /**
- * Что делать с заданием, чей воркер перестал продлевать аренду. Отмену человек уже
+ * Что делать с заданием, чей воркер перестал продлевать аренду. Симуляция уже
+ * сохранена — результат есть, задание завершается успехом при любом числе попыток
+ * и даже при просьбе об отмене: симуляция уже лежит в истории. Отмену человек
  * попросил — перезапускать нечего. Иначе одна повторная попытка.
  */
-export function reapDecision(job: { attempts: number; cancelRequested: boolean }): ReapDecision {
+export function reapDecision(
+  job: { attempts: number; cancelRequested: boolean; simulationId: string | null },
+): ReapDecision {
+  if (job.simulationId !== null) return 'done';
   if (job.cancelRequested) return 'cancel';
   return job.attempts < MAX_ATTEMPTS ? 'requeue' : 'fail';
 }

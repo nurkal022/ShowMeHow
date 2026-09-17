@@ -72,7 +72,8 @@ async function insertEvent(c: PoolClient, id: string, event: PipelineEvent): Pro
     `INSERT INTO job_events (job_id, seq, event)
      SELECT $1::uuid, coalesce(max(seq), 0) + 1, $2::jsonb FROM job_events WHERE job_id = $1::uuid
      RETURNING seq`, [id, JSON.stringify(event)]);
-  await c.query("SELECT pg_notify('job_events', $1)", [id]);
+  // Канонический вид id (нижний регистр) — тот же, что у appendEvent и subscribe.
+  await c.query("SELECT pg_notify('job_events', $1::uuid::text)", [id]);
   return rows[0].seq;
 }
 
@@ -239,15 +240,25 @@ export function createPgJobStore(
 
     async reap() {
       const reaped = await inTx(pool, async (c) => {
-        const { rows } = await c.query<{ id: string; attempts: number; cancel_requested: boolean }>(
-          `SELECT id, attempts, cancel_requested_at IS NOT NULL AS cancel_requested
+        const { rows } = await c.query<{
+          id: string; attempts: number; cancel_requested: boolean; simulation_id: string | null;
+        }>(
+          `SELECT id, attempts, cancel_requested_at IS NOT NULL AS cancel_requested, simulation_id
            FROM jobs
            WHERE status = 'running' AND locked_until < now() - ${SECONDS(REAP_GRACE_SECONDS)}
            FOR UPDATE SKIP LOCKED`);
         const out: ReapedJob[] = [];
         for (const r of rows) {
-          const decision = reapDecision({ attempts: r.attempts, cancelRequested: r.cancel_requested });
-          if (decision === 'requeue') {
+          const decision = reapDecision({
+            attempts: r.attempts, cancelRequested: r.cancel_requested, simulationId: r.simulation_id,
+          });
+          if (decision === 'done') {
+            await c.query(
+              `UPDATE jobs SET status = 'done', error = NULL, finished_at = now(), image_data_url = NULL,
+                      locked_by = NULL, locked_until = NULL
+               WHERE id = $1`, [r.id]);
+            await insertEvent(c, r.id, outcomeEvent({ status: 'done', simulationId: r.simulation_id! }));
+          } else if (decision === 'requeue') {
             await c.query(
               "UPDATE jobs SET status = 'queued', locked_by = NULL, locked_until = NULL WHERE id = $1",
               [r.id]);
@@ -310,7 +321,8 @@ export function createPgJobStore(
     },
 
     subscribe(id, onChange) {
-      return listen.job(id, onChange);
+      // NOTIFY несёт id в нижнем регистре; подписка обязана совпасть с ним.
+      return listen.job(id.toLowerCase(), onChange);
     },
 
     subscribeQueue(onQueued) {

@@ -39,17 +39,25 @@ describe('jobPriority', () => {
 
 describe('reapDecision', () => {
   it('первая потеря возвращает задание в очередь', () => {
-    expect(reapDecision({ attempts: 1, cancelRequested: false })).toBe('requeue');
+    expect(reapDecision({ attempts: 1, cancelRequested: false, simulationId: null })).toBe('requeue');
   });
 
   it('вторая потеря — ошибка', () => {
-    expect(reapDecision({ attempts: 2, cancelRequested: false })).toBe('fail');
-    expect(reapDecision({ attempts: 5, cancelRequested: false })).toBe('fail');
+    expect(reapDecision({ attempts: 2, cancelRequested: false, simulationId: null })).toBe('fail');
+    expect(reapDecision({ attempts: 5, cancelRequested: false, simulationId: null })).toBe('fail');
+  });
+
+  it('потерянное задание с уже сохранённой симуляцией завершается успехом', () => {
+    for (const attempts of [1, 2, 5]) {
+      for (const cancelRequested of [false, true]) {
+        expect(reapDecision({ attempts, cancelRequested, simulationId: 'sim' })).toBe('done');
+      }
+    }
   });
 
   it('потерянное задание, которое просили отменить, отменяется', () => {
-    expect(reapDecision({ attempts: 1, cancelRequested: true })).toBe('cancel');
-    expect(reapDecision({ attempts: 2, cancelRequested: true })).toBe('cancel');
+    expect(reapDecision({ attempts: 1, cancelRequested: true, simulationId: null })).toBe('cancel');
+    expect(reapDecision({ attempts: 2, cancelRequested: true, simulationId: null })).toBe('cancel');
   });
 });
 
