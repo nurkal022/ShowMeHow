@@ -5,7 +5,7 @@ import type { LabEntry } from '@/lib/labs';
 import { labUrl } from '@/lib/labs';
 import { IconLab, IconPlay, IconPlus, IconVr } from '@/components/icons';
 
-export default function LabsView({ labs }: { labs: LabEntry[] }) {
+export default function LabsView({ labs, isGuest = false }: { labs: LabEntry[]; isGuest?: boolean }) {
   const [vrFor, setVrFor] = useState<LabEntry | null>(null);
   const [soon, setSoon] = useState(false);
   // WebXR живёт только в защищённом контексте (HTTPS или localhost). Пока боевой
@@ -18,9 +18,12 @@ export default function LabsView({ labs }: { labs: LabEntry[] }) {
     <div className="library labs">
       <div className="library-head">
         <h1>Лаборатории</h1>
-        <button type="button" className="btn btn-primary" onClick={() => setSoon(true)}>
-          <IconPlus size={17} />Создать лабораторию
-        </button>
+        {/* Гостю форма всё равно отправит на вход: она пока показывает лишь «скоро». */}
+        {!isGuest && (
+          <button type="button" className="btn btn-primary" onClick={() => setSoon(true)}>
+            <IconPlus size={17} />Создать лабораторию
+          </button>
+        )}
       </div>
       <p className="muted labs-lead">
         Трёхмерные сцены: открываются в браузере и рассматриваются мышью.

@@ -4,7 +4,7 @@ import ForcePasswordChange from '@/components/ForcePasswordChange';
 import { currentUserAllowingPasswordChangeFromCookies } from '@/lib/auth/session';
 import { userContact, userLabel } from '@/lib/auth/identifier';
 import { listMemberships } from '@/lib/org/access';
-import { ALL_NAV_SECTIONS, navSections } from '@/lib/org/policy';
+import { GUEST_NAV_SECTIONS, navSections } from '@/lib/org/policy';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
 import { IconLogo } from '@/components/icons';
 
@@ -17,10 +17,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Разрешающий вариант: только layout узнаёт о временном пароле и подменяет страницу.
   const user = await currentUserAllowingPasswordChangeFromCookies();
   const mustChangePassword = !!user?.mustChangePassword;
-  // Разделы считаются на сервере по членствам; без входа видны все, как раньше.
+  // Разделы считаются на сервере по членствам; гостю (без сессии) видны только
+  // «Лаборатории» — их список открыт без входа, остальное — нет. Для пользователя
+  // с временным паролем значение не важно: NavLinks ниже для него не рендерится.
   const sections = user && !mustChangePassword
     ? navSections(user, await listMemberships(user.id))
-    : [...ALL_NAV_SECTIONS];
+    : [...GUEST_NAV_SECTIONS];
   return (
     // data-theme проставляет скрипт ниже до отрисовки, поэтому значение на сервере
     // и на клиенте расходится намеренно — предупреждение о гидрации здесь ложное.

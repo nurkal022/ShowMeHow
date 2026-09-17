@@ -6,6 +6,7 @@ import type { JobKind, JobStatus } from '@/lib/jobs/store';
 import type { UserPrefs } from '@/lib/auth/prefs';
 import { historyLabel } from '@/lib/history-label';
 import { RECONNECT_COMMENT } from '@/lib/jobs/sse';
+import { isUnauthorized, loginWithReturnTo } from '@/lib/auth/client-session';
 import ProgressView from './progress/ProgressView';
 import PreviewFrame from './PreviewFrame';
 import ConstructorStand from './constructor/ConstructorStand';
@@ -228,6 +229,7 @@ export default function Workbench() {
     (async () => {
       try {
         const res = await fetch(`/api/jobs/${activeJobId}`);
+        if (isUnauthorized(res)) { loginWithReturnTo('/'); return; }
         if (!res.ok) {
           // 404 (job исчез) или иная ошибка сервера — реплей всё равно невозможен.
           localStorage.removeItem(ACTIVE_JOB_KEY);
@@ -274,6 +276,7 @@ export default function Workbench() {
   async function openSimulation(id: string) {
     try {
       const res = await fetch(`/api/simulations/${id}`);
+      if (isUnauthorized(res)) { loginWithReturnTo('/'); return; }
       if (!res.ok) {
         setError('Не удалось загрузить симуляцию');
         setPhase('error');
@@ -305,6 +308,7 @@ export default function Workbench() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
+      if (isUnauthorized(res)) { loginWithReturnTo('/'); return; }
       const body = await res.json();
       if (res.ok) {
         setHtml(body.html);
@@ -401,6 +405,7 @@ export default function Workbench() {
           res = null;   // сеть или рестарт веба — попробуем ещё раз
         }
         if (abort.signal.aborted) return;
+        if (res && isUnauthorized(res)) { clearActiveJob(); loginWithReturnTo('/'); return; }
         if (res && !res.ok && res.status < 500) {
           clearActiveJob();
           setError(res.status === 404 ? 'Задание не найдено' : `Ошибка сервера (${res.status})`);
@@ -443,6 +448,7 @@ export default function Workbench() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: text, imageDataUrl: image ?? undefined, mode }),
       });
+      if (isUnauthorized(res)) { loginWithReturnTo('/'); return; }
       if (!res.ok) {
         let message = `Ошибка сервера (${res.status})`;
         try {
@@ -487,6 +493,7 @@ export default function Workbench() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instruction }),
       });
+      if (isUnauthorized(res)) { loginWithReturnTo('/'); return; }
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(body.error ?? `Ошибка сервера (${res.status})`);

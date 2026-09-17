@@ -31,6 +31,12 @@ export const ALL_NAV_SECTIONS: readonly NavSection[] = [
   { key: 'labs', href: '/labs', label: 'Лаборатории' },
 ];
 
+/**
+ * Гостю (без сессии) видна только «Лаборатории» — их список открыт без входа.
+ * «Создать» и «Библиотека» ведут на страницы, закрытые логином.
+ */
+export const GUEST_NAV_SECTIONS: readonly NavSection[] = ALL_NAV_SECTIONS.filter((s) => s.key === 'labs');
+
 type PolicyUser = Pick<AuthUser, 'role'>;
 
 export function isPlatformAdmin(user: PolicyUser): boolean {

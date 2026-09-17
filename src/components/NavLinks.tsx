@@ -83,6 +83,11 @@ export default function NavLinks({ sections, user }: { sections: NavSection[]; u
           );
         })}
       </div>
+      {!user && (
+        <div className="account">
+          <Link href="/login" className="btn btn-sm btn-primary">Войти</Link>
+        </div>
+      )}
       {user && (
         <div className="account" ref={boxRef}>
           <button type="button" className="avatar" aria-haspopup="menu" aria-expanded={open}

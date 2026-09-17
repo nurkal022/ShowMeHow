@@ -1,12 +1,12 @@
-import { redirect } from 'next/navigation';
 import { getRenderableArtifact } from '@/lib/storage';
-import { currentUserFromCookies } from '@/lib/auth/session';
+import { requirePageUser } from '@/lib/auth/page-guard';
 import { IconBack } from '@/components/icons';
 
 export default async function Present({ params }: { params: Promise<{ id: string }> }) {
-  const user = await currentUserFromCookies();
-  if (!user) redirect('/login');
   const { id } = await params;
+  const user = await requirePageUser(`/present/${id}`);
+  // Временный пароль — layout уже подменяет страницу формой смены.
+  if (!user) return null;
   let html: string | null;
   try {
     html = await getRenderableArtifact(user.id, id);

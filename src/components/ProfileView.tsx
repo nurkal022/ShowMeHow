@@ -5,6 +5,7 @@ import { userContact, userLabel } from '@/lib/auth/identifier';
 import type { UserPrefs } from '@/lib/auth/prefs';
 import type { QuotaStatus } from '@/lib/quota';
 import { applyTheme, storeTheme, readStoredTheme, type Theme } from '@/lib/theme';
+import { isUnauthorized, loginWithReturnTo } from '@/lib/auth/client-session';
 import { IconKey, IconSliders } from './icons';
 
 interface Props { profile: UserProfile; quota: QuotaStatus; orgQuota: boolean }
@@ -46,6 +47,7 @@ export default function ProfileView({ profile, quota, orgQuota }: Props) {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     });
+    if (isUnauthorized(res)) { loginWithReturnTo('/profile'); return; }
     if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 2200); }
   }
 
@@ -181,6 +183,7 @@ function PasswordPanel() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword: current, newPassword: next }),
       });
+      if (isUnauthorized(res)) { loginWithReturnTo('/profile'); return; }
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
         setState({ kind: 'ok', text: 'Пароль изменён. Другие устройства придётся войти заново.' });
