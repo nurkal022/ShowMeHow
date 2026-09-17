@@ -1,0 +1,25 @@
+[Unit]
+Description=Tesseract worker (очередь генераций)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=user
+WorkingDirectory=/home/user/teseract
+EnvironmentFile=/home/user/teseract/.env.local
+Environment=NODE_ENV=production
+Environment=WORKER_CONCURRENCY=2
+Environment=WORKER_DRAIN_SECONDS=600
+# node напрямую, без npm: SIGTERM должен прийти в процесс воркера.
+ExecStart=/usr/bin/node --import tsx scripts/worker.ts
+# SIGTERM — только главному процессу: Chromium доделывает текущие рендеры.
+KillMode=mixed
+KillSignal=SIGTERM
+# Воркер ждёт задания до 600 секунд, systemd — на минуту дольше.
+TimeoutStopSec=660
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

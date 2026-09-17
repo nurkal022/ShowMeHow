@@ -1,0 +1,7 @@
+[Unit]
+Description=Tesseract backup (дамп базы и копия data/)
+
+[Service]
+Type=oneshot
+User=user
+ExecStart=/home/user/teseract/scripts/backup.sh
