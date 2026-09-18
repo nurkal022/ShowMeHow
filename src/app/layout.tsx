@@ -1,7 +1,8 @@
 import './globals.css';
 import ForcePasswordChange from '@/components/ForcePasswordChange';
 import { Brand } from '@/components/SiteChrome';
-import { currentUserAllowingPasswordChangeFromCookies } from '@/lib/auth/session';
+import ImpersonationBar from '@/components/ImpersonationBar';
+import { currentUserAllowingPasswordChangeFromCookies, impersonatorFromCookies } from '@/lib/auth/session';
 import { userLabel } from '@/lib/auth/identifier';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
 
@@ -19,6 +20,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Разрешающий вариант: только layout узнаёт о временном пароле и подменяет страницу.
   const user = await currentUserAllowingPasswordChangeFromCookies();
   const mustChangePassword = !!user?.mustChangePassword;
+  const impersonator = user ? await impersonatorFromCookies() : null;
   return (
     // data-theme проставляет скрипт ниже до отрисовки, поэтому значение на сервере
     // и на клиенте расходится намеренно — предупреждение о гидрации здесь ложное.
@@ -32,6 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
       </head>
       <body>
+        {user && impersonator && <ImpersonationBar viewer={userLabel(user)} />}
         {user && mustChangePassword ? (
           // С временным паролем нет ни разделов, ни кабинета: только марка и форма.
           <>

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { callApi } from '@/components/cabinet/api';
 import SecretDialog from '@/components/cabinet/SecretDialog';
 import { useConfirm, type ConfirmOptions } from '@/components/lms/ui/useConfirm';
+import { useImpersonate } from './useImpersonate';
 
 type Action = 'reset-password' | 'disable' | 'enable' | 'make-admin' | 'revoke-admin';
 
@@ -34,6 +35,7 @@ export default function UserActions({ userId, label, disabled, isAdmin, isSelf }
   const [error, setError] = useState('');
   const [password, setPassword] = useState<string | null>(null);
   const [ask, confirmDialog] = useConfirm();
+  const [impersonate, switching, switchError] = useImpersonate();
 
   async function run(action: Action) {
     const question = CONFIRM[action];
@@ -49,6 +51,11 @@ export default function UserActions({ userId, label, disabled, isAdmin, isSelf }
 
   return (
     <div className="cf-inline">
+      {!isAdmin && !disabled && (
+        <button type="button" className="btn btn-primary" disabled={busy || switching}
+          title="Открыть сайт глазами этого человека. Вернуться — кнопкой в полосе сверху."
+          onClick={() => impersonate(userId)}>Войти как {label}</button>
+      )}
       <button type="button" className="btn" disabled={busy} onClick={() => run('reset-password')}>Сбросить пароль</button>
       {disabled
         ? <button type="button" className="btn" disabled={busy} onClick={() => run('enable')}>Разблокировать</button>
@@ -58,6 +65,7 @@ export default function UserActions({ userId, label, disabled, isAdmin, isSelf }
             title={isSelf ? 'Снять права с самого себя нельзя.' : undefined}
             onClick={() => run('revoke-admin')}>Снять права админа</button>
         : <button type="button" className="btn" disabled={busy} onClick={() => run('make-admin')}>Сделать админом платформы</button>}
+      {switchError && <p className="error-box cf-full" role="alert">{switchError}</p>}
       {error && <p className="error-box cf-full" role="alert">{error}</p>}
       {confirmDialog}
       {password && (

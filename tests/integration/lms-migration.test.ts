@@ -32,7 +32,7 @@ describe.skipIf(!pool)('миграция 006', () => {
       `INSERT INTO simulations (id, owner_id, title, prompt, subject, created_at, updated_at)
        VALUES ($1, $2, 'Маятник', 'п', 'Физика', now(), now())`, [simId, ownerId]);
 
-    expect(await applyMigrations(p)).toEqual(['006_lms.sql']);
+    expect(await applyMigrations(p, { until: '006_lms.sql' })).toEqual(['006_lms.sql']);
 
     const { rows } = await p.query<{ visibility: string }>(
       'SELECT visibility FROM simulations WHERE id = $1', [simId]);

@@ -16,6 +16,9 @@ import { withOrgParam } from '@/lib/lms/links';
 import type { Theme } from '@/lib/theme';
 import { isCabinetItemActive } from './CabinetNav';
 import { useDismiss } from './useDismiss';
+import { useImpersonate } from '@/components/admin/useImpersonate';
+import type { SwitchTarget } from '@/lib/admin/switch';
+import { ORG_ROLE_LABELS } from '@/lib/org/types';
 import { useThemeChoice } from './useThemeChoice';
 
 const ICONS: Record<CabinetIcon, typeof IconPlus> = {
@@ -33,8 +36,8 @@ const SECTION_OF: Record<string, CabinetGroupKey> = { admin: 'platform', org: 'o
 
 interface ShellUser { name: string; contact: string; platformAdmin: boolean }
 
-export default function ShellFrame({ menu, user, children }: {
-  menu: CabinetMenu; user: ShellUser; children: React.ReactNode;
+export default function ShellFrame({ menu, user, switchTargets = [], children }: {
+  menu: CabinetMenu; user: ShellUser; switchTargets?: SwitchTarget[]; children: React.ReactNode;
 }) {
   const pathname = usePathname() ?? '/';
   const [collapsed, setCollapsed] = useState(false);
@@ -98,7 +101,7 @@ export default function ShellFrame({ menu, user, children }: {
             <Crumbs menu={menu} pathname={pathname} />
           </Suspense>
           <ThemeButton />
-          <AccountMenu user={user} />
+          <AccountMenu user={user} switchTargets={switchTargets} />
         </header>
         <main className="cab-content">{children}</main>
       </div>
@@ -260,8 +263,9 @@ function ThemeButton() {
   );
 }
 
-function AccountMenu({ user }: { user: ShellUser }) {
+function AccountMenu({ user, switchTargets }: { user: ShellUser; switchTargets: SwitchTarget[] }) {
   const router = useRouter();
+  const [impersonate, switching, switchError] = useImpersonate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(open, ref, () => setOpen(false));
@@ -290,6 +294,8 @@ function AccountMenu({ user }: { user: ShellUser }) {
           <Link href="/" className="menu-item" role="menuitem" onClick={() => setOpen(false)}>
             <IconBack size={18} />На сайт
           </Link>
+          {user.platformAdmin && <SwitchSection targets={switchTargets} busy={switching} error={switchError}
+            onPick={(t) => impersonate(t.userId, t.orgSlug)} onOther={() => setOpen(false)} />}
           <div className="menu-sep" />
           <button type="button" className="menu-item" role="menuitem" onClick={logout}>
             <IconLogout size={18} />Выйти
@@ -297,5 +303,34 @@ function AccountMenu({ user }: { user: ShellUser }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** «Войти как» в меню админа платформы: быстрые роли по школам и переход к поиску людей. */
+function SwitchSection({ targets, busy, error, onPick, onOther }: {
+  targets: SwitchTarget[]; busy: boolean; error: string;
+  onPick: (t: SwitchTarget) => void; onOther: () => void;
+}) {
+  const orgs = [...new Set(targets.map((t) => t.orgName))];
+  return (
+    <>
+      <div className="menu-sep" />
+      <div className="menu-sub">Войти как</div>
+      {orgs.map((org) => (
+        <div key={org}>
+          {orgs.length > 1 && <div className="menu-sub">{org}</div>}
+          {targets.filter((t) => t.orgName === org).map((t) => (
+            <button key={t.userId + t.role} type="button" className="menu-item" role="menuitem" disabled={busy}
+              title={`${ORG_ROLE_LABELS[t.role]}: ${t.label}`} onClick={() => onPick(t)}>
+              <IconUser size={18} />{ORG_ROLE_LABELS[t.role]} · {t.label}
+            </button>
+          ))}
+        </div>
+      ))}
+      <Link href="/admin/users" className="menu-item" role="menuitem" onClick={onOther}>
+        <IconPeople size={18} />Другой человек…
+      </Link>
+      {error && <div className="menu-sub" role="alert">{error}</div>}
+    </>
   );
 }

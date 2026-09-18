@@ -21,19 +21,33 @@ function hashToken(token: string): string {
 }
 
 /** Тип определяется при входе и дальше не пересчитывается; короткая сессия не продлевается. */
-export async function createSession(userId: string, kind: SessionKind = 'long'): Promise<string> {
+export async function createSession(
+  userId: string, kind: SessionKind = 'long', impersonatorId: string | null = null,
+): Promise<string> {
   const token = crypto.randomBytes(32).toString('base64url');
   await db().query(
-    'INSERT INTO sessions (token_hash, user_id, expires_at, sliding) VALUES ($1,$2,$3,$4)',
-    [hashToken(token), userId, new Date(Date.now() + sessionTtlMs(kind)), kind === 'long']);
+    'INSERT INTO sessions (token_hash, user_id, expires_at, sliding, impersonator_id) VALUES ($1,$2,$3,$4,$5)',
+    [hashToken(token), userId, new Date(Date.now() + sessionTtlMs(kind)), kind === 'long', impersonatorId]);
   return token;
 }
 
+/** Сессия вместе с тем, кто вошёл в неё от чужого имени (админ платформы). */
+export interface ResolvedSession { user: AuthUser; impersonator: AuthUser | null }
+
 export async function resolveSession(token: string | undefined): Promise<AuthUser | null> {
+  return (await resolveSessionDetails(token))?.user ?? null;
+}
+
+/**
+ * Сессия «от имени» живёт, пока её автор — действующий админ платформы. Временный
+ * пароль человека в ней не мешает: админ смотрит, а не входит за него.
+ */
+export async function resolveSessionDetails(token: string | undefined): Promise<ResolvedSession | null> {
   if (!token) return null;
   const hash = hashToken(token);
-  const { rows } = await db().query<{ user_id: string; expires_at: Date; sliding: boolean }>(
-    'SELECT user_id, expires_at, sliding FROM sessions WHERE token_hash = $1', [hash]);
+  const { rows } = await db().query<{
+    user_id: string; expires_at: Date; sliding: boolean; impersonator_id: string | null;
+  }>('SELECT user_id, expires_at, sliding, impersonator_id FROM sessions WHERE token_hash = $1', [hash]);
   const row = rows[0];
   if (!row) return null;
   if (row.expires_at.getTime() <= Date.now()) {
@@ -45,7 +59,12 @@ export async function resolveSession(token: string | undefined): Promise<AuthUse
     await db().query('UPDATE sessions SET expires_at = $2 WHERE token_hash = $1',
       [hash, new Date(Date.now() + SESSION_TTL_MS)]);
   }
-  return findActiveUserById(row.user_id);
+  const user = await findActiveUserById(row.user_id);
+  if (!user) return null;
+  if (!row.impersonator_id) return { user, impersonator: null };
+  const impersonator = await findActiveUserById(row.impersonator_id);
+  if (impersonator?.role !== 'admin') return null;
+  return { user: { ...user, mustChangePassword: false }, impersonator };
 }
 
 export async function destroySession(token: string | undefined): Promise<void> {
@@ -77,6 +96,11 @@ async function tokenFromCookies(): Promise<string | undefined> {
   const { cookies } = await import('next/headers');
   const store = await cookies();
   return store.get(SESSION_COOKIE)?.value;
+}
+
+/** Кто вошёл в текущую сессию от чужого имени — для полосы «Вернуться в админку». */
+export async function impersonatorFromCookies(): Promise<AuthUser | null> {
+  return (await resolveSessionDetails(await tokenFromCookies()))?.impersonator ?? null;
 }
 
 /** Для роутов: токен берётся из заголовка запроса, а не из next/headers — так роут тестируется вызовом. */
