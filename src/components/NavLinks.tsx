@@ -2,15 +2,18 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { IconLab, IconLibrary, IconLogout, IconMonitor, IconMoon, IconPlus, IconSun, IconUser } from './icons';
+import { IconAdmin, IconLab, IconLibrary, IconOrg, IconTeach, IconLogout, IconMonitor, IconMoon, IconPlus, IconSun, IconUser } from './icons';
 import { applyTheme, readStoredTheme, storeTheme, type Theme } from '@/lib/theme';
 import type { NavSection, NavSectionKey } from '@/lib/org/policy';
 
 // Иконки живут на клиенте: компонент нельзя передать из серверного layout.
 const ICONS: Record<NavSectionKey, typeof IconPlus> = {
+  teach: IconTeach,
   create: IconPlus,
   library: IconLibrary,
   labs: IconLab,
+  org: IconOrg,
+  admin: IconAdmin,
 };
 
 export function isSectionActive(href: string, pathname: string | null): boolean {

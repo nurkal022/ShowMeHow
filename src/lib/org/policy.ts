@@ -13,7 +13,7 @@ export const GENERATION_FORBIDDEN_MESSAGE = 'Генерация недоступ
 
 export type SessionKind = 'long' | 'short';
 
-export type NavSectionKey = 'create' | 'library' | 'labs';
+export type NavSectionKey = 'teach' | 'create' | 'library' | 'labs' | 'org' | 'admin';
 
 export interface NavSection {
   key: NavSectionKey;
@@ -26,9 +26,12 @@ export interface NavSection {
  * «Курсы», «Преподавание» и прочие вместе со своими страницами.
  */
 export const ALL_NAV_SECTIONS: readonly NavSection[] = [
+  { key: 'teach', href: '/teach', label: 'Преподавание' },
   { key: 'create', href: '/', label: 'Создать' },
   { key: 'library', href: '/library', label: 'Библиотека' },
   { key: 'labs', href: '/labs', label: 'Лаборатории' },
+  { key: 'org', href: '/org', label: 'Организация' },
+  { key: 'admin', href: '/admin', label: 'Админка' },
 ];
 
 /**
@@ -77,8 +80,16 @@ export function generationLimit(user: PolicyUser, memberships: Membership[]): nu
 }
 
 export function navSections(user: PolicyUser, memberships: Membership[]): NavSection[] {
-  const allowCreate = canGenerate(user, memberships);
-  return ALL_NAV_SECTIONS.filter((s) => s.key !== 'create' || allowCreate);
+  // «Курсы» ученика появятся вместе со страницами /learn.
+  const visible: Record<NavSectionKey, boolean> = {
+    teach: hasStaffRole(memberships),
+    create: canGenerate(user, memberships),
+    library: true,
+    labs: true,
+    org: memberships.some((m) => m.role === 'org_admin'),
+    admin: isPlatformAdmin(user),
+  };
+  return ALL_NAV_SECTIONS.filter((s) => visible[s.key]);
 }
 
 /**

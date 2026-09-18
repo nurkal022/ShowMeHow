@@ -86,17 +86,21 @@ describe('тип сессии', () => {
 describe('разделы навигации', () => {
   const keys = (s: { key: string }[]) => s.map((x) => x.key);
 
-  it('полный список — Создать, Библиотека, Лаборатории', () => {
+  it('полный список разделов', () => {
     expect(ALL_NAV_SECTIONS.map((s) => [s.key, s.href, s.label])).toEqual([
+      ['teach', '/teach', 'Преподавание'],
       ['create', '/', 'Создать'],
       ['library', '/library', 'Библиотека'],
       ['labs', '/labs', 'Лаборатории'],
+      ['org', '/org', 'Организация'],
+      ['admin', '/admin', 'Админка'],
     ]);
   });
-  it('без членств, учитель и админ видят все три', () => {
+  it('без членств — как раньше; учитель, админ организации и платформы видят свои кабинеты', () => {
     expect(keys(navSections(USER, []))).toEqual(['create', 'library', 'labs']);
-    expect(keys(navSections(USER, [member('teacher')]))).toEqual(['create', 'library', 'labs']);
-    expect(keys(navSections(ADMIN, [member('student')]))).toEqual(['create', 'library', 'labs']);
+    expect(keys(navSections(USER, [member('teacher')]))).toEqual(['teach', 'create', 'library', 'labs']);
+    expect(keys(navSections(USER, [member('org_admin')]))).toEqual(['teach', 'create', 'library', 'labs', 'org']);
+    expect(keys(navSections(ADMIN, [member('student')]))).toEqual(['create', 'library', 'labs', 'admin']);
   });
   it('ученик без права генерации не видит «Создать»', () => {
     expect(keys(navSections(USER, [member('student')]))).toEqual(['library', 'labs']);
