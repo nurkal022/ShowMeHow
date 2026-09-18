@@ -1,9 +1,7 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requirePageUser } from '@/lib/auth/page-guard';
 import { staffCourse } from '@/lib/lms/access';
 import { courseProgress } from '@/lib/lms/grading';
-import { courseEditorHref } from '@/lib/lms/links';
 import CabinetHeader from '@/components/cabinet/CabinetHeader';
 import ProgressTable from '@/components/teach/ProgressTable';
 
@@ -15,9 +13,7 @@ export default async function ProgressPage({ params }: { params: Promise<{ id: s
   if (!staff) notFound();
   return (
     <>
-      <CabinetHeader title={`Прогресс: ${staff.course.title}`} subtitle="Какие темы ученики открывали">
-        <Link className="btn btn-ghost" href={courseEditorHref(id)}>← К курсу</Link>
-      </CabinetHeader>
+      <CabinetHeader title={`Прогресс: ${staff.course.title}`} subtitle="Какие темы ученики открывали" />
       <ProgressTable progress={await courseProgress(id)} />
     </>
   );

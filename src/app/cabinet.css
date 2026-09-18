@@ -1,0 +1,446 @@
+/* =========================================================================
+   Оболочка кабинетов (/admin, /org, /teach): тёмная боковая панель, светлая
+   верхняя полоса, серое поле и белые карточки. Файл подключается только в
+   (cabinet)/layout.tsx — сайт ученика эти правила не видит.
+   Токены продолжают globals.css; сетка отступов — 8px.
+   ========================================================================= */
+:root {
+  --cab-sidebar-w: 256px;
+  --cab-sidebar-w-collapsed: 72px;
+  --cab-topbar-h: 60px;
+
+  --cab-bg: #f1f3f7;
+  --cab-sidebar-bg: #1b2030;
+  --cab-sidebar-border: #1b2030;
+  --cab-sidebar-hover: rgba(255, 255, 255, .06);
+  --cab-sidebar-active: rgba(110, 168, 255, .16);
+  --cab-sidebar-text: #c6ccda;
+  --cab-sidebar-strong: #ffffff;
+  --cab-sidebar-muted: #7f89a1;
+  --cab-sidebar-accent: #8ab4f8;
+
+  --cab-card-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 6px 20px rgba(16, 24, 40, .05);
+  --cab-radius: 14px;
+
+  /* Карточки-показатели: сплошной фон, текст с контрастом не ниже 4.5:1. */
+  --cab-indigo: #4f5bd5;
+  --cab-blue: #1967d2;
+  --cab-amber: #f6a723;
+  --cab-rose: #c9245f;
+  --cab-teal: #0b7f76;
+  --cab-on-tone: #ffffff;
+  --cab-on-amber: #2b1c00;
+
+  /* Ряды графиков: порядок фиксирован, ряд узнаётся ещё и по штриху линии. */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+}
+
+html[data-theme='dark'] {
+  --cab-bg: #0f1013;
+  --cab-sidebar-bg: #15171c;
+  --cab-sidebar-border: #24272d;
+  --cab-sidebar-hover: rgba(255, 255, 255, .05);
+  --cab-sidebar-active: rgba(138, 180, 248, .14);
+  --cab-sidebar-text: #b9bfca;
+  --cab-sidebar-muted: #767d8a;
+
+  --cab-card-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px rgba(0, 0, 0, .25);
+
+  --cab-indigo: #4450b8;
+  --cab-blue: #1f5fbf;
+  --cab-amber: #dc9a1e;
+  --cab-rose: #ad2656;
+  --cab-teal: #0f6f68;
+  --cab-on-amber: #211500;
+
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+}
+
+/* ------------------------------- рамка -------------------------------- */
+.cab {
+  display: grid;
+  grid-template-columns: var(--cab-sidebar-w) minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--cab-bg);
+  font-size: 14.5px;
+}
+.cab-main { display: flex; flex-direction: column; min-width: 0; }
+.cab-content { flex: 1; padding: 24px 28px 64px; min-width: 0; }
+
+/* ---------------------------- боковая панель --------------------------- */
+.cab-sidebar {
+  position: sticky; top: 0; height: 100vh; z-index: 50;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 0 12px 12px;
+  background: var(--cab-sidebar-bg); color: var(--cab-sidebar-text);
+  border-right: 1px solid var(--cab-sidebar-border);
+  overflow-y: auto; overflow-x: hidden; scrollbar-width: thin;
+}
+.cab-brand {
+  display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  height: var(--cab-topbar-h); padding: 0 8px; margin-bottom: 4px;
+  color: var(--cab-sidebar-strong); font-size: 16px; font-weight: 600; letter-spacing: -.02em;
+}
+.cab-brand:hover { text-decoration: none; }
+.cab-brand .brand-mark { width: 30px; height: 30px; border-radius: 9px; background: #1a73e8; color: #fff; flex-shrink: 0; }
+.cab-brand-text { display: flex; flex-direction: column; line-height: 1.15; white-space: nowrap; }
+.cab-brand-text small { font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--cab-sidebar-muted); }
+
+.cab-org {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  margin: 0 0 8px; padding: 0 12px; height: 40px;
+  border-radius: 10px; background: var(--cab-sidebar-hover);
+  color: var(--cab-sidebar-strong); font-size: 13.5px; font-weight: 500;
+}
+.cab-org svg { color: var(--cab-sidebar-muted); }
+.cab-org-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cab-org-select select {
+  flex: 1; min-width: 0; height: 100%; border: none; background: transparent; color: inherit;
+  font: inherit; cursor: pointer; text-overflow: ellipsis; outline: none;
+}
+.cab-org-select:focus-within { outline: 2px solid var(--cab-sidebar-accent); outline-offset: 1px; }
+.cab-org-select option { color: #1f2023; background: #fff; }
+
+.cab-nav { display: flex; flex-direction: column; gap: 16px; flex: 1; padding-top: 8px; }
+.cab-nav-group { display: flex; flex-direction: column; gap: 2px; }
+.cab-nav-title {
+  padding: 0 12px 6px; font-size: 11px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--cab-sidebar-muted); white-space: nowrap;
+}
+.cab-nav-item {
+  position: relative; display: flex; align-items: center; gap: 12px;
+  height: 40px; padding: 0 12px; border-radius: 10px;
+  color: var(--cab-sidebar-text); font-size: 14px; font-weight: 500; white-space: nowrap;
+  transition: background .12s ease, color .12s ease;
+}
+.cab-nav-item svg { color: var(--cab-sidebar-muted); transition: color .12s ease; }
+.cab-nav-item:hover { background: var(--cab-sidebar-hover); color: var(--cab-sidebar-strong); text-decoration: none; }
+.cab-nav-item:hover svg { color: var(--cab-sidebar-strong); }
+.cab-nav-item.active { background: var(--cab-sidebar-active); color: var(--cab-sidebar-strong); }
+.cab-nav-item.active svg { color: var(--cab-sidebar-accent); }
+.cab-nav-item.active::before {
+  content: ''; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px;
+  border-radius: 0 3px 3px 0; background: var(--cab-sidebar-accent);
+}
+.cab-nav-item.action { color: var(--cab-sidebar-accent); }
+.cab-nav-item.action svg { color: var(--cab-sidebar-accent); }
+.cab-nav-item:focus-visible, .cab-brand:focus-visible { outline-color: var(--cab-sidebar-accent); }
+.cab-back { margin-top: 8px; flex-shrink: 0; border-top: 1px solid rgba(255, 255, 255, .07); border-radius: 0 0 10px 10px; padding-top: 4px; height: 48px; }
+
+.cab-scrim { display: none; }
+
+/* Свёрнутая панель — только на широком экране; на телефоне бургер выдвигает её целиком. */
+@media (min-width: 901px) {
+  .cab { transition: grid-template-columns .18s ease; }
+  html[data-cab-sidebar='collapsed'] .cab { grid-template-columns: var(--cab-sidebar-w-collapsed) minmax(0, 1fr); }
+  html[data-cab-sidebar='collapsed'] .cab-nav-item span,
+  html[data-cab-sidebar='collapsed'] .cab-brand-text,
+  html[data-cab-sidebar='collapsed'] .cab-org-name,
+  html[data-cab-sidebar='collapsed'] .cab-org-select select { display: none; }
+  html[data-cab-sidebar='collapsed'] .cab-nav-item,
+  html[data-cab-sidebar='collapsed'] .cab-org,
+  html[data-cab-sidebar='collapsed'] .cab-brand { justify-content: center; padding: 0; }
+  html[data-cab-sidebar='collapsed'] .cab-nav-title {
+    height: 1px; padding: 0; margin: 0 8px 8px; overflow: hidden; color: transparent;
+    background: rgba(255, 255, 255, .09);
+  }
+}
+
+/* ----------------------------- верхняя полоса --------------------------- */
+.cab-topbar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 8px;
+  height: var(--cab-topbar-h); padding: 0 20px 0 16px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.cab-icon-btn {
+  width: 38px; height: 38px; border-radius: 10px; border: none; background: transparent;
+  color: var(--text-2); display: grid; place-items: center; cursor: pointer; flex-shrink: 0;
+  transition: background .12s ease, color .12s ease;
+}
+.cab-icon-btn:hover { background: var(--surface-2); color: var(--text); }
+.cab-crumbs { flex: 1; min-width: 0; overflow: hidden; }
+.cab-crumbs ol { display: flex; align-items: center; gap: 2px; margin: 0; padding: 0; list-style: none; white-space: nowrap; }
+.cab-crumbs li { display: inline-flex; align-items: center; gap: 2px; font-size: 14px; color: var(--muted); min-width: 0; }
+.cab-crumbs li svg { color: var(--border-strong); }
+.cab-crumbs a { color: var(--muted); padding: 4px 6px; border-radius: 6px; }
+.cab-crumbs a:hover { color: var(--text); background: var(--surface-2); text-decoration: none; }
+.cab-crumbs span { padding: 4px 6px; }
+.cab-crumbs [aria-current='page'] { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.cab-pop { position: relative; flex-shrink: 0; }
+.cab-pop .menu { min-width: 220px; }
+.cab-pop .menu-item.active { background: var(--accent-soft); color: var(--accent); }
+.cab-pop .menu-item.active svg { color: var(--accent); }
+.cab-pop .avatar { background: var(--cab-indigo); color: #fff; border-color: transparent; margin-left: 4px; }
+
+/* -------------------- страница: заголовок, кнопки, поля ----------------- */
+.cab .cabinet { max-width: 1360px; padding: 0; gap: 24px; }
+.cab .cabinet-head { gap: 16px; align-items: flex-start; }
+.cab .cabinet-head h1 { font-size: 24px; letter-spacing: -.02em; }
+.cab .cabinet-head .page-head .muted { font-size: 14px; }
+.cabinet-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cab .btn { height: 38px; padding: 0 16px; border-radius: 10px; }
+.cab .btn-sm { height: 32px; padding: 0 12px; border-radius: 8px; }
+.cab .btn-primary { box-shadow: 0 1px 2px rgba(26, 115, 232, .25); }
+.btn-warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.btn-warn:hover { background: var(--warn-soft); filter: brightness(.97); }
+.cab .input, .cab .select, .cab textarea.input,
+.cab .field input, .cab .field select, .cab .field textarea { border-radius: 10px; }
+
+/* ------------------------------- карточки ------------------------------- */
+.cab-card, .cab .panel, .cab .stat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--cab-radius); box-shadow: var(--cab-card-shadow);
+}
+.cab-card { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.cab-card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 18px 20px 14px;
+}
+.cab-card-head h2 { font-size: 16px; }
+.cab-card-head > div:not(.segmented) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cab-card-head .segmented { flex-shrink: 0; }
+.cab .panel { padding: 20px; }
+.cab-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.cab-section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.cab-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cab-section-head h2 { font-size: 17px; }
+
+/* ---------------------------- показатели ------------------------------- */
+.stat-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; }
+.stat-card {
+  position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 156px;
+  padding: 18px 20px 0; border-radius: var(--cab-radius); overflow: hidden;
+  color: var(--cab-on-tone); box-shadow: var(--cab-card-shadow);
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+a.stat-card:hover { text-decoration: none; transform: translateY(-2px); box-shadow: var(--shadow-md); }
+a.stat-card:focus-visible { outline-offset: 3px; }
+.stat-card.tone-indigo { background: var(--cab-indigo); }
+.stat-card.tone-blue { background: var(--cab-blue); }
+.stat-card.tone-amber { background: var(--cab-amber); color: var(--cab-on-amber); }
+.stat-card.tone-rose { background: var(--cab-rose); }
+.stat-card.tone-teal { background: var(--cab-teal); }
+.stat-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.stat-card-top > div { display: flex; flex-direction: column; min-width: 0; }
+.stat-card strong { font-size: 28px; font-weight: 600; line-height: 1.15; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.stat-card-label { font-size: 14px; font-weight: 500; }
+.stat-card-hint { font-size: 12.5px; opacity: .88; }
+.stat-card-icon {
+  width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0;
+  background: rgba(255, 255, 255, .16);
+}
+.tone-amber .stat-card-icon { background: rgba(43, 28, 0, .1); }
+.stat-card-spark { margin: auto -20px 0; height: 52px; display: flex; align-items: flex-end; }
+.spark { display: block; width: 100%; height: 100%; }
+.stat-card-flat { display: block; width: 100%; height: 2px; margin-bottom: 14px; background: currentColor; opacity: .22; }
+
+/* Прежние числа-показатели (карточка организации в админке) — белой карточкой. */
+.cab .stat-grid { gap: 16px; }
+.cab .stat { padding: 16px 18px; }
+
+/* -------------------------------- график -------------------------------- */
+.chart-card .cab-card-head { padding-bottom: 4px; }
+.chart { position: relative; padding: 0 20px 8px; min-width: 0; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 4px; padding: 0; list-style: none; font-size: 13px; color: var(--text-2); }
+.chart-legend li { display: inline-flex; align-items: center; gap: 8px; }
+.chart-box { position: relative; border-radius: 8px; touch-action: pan-y; cursor: crosshair; }
+.chart-box svg { display: block; overflow: visible; }
+.chart-grid { stroke: var(--border); stroke-width: 1; shape-rendering: crispEdges; }
+.chart-tick { fill: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.chart-cross { stroke: var(--border-strong); stroke-width: 1; }
+.chart-dot { stroke: var(--surface); stroke-width: 2; }
+.chart-tip {
+  position: absolute; top: 8px; z-index: 5; pointer-events: none;
+  display: flex; flex-direction: column; gap: 4px; min-width: 150px; padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md);
+  font-size: 12.5px; color: var(--text-2); white-space: nowrap;
+}
+.chart-tip strong { color: var(--text); font-size: 13px; }
+.chart-tip span { display: flex; align-items: center; gap: 8px; }
+.chart-tip i { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.chart-tip i.dashed { border-radius: 50%; }
+.chart-tip b { margin-left: auto; padding-left: 16px; color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart-empty { text-align: center; padding: 0 20px 12px; }
+.chart-totals {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px 24px;
+  padding: 16px 20px 18px; border-top: 1px solid var(--border); background: var(--bg-subtle);
+}
+.chart-totals > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chart-totals strong { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart-share { display: block; height: 4px; margin-top: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.chart-share i { display: block; height: 100%; border-radius: 999px; }
+.chart-note { font-size: 12px; }
+
+/* -------------------------------- таблицы ------------------------------- */
+.cab .table-wrap {
+  border-radius: var(--cab-radius); box-shadow: var(--cab-card-shadow);
+  /* Длинная таблица прокручивается внутри карточки, шапка остаётся на месте. */
+  max-height: min(76vh, 920px); overflow: auto;
+}
+.cab .cab-card > .table-wrap { border: none; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; }
+.cab .data-table th {
+  position: sticky; top: 0; z-index: 2; padding: 12px 16px;
+  font-size: 12px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+  background: var(--bg-subtle); box-shadow: inset 0 -1px 0 var(--border); border-bottom: none;
+}
+.cab .data-table td { padding: 12px 16px; }
+.cab .data-table tbody tr { transition: background .1s ease; }
+.cab .data-table tbody tr:hover td { background: var(--bg-subtle); }
+.cab .data-table tr.selected td, .cab .data-table tbody tr.selected:hover td { background: var(--accent-soft); }
+.cab .data-table td.actions .btn + .btn { margin-left: 4px; }
+.cab-cell-icon { display: inline-flex; align-items: center; gap: 8px; }
+.cab-cell-icon svg { color: var(--warn); }
+
+/* ------------------------- списки и лента действий ---------------------- */
+.cab-list, .cab-feed { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.cab-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+}
+.cab-list li:last-child, .cab-feed li:last-child { border-bottom: none; }
+.cab-list li > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cab-list li a { font-weight: 500; overflow-wrap: anywhere; }
+.cab-list li:hover { background: var(--bg-subtle); }
+.cab-feed li { display: flex; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.cab-feed p { font-size: 14px; overflow-wrap: anywhere; }
+.cab-feed strong { font-weight: 600; }
+.cab-feed-dot { width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; box-shadow: 0 0 0 4px var(--accent-soft); }
+.cab-feed-target { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); }
+
+/* --------------------------- пустые состояния --------------------------- */
+.cab-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 32px 24px 36px; text-align: center; border-top: 1px solid var(--border);
+}
+.cab-empty p { max-width: 380px; color: var(--text-2); font-size: 14px; }
+.cab-empty-icon {
+  width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent);
+}
+.cab-card > .cab-empty:first-child { border-top: none; }
+.cab .empty-state { background: var(--surface); border-radius: var(--cab-radius); padding: 32px 24px; }
+
+/* ----------------------------- карточки курсов -------------------------- */
+.course-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 24px; }
+.course-card {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 18px 20px 16px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--cab-radius);
+  box-shadow: var(--cab-card-shadow); transition: box-shadow .14s ease, border-color .14s ease;
+}
+.course-card:hover { box-shadow: var(--shadow-md); border-color: var(--border-strong); }
+.course-card.archived { opacity: .7; }
+.course-card > header { display: flex; align-items: center; gap: 8px; }
+.course-card h3 { font-size: 16px; overflow-wrap: anywhere; }
+.course-card h3 a { color: var(--text); }
+.course-card h3 a:hover { color: var(--accent); text-decoration: none; }
+.course-card > p { overflow-wrap: anywhere; }
+.course-card-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0 0; }
+.course-card-facts div { display: flex; flex-direction: column-reverse; padding: 8px 12px; border-radius: 10px; background: var(--bg-subtle); }
+.course-card-facts dt { font-size: 12px; color: var(--muted); }
+.course-card-facts dd { margin: 0; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.course-card-progress { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; margin-top: 4px; }
+.course-card-progress .meter { grid-column: 1 / -1; }
+.course-card-progress .meter i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.course-card > footer {
+  display: flex; flex-wrap: wrap; gap: 4px; margin: 8px -8px 0; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.course-card > footer .btn:first-child { margin: 0 4px 0 8px; }
+.course-card > footer { align-items: center; }
+.course-card > footer .btn-ghost { padding: 0 10px; }
+.course-card-view { width: 32px; height: 32px; margin: 0 8px 0 auto; color: var(--muted); }
+
+/* ------------------------------ вкладки курса --------------------------- */
+.cab-course { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.cab-course > * { min-width: 0; }
+.cab-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.cab-tabs::-webkit-scrollbar { display: none; }
+.cab-tabs a {
+  position: relative; padding: 10px 16px; font-size: 14px; font-weight: 500; color: var(--muted);
+  white-space: nowrap; border-radius: 8px 8px 0 0;
+}
+.cab-tabs a:hover { color: var(--text); background: var(--surface-2); text-decoration: none; }
+.cab-tabs a.active { color: var(--accent); }
+.cab-tabs a.active::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
+/* Те же переходы уже есть вкладками и в хлебных крошках — в шапке редактора они лишние. */
+.cab-course > :not(.cab-tabs) a[href^='/teach/courses/'][href$='/journal'],
+.cab-course > :not(.cab-tabs) a[href^='/teach/courses/'][href$='/progress'] { display: none; }
+
+/* --------------------------------- окно --------------------------------- */
+.cab-dialog {
+  width: min(600px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--border);
+  border-radius: 16px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-lg);
+}
+.cab-dialog::backdrop { background: rgba(12, 16, 28, .55); }
+.cab-dialog-body { display: flex; flex-direction: column; gap: 16px; padding: 20px 24px 24px; }
+.cab-dialog-body > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* --------------------------------- 404 ---------------------------------- */
+.cab .not-found { padding: 64px 16px; }
+
+/* ------------------------------ адаптивность ---------------------------- */
+@media (max-width: 1180px) {
+  .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .cab-grid-2 { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .cab { grid-template-columns: minmax(0, 1fr); }
+  .cab-sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; width: min(var(--cab-sidebar-w), 84vw); height: auto;
+    transform: translateX(-100%); visibility: hidden;
+    transition: transform .2s ease, visibility 0s linear .2s;
+  }
+  .cab-drawer-open .cab-sidebar { transform: none; visibility: visible; transition: transform .2s ease; box-shadow: var(--shadow-lg); }
+  .cab-scrim {
+    display: block; position: fixed; inset: 0; z-index: 45; border: none; padding: 0;
+    background: rgba(12, 16, 28, .5); opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .cab-drawer-open .cab-scrim { opacity: 1; pointer-events: auto; }
+  .cab-content { padding: 20px 16px 48px; }
+  .cab-topbar { padding: 0 12px 0 8px; }
+  .cab .cabinet { gap: 20px; }
+  .cab-grid-2 { gap: 20px; }
+}
+
+@media (max-width: 720px) {
+  /* Таблица на телефоне — стопка карточек (правило из globals.css): прокрутка и липкая шапка не нужны. */
+  .cab .table-wrap { max-height: none; overflow: visible; box-shadow: none; }
+  .cab .cab-card > .table-wrap { padding: 12px 12px 2px; }
+  .cab .data-table tbody tr:hover td { background: transparent; }
+  .cab .data-table tr { box-shadow: var(--cab-card-shadow); }
+  .cab .cab-card .data-table tr { box-shadow: none; background: var(--bg-subtle); }
+  .cab .cabinet-head h1 { font-size: 21px; }
+  .course-cards { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .cab .panel { padding: 16px; }
+}
+
+@media (max-width: 520px) {
+  .stat-cards { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .stat-card { min-height: 132px; }
+  .stat-card-spark { height: 40px; }
+  .cabinet-head-actions { width: 100%; }
+  .cabinet-head-actions .btn { flex: 1; }
+  .chart { padding: 0 12px 8px; }
+  .cab-card-head { padding: 16px 16px 12px; }
+  .chart-totals { padding: 14px 16px 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cab-list li, .cab-feed li { padding: 12px 16px; }
+  .course-card > footer { flex-wrap: nowrap; gap: 0; }
+  .course-card > footer .btn { padding: 0 8px; font-size: 12.5px; }
+  .course-card > footer .btn:first-child { padding: 0 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cab, .cab-sidebar, .cab-scrim, .stat-card, .course-card { transition: none; }
+}
+
+@media print {
+  .cab { display: block; background: #fff; min-height: 0; }
+  .cab-content { padding: 0; }
+  .cab .table-wrap { max-height: none; overflow: visible; box-shadow: none; }
+  .cab-card, .cab .panel, .stat-card, .course-card { box-shadow: none; }
+}

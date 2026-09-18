@@ -1,4 +1,5 @@
 import type { CredentialCard } from '@/lib/org/credentials';
+import { IconScissors } from '@/components/icons';
 
 export const CARDS_PER_PAGE = 8;
 
@@ -8,22 +9,29 @@ export function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** Карточки под печать: по восемь на лист A4, разрезаются и раздаются ученикам. */
+/** Карточки под печать: по восемь на лист A4, разрезаются по пунктиру и раздаются ученикам. */
 export default function CredentialSheet({ cards, site, groupTitle }: {
   cards: CredentialCard[]; site: string; groupTitle: string;
 }) {
+  const pages = chunk(cards, CARDS_PER_PAGE);
   return (
-    <div>
-      {chunk(cards, CARDS_PER_PAGE).map((page, i) => (
+    <div className="cred-sheet">
+      <p className="cred-sheet-note no-print">
+        <IconScissors size={16} />
+        {`Карточек: ${cards.length}, листов A4: ${pages.length}. Режьте по пунктиру. На печати останутся только карточки.`}
+      </p>
+      {pages.map((page, i) => (
         <div key={i} className="cred-page">
           {page.map((c) => (
             <div key={c.userId} className="cred-card">
-              <strong>{c.displayName}</strong>
-              <span className="muted">Группа {groupTitle}</span>
-              <span>Логин: <span className="num" data-field="login">{c.login}</span></span>
-              <span>Пароль: <span className="num" data-field="password">{c.password}</span></span>
-              <span>Сайт: <span className="num">{site}</span></span>
-              <span className="muted">При первом входе придумайте свой пароль.</span>
+              <span className="cred-card-head">
+                <strong>{c.displayName}</strong>
+                <span className="muted">Группа {groupTitle}</span>
+              </span>
+              <span className="cred-line"><span className="cred-key">Сайт</span><span className="num">{site}</span></span>
+              <span className="cred-line"><span className="cred-key">Логин</span><span className="num" data-field="login">{c.login}</span></span>
+              <span className="cred-line"><span className="cred-key">Пароль</span><span className="num cred-password" data-field="password">{c.password}</span></span>
+              <span className="muted cred-foot">При первом входе придумайте свой пароль и никому его не говорите.</span>
             </div>
           ))}
         </div>

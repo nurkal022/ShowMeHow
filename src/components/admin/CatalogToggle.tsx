@@ -15,10 +15,12 @@ export default function CatalogToggle({ id, title, initial }: { id: string; titl
     else setError(res.error);
   }
   return (
-    <label className="check-row" title={error || undefined}>
-      <input type="checkbox" checked={on} disabled={busy} aria-label={`«${title}» в общем каталоге`}
+    <label className="cf-switch" title={error || undefined}>
+      <input type="checkbox" role="switch" checked={on} disabled={busy} aria-label={`«${title}» в общем каталоге`}
         onChange={(e) => toggle(e.target.checked)} />
-      {error && <span className="warn">{error}</span>}
+      <span className="cf-switch-track" aria-hidden="true" />
+      <span className="cf-switch-text">{on ? 'в каталоге' : 'скрыта'}</span>
+      {error && <span className="cf-field-error" role="alert">{error}</span>}
     </label>
   );
 }

@@ -3,14 +3,27 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { callApi } from '@/components/cabinet/api';
 import SecretDialog from '@/components/cabinet/SecretDialog';
+import { useConfirm, type ConfirmOptions } from '@/components/lms/ui/useConfirm';
 
 type Action = 'reset-password' | 'disable' | 'enable' | 'make-admin' | 'revoke-admin';
 
-const CONFIRM: Partial<Record<Action, string>> = {
-  'reset-password': 'Сбросить пароль? Все сессии человека закроются, при входе он задаст новый пароль.',
-  disable: 'Заблокировать? Человек не сможет войти, данные сохранятся.',
-  'make-admin': 'Сделать админом платформы? Он получит доступ ко всем организациям.',
-  'revoke-admin': 'Снять права админа платформы?',
+const CONFIRM: Partial<Record<Action, ConfirmOptions>> = {
+  'reset-password': {
+    title: 'Сбросить пароль?', confirmLabel: 'Сбросить пароль',
+    text: 'Все сессии человека закроются, при входе он задаст новый пароль. Временный пароль будет показан один раз.',
+  },
+  disable: {
+    title: 'Заблокировать вход?', confirmLabel: 'Заблокировать', danger: true,
+    text: 'Человек не сможет войти, его данные сохранятся. Блокировку можно снять.',
+  },
+  'make-admin': {
+    title: 'Сделать админом платформы?', confirmLabel: 'Сделать админом',
+    text: 'Он получит доступ ко всем организациям, пользователям и каталогу.',
+  },
+  'revoke-admin': {
+    title: 'Снять права админа платформы?', confirmLabel: 'Снять права', danger: true,
+    text: 'Человек останется обычным пользователем со своими организациями.',
+  },
 };
 
 export default function UserActions({ userId, label, disabled, isAdmin, isSelf }: {
@@ -20,10 +33,11 @@ export default function UserActions({ userId, label, disabled, isAdmin, isSelf }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [password, setPassword] = useState<string | null>(null);
+  const [ask, confirmDialog] = useConfirm();
 
   async function run(action: Action) {
     const question = CONFIRM[action];
-    if (question && !confirm(question)) return;
+    if (question && !(await ask(question))) return;
     setBusy(true);
     setError('');
     const res = await callApi<{ password?: string }>(`/api/admin/users/${userId}`, 'POST', { action });
@@ -34,7 +48,7 @@ export default function UserActions({ userId, label, disabled, isAdmin, isSelf }
   }
 
   return (
-    <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+    <div className="cf-inline">
       <button type="button" className="btn" disabled={busy} onClick={() => run('reset-password')}>Сбросить пароль</button>
       {disabled
         ? <button type="button" className="btn" disabled={busy} onClick={() => run('enable')}>Разблокировать</button>
@@ -44,7 +58,8 @@ export default function UserActions({ userId, label, disabled, isAdmin, isSelf }
             title={isSelf ? 'Снять права с самого себя нельзя.' : undefined}
             onClick={() => run('revoke-admin')}>Снять права админа</button>
         : <button type="button" className="btn" disabled={busy} onClick={() => run('make-admin')}>Сделать админом платформы</button>}
-      {error && <p className="error-box" style={{ flexBasis: '100%' }}>{error}</p>}
+      {error && <p className="error-box cf-full" role="alert">{error}</p>}
+      {confirmDialog}
       {password && (
         <SecretDialog title="Пароль сброшен" secret={password} onClose={() => setPassword(null)}
           lines={[`Новый временный пароль для ${label}. При входе его попросят сменить.`]} />

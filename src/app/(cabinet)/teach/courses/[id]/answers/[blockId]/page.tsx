@@ -36,7 +36,7 @@ export default async function AnswersPage({ params, searchParams }: {
   return (
     <>
       <CabinetHeader title={`Ответы: ${assignmentTitle(payload.prompt)}`} subtitle={`${staff.course.title} · ${staff.topic.title}`}>
-        <Link className="btn btn-ghost" href={courseEditorHref(id, staff.topic.id)}>← К курсу</Link>
+        <Link className="btn btn-ghost" href={courseEditorHref(id, staff.topic.id)}>К заданию в редакторе</Link>
         <Link className={pending ? 'btn btn-secondary' : 'btn'} href={answersHref(id, blockId, { pending: !pending })}>
           {pending ? 'Показать все' : 'Только непроверенные'}
         </Link>

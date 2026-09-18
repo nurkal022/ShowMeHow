@@ -1,28 +1,24 @@
 import './globals.css';
-import NavLinks from '@/components/NavLinks';
 import ForcePasswordChange from '@/components/ForcePasswordChange';
+import { Brand } from '@/components/SiteChrome';
 import { currentUserAllowingPasswordChangeFromCookies } from '@/lib/auth/session';
-import { userContact, userLabel } from '@/lib/auth/identifier';
-import { listMemberships } from '@/lib/org/access';
-import { GUEST_NAV_SECTIONS, navSections } from '@/lib/org/policy';
+import { userLabel } from '@/lib/auth/identifier';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
-import { IconLogo } from '@/components/icons';
 
 export const metadata = {
   title: 'Tesseract',
   description: 'Интерактивные симуляции по описанию',
 };
 
+/**
+ * Корень держит только общее: html/body, тему, шрифты и подмену страницы формой
+ * смены временного пароля. Шапку сайта рисует (site)/layout, оболочку кабинетов —
+ * (cabinet)/layout: это две разные рамки вокруг одних и тех же адресов.
+ */
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Разрешающий вариант: только layout узнаёт о временном пароле и подменяет страницу.
   const user = await currentUserAllowingPasswordChangeFromCookies();
   const mustChangePassword = !!user?.mustChangePassword;
-  // Разделы считаются на сервере по членствам; гостю (без сессии) видны только
-  // «Лаборатории» — их список открыт без входа, остальное — нет. Для пользователя
-  // с временным паролем значение не важно: NavLinks ниже для него не рендерится.
-  const sections = user && !mustChangePassword
-    ? navSections(user, await listMemberships(user.id))
-    : [...GUEST_NAV_SECTIONS];
   return (
     // data-theme проставляет скрипт ниже до отрисовки, поэтому значение на сервере
     // и на клиенте расходится намеренно — предупреждение о гидрации здесь ложное.
@@ -36,18 +32,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" />
       </head>
       <body>
-        <nav className="topnav">
-          <span className="brand">
-            <span className="brand-mark"><IconLogo size={15} /></span>Tesseract
-          </span>
-          {!mustChangePassword && (
-            <NavLinks sections={sections}
-              user={user ? { label: userContact(user), role: user.role } : undefined} />
-          )}
-        </nav>
-        <main>
-          {user && mustChangePassword ? <ForcePasswordChange label={userLabel(user)} /> : children}
-        </main>
+        {user && mustChangePassword ? (
+          // С временным паролем нет ни разделов, ни кабинета: только марка и форма.
+          <>
+            <nav className="topnav"><Brand /></nav>
+            <main><ForcePasswordChange label={userLabel(user)} /></main>
+          </>
+        ) : children}
       </body>
     </html>
   );
