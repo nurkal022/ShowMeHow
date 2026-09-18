@@ -1,3 +1,4 @@
+import { dailyCounts, sum, type DailySeries } from '../cabinet/daily';
 import crypto from 'node:crypto';
 import { db } from '../db/client';
 import { isUniqueViolation } from '../auth/users';
@@ -140,4 +141,55 @@ export async function orgOverview(orgId: string): Promise<OrgOverview> {
        (SELECT count(*)::int FROM groups WHERE org_id = $1 AND archived_at IS NULL) AS groups,
        (SELECT count(*)::int FROM courses WHERE org_id = $1 AND status <> 'archived') AS courses`, [orgId]);
   return rows[0];
+}
+
+/* ---------------------- дашборд кабинета организации ---------------------- */
+
+export interface TempPasswordStudent { userId: string; label: string; groups: string[]; createdAt: string }
+
+export interface OrgDashboard {
+  teachers: { total: number; spark: DailySeries };
+  students: { total: number; new7d: number; spark: DailySeries };
+  groups: { total: number; spark: DailySeries };
+  courses: { total: number; published: number; spark: DailySeries };
+  /** Сданные и проверенные ответы по дням за 30 дней. */
+  chart: { days: string[]; submitted: number[]; graded: number[] };
+  tempPasswords: { total: number; rows: TempPasswordStudent[] };
+}
+
+const ORG_SUBMISSIONS = `submissions s JOIN blocks b ON b.id = s.block_id
+  JOIN topics t ON t.id = b.topic_id JOIN courses c ON c.id = t.course_id`;
+
+export async function orgDashboard(orgId: string): Promise<OrgDashboard> {
+  const member = (role: string) => dailyCounts(
+    { from: 'memberships', at: 'created_at', where: `org_id = $2 AND role = '${role}'`, params: [orgId] }, 14);
+  const [o, teachers, students, groups, courses, submitted, graded, published, temp] = await Promise.all([
+    orgOverview(orgId),
+    member('teacher'),
+    member('student'),
+    dailyCounts({ from: 'groups', at: 'created_at', where: 'org_id = $2 AND archived_at IS NULL', params: [orgId] }, 14),
+    dailyCounts({ from: 'courses', at: 'created_at', where: "org_id = $2 AND status <> 'archived'", params: [orgId] }, 14),
+    dailyCounts({ from: ORG_SUBMISSIONS, at: 's.submitted_at', where: 'c.org_id = $2 AND s.submitted_at IS NOT NULL', params: [orgId] }, 30),
+    dailyCounts({ from: ORG_SUBMISSIONS, at: 's.graded_at', where: 'c.org_id = $2 AND s.graded_at IS NOT NULL', params: [orgId] }, 30),
+    db().query<{ n: number }>("SELECT count(*)::int AS n FROM courses WHERE org_id = $1 AND status = 'published'", [orgId]),
+    db().query<{ user_id: string; label: string; groups: string[]; created_at: Date; total: number }>(
+      `SELECT u.id AS user_id, coalesce(u.display_name, u.login, u.email) AS label, m.created_at,
+         ARRAY(SELECT g.title FROM group_members gm JOIN groups g ON g.id = gm.group_id
+               WHERE gm.user_id = u.id AND g.org_id = $1 AND g.archived_at IS NULL ORDER BY g.title) AS groups,
+         count(*) OVER ()::int AS total
+       FROM memberships m JOIN users u ON u.id = m.user_id
+       WHERE m.org_id = $1 AND m.role = 'student' AND u.must_change_password AND u.disabled_at IS NULL
+       ORDER BY m.created_at DESC, label LIMIT 8`, [orgId]),
+  ]);
+  return {
+    teachers: { total: o.teachers, spark: teachers },
+    students: { total: o.students, new7d: sum(students.values.slice(-7)), spark: students },
+    groups: { total: o.groups, spark: groups },
+    courses: { total: o.courses, published: published.rows[0].n, spark: courses },
+    chart: { days: submitted.days, submitted: submitted.values, graded: graded.values },
+    tempPasswords: {
+      total: temp.rows[0]?.total ?? 0,
+      rows: temp.rows.map((r) => ({ userId: r.user_id, label: r.label, groups: r.groups, createdAt: r.created_at.toISOString() })),
+    },
+  };
 }
