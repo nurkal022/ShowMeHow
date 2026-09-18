@@ -1,5 +1,5 @@
 import type { AuthUser } from '../auth/users';
-import type { Membership } from './types';
+import type { Membership, OrgRole } from './types';
 
 /**
  * Кто что может — как чистые функции от пользователя и его членств.
@@ -88,4 +88,21 @@ export function navSections(user: PolicyUser, memberships: Membership[]): NavSec
  */
 export function homeRedirect(user: PolicyUser, memberships: Membership[]): string | null {
   return canGenerate(user, memberships) ? null : '/library';
+}
+
+/** org_admin включает права учителя — то же правило, что в requireOrgRole. */
+export function roleSatisfies(role: OrgRole, allowed: readonly OrgRole[]): boolean {
+  return allowed.includes(role) || (role === 'org_admin' && allowed.includes('teacher'));
+}
+
+/**
+ * Организация кабинета из членств: слаг из ?org=, без него — первая подходящая
+ * (членства уже отсортированы по названию). Чужой слаг — null, страница ответит 404.
+ */
+export function pickMembership(
+  memberships: Membership[], allowed: readonly OrgRole[], slug: string | undefined,
+): Membership | null {
+  const fit = memberships.filter((m) => roleSatisfies(m.role, allowed));
+  if (slug) return fit.find((m) => m.orgSlug === slug) ?? null;
+  return fit[0] ?? null;
 }

@@ -31,3 +31,15 @@ export function isOrgRole(v: unknown): v is OrgRole {
 export function isOrgKind(v: unknown): v is OrgKind {
   return typeof v === 'string' && (ORG_KINDS as readonly string[]).includes(v);
 }
+
+export const ORG_ROLE_LABELS: Record<OrgRole, string> = {
+  org_admin: 'администратор',
+  teacher: 'учитель',
+  student: 'ученик',
+};
+
+export const ORG_KIND_LABELS: Record<OrgKind, string> = {
+  school: 'Школа',
+  college: 'Колледж',
+  university: 'Университет',
+};
