@@ -5,6 +5,13 @@ import { POST as adminCreateOrg } from '@/app/api/admin/orgs/route';
 import { PATCH as adminPatchOrg } from '@/app/api/admin/orgs/[id]/route';
 import { POST as adminUserAction } from '@/app/api/admin/users/[id]/route';
 import { PATCH as adminCatalog } from '@/app/api/admin/catalog/[id]/route';
+import { PATCH as orgSettings } from '@/app/api/org/[slug]/settings/route';
+import { POST as orgTeachers } from '@/app/api/org/[slug]/teachers/route';
+import { POST as orgGroups } from '@/app/api/org/[slug]/groups/route';
+import { PATCH as orgGroupPatch, DELETE as orgGroupDelete } from '@/app/api/org/[slug]/groups/[groupId]/route';
+import { PUT as orgGroupTeachers } from '@/app/api/org/[slug]/groups/[groupId]/teachers/route';
+import { POST as orgGroupStudents } from '@/app/api/org/[slug]/groups/[groupId]/students/route';
+import { POST as orgMember } from '@/app/api/org/[slug]/members/[userId]/route';
 
 // Роуты вызываются без базы: отказ «не вошёл» и «не админ» случается до первого запроса.
 const session = vi.hoisted(() => ({ current: null as AuthUser | null }));
@@ -37,6 +44,30 @@ describe('роуты админки', () => {
       const res = await call();
       expect(res.status).toBe(404);
       expect(await res.json()).toEqual({ error: 'Не найдено.' });
+    });
+  }
+});
+
+const slug = () => ({ params: Promise.resolve({ slug: 'sch12' }) });
+const group = () => ({ params: Promise.resolve({ slug: 'sch12', groupId: ID }) });
+const member = () => ({ params: Promise.resolve({ slug: 'sch12', userId: ID }) });
+
+const ANON_CALLS: Call[] = [
+  ['PATCH /api/org/[slug]/settings', () => orgSettings(req('PATCH'), slug())],
+  ['POST /api/org/[slug]/teachers', () => orgTeachers(req(), slug())],
+  ['POST /api/org/[slug]/groups', () => orgGroups(req(), slug())],
+  ['PATCH /api/org/[slug]/groups/[groupId]', () => orgGroupPatch(req('PATCH'), group())],
+  ['DELETE /api/org/[slug]/groups/[groupId]', () => orgGroupDelete(req('DELETE'), group())],
+  ['PUT /api/org/[slug]/groups/[groupId]/teachers', () => orgGroupTeachers(req('PUT'), group())],
+  ['POST /api/org/[slug]/groups/[groupId]/students', () => orgGroupStudents(req(), group())],
+  ['POST /api/org/[slug]/members/[userId]', () => orgMember(req(), member())],
+];
+
+describe('роуты кабинетов без входа', () => {
+  for (const [name, call] of ANON_CALLS) {
+    it(`${name}: 401`, async () => {
+      session.current = null;
+      expect((await call()).status).toBe(401);
     });
   }
 });
