@@ -124,3 +124,25 @@ export const IconPrint = svg(<>
   <path d="M7 9V4h10v5" /><rect x="3.5" y="9" width="17" height="7.5" rx="1.8" /><path d="M7 14h10v6H7z" />
 </>);
 export const IconEdit = svg(<><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></>);
+
+/* Рабочие экраны кабинетов: меню строки, типы блоков урока, мастер учеников. */
+export const IconMore = svg(<><path d="M12 5.5h.01M12 12h.01M12 18.5h.01" strokeWidth={2.6} /></>);
+export const IconText = svg(<><path d="M5 6h14M5 10.5h14M5 15h9M5 19.5h6" /></>);
+export const IconTask = svg(<>
+  <rect x="5" y="4.5" width="14" height="16" rx="2" /><path d="M9.5 4.5V3.4h5v1.1" /><path d="m9 13 2.2 2.2L15.2 11" />
+</>);
+export const IconEye = svg(<>
+  <path d="M2.8 12S6.2 5.8 12 5.8 21.2 12 21.2 12 17.8 18.2 12 18.2 2.8 12 2.8 12z" /><circle cx="12" cy="12" r="2.8" />
+</>);
+export const IconUpload = svg(<><path d="M12 15V4m0 0 4 4m-4-4-4 4" /><path d="M4 18h16" /></>);
+export const IconLock = svg(<>
+  <rect x="5" y="10.5" width="14" height="9.5" rx="2" /><path d="M8.2 10.5V8a3.8 3.8 0 0 1 7.6 0v2.5" />
+</>);
+export const IconUsers = svg(<>
+  <circle cx="9" cy="8.6" r="3.2" /><path d="M3 19.5a6 6 0 0 1 12 0" />
+  <path d="M15.6 5.8a3 3 0 0 1 0 5.6M17.4 14.2a5.6 5.6 0 0 1 3.6 5.3" opacity=".7" />
+</>);
+export const IconScissors = svg(<>
+  <circle cx="6" cy="7" r="2.4" /><circle cx="6" cy="17" r="2.4" /><path d="M8 8.4 20 17M8 15.6 20 7" />
+</>);
+export const IconSwap = svg(<><path d="M4 8h13m0 0-3.5-3.5M17 8l-3.5 3.5" /><path d="M20 16H7m0 0 3.5-3.5M7 16l3.5 3.5" /></>);

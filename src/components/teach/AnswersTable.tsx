@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import type { AnswerRow } from '@/lib/lms/submissions';
 import { ANSWER_STATE_LABELS, type AnswerState } from '@/lib/lms/types';
 import { formatDateTime, formatScore } from '@/lib/lms/format';
-import StatusPill, { type PillTone } from '@/components/cabinet/StatusPill';
+import type { PillTone } from '@/components/cabinet/StatusPill';
+import AnswersList, { type AnswerListItem } from './AnswersList';
 
 export function stateTone(state: AnswerState): PillTone {
   if (state === 'submitted') return 'warn';
@@ -11,36 +11,30 @@ export function stateTone(state: AnswerState): PillTone {
   return 'neutral';
 }
 
+/**
+ * Ответы на задание. Сам компонент серверный: он превращает строки и функцию
+ * ссылок в простые данные, а фильтр «ждут проверки» живёт в клиентском списке.
+ */
 export default function AnswersTable({ rows, points, hrefFor, selectedId }: {
   rows: AnswerRow[]; points: number; hrefFor: (submissionId: string) => string; selectedId: string | null;
 }) {
   if (rows.length === 0) {
     return <p className="empty-state">Ответов пока нет: курс не открыт ни одной группе или в группах нет учеников.</p>;
   }
-  return (
-    <div className="table-wrap">
-      <table className="data-table">
-        <thead><tr><th>Ученик</th><th>Группы</th><th>Статус</th><th>Балл</th><th>Сдано</th><th /></tr></thead>
-        <tbody>
-          {rows.map(({ student, submission: s }) => {
-            const state: AnswerState = s?.status ?? 'none';
-            return (
-              <tr key={student.id} className={s && s.id === selectedId ? 'selected' : undefined}>
-                <td data-label="Ученик">{student.name}</td>
-                <td data-label="Группы">{student.groups.join(', ')}</td>
-                <td data-label="Статус"><StatusPill tone={stateTone(state)}>{ANSWER_STATE_LABELS[state]}</StatusPill></td>
-                <td data-label="Балл">{s?.status === 'graded' ? `${formatScore(s.score)} из ${points}` : '—'}</td>
-                <td data-label="Сдано">{formatDateTime(s?.submittedAt ?? null)}</td>
-                <td className="actions">
-                  {s && s.status !== 'draft' && (
-                    <Link className="btn btn-sm btn-ghost" href={hrefFor(s.id)}>Открыть</Link>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+  const items: AnswerListItem[] = rows.map(({ student, submission: s }) => {
+    const state: AnswerState = s?.status ?? 'none';
+    return {
+      id: student.id,
+      name: student.name,
+      groups: student.groups.join(', '),
+      state,
+      stateLabel: ANSWER_STATE_LABELS[state],
+      tone: stateTone(state),
+      score: s?.status === 'graded' ? `${formatScore(s.score)} из ${points}` : '—',
+      submittedAt: formatDateTime(s?.submittedAt ?? null),
+      href: s && s.status !== 'draft' ? hrefFor(s.id) : null,
+      selected: Boolean(s && s.id === selectedId),
+    };
+  });
+  return <AnswersList items={items} />;
 }

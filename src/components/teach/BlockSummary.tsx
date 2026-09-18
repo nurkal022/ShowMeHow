@@ -19,12 +19,12 @@ export default function BlockSummary({ block, simulationTitle, missing }: {
   switch (b.kind) {
     case 'text':
       return (
-        <>
+        <div className="cf-summary-text">
           {b.payload.title && <h3>{b.payload.title}</h3>}
           {b.payload.body
             ? <Markup text={b.payload.body} />
-            : <p className="muted">Текст пока пустой. Нажмите «Изменить».</p>}
-        </>
+            : !b.payload.title && <p className="muted">Текст пока пустой. Нажмите «Изменить».</p>}
+        </div>
       );
     case 'simulation': {
       if (!b.payload.simulationId) {
@@ -32,12 +32,22 @@ export default function BlockSummary({ block, simulationTitle, missing }: {
       }
       if (missing) return <p className="warn-banner">Тренажёр удалён автором. Выберите другой.</p>;
       const caption = b.payload.caption ? ` — ${b.payload.caption}` : '';
-      return <p>{`Тренажёр «${simulationTitle ?? 'без названия'}»${caption}`}</p>;
+      return (
+        <div className="cf-summary-media">
+          <img src={`/api/simulations/${b.payload.simulationId}/thumbnail`} alt="" loading="lazy" />
+          <p>{`Тренажёр «${simulationTitle ?? 'без названия'}»${caption}`}</p>
+        </div>
+      );
     }
     case 'lab': {
       const lab = LABS.find((l) => l.slug === b.payload.slug);
       const caption = b.payload.caption ? ` — ${b.payload.caption}` : '';
-      return <p>{`Лаборатория «${lab?.title ?? b.payload.slug}»${caption}`}</p>;
+      return (
+        <div className="cf-summary-media">
+          <img src={`/labs/${b.payload.slug}.png`} alt="" loading="lazy" />
+          <p>{`Лаборатория «${lab?.title ?? b.payload.slug}»${caption}`}</p>
+        </div>
+      );
     }
     case 'assignment': {
       const p = b.payload;
@@ -52,8 +62,10 @@ export default function BlockSummary({ block, simulationTitle, missing }: {
           <Markup text={p.prompt} />
           <p className="muted">{meta}</p>
           {p.spec.type === 'choice' && (
-            <ul className="muted" style={{ margin: 0, paddingLeft: 18 }}>
-              {p.spec.options.map((o) => <li key={o.id}>{`${o.correct ? '✓' : '·'} ${o.text}`}</li>)}
+            <ul className="cf-summary-options">
+              {p.spec.options.map((o) => (
+                <li key={o.id} className={o.correct ? 'correct' : undefined}>{`${o.correct ? '✓' : '·'} ${o.text}`}</li>
+              ))}
             </ul>
           )}
           {p.spec.type === 'number' && (
