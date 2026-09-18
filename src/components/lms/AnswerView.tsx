@@ -3,6 +3,7 @@ import type { AssignmentSpec, StudentAssignmentSpec } from '@/lib/lms/block-sche
 import { formatScore } from '@/lib/lms/format';
 import { checkTargets } from '@/lib/lms/sim-state';
 import { normalizeWord, parseGaps } from '@/lib/lms/block-schema';
+import MeasureChart from './MeasureChart';
 import { IconCheck, IconClose } from '@/components/icons';
 
 /**
@@ -108,6 +109,17 @@ export default function AnswerView({ spec, answer, keyed = true }: {
           );
         })}
       </ol>
+    );
+  }
+  if (spec.type === 'table' && answer.type === 'table') {
+    return (
+      <div className="cf-answer-table">
+        <table>
+          <thead><tr><th>№</th>{spec.columns.map((c) => <th key={c.id}>{c.unit ? `${c.label}, ${c.unit}` : c.label}</th>)}</tr></thead>
+          <tbody>{answer.rows.map((r, i) => <tr key={i}><td>{i + 1}</td>{spec.columns.map((c, k) => <td key={c.id}>{r[k] || '—'}</td>)}</tr>)}</tbody>
+        </table>
+        <MeasureChart columns={spec.columns} rows={answer.rows} />
+      </div>
     );
   }
   if (spec.type === 'sim_state' && answer.type === 'sim_state') {

@@ -19,7 +19,7 @@ describe('сводка блока в редакторе', () => {
   });
   it('тренажёр: не выбран, выбран, удалён', () => {
     expect(render(block(defaultBody('simulation')))).toContain('Тренажёр не выбран.');
-    const chosen = block({ kind: 'simulation', payload: { simulationId: SIM, caption: 'Меняйте длину' } });
+    const chosen = block({ kind: 'simulation', payload: { simulationId: SIM, caption: 'Меняйте длину', preset: {}, locked: [] } });
     expect(render(chosen, 'Маятник')).toContain('Тренажёр «Маятник» — Меняйте длину');
     expect(render(chosen, null, true)).toContain('Тренажёр удалён автором.');
   });

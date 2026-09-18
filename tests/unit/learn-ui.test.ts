@@ -51,7 +51,7 @@ describe('раздел ученика', () => {
     expect(render(createElement(LessonBlock, { blockId: 'b2', missing: false, preview: false, submission: null,
       body: { kind: 'text', payload: { title: 'Период', body: '**важно**' } } }))).toContain('<strong>важно</strong>');
     expect(render(createElement(LessonBlock, { blockId: 'b3', missing: true, preview: false, submission: null,
-      body: { kind: 'simulation', payload: { simulationId: '11111111-2222-3333-4444-555555555555', caption: '' } } })))
+      body: { kind: 'simulation', payload: { simulationId: '11111111-2222-3333-4444-555555555555', caption: '', preset: {}, locked: [] } } })))
       .toContain('Тренажёр удалён автором.');
   });
 

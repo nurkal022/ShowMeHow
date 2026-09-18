@@ -690,3 +690,89 @@ html[data-theme='dark'] .cf-tone.active { color: #111; }
 @media (prefers-reduced-motion: reduce) { .cf-palette, .cf-block.fresh { animation: none; } }
 
 .cf-blocks > .cf-add { margin-top: 14px; }
+
+/* ===================== волна 2: формат темы, пресет, критерии ============ */
+.cf-format { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); }
+.cf-format-row { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.cf-format-time { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-left: auto; }
+.cf-format-time .input { width: 110px; min-height: 34px; padding: 4px 10px; }
+.cf-preset-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+.cf-preset-list li { display: flex; align-items: center; gap: 12px; padding: 8px 12px; font-size: 14px; border-bottom: 1px solid var(--border); }
+.cf-preset-list li:last-child { border-bottom: none; }
+.cf-preset-name { flex: 1; min-width: 0; }
+.cf-preset-list strong { font-variant-numeric: tabular-nums; }
+.cf-col-row { grid-template-columns: minmax(0, 2fr) auto minmax(0, 1fr) auto; }
+.cf-inline-field { flex-direction: row; align-items: center; gap: 8px; margin-left: auto; }
+.cf-inline-field input { width: 72px; min-height: 34px; padding: 4px 10px; }
+.cf-rubric-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px auto auto; gap: 8px; align-items: center; }
+.cf-rubric-points { text-align: center; }
+
+.cf-rubric { border: 1px solid var(--border); border-radius: var(--r-sm); padding: 4px 12px 8px; margin: 0; display: flex; flex-direction: column; }
+.cf-rubric legend { padding: 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.cf-rubric-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; font-size: 14px; border-bottom: 1px dashed var(--border); }
+.cf-rubric-item:last-child { border-bottom: none; }
+.cf-rubric-steps { display: inline-flex; gap: 4px; flex-shrink: 0; }
+.cf-rubric-step { min-width: 40px; height: 30px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .12s ease; }
+.cf-rubric-step:hover { border-color: var(--accent); color: var(--accent); }
+.cf-rubric-step.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); transform: scale(1.05); }
+.cf-bank { display: flex; flex-wrap: wrap; gap: 6px; }
+.cf-bank-item { display: inline-flex; align-items: stretch; border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden; background: var(--surface); }
+.cf-bank-text { border: none; background: none; padding: 4px 4px 4px 12px; font: inherit; font-size: 12.5px; color: var(--text-2); cursor: pointer; text-align: left; }
+.cf-bank-text:hover { color: var(--accent); }
+.cf-bank-x { border: none; background: none; padding: 0 8px 0 4px; color: var(--border-strong); cursor: pointer; display: grid; place-items: center; }
+.cf-bank-x:hover { color: var(--danger); }
+.cf-bank-add { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 999px; border: 1px dashed var(--accent); background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
+.cf-keys { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+
+/* таблица-редактор списка учеников */
+.cf-grid-wrap { max-height: 46vh; overflow: auto; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); }
+.cf-drop-zone.over .cf-grid-wrap { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cf-grid { width: 100%; border-collapse: collapse; font-size: 14px; }
+.cf-grid th { position: sticky; top: 0; z-index: 1; padding: 8px 10px; text-align: left; font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--bg-subtle); box-shadow: inset 0 -1px 0 var(--border); }
+.cf-grid td { padding: 0; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+.cf-grid td:last-child { border-right: none; }
+.cf-grid tr:last-child td { border-bottom: none; }
+.cf-grid-n { width: 40px; text-align: center !important; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; background: var(--bg-subtle); }
+.cf-grid-x { width: 104px; white-space: nowrap; text-align: right; padding-right: 4px !important; }
+.cf-grid-x .icon-btn { width: 28px; height: 28px; opacity: 0; }
+.cf-grid tr:hover .cf-grid-x .icon-btn { opacity: 1; }
+.cf-grid input { width: 100%; height: 36px; padding: 0 10px; border: none; outline: none; background: transparent; color: var(--text); font: inherit; }
+.cf-grid input:focus { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft); }
+.cf-grid tr.warn td { background: var(--warn-soft); }
+.cf-grid tr.dup td { background: var(--danger-soft); }
+.cf-grid-flag { font-size: 11px; font-weight: 600; color: var(--warn); margin-right: 2px; }
+.cf-grid tr.dup .cf-grid-flag { color: var(--danger); }
+
+/* ученики: поиск и массовые действия */
+.cf-board { display: flex; flex-direction: column; gap: 12px; }
+.cf-board-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cf-board-search { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; min-width: 240px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); color: var(--muted); }
+.cf-board-search input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text); font: inherit; font-size: 14px; }
+.cf-board-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cf-bulk { position: sticky; top: calc(var(--cab-topbar-h) + 8px); z-index: 5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-radius: 12px; background: var(--text); color: var(--bg); box-shadow: var(--shadow-lg); animation: cf-bulk-in .2s cubic-bezier(.2, .9, .3, 1.2); }
+@keyframes cf-bulk-in { from { opacity: 0; transform: translateY(-8px); } }
+.cf-bulk strong { font-size: 13.5px; margin-right: 4px; }
+.cf-bulk .btn { background: rgba(255, 255, 255, .12); border-color: transparent; color: inherit; }
+.cf-bulk .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .22); }
+.cf-bulk .btn-danger { color: #ff9d94; }
+.cf-bulk .muted { color: inherit; opacity: .7; }
+.cf-bulk-move { display: inline-flex; gap: 4px; }
+.cf-bulk-move .select { min-height: 32px; height: 32px; padding: 0 8px; width: auto; border-radius: 8px; font-size: 13px; }
+html[data-theme='dark'] .cf-bulk .btn { background: rgba(0, 0, 0, .12); }
+.cf-col-check { width: 44px; }
+.cf-col-check input { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+.cf-board-none { padding: 16px; text-align: center; }
+
+/* выезжающая панель */
+.cab-drawer-layer { position: fixed; inset: 0; z-index: 80; display: flex; justify-content: flex-end; }
+.cab-drawer-scrim { position: absolute; inset: 0; border: none; padding: 0; background: rgba(12, 16, 28, .45); animation: cab-fade .2s ease; cursor: default; }
+@keyframes cab-fade { from { opacity: 0; } }
+.cab-drawer { position: relative; width: min(680px, 100vw); height: 100%; display: flex; flex-direction: column; background: var(--surface); box-shadow: var(--shadow-lg); animation: cab-drawer-in .26s cubic-bezier(.2, .8, .2, 1); }
+@keyframes cab-drawer-in { from { transform: translateX(40px); opacity: 0; } }
+.cab-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 20px 16px 24px; border-bottom: 1px solid var(--border); }
+.cab-drawer-head h2 { font-size: 19px; }
+.cab-drawer-body { flex: 1; overflow-y: auto; padding: 20px 24px 32px; }
+.cf-answer-table table { border-collapse: collapse; font-size: 14px; margin-bottom: 12px; }
+.cf-answer-table th, .cf-answer-table td { padding: 6px 14px; border: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
+.cf-answer-table th { background: var(--bg-subtle); font-weight: 600; font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { .cab-drawer, .cab-drawer-scrim, .cf-bulk { animation: none; } }

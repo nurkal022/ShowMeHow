@@ -8,6 +8,7 @@ import { ruPlural } from '@/lib/lms/format';
 import { callApi } from '@/components/cabinet/api';
 import { IconBack, IconCheck, IconPrint, IconUpload } from '@/components/icons';
 import RosterPreviewTable from './RosterPreviewTable';
+import RosterGrid, { parsePasted, rosterText, type RosterRow } from './RosterGrid';
 
 type Step = 1 | 2 | 3;
 const STEPS: { n: Step; label: string }[] = [
@@ -21,7 +22,9 @@ export default function BulkStudents({ slug, groupId }: { slug: string; groupId:
   const router = useRouter();
   const endpoint = `/api/org/${slug}/groups/${groupId}/students`;
   const [step, setStep] = useState<Step>(1);
-  const [text, setText] = useState('');
+  const [rows, setRows] = useState<RosterRow[]>([]);
+  const text = rosterText(rows);
+  const setText = (t: string) => setRows(parsePasted(t));
   const [fileName, setFileName] = useState('');
   const [preview, setPreview] = useState<RosterPreview | null>(null);
   const [created, setCreated] = useState<CreatedStudent[]>([]);
@@ -60,7 +63,7 @@ export default function BulkStudents({ slug, groupId }: { slug: string; groupId:
   }
 
   function restart() {
-    setText(''); setFileName(''); setPreview(null); setCreated([]); setError(''); setStep(1);
+    setRows([]); setFileName(''); setPreview(null); setCreated([]); setError(''); setStep(1);
   }
 
   const skipped = preview ? preview.rows.length - preview.creatable : 0;
@@ -78,14 +81,13 @@ export default function BulkStudents({ slug, groupId }: { slug: string; groupId:
 
       {step === 1 && (
         <div className="cf-wizard-body">
-          <label className="field"><span>Вставьте список: по одному человеку на строку, сначала фамилия, потом имя</span>
-            <textarea className={dragging ? 'input cf-textarea cf-drop' : 'input cf-textarea'} rows={9} value={text}
-              placeholder={'Иванов Иван\nПетрова Анна\nСидоров Пётр'}
-              onChange={(e) => { setText(e.target.value); setFileName(''); setError(''); }}
-              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e) => { e.preventDefault(); setDragging(false); void readFile(e.dataTransfer.files[0]); }} />
-          </label>
+          <p className="muted">Скопируйте столбцы «Фамилия» и «Имя» из Excel или ведомости и вставьте в первую ячейку (Ctrl+V) — строки разложатся сами. Можно печатать и вручную: Enter — следующая строка.</p>
+          <div className={dragging ? 'cf-drop-zone over' : 'cf-drop-zone'}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => { e.preventDefault(); setDragging(false); void readFile(e.dataTransfer.files[0]); }}>
+            <RosterGrid rows={rows} onChange={(next) => { setRows(next); setFileName(''); setError(''); }} />
+          </div>
           <div className="cf-inline">
             <label className="btn btn-sm cf-file-btn">
               <IconUpload size={15} />Загрузить CSV
@@ -94,7 +96,7 @@ export default function BulkStudents({ slug, groupId }: { slug: string; groupId:
             </label>
             <span className="muted">
               {fileName ? `Загружен файл «${fileName}». ` : ''}
-              {`CSV: «Фамилия;Имя» или «Фамилия,Имя», кодировка UTF-8, до ${MAX_ROSTER_LINES} строк. Файл можно перетащить в поле.`}
+              {`CSV: «Фамилия;Имя» или «Фамилия,Имя», кодировка UTF-8, до ${MAX_ROSTER_LINES} строк. Файл можно перетащить на таблицу.`}
             </span>
           </div>
           {error && <p className="error-box" role="alert">{error}</p>}

@@ -51,7 +51,9 @@ export default function BlockSummary({ block, simulationTitle, missing }: {
       return (
         <div className="cf-summary-media">
           <img src={`/api/simulations/${b.payload.simulationId}/thumbnail`} alt="" loading="lazy" />
-          <p>{`Тренажёр «${simulationTitle ?? 'без названия'}»${caption}`}</p>
+          <p>{`Тренажёр «${simulationTitle ?? 'без названия'}»${caption}`}
+            {Object.keys(b.payload.preset).length > 0 && <span className="muted">{` · задан старт${b.payload.locked.length ? `, закрыто: ${b.payload.locked.length}` : ''}`}</span>}
+          </p>
         </div>
       );
     }
@@ -103,6 +105,9 @@ export default function BlockSummary({ block, simulationTitle, missing }: {
             <ol className="cf-summary-options cf-summary-order">
               {p.spec.items.map((it) => <li key={it.id}>{it.text}</li>)}
             </ol>
+          )}
+          {p.spec.type === 'table' && (
+            <p className="muted">{`Столбцы: ${p.spec.columns.map((c) => (c.unit ? `${c.label}, ${c.unit}` : c.label)).join(' · ')} · строк не меньше ${p.spec.minRows}`}</p>
           )}
           {p.explanation && <p className="muted">{`Пояснение после проверки: ${p.explanation}`}</p>}
           {p.spec.type === 'number' && (

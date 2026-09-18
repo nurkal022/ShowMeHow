@@ -73,7 +73,7 @@ window.SimUI = (function () {
     });
     wrap.appendChild(lab); wrap.appendChild(inp); ctrlPanel.appendChild(wrap);
     register({
-      kind: 'slider', name: o.name || o.label, label: o.label,
+      kind: 'slider', name: o.name || o.label, label: o.label, el: wrap,
       min: Number(o.min), max: Number(o.max), step: Number(o.step),
       get: function () { return parseFloat(inp.value); },
       set: function (v) {

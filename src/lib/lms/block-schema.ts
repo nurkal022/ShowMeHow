@@ -34,7 +34,12 @@ export function isBlockKind(v: unknown): v is BlockKind {
 }
 
 export interface TextPayload { title: string; body: string }
-export interface SimulationPayload { simulationId: string | null; caption: string }
+export interface SimulationPayload {
+  simulationId: string | null; caption: string;
+  /** Стартовые значения параметров (имя контрола → число) и параметры, закрытые от ученика. */
+  preset: Record<string, number>;
+  locked: string[];
+}
 export interface LabPayload { slug: string; caption: string }
 export type CalloutTone = 'info' | 'definition' | 'important' | 'warning' | 'example';
 export const CALLOUT_TONES: readonly CalloutTone[] = ['info', 'definition', 'important', 'warning', 'example'];
@@ -52,7 +57,11 @@ export type Stand = { kind: 'simulation'; simulationId: string } | { kind: 'lab'
 export interface ChoiceOption { id: string; text: string; correct: boolean }
 
 export interface MatchPair { id: string; left: string; rightId: string; right: string }
+export interface RubricItem { id: string; label: string; points: number }
+export const RUBRIC_MAX = 8;
 export interface OrderItem { id: string; text: string }
+export interface TableColumn { id: string; label: string; unit: string }
+export const TABLE_LIMITS = { minColumns: 2, maxColumns: 5, maxRows: 20, cell: 30 } as const;
 
 export type AssignmentSpec =
   | { type: 'choice'; multiple: boolean; shuffle: boolean; options: ChoiceOption[] }
@@ -60,6 +69,7 @@ export type AssignmentSpec =
   | { type: 'gaps'; text: string }
   | { type: 'match'; pairs: MatchPair[] }
   | { type: 'order'; items: OrderItem[] }
+  | { type: 'table'; columns: TableColumn[]; minRows: number }
   | { type: 'number'; answer: number; tolerance: number; unit: string }
   | { type: 'text' }
   | { type: 'sim_state'; simulationId: string; targets: SimTarget[]; showHints: boolean };
@@ -70,6 +80,7 @@ export const ASSIGNMENT_TYPE_LABELS: Record<AssignmentType, string> = {
   gaps: 'Пропуски в тексте',
   match: 'Сопоставление',
   order: 'Порядок',
+  table: 'Таблица измерений',
   number: 'Число',
   text: 'Развёрнутый ответ',
   sim_state: 'Состояние симуляции',
@@ -80,6 +91,8 @@ export interface AssignmentPayload {
   points: number;
   stand: Stand;
   allowRetry: boolean;
+  /** Критерии оценивания для ручной проверки: ученик видит их в задании, учитель — в форме оценки. */
+  rubric: RubricItem[];
   /** Пояснение к правильному ответу: ученик видит его только после проверки. */
   explanation: string;
   spec: AssignmentSpec;
@@ -107,6 +120,7 @@ export type StudentAssignmentSpec =
   | { type: 'gaps'; parts: string[] }
   | { type: 'match'; left: { id: string; text: string }[]; right: { id: string; text: string }[] }
   | { type: 'order'; items: OrderItem[] }
+  | { type: 'table'; columns: TableColumn[]; minRows: number }
   | { type: 'number'; unit: string }
   | { type: 'text' }
   /** Значений цели здесь нет; имена параметров — только если учитель разрешил подсказки. */
@@ -117,6 +131,7 @@ export interface StudentAssignmentPayload {
   points: number;
   stand: Stand;
   allowRetry: boolean;
+  rubric: RubricItem[];
   spec: StudentAssignmentSpec;
   /** Только после проверки (см. revealFor): пояснение и учительская схема с ключом. */
   explanation?: string;
@@ -136,7 +151,7 @@ export function defaultBody(kind: BlockKind): BlockBody {
     case 'text':
       return { kind, payload: { title: '', body: '' } };
     case 'simulation':
-      return { kind, payload: { simulationId: null, caption: '' } };
+      return { kind, payload: { simulationId: null, caption: '', preset: {}, locked: [] } };
     case 'lab':
       return { kind, payload: { slug: LABS[0].slug, caption: '' } };
     case 'callout':
@@ -155,7 +170,7 @@ export function defaultBody(kind: BlockKind): BlockBody {
       return { kind, payload: {} };
     case 'assignment':
       return { kind, payload: {
-        prompt: 'Новое задание', points: DEFAULT_POINTS, stand: null, allowRetry: false, explanation: '',
+        prompt: 'Новое задание', points: DEFAULT_POINTS, stand: null, allowRetry: false, rubric: [], explanation: '',
         spec: { type: 'text' },
       } };
   }
@@ -307,6 +322,25 @@ function sanitizeSpec(raw: unknown): AssignmentSpec {
       return { id, text: requireText(o.text, LIMITS.option, `Шаг ${i + 1}`) };
     }) };
   }
+  if (s.type === 'table') {
+    if (!Array.isArray(s.columns) || s.columns.length < TABLE_LIMITS.minColumns || s.columns.length > TABLE_LIMITS.maxColumns) {
+      throw new LmsError(`Столбцов должно быть от ${TABLE_LIMITS.minColumns} до ${TABLE_LIMITS.maxColumns}.`);
+    }
+    const used = new Set<string>();
+    const columns = s.columns.map((item, i): TableColumn => {
+      const o = obj(item);
+      let id = typeof o.id === 'string' && OPTION_ID_RE.test(o.id) ? o.id : `c${i + 1}`;
+      let k = i + 1;
+      while (used.has(id)) id = `c${++k}`;
+      used.add(id);
+      return { id, label: requireText(o.label, LIMITS.unit * 2, `Столбец ${i + 1}`), unit: optionalText(o.unit, LIMITS.unit, 'Единицы') };
+    });
+    const minRows = finite(s.minRows) ?? 3;
+    if (!Number.isInteger(minRows) || minRows < 1 || minRows > TABLE_LIMITS.maxRows) {
+      throw new LmsError(`Строк — целое число от 1 до ${TABLE_LIMITS.maxRows}.`);
+    }
+    return { type: 'table', columns, minRows };
+  }
   if (s.type === 'number') {
     const answer = finite(s.answer);
     if (answer === null) throw new LmsError('Укажите правильное число.');
@@ -325,6 +359,36 @@ function sanitizeSpec(raw: unknown): AssignmentSpec {
     };
   }
   throw new LmsError('Неизвестный тип задания.');
+}
+
+function sanitizeRubric(raw: unknown): RubricItem[] {
+  if (!Array.isArray(raw)) return [];
+  if (raw.length > RUBRIC_MAX) throw new LmsError(`Критериев — не больше ${RUBRIC_MAX}.`);
+  const used = new Set<string>();
+  return raw.map((item, i): RubricItem => {
+    const o = obj(item);
+    const points = finite(o.points);
+    if (points === null || points <= 0 || points > LIMITS.maxPoints) throw new LmsError(`Критерий ${i + 1}: баллы — число больше нуля.`);
+    let id = typeof o.id === 'string' && OPTION_ID_RE.test(o.id) ? o.id : `k${i + 1}`;
+    let k = i + 1;
+    while (used.has(id)) id = `k${++k}`;
+    used.add(id);
+    return { id, label: requireText(o.label, LIMITS.caption, `Критерий ${i + 1}`), points };
+  });
+}
+
+const PRESET_MAX = 40;
+function sanitizePreset(rawPreset: unknown, rawLocked: unknown): { preset: Record<string, number>; locked: string[] } {
+  const preset: Record<string, number> = {};
+  if (typeof rawPreset === 'object' && rawPreset !== null && !Array.isArray(rawPreset)) {
+    for (const [name, v] of Object.entries(rawPreset as Record<string, unknown>).slice(0, PRESET_MAX)) {
+      const n = finite(v);
+      if (name && name.length <= 80 && n !== null) preset[name] = n;
+    }
+  }
+  const locked = (Array.isArray(rawLocked) ? rawLocked : [])
+    .filter((n): n is string => typeof n === 'string' && n.length > 0 && n.length <= 80).slice(0, PRESET_MAX);
+  return { preset, locked: [...new Set(locked)] };
 }
 
 export const MEDIA_LIMITS = { latex: 2000, url: 500 } as const;
@@ -373,6 +437,7 @@ export function sanitizeBlockBody(kind: BlockKind, raw: unknown): BlockBody {
       return { kind, payload: {
         simulationId: typeof id === 'string' ? id.toLowerCase() : null,
         caption: optionalText(p.caption, LIMITS.caption, 'Подпись'),
+        ...sanitizePreset(p.preset, p.locked),
       } };
     }
     case 'lab':
@@ -429,6 +494,7 @@ export function sanitizeBlockBody(kind: BlockKind, raw: unknown): BlockBody {
         // Симуляция задания-состояния уже стоит в карточке: второй стенд не нужен.
         stand: spec.type === 'sim_state' ? null : sanitizeStand(p.stand),
         allowRetry: p.allowRetry === true,
+        rubric: sanitizeRubric(p.rubric),
         explanation: optionalText(p.explanation, LIMITS.comment, 'Пояснение'),
         spec,
       } };
@@ -469,6 +535,8 @@ export function toStudentBody(body: BlockBody, reveal = false): StudentBlockBody
     };
   } else if (spec.type === 'order') {
     safe = { type: 'order', items: stableShuffle(spec.items) };
+  } else if (spec.type === 'table') {
+    safe = spec;
   } else if (spec.type === 'sim_state') {
     safe = { type: 'sim_state', simulationId: spec.simulationId, showHints: spec.showHints };
     if (spec.showHints) safe.targets = spec.targets.map(({ name, label }) => ({ name, label }));
@@ -526,7 +594,8 @@ export function simulationIdsOf(body: BlockBody | StudentBlockBody): string[] {
 
 /** Вставка симуляции: в блок «Тренажёр» или стендом в задание. */
 export function withSimulation(body: BlockBody, simulationId: string): BlockBody {
-  if (body.kind === 'simulation') return { kind: 'simulation', payload: { ...body.payload, simulationId } };
+  // Другая симуляция — другие ползунки: прежний пресет к ней не относится.
+  if (body.kind === 'simulation') return { kind: 'simulation', payload: { ...body.payload, simulationId, preset: {}, locked: [] } };
   if (body.kind === 'assignment' && body.payload.spec.type === 'sim_state') {
     throw new LmsError('В задании «Состояние симуляции» симуляцию выбирают в редакторе: к ней привязана цель.');
   }

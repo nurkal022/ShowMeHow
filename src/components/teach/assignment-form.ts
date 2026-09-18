@@ -1,7 +1,7 @@
 import { LABS } from '@/lib/labs';
 import {
   GAP_LIMITS, newOptionId, parseGaps,
-  type AssignmentPayload, type AssignmentType, type ChoiceOption, type MatchPair, type OrderItem,
+  type AssignmentPayload, type AssignmentType, type ChoiceOption, type MatchPair, type OrderItem, type TableColumn,
 } from '@/lib/lms/block-schema';
 import { SIM_LIMITS } from '@/lib/lms/sim-state';
 import { LIMITS } from '@/lib/lms/types';
@@ -29,7 +29,10 @@ export interface AssignmentForm {
   gapsText: string;
   pairs: MatchPair[];
   items: OrderItem[];
+  columns: TableColumn[];
+  minRows: string;
   explanation: string;
+  rubric: { id: string; label: string; points: string }[];
   answer: string;
   tolerance: string;
   unit: string;
@@ -69,7 +72,10 @@ export function toAssignmentForm(p: AssignmentPayload, standTitle: string | null
     gapsText: s.type === 'gaps' ? s.text : '',
     pairs: s.type === 'match' ? s.pairs : blankPairs(),
     items: s.type === 'order' ? s.items : blankItems(),
+    columns: s.type === 'table' ? s.columns : [{ id: newOptionId(), label: '', unit: '' }, { id: newOptionId(), label: '', unit: '' }],
+    minRows: s.type === 'table' ? String(s.minRows) : '5',
     explanation: p.explanation,
+    rubric: p.rubric.map((r) => ({ ...r, points: String(r.points) })),
     answer: s.type === 'number' ? String(s.answer) : '',
     tolerance: s.type === 'number' ? String(s.tolerance) : '0',
     unit: s.type === 'number' ? s.unit : '',
@@ -92,6 +98,7 @@ export function fromAssignmentForm(f: AssignmentForm): Record<string, unknown> {
     : f.type === 'gaps' ? { type: 'gaps', text: f.gapsText }
     : f.type === 'match' ? { type: 'match', pairs: f.pairs }
     : f.type === 'order' ? { type: 'order', items: f.items }
+    : f.type === 'table' ? { type: 'table', columns: f.columns, minRows: f.minRows }
     : f.type === 'number'
       ? { type: 'number', answer: f.answer, tolerance: f.tolerance, unit: f.unit }
       : f.type === 'sim_state'
@@ -101,7 +108,8 @@ export function fromAssignmentForm(f: AssignmentForm): Record<string, unknown> {
         : { type: 'text' };
   // Пустое поле баллов — не ноль: сервер ответит понятной ошибкой.
   const points = f.points.trim() === '' ? Number.NaN : Number(f.points);
-  return { prompt: f.prompt, points, allowRetry: f.allowRetry, explanation: f.explanation, stand, spec };
+  return { prompt: f.prompt, points, allowRetry: f.allowRetry, explanation: f.explanation, stand, spec,
+    rubric: f.type === 'text' || f.type === 'table' ? f.rubric.filter((r) => r.label.trim()) : [] };
 }
 
 export function markCorrect(options: ChoiceOption[], id: string, multiple: boolean): ChoiceOption[] {
@@ -120,7 +128,7 @@ function parseNumber(raw: string): number | null {
 }
 
 export type AssignmentErrors = Partial<Record<
-  'prompt' | 'options' | 'correct' | 'accepted' | 'gaps' | 'pairs' | 'items' | 'answer' | 'tolerance' | 'points' | 'stand' | 'targets', string>>;
+  'prompt' | 'options' | 'correct' | 'accepted' | 'gaps' | 'pairs' | 'items' | 'columns' | 'answer' | 'tolerance' | 'points' | 'stand' | 'targets', string>>;
 
 /**
  * Проверка до отправки: те же правила, что на сервере, но ошибка встаёт рядом
@@ -144,6 +152,7 @@ export function validateAssignmentForm(f: AssignmentForm): AssignmentErrors {
   }
   if (f.type === 'match' && f.pairs.some((p) => !p.left.trim() || !p.right.trim())) errors.pairs = 'Заполните обе стороны каждой пары или удалите пустые.';
   if (f.type === 'order' && f.items.some((i) => !i.text.trim())) errors.items = 'Заполните каждый шаг или удалите пустые.';
+  if (f.type === 'table' && f.columns.some((c) => !c.label.trim())) errors.columns = 'Назовите каждый столбец или удалите лишние.';
   if (f.type === 'number') {
     if (parseNumber(f.answer) === null) errors.answer = 'Укажите правильное число, например 9,8.';
     const tolerance = f.tolerance.trim() === '' ? 0 : parseNumber(f.tolerance);

@@ -78,9 +78,21 @@ export interface Course {
   updatedAt: string;
 }
 
+export type TopicFormat = 'lesson' | 'slides' | 'exam';
+export const TOPIC_FORMATS: readonly TopicFormat[] = ['lesson', 'slides', 'exam'];
+export const TOPIC_FORMAT_LABELS: Record<TopicFormat, string> = { lesson: 'Урок', slides: 'Слайды', exam: 'Контрольная' };
+export const TOPIC_FORMAT_HINTS: Record<TopicFormat, string> = {
+  lesson: 'Лента блоков сверху вниз — ученик идёт в своём темпе.',
+  slides: 'Один блок на экран, стрелки листают — для проектора и объяснения у доски.',
+  exam: 'С таймером: время идёт с нажатия «Начать», баллы и разбор — после завершения.',
+};
+
 export interface Topic {
   id: string;
   courseId: string;
   position: number;
   title: string;
+  format: TopicFormat;
+  /** Только для контрольной: минут на работу. null — без ограничения. */
+  timeLimitMin: number | null;
 }

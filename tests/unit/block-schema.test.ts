@@ -45,8 +45,8 @@ describe('санация блоков', () => {
     expect(() => sanitizeBlockBody('text', { body: 'x'.repeat(LIMITS.text + 1) })).toThrow(LmsError);
   });
   it('тренажёр: id симуляции — uuid или пусто', () => {
-    expect(sanitizeBlockBody('simulation', { simulationId: SIM.toUpperCase(), caption: 'Смотрите' }))
-      .toEqual({ kind: 'simulation', payload: { simulationId: SIM, caption: 'Смотрите' } });
+    expect(sanitizeBlockBody('simulation', { simulationId: SIM.toUpperCase(), caption: 'Смотрите', preset: {}, locked: [] }))
+      .toEqual({ kind: 'simulation', payload: { simulationId: SIM, caption: 'Смотрите', preset: {}, locked: [] } });
     expect(() => sanitizeBlockBody('simulation', { simulationId: '../evil' })).toThrow('Тренажёр указан неверно.');
   });
   it('лаборатория: только из списка', () => {
@@ -86,7 +86,7 @@ describe('санация блоков', () => {
     const body = sanitizeBlockBody('assignment', {
       prompt: 'Период?', points: 5, spec: { type: 'number', answer: '2,0', tolerance: '0.1', unit: 'с' } });
     expect(body).toEqual({ kind: 'assignment', payload: {
-      prompt: 'Период?', points: 5, stand: null, allowRetry: false, explanation: '',
+      prompt: 'Период?', points: 5, stand: null, allowRetry: false, rubric: [], explanation: '',
       spec: { type: 'number', answer: 2, tolerance: 0.1, unit: 'с' },
     } });
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', spec: { type: 'number' } }))
@@ -115,7 +115,7 @@ describe('что видит ученик', () => {
     const student = toStudentBody({ kind: 'assignment', payload: choice() });
     expect(JSON.stringify(student)).not.toContain('correct');
     expect(student).toEqual({ kind: 'assignment', payload: {
-      prompt: 'От чего зависит период?', points: 10, allowRetry: false,
+      prompt: 'От чего зависит период?', points: 10, allowRetry: false, rubric: [],
       stand: { kind: 'simulation', simulationId: SIM },
       spec: { type: 'choice', multiple: false, options: [
         { id: 'len', text: 'От длины нити' }, { id: 'mass', text: 'От массы' },
@@ -153,7 +153,7 @@ describe('ревизии и симуляции', () => {
     expect(simulationIdsOf(defaultBody('simulation'))).toEqual([]);
     const other = '99999999-2222-3333-4444-555555555555';
     expect(withSimulation(defaultBody('simulation'), other))
-      .toEqual({ kind: 'simulation', payload: { simulationId: other, caption: '' } });
+      .toEqual({ kind: 'simulation', payload: { simulationId: other, caption: '', preset: {}, locked: [] } });
     const withStand = withSimulation(defaultBody('assignment'), other);
     expect(withStand.kind === 'assignment' && withStand.payload.stand)
       .toEqual({ kind: 'simulation', simulationId: other });

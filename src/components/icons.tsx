@@ -167,3 +167,6 @@ export const IconOrder = svg(<><path d="M10 6.5h10.5M10 12h10.5M10 17.5h10.5" />
 export const IconEssay = svg(<><path d="M4 6.5h16M4 11h16M4 15.5h10" /><path d="m16.5 19.5 4-4-1.6-1.6-4 4-.5 2.1z" /></>);
 export const IconTarget = svg(<><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r=".8" /></>);
 export const IconUndo = svg(<><path d="M8 5.5 3.5 10 8 14.5" /><path d="M3.5 10H14a6 6 0 0 1 0 12h-3" /></>);
+export const IconTable = svg(<><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="M3.5 9.5h17M3.5 14.5h17M10 4.5v15" /></>);
+export const IconPipette = svg(<><path d="m14 6 4 4M12.5 7.5l4 4-7.8 7.8a2 2 0 0 1-1.4.6H5v-2.3a2 2 0 0 1 .6-1.4z" /><path d="m15.5 4.5 1-1a2.1 2.1 0 0 1 3 3l-1 1" /></>);
+export const IconKeyboard = svg(<><rect x="2.5" y="6" width="19" height="12" rx="2.5" /><path d="M6.5 10h.1M10 10h.1M13.5 10h.1M17 10h.1M7 14h10" /></>);

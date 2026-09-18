@@ -15,6 +15,7 @@ import { IconArrowDown, IconArrowUp, IconCheck, IconLibrary, IconPlus, IconTrash
 import { ASSIGNMENT_META, ASSIGNMENT_TYPES } from './block-meta';
 import SimulationPicker from './SimulationPicker';
 import SimStateEditor from './SimStateEditor';
+import SimStateFrame, { type CaptureSimState } from '@/components/lms/SimStateFrame';
 import {
   fromAssignmentForm, markCorrect, toAssignmentForm, validateAssignmentForm,
   type AssignmentErrors, type AssignmentForm,
@@ -528,15 +529,68 @@ function SimulationEditor({ blockId, payload, title, onSave, onCancel, onDirtyCh
   const [simulationId, setSimulationId] = useState(payload.simulationId);
   const [simTitle, setSimTitle] = useState(title);
   const [caption, setCaption] = useState(payload.caption);
-  const dirty = useDirty({ simulationId, caption }, onDirtyChange);
+  const [preset, setPreset] = useState(payload.preset);
+  const [locked, setLocked] = useState(payload.locked);
+  const [labels, setLabels] = useState<Record<string, string>>({});
+  const [tuning, setTuning] = useState(false);
+  const [note, setNote] = useState('');
+  const captureRef = useRef<CaptureSimState | null>(null);
+  const dirty = useDirty({ simulationId, caption, preset, locked }, onDirtyChange);
+  const names = Object.keys(preset);
+
+  async function capture() {
+    setNote('');
+    const reply = captureRef.current ? await captureRef.current() : null;
+    if (!reply || !reply.ok) {
+      return setNote(!reply || reply.reason === 'timeout' || reply.reason === 'no-frame'
+        ? 'Симуляция ещё загружается — подождите пару секунд.' : 'Эта симуляция не сообщает свои параметры, пресет для неё не задать.');
+    }
+    const controls = reply.controls.filter((c) => c.kind !== 'speed');
+    setPreset(Object.fromEntries(controls.map((c) => [c.name, c.value])));
+    setLabels(Object.fromEntries(controls.map((c) => [c.name, c.label])));
+    setLocked((prev) => prev.filter((n) => controls.some((c) => c.name === n)));
+  }
+
   return (
-    <EditorForm dirty={dirty} error={error} onCancel={onCancel} onSubmit={() => onSave({ simulationId, caption })}>
+    <EditorForm dirty={dirty} error={error} onCancel={onCancel} onSubmit={() => onSave({ simulationId, caption, preset, locked })}>
       <SimulationChooser blockId={blockId} simulationId={simulationId} title={simTitle}
-        onChange={(id, t) => { setSimulationId(id); setSimTitle(t); }} />
+        onChange={(id, t) => { if (id !== simulationId) { setPreset({}); setLocked([]); } setSimulationId(id); setSimTitle(t); }} />
       <label className="field"><span>Подпись под тренажёром</span>
         <input value={caption} maxLength={LIMITS.caption} placeholder="Что сделать: «Меняйте длину нити и следите за периодом»"
           onChange={(e) => setCaption(e.target.value)} />
       </label>
+      {simulationId && (
+        <fieldset className="cf-fieldset">
+          <legend>С чего начинает ученик</legend>
+          {names.length === 0 && !tuning && (
+            <p className="muted">Сейчас тренажёр откроется как есть. Можно задать стартовые значения ползунков и закрыть лишние от ученика.</p>
+          )}
+          {names.length > 0 && (
+            <ul className="cf-preset-list">
+              {names.map((n) => (
+                <li key={n}>
+                  <span className="cf-preset-name">{labels[n] ?? n}</span>
+                  <strong>{String(preset[n]).replace('.', ',')}</strong>
+                  <label className="check-row">
+                    <input type="checkbox" checked={locked.includes(n)}
+                      onChange={(e) => setLocked(e.target.checked ? [...locked, n] : locked.filter((x) => x !== n))} />
+                    закрыть от ученика
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+          {tuning && <SimStateFrame simulationId={simulationId} captureRef={captureRef} />}
+          <div className="cf-inline">
+            {!tuning
+              ? <button type="button" className="btn btn-sm" onClick={() => setTuning(true)}>{names.length ? 'Изменить стартовые значения' : 'Задать стартовые значения'}</button>
+              : <button type="button" className="btn btn-sm btn-primary" onClick={capture}>Запомнить текущее положение</button>}
+            {names.length > 0 && <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setPreset({}); setLocked([]); }}>Сбросить пресет</button>}
+            {tuning && <span className="muted">Выставьте ползунки так, как должен увидеть ученик.</span>}
+          </div>
+          {note && <p className="warn-banner">{note}</p>}
+        </fieldset>
+      )}
     </EditorForm>
   );
 }
@@ -770,6 +824,34 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
         </fieldset>
       )}
 
+      {f.type === 'table' && (
+        <fieldset className="cf-fieldset">
+          <legend>Столбцы таблицы</legend>
+          <p className="muted">Первый столбец — то, что ученик меняет, второй — то, что измеряет: по ним строится график. Работу проверяете вы.</p>
+          {f.columns.map((c, i) => (
+            <div key={c.id} className="cf-pair-row cf-col-row">
+              <input className="input" value={c.label} maxLength={60} placeholder={i === 0 ? 'Длина нити' : i === 1 ? 'Период' : `Столбец ${i + 1}`}
+                aria-label={`Название столбца ${i + 1}`} aria-invalid={errors.columns && !c.label.trim() ? true : undefined}
+                onChange={(e) => set({ columns: f.columns.map((x) => (x.id === c.id ? { ...x, label: e.target.value } : x)) })} />
+              <span className="cf-pair-arrow" aria-hidden="true">,</span>
+              <input className="input" value={c.unit} maxLength={LIMITS.unit} placeholder="единицы: м" aria-label={`Единицы столбца ${i + 1}`}
+                onChange={(e) => set({ columns: f.columns.map((x) => (x.id === c.id ? { ...x, unit: e.target.value } : x)) })} />
+              <button type="button" className="icon-btn cf-icon-btn" aria-label={`Удалить столбец ${i + 1}`} title="Удалить столбец"
+                disabled={f.columns.length <= 2} onClick={() => set({ columns: f.columns.filter((x) => x.id !== c.id) })}><IconTrash size={16} /></button>
+            </div>
+          ))}
+          <FieldError id={`${uid}-columns`} text={errors.columns} />
+          <div className="cf-inline">
+            <button type="button" className="btn btn-sm" disabled={f.columns.length >= 5}
+              onClick={() => set({ columns: [...f.columns, { id: newOptionId(), label: '', unit: '' }] })}><IconPlus size={15} />Добавить столбец</button>
+            <label className="field cf-inline-field"><span>Строк не меньше</span>
+              <input type="number" min={1} max={20} value={f.minRows} onChange={(e) => set({ minRows: e.target.value })} />
+            </label>
+          </div>
+          {f.standKind !== 'simulation' && <p className="cf-note">Совет: добавьте ниже стенд-тренажёр — тогда ученик сможет подставлять значения пипеткой.</p>}
+        </fieldset>
+      )}
+
       {f.type === 'order' && (
         <fieldset className="cf-fieldset">
           <legend>Шаги в правильном порядке</legend>
@@ -840,6 +922,36 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
 
       {f.type === 'text' && (
         <p className="cf-note">Развёрнутый ответ проверяете вы: он появится в «Ответах» со статусом «сдано».</p>
+      )}
+
+      {(f.type === 'text' || f.type === 'table') && (
+        <fieldset className="cf-fieldset">
+          <legend>Критерии оценивания (необязательно)</legend>
+          <p className="muted">Ученик увидит их в задании, а вы при проверке отметите каждый — балл сложится сам.</p>
+          {f.rubric.map((r, i) => (
+            <div key={r.id} className="cf-rubric-row">
+              <input className="input" value={r.label} maxLength={LIMITS.caption} placeholder={`Критерий ${i + 1}: например, «Сделан вывод»`}
+                aria-label={`Критерий ${i + 1}`} onChange={(e) => set({ rubric: f.rubric.map((x) => (x.id === r.id ? { ...x, label: e.target.value } : x)) })} />
+              <input className="input cf-rubric-points" value={r.points} inputMode="decimal" aria-label={`Баллы за критерий ${i + 1}`}
+                onChange={(e) => set({ rubric: f.rubric.map((x) => (x.id === r.id ? { ...x, points: e.target.value } : x)) })} />
+              <span className="muted">б.</span>
+              <button type="button" className="icon-btn cf-icon-btn" aria-label={`Удалить критерий ${i + 1}`} title="Удалить"
+                onClick={() => set({ rubric: f.rubric.filter((x) => x.id !== r.id) })}><IconTrash size={16} /></button>
+            </div>
+          ))}
+          <div className="cf-inline">
+            <button type="button" className="btn btn-sm" disabled={f.rubric.length >= 8}
+              onClick={() => set({ rubric: [...f.rubric, { id: newOptionId(), label: '', points: '2' }] })}><IconPlus size={15} />Добавить критерий</button>
+            {f.rubric.length > 0 && (() => {
+              const sum = f.rubric.reduce((a, r) => a + (Number(r.points.replace(',', '.')) || 0), 0);
+              return sum !== Number(f.points) && (
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => set({ points: String(Math.round(sum)) })}>
+                  {`Сумма критериев — ${String(sum).replace('.', ',')}: сделать баллом задания`}
+                </button>
+              );
+            })()}
+          </div>
+        </fieldset>
       )}
 
       <fieldset className="cf-fieldset">

@@ -5,7 +5,7 @@ import {
 import { LABS } from '@/lib/labs';
 import {
   IconChoice, IconCode, IconDivider, IconEssay, IconFold, IconFormula, IconGaps, IconImage, IconLab, IconMatch,
-  IconNumber, IconOrder, IconPlay, IconQuote, IconShort, IconTarget, IconTask, IconText, IconVideo,
+  IconNumber, IconOrder, IconPlay, IconQuote, IconShort, IconTable, IconTarget, IconTask, IconText, IconVideo,
 } from '@/components/icons';
 
 type Meta = { label: string; hint: string; icon: (size: number) => React.ReactNode };
@@ -76,6 +76,7 @@ export const ASSIGNMENT_META: Record<AssignmentType, Meta & { auto: boolean }> =
   gaps: { label: ASSIGNMENT_TYPE_LABELS.gaps, auto: true, hint: 'Ученик вписывает слова в текст.', icon: (s) => <IconGaps size={s} /> },
   match: { label: ASSIGNMENT_TYPE_LABELS.match, auto: true, hint: 'Соединить пары: термин — определение.', icon: (s) => <IconMatch size={s} /> },
   order: { label: ASSIGNMENT_TYPE_LABELS.order, auto: true, hint: 'Расставить шаги в правильном порядке.', icon: (s) => <IconOrder size={s} /> },
+  table: { label: ASSIGNMENT_TYPE_LABELS.table, auto: false, hint: 'Ученик снимает значения с тренажёра, строится график.', icon: (s) => <IconTable size={s} /> },
   sim_state: { label: ASSIGNMENT_TYPE_LABELS.sim_state, auto: true, hint: 'Настроить симуляцию до заданной цели.', icon: (s) => <IconTarget size={s} /> },
   text: { label: ASSIGNMENT_TYPE_LABELS.text, auto: false, hint: 'Свободный текст — проверяете вы.', icon: (s) => <IconEssay size={s} /> },
 };

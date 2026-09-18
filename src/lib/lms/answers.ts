@@ -1,5 +1,5 @@
 import {
-  GAP_LIMITS, normalizeWord, parseGaps,
+  GAP_LIMITS, TABLE_LIMITS, normalizeWord, parseGaps,
   type AssignmentPayload, type AssignmentSpec, type AssignmentType, type StudentAssignmentSpec,
 } from './block-schema';
 import { checkTargets, sanitizeControls, simScore, type SimHint } from './sim-state';
@@ -18,6 +18,8 @@ export type Answer =
   /** Левый id → правый id. */
   | { type: 'match'; pairs: Record<string, string> }
   | { type: 'order'; order: string[] }
+  /** Строки таблицы измерений: ячейки — как ввёл ученик. */
+  | { type: 'table'; rows: string[][] }
   | { type: 'text'; text: string }
   /** hints дописывает сервер при сдаче, если учитель разрешил подсказки; от клиента они не принимаются. */
   | { type: 'sim_state'; controls: Record<string, number>; capturedAt: string; hints?: SimHint[] };
@@ -32,6 +34,7 @@ export function emptyAnswer(spec: { type: AssignmentType }): Answer {
   if (spec.type === 'gaps') return { type: 'gaps', values: [] };
   if (spec.type === 'match') return { type: 'match', pairs: {} };
   if (spec.type === 'order') return { type: 'order', order: [] };
+  if (spec.type === 'table') return { type: 'table', rows: [] };
   if (spec.type === 'sim_state') return { type: 'sim_state', controls: {}, capturedAt: '' };
   return { type: 'text', text: '' };
 }
@@ -92,6 +95,15 @@ export function sanitizeAnswer(spec: AssignmentSpec | StudentAssignmentSpec, raw
     if (order.length !== 0 && (order.length !== ids.size || order.some((id) => !ids.has(id)))) throw new LmsError(MISMATCH);
     return { type: 'order', order };
   }
+  if (spec.type === 'table') {
+    if (!Array.isArray(a.rows)) throw new LmsError(MISMATCH);
+    const width = spec.columns.length;
+    const rows = (a.rows as unknown[]).slice(0, TABLE_LIMITS.maxRows).map((r) => {
+      if (!Array.isArray(r)) throw new LmsError(MISMATCH);
+      return Array.from({ length: width }, (_, i) => (typeof r[i] === 'string' ? (r[i] as string).trim().slice(0, TABLE_LIMITS.cell) : ''));
+    });
+    return { type: 'table', rows };
+  }
   if (spec.type === 'sim_state') {
     const known = spec.targets ? spec.targets.map((t: { name: string }) => t.name) : null;
     const at = typeof a.capturedAt === 'string' ? Date.parse(a.capturedAt) : NaN;
@@ -122,6 +134,7 @@ export function isAnswerComplete(a: Answer): boolean {
   if (a.type === 'gaps') return a.values.length > 0 && a.values.every((v) => v.trim().length > 0);
   if (a.type === 'match') return Object.keys(a.pairs).length > 0;
   if (a.type === 'order') return a.order.length > 0;
+  if (a.type === 'table') return tableFilledRows(a.rows) > 0;
   // Состояние снимается кнопкой «Сдать»: пустым оно бывает, только если мост ничего не отдал.
   if (a.type === 'sim_state') return Object.keys(a.controls).length > 0;
   return a.text.trim().length > 0;
@@ -129,6 +142,11 @@ export function isAnswerComplete(a: Answer): boolean {
 
 // Запас на двоичное округление: 0.1 + 0.2 не должно проваливать допуск.
 const EPS = 1e-9;
+
+/** Сколько строк таблицы заполнено целиком числами. */
+export function tableFilledRows(rows: string[][]): number {
+  return rows.filter((r) => r.length > 0 && r.every((c) => parseNumber(c) !== null)).length;
+}
 
 /** Частичный балл: доля верных частей, до сотых. */
 function partial(points: number, marks: boolean[]): number {
@@ -144,7 +162,7 @@ export function gapMarks(text: string, values: string[]): boolean[] {
 /** null — проверяет учитель (развёрнутый ответ). */
 export function autoScore(payload: AssignmentPayload, answer: Answer): number | null {
   const spec = payload.spec;
-  if (spec.type === 'text') return null;
+  if (spec.type === 'text' || spec.type === 'table') return null;
   if (spec.type === 'choice' && answer.type === 'choice') {
     const right = spec.options.filter((o) => o.correct).map((o) => o.id).sort();
     const given = [...answer.selected].sort();
@@ -212,8 +230,12 @@ export interface SubmissionLike {
 /** Что уходит ученику: балл — только после проверки, служебных полей нет. */
 export type StudentSubmission = SubmissionLike;
 
-export function toStudentSubmission(s: SubmissionLike | null | undefined): StudentSubmission | null {
+/** hideResult — контрольная ещё идёт: проверенная работа выглядит просто сданной, без балла и комментария. */
+export function toStudentSubmission(s: SubmissionLike | null | undefined, hideResult = false): StudentSubmission | null {
   if (!s) return null;
+  if (hideResult && s.status === 'graded') {
+    return { status: 'submitted', answer: s.answer, score: null, comment: null, submittedAt: s.submittedAt };
+  }
   return {
     status: s.status,
     answer: s.answer,

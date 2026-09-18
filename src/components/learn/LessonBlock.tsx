@@ -46,7 +46,8 @@ export default function LessonBlock({ blockId, body, missing, submission, previe
     case 'simulation':
       return (
         <article className="learn-block learn-sim">
-          <SimulationEmbed simulationId={body.payload.simulationId} missing={missing} caption={body.payload.caption} />
+          <SimulationEmbed simulationId={body.payload.simulationId} missing={missing} caption={body.payload.caption}
+            preset={body.payload.preset} locked={body.payload.locked} />
         </article>
       );
     case 'lab':
@@ -68,6 +69,11 @@ export default function LessonBlock({ blockId, body, missing, submission, previe
             <span className="learn-task-points">{`${p.points} ${ruPlural(p.points, 'балл', 'балла', 'баллов')}`}</span>
           </header>
           <Markup text={p.prompt} />
+          {p.rubric.length > 0 && (
+            <ul className="learn-rubric" aria-label="Критерии оценивания">
+              {p.rubric.map((r) => <li key={r.id}><span>{r.label}</span><strong>{`${String(r.points).replace('.', ',')} б.`}</strong></li>)}
+            </ul>
+          )}
           {p.stand?.kind === 'simulation' && (
             <div className="learn-sim">
               <SimulationEmbed simulationId={p.stand.simulationId} missing={missing} caption="" />

@@ -1,6 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { IconArrowDown, IconArrowUp, IconClose, IconGrip } from '@/components/icons';
+import { IconArrowDown, IconArrowUp, IconClose, IconGrip, IconPlus, IconTrash } from '@/components/icons';
+import { TABLE_LIMITS, type TableColumn } from '@/lib/lms/block-schema';
+import MeasureChart from '@/components/lms/MeasureChart';
+import SimValuePicker from './SimValuePicker';
 
 /** Интерактивные поля ответа: пропуски, пары и порядок. Управляемые — состояние держит AnswerForm. */
 
@@ -121,5 +124,46 @@ export function OrderInput({ items, order, disabled, onChange }: {
         </li>
       ))}
     </ol>
+  );
+}
+
+export function TableInput({ columns, minRows, rows, disabled, onChange }: {
+  columns: TableColumn[]; minRows: number; rows: string[][]; disabled: boolean; onChange: (r: string[][]) => void;
+}) {
+  const height = Math.max(minRows, rows.length);
+  const grid = Array.from({ length: height }, (_, r) => columns.map((_, c) => rows[r]?.[c] ?? ''));
+  const set = (r: number, c: number, v: string) => onChange(grid.map((row, i) => (i === r ? row.map((x, k) => (k === c ? v : x)) : row)));
+  return (
+    <div className="learn-table">
+      <p className="muted learn-hint">{`Меняйте параметр в тренажёре и записывайте измерения. Нужно строк: ${minRows}. Пипетка подставит значение из тренажёра.`}</p>
+      <div className="learn-table-wrap">
+        <table>
+          <thead><tr><th>№</th>{columns.map((c) => <th key={c.id}>{c.label}{c.unit && <small>{`, ${c.unit}`}</small>}</th>)}<th /></tr></thead>
+          <tbody>
+            {grid.map((row, r) => (
+              <tr key={r}>
+                <td className="learn-table-num">{r + 1}</td>
+                {row.map((cell, c) => (
+                  <td key={columns[c].id}>
+                    <span className="learn-cell">
+                      <input value={cell} inputMode="decimal" disabled={disabled} maxLength={TABLE_LIMITS.cell}
+                        aria-label={`${columns[c].label}, строка ${r + 1}`} onChange={(e) => set(r, c, e.target.value)} />
+                      {!disabled && <SimValuePicker compact onPick={(v) => set(r, c, v)} />}
+                    </span>
+                  </td>
+                ))}
+                <td>{!disabled && grid.length > minRows && (
+                  <button type="button" className="icon-btn" aria-label={`Удалить строку ${r + 1}`} onClick={() => onChange(grid.filter((_, i) => i !== r))}><IconTrash size={15} /></button>
+                )}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!disabled && grid.length < TABLE_LIMITS.maxRows && (
+        <button type="button" className="btn btn-sm" onClick={() => onChange([...grid, columns.map(() => '')])}><IconPlus size={15} />Строка</button>
+      )}
+      <MeasureChart columns={columns} rows={grid} />
+    </div>
   );
 }

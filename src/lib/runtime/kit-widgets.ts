@@ -173,7 +173,7 @@ export const KIT_WIDGETS_JS = `
     row.wrap.appendChild(sel);
     p.appendChild(row.wrap);
     K.__register({
-      kind: 'select', name: o.name || o.label, label: o.label,
+      kind: 'select', name: o.name || o.label, label: o.label, el: row.wrap,
       get: function () { return sel.value; },
       set: function (v) { sel.value = String(v); o.onChange(sel.value); },
     });
@@ -196,7 +196,7 @@ export const KIT_WIDGETS_JS = `
     row.wrap.appendChild(btn);
     p.appendChild(row.wrap);
     K.__register({
-      kind: 'toggle', name: o.name || o.label, label: o.label,
+      kind: 'toggle', name: o.name || o.label, label: o.label, el: row.wrap,
       get: function () { return on; },
       set: function (v) { on = !!v; sync(); o.onChange(on); },
       activate: function () { btn.onclick(); },

@@ -4,7 +4,7 @@ import { isUuid } from '../org/access';
 import type { JournalStudent, ProgressView } from './journal';
 import { nextPosition, swapWithNeighbour, TOPICS, type MoveDirection } from './order';
 import {
-  LIMITS, LmsError, optionalText, requireText, type Course, type CourseStatus, type Topic,
+  LIMITS, LmsError, optionalText, requireText, TOPIC_FORMATS, type Course, type CourseStatus, type Topic, type TopicFormat,
 } from './types';
 
 /** Курсы, их группы и темы; что видит ученик. Права проверяет src/lib/lms/access.ts. */
@@ -134,22 +134,23 @@ export async function setCourseGroups(
   }
 }
 
-interface TopicRow { id: string; course_id: string; position: number; title: string }
+interface TopicRow { id: string; course_id: string; position: number; title: string; format: TopicFormat; time_limit_min: number | null }
+const TOPIC_COLUMNS = 'id, course_id, position, title, format, time_limit_min';
 
 function toTopic(r: TopicRow): Topic {
-  return { id: r.id, courseId: r.course_id, position: r.position, title: r.title };
+  return { id: r.id, courseId: r.course_id, position: r.position, title: r.title, format: r.format, timeLimitMin: r.time_limit_min };
 }
 
 export async function listTopics(courseId: string): Promise<Topic[]> {
   const { rows } = await db().query<TopicRow>(
-    'SELECT id, course_id, position, title FROM topics WHERE course_id = $1 ORDER BY position, id', [courseId]);
+    `SELECT ${TOPIC_COLUMNS} FROM topics WHERE course_id = $1 ORDER BY position, id`, [courseId]);
   return rows.map(toTopic);
 }
 
 export async function getTopic(topicId: string): Promise<Topic | null> {
   if (!isUuid(topicId)) return null;
   const { rows } = await db().query<TopicRow>(
-    'SELECT id, course_id, position, title FROM topics WHERE id = $1', [topicId]);
+    `SELECT ${TOPIC_COLUMNS} FROM topics WHERE id = $1`, [topicId]);
   return rows[0] ? toTopic(rows[0]) : null;
 }
 
@@ -158,7 +159,7 @@ export async function createTopic(courseId: string, title: unknown): Promise<Top
   const position = await nextPosition(TOPICS, courseId);
   const { rows } = await db().query<TopicRow>(
     `INSERT INTO topics (id, course_id, position, title) VALUES ($1, $2, $3, $4)
-     RETURNING id, course_id, position, title`, [crypto.randomUUID(), courseId, position, clean]);
+     RETURNING ${TOPIC_COLUMNS}`, [crypto.randomUUID(), courseId, position, clean]);
   await touchCourse(courseId);
   return toTopic(rows[0]);
 }
@@ -169,6 +170,40 @@ export async function renameTopic(topicId: string, title: unknown): Promise<void
 }
 
 /** Удаляет тему вместе с блоками и ответами (каскад в схеме). */
+export async function setTopicFormat(topicId: string, format: unknown, rawLimit: unknown): Promise<void> {
+  if (typeof format !== 'string' || !(TOPIC_FORMATS as readonly string[]).includes(format)) throw new LmsError('Неизвестный формат темы.');
+  let limit: number | null = null;
+  if (format === 'exam' && rawLimit !== null && rawLimit !== undefined && rawLimit !== '') {
+    limit = Number(rawLimit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 300) throw new LmsError('Время на контрольную — от 1 до 300 минут.');
+  }
+  await db().query('UPDATE topics SET format = $2, time_limit_min = $3 WHERE id = $1', [topicId, format, limit]);
+}
+
+export interface ExamWindow { startedAt: string | null; deadline: string | null; over: boolean }
+
+/** Окно контрольной ученика: отсчёт идёт с первого открытия темы (кнопка «Начать»). */
+export async function examWindow(topic: Topic, userId: string): Promise<ExamWindow> {
+  const { rows } = await db().query<{ first_at: Date }>(
+    'SELECT first_at FROM topic_views WHERE topic_id = $1 AND user_id = $2', [topic.id, userId]);
+  const started = rows[0]?.first_at ?? null;
+  if (!started) return { startedAt: null, deadline: null, over: false };
+  const deadline = topic.timeLimitMin ? new Date(started.getTime() + topic.timeLimitMin * 60_000) : null;
+  return { startedAt: started.toISOString(), deadline: deadline?.toISOString() ?? null, over: deadline !== null && deadline.getTime() <= Date.now() };
+}
+
+/** Контрольная закончена: время вышло или сданы все задания. До этого баллы и разбор ученику не видны. */
+export async function examFinished(topic: Topic, userId: string, window?: ExamWindow): Promise<boolean> {
+  const w = window ?? await examWindow(topic, userId);
+  if (w.over) return true;
+  const { rows } = await db().query<{ total: number; done: number }>(
+    `SELECT count(b.id)::int AS total,
+       count(s.id) FILTER (WHERE s.status IN ('submitted', 'graded'))::int AS done
+     FROM blocks b LEFT JOIN submissions s ON s.block_id = b.id AND s.student_id = $2
+     WHERE b.topic_id = $1 AND b.kind = 'assignment'`, [topic.id, userId]);
+  return rows[0].total > 0 && rows[0].done >= rows[0].total;
+}
+
 export async function deleteTopic(topicId: string): Promise<void> {
   await db().query('DELETE FROM topics WHERE id = $1', [topicId]);
 }

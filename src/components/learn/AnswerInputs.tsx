@@ -5,7 +5,8 @@ import type { StudentAssignmentSpec } from '@/lib/lms/block-schema';
 import { LIMITS } from '@/lib/lms/types';
 import type { CaptureSimState } from '@/components/lms/SimStateFrame';
 import SimStateAnswer from './SimStateAnswer';
-import { GapsInput, MatchInput, OrderInput } from './InteractiveInputs';
+import { GapsInput, MatchInput, OrderInput, TableInput } from './InteractiveInputs';
+import SimValuePicker from './SimValuePicker';
 
 /** Поля ответа ученика. Управляемые: состояние хранит AnswerForm. */
 export default function AnswerInputs({ name, spec, answer, disabled, onChange, captureRef }: {
@@ -47,6 +48,10 @@ export default function AnswerInputs({ name, spec, answer, disabled, onChange, c
     return <OrderInput items={spec.items} order={answer.type === 'order' ? answer.order : []} disabled={disabled}
       onChange={(order) => onChange({ type: 'order', order })} />;
   }
+  if (spec.type === 'table') {
+    return <TableInput columns={spec.columns} minRows={spec.minRows} rows={answer.type === 'table' ? answer.rows : []} disabled={disabled}
+      onChange={(rows) => onChange({ type: 'table', rows })} />;
+  }
   if (spec.type === 'short') {
     return (
       <label className="field learn-short"><span>Ваш ответ</span>
@@ -58,12 +63,13 @@ export default function AnswerInputs({ name, spec, answer, disabled, onChange, c
   }
   if (spec.type === 'number') {
     return (
-      <label className="field" style={{ maxWidth: 260 }}><span>Ваш ответ</span>
+      <label className="field learn-number"><span>Ваш ответ</span>
         <span className="row" style={{ gap: 8 }}>
           <input className="input" inputMode="decimal" value={answer.type === 'number' ? answer.value : ''}
             maxLength={LIMITS.numberAnswer} disabled={disabled}
             onChange={(e) => onChange({ type: 'number', value: e.target.value })} />
           {spec.unit && <span>{spec.unit}</span>}
+          {!disabled && <SimValuePicker onPick={(value) => onChange({ type: 'number', value })} />}
         </span>
       </label>
     );

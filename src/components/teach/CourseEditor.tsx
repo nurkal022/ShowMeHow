@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Block } from '@/lib/lms/blocks';
 import { simulationIdsOf, type AssignmentType, type BlockKind } from '@/lib/lms/block-schema';
-import { COURSE_STATUS_LABELS, LIMITS, type Course, type Topic } from '@/lib/lms/types';
+import {
+  COURSE_STATUS_LABELS, LIMITS, TOPIC_FORMATS, TOPIC_FORMAT_HINTS, TOPIC_FORMAT_LABELS, type Course, type Topic, type TopicFormat,
+} from '@/lib/lms/types';
 import { answersHref, courseEditorHref, learnCourseHref, learnTopicHref } from '@/lib/lms/links';
 import { ruPlural } from '@/lib/lms/format';
 import { callApi } from '@/components/cabinet/api';
@@ -285,6 +287,11 @@ export default function CourseEditor(props: CourseEditorProps) {
             </div>
           )}
 
+          {activeTopic && (
+            <TopicFormatBar key={activeTopic.id} topic={activeTopic}
+              onChange={(format, timeLimitMin) => act(`/api/teach/topics/${activeTopic.id}`, 'PATCH', { format, timeLimitMin })} />
+          )}
+
           {blocks.map((block, i) => {
             const simId = simulationIdsOf(block.body)[0] ?? null;
             const simTitle = simId ? props.simulationTitles[simId] ?? null : null;
@@ -391,6 +398,37 @@ export default function CourseEditor(props: CourseEditorProps) {
         </section>
       </div>
       {confirmDialog}
+    </div>
+  );
+}
+
+/* ------------------------------ формат темы ----------------------------- */
+
+function TopicFormatBar({ topic, onChange }: { topic: Topic; onChange: (format: TopicFormat, limit: number | null) => Promise<unknown> }) {
+  const [limit, setLimit] = useState(topic.timeLimitMin ? String(topic.timeLimitMin) : '');
+  const parsed = limit.trim() === '' ? null : Number(limit);
+  const valid = parsed === null || (Number.isInteger(parsed) && parsed >= 1 && parsed <= 300);
+  return (
+    <div className="cf-format">
+      <div className="cf-format-row">
+        <span className="label">Формат темы</span>
+        <div className="segmented" role="radiogroup" aria-label="Формат темы">
+          {TOPIC_FORMATS.map((f) => (
+            <button key={f} type="button" role="radio" aria-checked={topic.format === f} title={TOPIC_FORMAT_HINTS[f]}
+              className={topic.format === f ? 'segmented-item active' : 'segmented-item'}
+              onClick={() => { if (topic.format !== f) void onChange(f, f === 'exam' && valid ? parsed : null); }}>{TOPIC_FORMAT_LABELS[f]}</button>
+          ))}
+        </div>
+        {topic.format === 'exam' && (
+          <label className="cf-format-time">Время, мин
+            <input className="input" value={limit} inputMode="numeric" placeholder="без лимита" aria-invalid={valid ? undefined : true}
+              onChange={(e) => setLimit(e.target.value)}
+              onBlur={() => { if (valid && parsed !== topic.timeLimitMin) void onChange('exam', parsed); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />
+          </label>
+        )}
+      </div>
+      <p className="muted">{TOPIC_FORMAT_HINTS[topic.format]}</p>
     </div>
   );
 }

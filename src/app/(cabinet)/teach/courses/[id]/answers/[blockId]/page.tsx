@@ -24,11 +24,13 @@ export default async function AnswersPage({ params, searchParams }: {
   const payload = staff.block.body.payload;
   const sp = await searchParams;
   const pending = firstParam(sp.pending) === '1';
-  const selected = firstParam(sp.s) ?? null;
+  const picked = firstParam(sp.s) ?? null;
 
   const rows = await listBlockAnswers(blockId, id);
   const shown = pending ? rows.filter((r) => r.submission?.status === 'submitted') : rows;
   const openable = shown.flatMap((r) => (r.submission && r.submission.status !== 'draft' ? [r.submission.id] : []));
+  // «Проверить» без выбранной работы открывает первую непроверенную: лишнего клика быть не должно.
+  const selected = picked ?? shown.find((r) => r.submission?.status === 'submitted')?.submission?.id ?? null;
   const current = shown.find((r) => r.submission?.id === selected) ?? null;
   const nav = neighbours(openable, selected);
   const href = (s: string | null) => answersHref(id, blockId, { pending, s });
@@ -56,7 +58,9 @@ export default async function AnswersPage({ params, searchParams }: {
                 <p className="warn-banner">Ответ сдан до правки задания. Пересчитать можно в редакторе курса.</p>
               )}
               <GradeForm key={current.submission.id} submissionId={current.submission.id} points={payload.points}
-                score={current.submission.score} comment={current.submission.comment} />
+                score={current.submission.score} comment={current.submission.comment} rubric={payload.rubric}
+                suggested={current.submission.autoScore}
+                prevHref={nav.prev ? href(nav.prev) : null} nextAnyHref={nav.next ? href(nav.next) : null} />
             </>
           ) : (
             <p className="muted">Выберите ответ в таблице, чтобы проверить его.</p>

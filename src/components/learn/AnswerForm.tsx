@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import {
-  AUTOSAVE_MS, canSaveDraft, canSubmit, emptyAnswer, isAnswerComplete, type Answer, type StudentSubmission,
+  AUTOSAVE_MS, canSaveDraft, canSubmit, emptyAnswer, isAnswerComplete, tableFilledRows, type Answer, type StudentSubmission,
 } from '@/lib/lms/answers';
 import type { Reveal, StudentAssignmentPayload } from '@/lib/lms/block-schema';
 import type { AnswerState } from '@/lib/lms/types';
@@ -79,8 +79,14 @@ export default function AnswerForm({ blockId, payload, initial, preview }: {
 
   async function submit() {
     if (preview) return;
+    if (payload.spec.type === 'table' && answerRef.current.type === 'table'
+      && tableFilledRows(answerRef.current.rows) < payload.spec.minRows) {
+      setError(`Нужно заполнить числами не меньше ${payload.spec.minRows} строк.`);
+      return;
+    }
     if (!isSim && !isAnswerComplete(ready(answerRef.current))) {
-      setError(payload.spec.type === 'gaps' ? 'Заполните все пропуски.' : 'Сначала дайте ответ.');
+      setError(payload.spec.type === 'gaps' ? 'Заполните все пропуски.'
+        : payload.spec.type === 'table' ? 'Заполните числами хотя бы одну строку таблицы.' : 'Сначала дайте ответ.');
       return;
     }
     if (!payload.allowRetry && !(await ask({

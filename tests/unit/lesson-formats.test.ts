@@ -84,3 +84,23 @@ describe('новые типы заданий', () => {
     expect(JSON.stringify(toStudentBody({ kind: 'assignment', payload: once }, true))).toContain('потому что');
   });
 });
+
+describe('волна 2: тренажёр, таблица, контрольная', () => {
+  it('пресет тренажёра: только числа, закрытые параметры без повторов', () => {
+    const b = sanitizeBlockBody('simulation', { simulationId: null, preset: { 'Длина': '0,6', bad: 'x' }, locked: ['Длина', 'Длина', 5] });
+    expect(b).toEqual({ kind: 'simulation', payload: { simulationId: null, caption: '', preset: { 'Длина': 0.6 }, locked: ['Длина'] } });
+  });
+  it('таблица измерений проверяется учителем, ячейки обрезаются по числу столбцов', () => {
+    const p = task({ type: 'table', columns: [{ label: 'x', unit: 'м' }, { label: 'y' }], minRows: 2 }, { rubric: [{ label: 'Вывод', points: 4 }] });
+    expect(autoScore(p, { type: 'table', rows: [['1', '2']] })).toBeNull();
+    expect(sanitizeAnswer(p.spec, { type: 'table', rows: [['1', '2', '3'], ['4']] })).toEqual({ type: 'table', rows: [['1', '2'], ['4', '']] });
+    expect(p.rubric).toEqual([{ id: 'k1', label: 'Вывод', points: 4 }]);
+    expect(() => task({ type: 'table', columns: [{ label: 'x' }] })).toThrow();
+  });
+  it('пока контрольная идёт, проверенная работа выглядит просто сданной', async () => {
+    const { toStudentSubmission } = await import('@/lib/lms/answers');
+    const sub = { status: 'graded' as const, answer: null, score: 7, comment: 'ок', submittedAt: null };
+    expect(toStudentSubmission(sub, true)).toMatchObject({ status: 'submitted', score: null, comment: null });
+    expect(toStudentSubmission(sub)).toMatchObject({ status: 'graded', score: 7 });
+  });
+});
