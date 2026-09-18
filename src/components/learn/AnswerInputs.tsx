@@ -1,12 +1,18 @@
 'use client';
+import type { MutableRefObject } from 'react';
 import type { Answer } from '@/lib/lms/answers';
 import type { StudentAssignmentSpec } from '@/lib/lms/block-schema';
 import { LIMITS } from '@/lib/lms/types';
+import type { CaptureSimState } from '@/components/lms/SimStateFrame';
+import SimStateAnswer from './SimStateAnswer';
 
 /** Поля ответа ученика. Управляемые: состояние хранит AnswerForm. */
-export default function AnswerInputs({ name, spec, answer, disabled, onChange }: {
+export default function AnswerInputs({ name, spec, answer, disabled, onChange, captureRef }: {
   name: string; spec: StudentAssignmentSpec; answer: Answer; disabled: boolean; onChange: (a: Answer) => void;
+  /** Состояние симуляции снимает форма в момент сдачи — через эту ссылку. */
+  captureRef: MutableRefObject<CaptureSimState | null>;
 }) {
+  if (spec.type === 'sim_state') return <SimStateAnswer spec={spec} answer={answer} captureRef={captureRef} />;
   if (spec.type === 'choice') {
     const selected = answer.type === 'choice' ? answer.selected : [];
     return (

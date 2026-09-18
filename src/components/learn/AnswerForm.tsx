@@ -6,6 +6,8 @@ import {
 import type { StudentAssignmentPayload } from '@/lib/lms/block-schema';
 import type { AnswerState } from '@/lib/lms/types';
 import { callApi } from '@/components/cabinet/api';
+import { bridgeProblem } from '@/lib/lms/sim-bridge';
+import type { CaptureSimState } from '@/components/lms/SimStateFrame';
 import AnswerInputs from './AnswerInputs';
 import SubmissionStatus from './SubmissionStatus';
 
@@ -23,6 +25,8 @@ export default function AnswerForm({ blockId, payload, initial, preview }: {
   const [error, setError] = useState('');
   const answerRef = useRef(answer);
   const dirty = useRef(false);
+  const captureRef = useRef<CaptureSimState | null>(null);
+  const isSim = payload.spec.type === 'sim_state';
   const state: AnswerState = sub?.status ?? 'none';
   const draftable = !preview && canSaveDraft(state);
   const editable = !preview && (draftable || reopened);
@@ -43,8 +47,27 @@ export default function AnswerForm({ blockId, payload, initial, preview }: {
       return;
     }
     setSub(res.data.submission);
+    // В сданное состояние сервер дописывает «что совпало» — показываем его версию.
+    if (isSim && res.data.submission.answer) setAnswer(res.data.submission.answer);
     setSaving('saved');
     if (submit) setReopened(false);
+  }
+
+  /** Состояние симуляции: снять значения контролов через мост и сразу сдать. */
+  async function submitSimState() {
+    if (preview) return;
+    setSaving('saving');
+    setError('');
+    const reply = captureRef.current ? await captureRef.current() : null;
+    if (!reply || !reply.ok) {
+      setSaving('idle');
+      setError(reply ? bridgeProblem(reply) : 'Симуляция ещё не загрузилась.');
+      return;
+    }
+    const controls: Record<string, number> = {};
+    for (const c of reply.controls) controls[c.name] = c.value;
+    answerRef.current = { type: 'sim_state', controls, capturedAt: new Date().toISOString() };
+    await save(true);
   }
 
   useEffect(() => {
@@ -65,14 +88,16 @@ export default function AnswerForm({ blockId, payload, initial, preview }: {
     <div className="settings-list">
       {preview && <p className="warn-banner">Режим просмотра: ответы не сохраняются.</p>}
       <SubmissionStatus sub={sub} points={payload.points} />
-      <AnswerInputs name={`answer-${blockId}`} spec={payload.spec} answer={answer} disabled={!editable} onChange={change} />
+      <AnswerInputs name={`answer-${blockId}`} spec={payload.spec} answer={answer} disabled={!editable} onChange={change}
+        captureRef={captureRef} />
       <div className="row" style={{ flexWrap: 'wrap' }}>
         {editable && (
-          <button type="button" className="btn btn-primary" disabled={saving === 'saving'} onClick={() => save(true)}>
-            {state === 'none' || state === 'draft' ? 'Сдать' : 'Сдать заново'}
+          <button type="button" className="btn btn-primary" disabled={saving === 'saving'} onClick={() => (isSim ? submitSimState() : save(true))}>
+            {isSim ? (state === 'none' || state === 'draft' ? 'Сдать состояние' : 'Сдать состояние заново')
+              : state === 'none' || state === 'draft' ? 'Сдать' : 'Сдать заново'}
           </button>
         )}
-        {draftable && (
+        {draftable && !isSim && (
           <button type="button" className="btn" disabled={saving === 'saving'} onClick={() => save(false)}>
             Сохранить черновик
           </button>

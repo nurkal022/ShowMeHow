@@ -1,11 +1,15 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 interface SimError { id: number; message: string }
 
 let nextId = 0;
 
-export default function PreviewFrame({ html }: { html: string | null }) {
+export default function PreviewFrame({ html, frameRef }: {
+  html: string | null;
+  /** Кому нужен сам iframe: задание «Состояние симуляции» спрашивает у него значения контролов. */
+  frameRef?: MutableRefObject<HTMLIFrameElement | null>;
+}) {
   const [errors, setErrors] = useState<SimError[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -36,7 +40,7 @@ export default function PreviewFrame({ html }: { html: string | null }) {
   return (
     <div className="preview-wrap">
       <iframe
-        ref={iframeRef}
+        ref={(el) => { iframeRef.current = el; if (frameRef) frameRef.current = el; }}
         className="preview-frame"
         sandbox="allow-scripts"
         srcDoc={html}

@@ -11,6 +11,7 @@ import { generateForBlockHref } from '@/lib/lms/links';
 import Markup from '@/components/lms/Markup';
 import { IconCheck, IconLibrary, IconPlus, IconTrash, IconWand } from '@/components/icons';
 import SimulationPicker from './SimulationPicker';
+import SimStateEditor from './SimStateEditor';
 import {
   fromAssignmentForm, markCorrect, toAssignmentForm, validateAssignmentForm,
   type AssignmentErrors, type AssignmentForm,
@@ -189,9 +190,11 @@ function TextEditor({ payload, onSave, onCancel, onDirtyChange, error }: { paylo
 
 /* ------------------------------- тренажёр ------------------------------- */
 
-function SimulationChooser({ blockId, simulationId, title, onChange, invalid }: {
+function SimulationChooser({ blockId, simulationId, title, onChange, invalid, pickOnly }: {
   blockId: string; simulationId: string | null; title: string | null;
   onChange: (id: string, title: string) => void; invalid?: boolean;
+  /** Задание «Состояние симуляции»: «Вставить в урок» из мастерской сюда не попадает — только выбор готового. */
+  pickOnly?: boolean;
 }) {
   const [picking, setPicking] = useState(false);
   return (
@@ -216,21 +219,21 @@ function SimulationChooser({ blockId, simulationId, title, onChange, invalid }: 
             <span><strong>Выбрать готовый</strong>
               <span className="muted">Из вашей библиотеки или общего каталога — с поиском и превью.</span></span>
           </button>
-          <a className="cf-choice-tile" href={generateForBlockHref(blockId)}>
+          {!pickOnly && <a className="cf-choice-tile" href={generateForBlockHref(blockId)}>
             <span className="cf-kind cf-kind-assignment" aria-hidden="true"><IconWand size={18} /></span>
             <span><strong>Сгенерировать новый</strong>
               <span className="muted">Откроется мастерская. Когда симуляция будет готова, нажмите там «Вставить в урок».</span></span>
-          </a>
+          </a>}
         </div>
       )}
-      {simulationId && (
+      {simulationId && !pickOnly && (
         <p className="muted">
           Нужен другой тренажёр? <a href={generateForBlockHref(blockId)}>Сгенерировать новый</a> — генерация тратит вашу квоту;
           сохраните блок перед переходом.
         </p>
       )}
       {picking && (
-        <SimulationPicker onClose={() => setPicking(false)} generateHref={generateForBlockHref(blockId)}
+        <SimulationPicker onClose={() => setPicking(false)} generateHref={pickOnly ? undefined : generateForBlockHref(blockId)}
           onPick={(item) => { onChange(item.id, item.title); setPicking(false); }} />
       )}
     </>
@@ -306,6 +309,7 @@ const TYPES: { type: AssignmentType; hint: string }[] = [
   { type: 'choice', hint: 'Один или несколько вариантов. Проверяется автоматически.' },
   { type: 'number', hint: 'Число с допуском и единицами. Проверяется автоматически.' },
   { type: 'text', hint: 'Свободный текст. Балл и комментарий ставите вы.' },
+  { type: 'sim_state', hint: 'Ученик настраивает симуляцию до заданной цели. Проверяется автоматически.' },
 ];
 
 function AssignmentEditor({ blockId, payload, standTitle, onSave, onCancel, onDirtyChange, error }: {
@@ -421,6 +425,23 @@ function AssignmentEditor({ blockId, payload, standTitle, onSave, onCancel, onDi
         </fieldset>
       )}
 
+      {f.type === 'sim_state' && (
+        <fieldset className="cf-fieldset">
+          <legend>Симуляция и цель</legend>
+          <SimulationChooser blockId={blockId} simulationId={f.standSimulationId} title={f.standTitle} pickOnly
+            invalid={Boolean(errors.stand)}
+            onChange={(id, t) => set(id === f.standSimulationId
+              ? { standTitle: t } : { standSimulationId: id, standTitle: t, simTargets: [] })} />
+          <FieldError id={`${uid}-stand`} text={errors.stand} />
+          {f.standSimulationId && (
+            <SimStateEditor simulationId={f.standSimulationId} rows={f.simTargets} showHints={f.showHints}
+              invalid={Boolean(errors.targets)}
+              onRows={(simTargets) => set({ simTargets })} onShowHints={(showHints) => set({ showHints })} />
+          )}
+          <FieldError id={`${uid}-targets`} text={errors.targets} />
+        </fieldset>
+      )}
+
       {f.type === 'text' && (
         <p className="cf-note">Развёрнутый ответ проверяете вы: он появится в «Ответах» со статусом «сдано».</p>
       )}
@@ -444,7 +465,7 @@ function AssignmentEditor({ blockId, payload, standTitle, onSave, onCancel, onDi
         </div>
       </fieldset>
 
-      <fieldset className="cf-fieldset">
+      {f.type !== 'sim_state' && <fieldset className="cf-fieldset">
         <legend>Стенд рядом с вопросом</legend>
         <div className="segmented cf-segmented-wrap" role="group" aria-label="Стенд рядом с вопросом">
           {([['none', 'Без стенда'], ['simulation', 'Тренажёр'], ['lab', 'Лаборатория']] as const).map(([kind, label]) => (
@@ -462,7 +483,7 @@ function AssignmentEditor({ blockId, payload, standTitle, onSave, onCancel, onDi
             <FieldError id={`${uid}-stand`} text={errors.stand} />
           </>
         )}
-      </fieldset>
+      </fieldset>}
     </EditorForm>
   );
 }

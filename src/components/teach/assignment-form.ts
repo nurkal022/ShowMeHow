@@ -2,6 +2,7 @@ import { LABS } from '@/lib/labs';
 import {
   newOptionId, type AssignmentPayload, type AssignmentType, type ChoiceOption,
 } from '@/lib/lms/block-schema';
+import { SIM_LIMITS } from '@/lib/lms/sim-state';
 import { LIMITS } from '@/lib/lms/types';
 
 /**
@@ -23,7 +24,12 @@ export interface AssignmentForm {
   answer: string;
   tolerance: string;
   unit: string;
+  /** «Состояние симуляции»: симуляция лежит в standSimulationId, цель — в строках. */
+  simTargets: SimTargetRow[];
+  showHints: boolean;
 }
+
+export interface SimTargetRow { name: string; label: string; include: boolean; value: string; tolerance: string }
 
 export function blankOptions(): ChoiceOption[] {
   return [
@@ -39,7 +45,8 @@ export function toAssignmentForm(p: AssignmentPayload, standTitle: string | null
     points: String(p.points),
     allowRetry: p.allowRetry,
     standKind: p.stand ? p.stand.kind : 'none',
-    standSimulationId: p.stand?.kind === 'simulation' ? p.stand.simulationId : null,
+    standSimulationId: s.type === 'sim_state' ? s.simulationId
+      : p.stand?.kind === 'simulation' ? p.stand.simulationId : null,
     standTitle,
     standLab: p.stand?.kind === 'lab' ? p.stand.slug : LABS[0].slug,
     type: s.type,
@@ -48,6 +55,10 @@ export function toAssignmentForm(p: AssignmentPayload, standTitle: string | null
     answer: s.type === 'number' ? String(s.answer) : '',
     tolerance: s.type === 'number' ? String(s.tolerance) : '0',
     unit: s.type === 'number' ? s.unit : '',
+    simTargets: s.type === 'sim_state'
+      ? s.targets.map((t) => ({ name: t.name, label: t.label, include: true, value: String(t.value), tolerance: String(t.tolerance) }))
+      : [],
+    showHints: s.type === 'sim_state' ? s.showHints : true,
   };
 }
 
@@ -61,7 +72,11 @@ export function fromAssignmentForm(f: AssignmentForm): Record<string, unknown> {
     ? { type: 'choice', multiple: f.multiple, options: f.options }
     : f.type === 'number'
       ? { type: 'number', answer: f.answer, tolerance: f.tolerance, unit: f.unit }
-      : { type: 'text' };
+      : f.type === 'sim_state'
+        ? { type: 'sim_state', simulationId: f.standSimulationId, showHints: f.showHints,
+          targets: f.simTargets.filter((t) => t.include)
+            .map(({ name, label, value, tolerance }) => ({ name, label, value, tolerance })) }
+        : { type: 'text' };
   // Пустое поле баллов — не ноль: сервер ответит понятной ошибкой.
   const points = f.points.trim() === '' ? Number.NaN : Number(f.points);
   return { prompt: f.prompt, points, allowRetry: f.allowRetry, stand, spec };
@@ -83,7 +98,7 @@ function parseNumber(raw: string): number | null {
 }
 
 export type AssignmentErrors = Partial<Record<
-  'prompt' | 'options' | 'correct' | 'answer' | 'tolerance' | 'points' | 'stand', string>>;
+  'prompt' | 'options' | 'correct' | 'answer' | 'tolerance' | 'points' | 'stand' | 'targets', string>>;
 
 /**
  * Проверка до отправки: те же правила, что на сервере, но ошибка встаёт рядом
@@ -107,7 +122,16 @@ export function validateAssignmentForm(f: AssignmentForm): AssignmentErrors {
   if (points === null || !Number.isInteger(points) || points < 0 || points > LIMITS.maxPoints) {
     errors.points = `Баллы — целое число от 0 до ${LIMITS.maxPoints}.`;
   }
-  if (f.standKind === 'simulation' && !f.standSimulationId) {
+  if (f.type === 'sim_state') {
+    const picked = f.simTargets.filter((t) => t.include);
+    if (!f.standSimulationId) errors.stand = 'Выберите симуляцию, в которой ученик будет добиваться цели.';
+    else if (picked.length === 0) errors.targets = 'Нажмите «Зафиксировать как цель» и отметьте хотя бы один параметр.';
+    else if (picked.length > SIM_LIMITS.maxTargets) errors.targets = `Параметров в цели — не больше ${SIM_LIMITS.maxTargets}.`;
+    else if (picked.some((t) => parseNumber(t.value) === null)) errors.targets = 'У каждого отмеченного параметра должно быть число.';
+    else if (picked.some((t) => { const n = t.tolerance.trim() === '' ? 0 : parseNumber(t.tolerance); return n === null || n < 0; })) {
+      errors.targets = 'Допуск — неотрицательное число.';
+    }
+  } else if (f.standKind === 'simulation' && !f.standSimulationId) {
     errors.stand = 'Выберите тренажёр для стенда или уберите стенд.';
   }
   return errors;

@@ -991,3 +991,10 @@ body:hover .present-exit { opacity: .85; }
 .not-found { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 96px 20px; text-align: center; }
 .not-found strong { font-size: 64px; font-weight: 600; line-height: 1; letter-spacing: -.04em; color: var(--border-strong); }
 .not-found .btn { margin-top: 8px; }
+
+/* ------------- задание «Состояние симуляции» у ученика ------------------ */
+.sim-state-answer { display: flex; flex-direction: column; gap: 10px; }
+.sim-state-hints { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sim-state-hints li { display: flex; gap: 8px; align-items: baseline; padding: 6px 10px; border-radius: var(--r-sm); font-size: 14px; }
+.sim-state-hints li.ok { background: var(--success-soft); color: var(--success); }
+.sim-state-hints li.miss { background: var(--danger-soft); color: var(--danger); }

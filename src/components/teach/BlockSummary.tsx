@@ -54,7 +54,9 @@ export default function BlockSummary({ block, simulationTitle, missing }: {
       const meta = [
         ASSIGNMENT_TYPE_LABELS[p.spec.type],
         `${p.points} ${ruPlural(p.points, 'балл', 'балла', 'баллов')}`,
-        standText(p.stand, simulationTitle, missing),
+        p.spec.type === 'sim_state'
+          ? (missing ? 'симуляция удалена автором' : `симуляция «${simulationTitle ?? 'без названия'}»`)
+          : standText(p.stand, simulationTitle, missing),
         p.allowRetry ? 'можно сдать повторно' : 'одна попытка',
       ].join(' · ');
       return (
@@ -71,6 +73,12 @@ export default function BlockSummary({ block, simulationTitle, missing }: {
           {p.spec.type === 'number' && (
             <p className="muted">
               {`Правильный ответ: ${formatScore(p.spec.answer)} ± ${formatScore(p.spec.tolerance)}${p.spec.unit ? ` ${p.spec.unit}` : ''}`}
+            </p>
+          )}
+          {p.spec.type === 'sim_state' && (
+            <p className="muted">
+              {`Цель: ${p.spec.targets.map((t) => `${t.label} = ${formatScore(t.value)} ± ${formatScore(t.tolerance)}`).join('; ')}`
+                + ` · ${p.spec.showHints ? 'ученик видит, что совпало' : 'без подсказок'}`}
             </p>
           )}
         </>

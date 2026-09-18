@@ -571,3 +571,17 @@ a.cf-icon-btn:hover { text-decoration: none; background: var(--surface-2); color
   .cred-sheet .cred-card:nth-child(2n) { border-right: none !important; }
   .cred-sheet .cred-card .muted, .cred-sheet .cred-key { color: #444 !important; }
 }
+
+/* ---------------- задание «Состояние симуляции»: цель ------------------ */
+.cf-simstate { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.cf-simstate-table { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px; }
+.cf-simstate-table.invalid { border-color: var(--danger); }
+.cf-simstate-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) 110px 110px; gap: 8px; align-items: center; }
+.cf-simstate-row > input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--success); justify-self: center; }
+.cf-simstate-row.off .cf-simstate-label { color: var(--text-2); }
+.cf-simstate-head { font-size: 12px; color: var(--text-2); }
+.cf-simstate-label { overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .cf-simstate-row { grid-template-columns: 28px minmax(0, 1fr) 72px 72px; }
+  .cf-simstate-head > span:first-child { visibility: hidden; }
+}
