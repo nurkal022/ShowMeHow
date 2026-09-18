@@ -128,3 +128,28 @@ export async function getThumbnailPath(ownerId: string, id: string): Promise<str
   const p = path.join(simDir(id), 'thumbnail.png');
   return fs.existsSync(p) ? p : null;
 }
+
+/**
+ * HTML для зрителя, которому доступ уже подтвердил canView (src/lib/lms/access.ts):
+ * владелец здесь не проверяется. Правка и удаление по-прежнему только через owned().
+ */
+export async function getSharedArtifact(id: string): Promise<{ meta: SimulationMeta; html: string } | null> {
+  assertSafe(id);
+  const rec = await getRepo().get(id);
+  if (!rec) return null;
+  try {
+    const html = reinstrument(fs.readFileSync(artifactPath(id), 'utf8'));
+    const { ownerId: _owner, ...meta } = rec;
+    return { meta, html };
+  } catch {
+    return null;
+  }
+}
+
+/** Превью для зрителя с подтверждённым canView. */
+export async function getSharedThumbnailPath(id: string): Promise<string | null> {
+  assertSafe(id);
+  if (!(await getRepo().get(id))) return null;
+  const p = path.join(simDir(id), 'thumbnail.png');
+  return fs.existsSync(p) ? p : null;
+}

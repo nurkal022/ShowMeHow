@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getMeta, getRenderableArtifact, deleteSimulation } from '@/lib/storage';
+import { getMeta, getRenderableArtifact, deleteSimulation, getSharedArtifact } from '@/lib/storage';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
+import { canView } from '@/lib/lms/access';
 
 type P = { params: Promise<{ id: string }> };
 
@@ -15,9 +16,17 @@ export async function GET(req: Request, { params }: P) {
   const { id } = await params;
   try {
     const meta = await getMeta(user.id, id);
-    const html = await getRenderableArtifact(user.id, id);
-    if (!meta || html === null) return NextResponse.json({ error: 'not found' }, { status: 404 });
-    return NextResponse.json({ meta, html });
+    const html = meta ? await getRenderableArtifact(user.id, id) : null;
+    if (meta && html !== null) return NextResponse.json({ meta, html });
+    // Не владелец: тренажёр из курса или каталога. Промпт и прочие поля чужому не отдаём.
+    if (await canView(user, id)) {
+      const shared = await getSharedArtifact(id);
+      if (shared) {
+        const { id: simId, title, subject } = shared.meta;
+        return NextResponse.json({ meta: { id: simId, title, subject }, html: shared.html, readOnly: true });
+      }
+    }
+    return NextResponse.json({ error: 'not found' }, { status: 404 });
   } catch (e) {
     const status = isInvalidSegment(e) ? 400 : 404;
     return NextResponse.json({ error: 'not found' }, { status });

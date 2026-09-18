@@ -23,6 +23,7 @@ import { POST as teachBlockSim } from '@/app/api/teach/blocks/[id]/simulation/ro
 import { POST as teachRecalc } from '@/app/api/teach/blocks/[id]/recalculate/route';
 import { PATCH as teachSubmission } from '@/app/api/teach/submissions/[id]/route';
 import { GET as teachSims } from '@/app/api/teach/simulations/route';
+import { PUT as learnAnswer } from '@/app/api/learn/blocks/[id]/answer/route';
 
 // Роуты вызываются без базы: отказ «не вошёл» и «не админ» случается до первого запроса.
 const session = vi.hoisted(() => ({ current: null as AuthUser | null }));
@@ -85,6 +86,7 @@ const ANON_CALLS: Call[] = [
   ['POST /api/teach/blocks/[id]/recalculate', () => teachRecalc(req(), idParams())],
   ['PATCH /api/teach/submissions/[id]', () => teachSubmission(req('PATCH'), idParams())],
   ['GET /api/teach/simulations', () => teachSims(new Request('http://t/api/teach/simulations'))],
+  ['PUT /api/learn/blocks/[id]/answer', () => learnAnswer(req('PUT'), idParams())],
 ];
 
 describe('роуты кабинетов без входа', () => {
