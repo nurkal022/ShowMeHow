@@ -7,6 +7,8 @@ import type { UserPrefs } from '@/lib/auth/prefs';
 import { historyLabel } from '@/lib/history-label';
 import { RECONNECT_COMMENT } from '@/lib/jobs/sse';
 import { isUnauthorized, loginWithReturnTo } from '@/lib/auth/client-session';
+import { lessonBlockFromSearch } from '@/lib/lms/links';
+import { callApi } from './cabinet/api';
 import ProgressView from './progress/ProgressView';
 import PreviewFrame from './PreviewFrame';
 import ConstructorStand from './constructor/ConstructorStand';
@@ -131,6 +133,9 @@ interface Message { role: 'user' | 'bot'; text: string }
 
 export default function Workbench() {
   const search = useSearchParams();
+  // Учитель пришёл из редактора курса: готовую симуляцию можно вставить в блок урока.
+  const returnTo = lessonBlockFromSearch(search.get('returnTo'));
+  const [inserting, setInserting] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
   const [events, setEvents] = useState<PipelineEvent[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -319,6 +324,20 @@ export default function Workbench() {
     } catch (err) {
       setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
     }
+  }
+
+  async function insertIntoLesson() {
+    if (!simId || !returnTo) return;
+    setInserting(true);
+    const res = await callApi<{ href: string }>(`/api/teach/blocks/${returnTo}/simulation`, 'POST', { simulationId: simId });
+    setInserting(false);
+    if (res.ok) {
+      window.location.assign(res.data.href);
+      return;
+    }
+    setError(res.error === 'Не найдено.'
+      ? 'Блок урока не найден: его могли удалить. Откройте курс и выберите тренажёр заново.'
+      : res.error);
   }
 
   function say(role: Message['role'], text: string) {
@@ -561,10 +580,15 @@ export default function Workbench() {
         disabled={busy || outOfQuota}
         defaultLevel={prefs.level}
         defaultStyle={prefs.style}
-        quotaNote={quota && quota.limit !== null && (
-          outOfQuota
-            ? <span className="quota-line quota-exhausted">{quotaMessage}</span>
-            : <span className="quota-line">Осталось {quota.remaining} из {quota.limit}</span>
+        quotaNote={(
+          <>
+            {returnTo && <span className="quota-line">Тренажёр для урока: после генерации нажмите «Вставить в урок».</span>}
+            {quota && quota.limit !== null && (
+              outOfQuota
+                ? <span className="quota-line quota-exhausted">{quotaMessage}</span>
+                : <span className="quota-line">Осталось {quota.remaining} из {quota.limit}</span>
+            )}
+          </>
         )}
         onCreate={(text) => { if (!busy) generate(text); }}
         onWriteText={(text) => { setPrompt(text); setInputMode('text'); }}
@@ -593,6 +617,12 @@ export default function Workbench() {
                   <IconPlus size={16} />Новая
                 </button>
               )}
+            </div>
+          )}
+
+          {returnTo && (
+            <div className="queue-banner">
+              Тренажёр для урока: когда симуляция будет готова, нажмите «Вставить в урок» под ней.
             </div>
           )}
 
@@ -731,6 +761,11 @@ export default function Workbench() {
             <a className="btn btn-sm btn-ghost" href={`/api/simulations/${simId}/export`}>
               <IconDownload size={16} />Экспорт
             </a>
+            {returnTo && !busy && (
+              <button type="button" className="btn btn-sm btn-primary" onClick={insertIntoLesson} disabled={inserting}>
+                {inserting ? 'Вставляю…' : 'Вставить в урок'}
+              </button>
+            )}
             <span className="spacer" />
             {history.length > 0 && (
               <details className="history-dropdown">
