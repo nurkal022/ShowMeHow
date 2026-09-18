@@ -143,6 +143,11 @@ export async function disableUser(userId: string): Promise<void> {
      UPDATE users SET disabled_at = now() WHERE id = $1`, [userId]);
 }
 
+/** Разблокировка: сессий у заблокированного нет, человек просто входит заново. */
+export async function enableUser(userId: string): Promise<void> {
+  await db().query('UPDATE users SET disabled_at = NULL WHERE id = $1', [userId]);
+}
+
 /**
  * Профиль отделён от AuthUser намеренно: AuthUser — то, что нужно для проверки
  * доступа на каждом запросе, и он не должен раздуваться настройками интерфейса.
@@ -175,20 +180,25 @@ export async function updateProfile(
 
 /**
  * Смена пароля человеком. Снимает флаг временного пароля: новый пароль придумал
- * он сам. Прочие сессии удаляет вызывающий роут.
+ * он сам, поэтому строка листа паролей (pending_credentials) больше не нужна.
+ * Прочие сессии удаляет вызывающий роут.
  */
 export async function updatePassword(userId: string, newPassword: string): Promise<void> {
-  await db().query('UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1',
+  await db().query(
+    `WITH forgotten AS (DELETE FROM pending_credentials WHERE user_id = $1)
+     UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1`,
     [userId, hashPassword(newPassword)]);
 }
 
 /**
- * Выдача временного пароля (скрипт, позже кабинет и админка). Человек обязан
- * сменить его при входе; старые сессии удаляются тем же оператором.
+ * Выдача временного пароля (скрипт, кабинет, админка). Человек обязан сменить
+ * его при входе; старые сессии и прежняя строка листа паролей удаляются тем же
+ * оператором. Кто хочет показать новый пароль на листе — пишет строку заново.
  */
 export async function setTemporaryPassword(userId: string, plain: string): Promise<void> {
   await db().query(
-    `WITH dropped AS (DELETE FROM sessions WHERE user_id = $1)
+    `WITH dropped AS (DELETE FROM sessions WHERE user_id = $1),
+          forgotten AS (DELETE FROM pending_credentials WHERE user_id = $1)
      UPDATE users SET password_hash = $2, must_change_password = true WHERE id = $1`,
     [userId, hashPassword(plain)]);
 }
