@@ -98,7 +98,7 @@ describe('санация блоков', () => {
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', points: 1.5, spec: { type: 'text' } }))
       .toThrow('Баллы — целое число от 0 до 1000.');
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', spec: { type: 'essay' } }))
-      .toThrow('Тип задания — выбор, число или развёрнутый ответ.');
+      .toThrow('Тип задания — выбор, число, развёрнутый ответ или состояние симуляции.');
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', stand: { kind: 'lab', slug: 'zzz' }, spec: { type: 'text' } }))
       .toThrow('Стенд задания указан неверно.');
     expect(() => sanitizeBlockBody('assignment', { prompt: '', spec: { type: 'text' } }))

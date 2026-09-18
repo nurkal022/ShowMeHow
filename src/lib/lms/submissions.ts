@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { db } from '../db/client';
 import { isUuid } from '../org/access';
 import {
-  autoScore, canSaveDraft, canSubmit, isAnswerComplete, sanitizeAnswer, type Answer,
+  autoScore, canSaveDraft, canSubmit, isAnswerComplete, sanitizeAnswer, withHints, type Answer,
 } from './answers';
 import { assignmentTitle, bodyFromRow } from './block-schema';
 import type { Block } from './blocks';
@@ -46,7 +46,7 @@ const iso = (d: Date | null) => (d ? d.toISOString() : null);
 function asAnswer(raw: unknown): Answer | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const t = (raw as { type?: unknown }).type;
-  return t === 'choice' || t === 'number' || t === 'text' ? raw as Answer : null;
+  return t === 'choice' || t === 'number' || t === 'text' || t === 'sim_state' ? raw as Answer : null;
 }
 
 export function toSubmission(r: SubmissionRow): Submission {
@@ -107,8 +107,13 @@ export async function saveAnswer(
   if (!canSubmit(state, payload.allowRetry)) {
     throw new LmsError('Ответ уже сдан. Сдать заново можно, если учитель вернёт работу или разрешит повторную сдачу.');
   }
-  if (!isAnswerComplete(answer)) throw new LmsError('Ответ пустой — заполните его перед сдачей.');
+  if (!isAnswerComplete(answer)) {
+    throw new LmsError(answer.type === 'sim_state'
+      ? 'Симуляция не передала значения параметров. Обновите страницу и попробуйте ещё раз.'
+      : 'Ответ пустой — заполните его перед сдачей.');
+  }
   const auto = autoScore(payload, answer);
+  const stored = withHints(payload, answer);
   const status: SubmissionStatus = auto === null ? 'submitted' : 'graded';
   const { rows } = await db().query<SubmissionRow>(
     `INSERT INTO submissions (id, block_id, student_id, block_revision, answer, status, auto_score, score,
@@ -120,7 +125,7 @@ export async function saveAnswer(
        auto_score = EXCLUDED.auto_score, score = EXCLUDED.score, comment = NULL,
        submitted_at = now(), graded_at = EXCLUDED.graded_at, graded_by = NULL, updated_at = now()
      RETURNING ${SUBMISSION_COLUMNS}`,
-    [crypto.randomUUID(), block.id, studentId, block.revision, JSON.stringify(answer), status, auto]);
+    [crypto.randomUUID(), block.id, studentId, block.revision, JSON.stringify(stored), status, auto]);
   return toSubmission(rows[0]);
 }
 

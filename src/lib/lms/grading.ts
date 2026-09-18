@@ -1,5 +1,5 @@
 import { db } from '../db/client';
-import { autoScore, parseScore } from './answers';
+import { autoScore, parseScore, withHints } from './answers';
 import { listCourseAssignments, type Block } from './blocks';
 import { courseStudents, courseTopicViews, listTopics } from './courses';
 import { buildJournal, buildProgress, type Journal, type Progress } from './journal';
@@ -55,8 +55,12 @@ export async function recalculateBlock(block: Block): Promise<number> {
     const score = manual ? sub.score : auto;
     await db().query(
       `UPDATE submissions SET auto_score = $2, score = $3, status = $4, block_revision = $5,
+         answer = coalesce($6::jsonb, answer),
          graded_at = CASE WHEN $4 = 'graded' THEN coalesce(graded_at, now()) END, updated_at = now()
-       WHERE id = $1`, [sub.id, auto, score, status, block.revision]);
+       WHERE id = $1`,
+      // Подсказки «что совпало» лежат в ответе: после смены цели они пересчитываются вместе с баллом.
+      [sub.id, auto, score, status, block.revision,
+        sub.answer?.type === 'sim_state' ? JSON.stringify(withHints(payload, sub.answer)) : null]);
   }
   return rows.length;
 }

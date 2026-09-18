@@ -1,4 +1,5 @@
 import { LABS } from '../labs';
+import { sanitizeTargets, type SimTarget } from './sim-state';
 import { LIMITS, LmsError, optionalText, requireText } from './types';
 
 /**
@@ -30,12 +31,14 @@ export interface ChoiceOption { id: string; text: string; correct: boolean }
 export type AssignmentSpec =
   | { type: 'choice'; multiple: boolean; options: ChoiceOption[] }
   | { type: 'number'; answer: number; tolerance: number; unit: string }
-  | { type: 'text' };
+  | { type: 'text' }
+  | { type: 'sim_state'; simulationId: string; targets: SimTarget[]; showHints: boolean };
 export type AssignmentType = AssignmentSpec['type'];
 export const ASSIGNMENT_TYPE_LABELS: Record<AssignmentType, string> = {
   choice: 'Выбор варианта',
   number: 'Число',
   text: 'Развёрнутый ответ',
+  sim_state: 'Состояние симуляции',
 };
 
 export interface AssignmentPayload {
@@ -57,7 +60,9 @@ export type BlockBody =
 export type StudentAssignmentSpec =
   | { type: 'choice'; multiple: boolean; options: { id: string; text: string }[] }
   | { type: 'number'; unit: string }
-  | { type: 'text' };
+  | { type: 'text' }
+  /** Значений цели здесь нет; имена параметров — только если учитель разрешил подсказки. */
+  | { type: 'sim_state'; simulationId: string; showHints: boolean; targets?: { name: string; label: string }[] };
 
 export interface StudentAssignmentPayload {
   prompt: string;
@@ -155,7 +160,16 @@ function sanitizeSpec(raw: unknown): AssignmentSpec {
     return { type: 'number', answer, tolerance, unit: optionalText(s.unit, LIMITS.unit, 'Единицы') };
   }
   if (s.type === 'text') return { type: 'text' };
-  throw new LmsError('Тип задания — выбор, число или развёрнутый ответ.');
+  if (s.type === 'sim_state') {
+    if (typeof s.simulationId !== 'string' || !UUID_RE.test(s.simulationId)) {
+      throw new LmsError('Выберите симуляцию для задания.');
+    }
+    return {
+      type: 'sim_state', simulationId: s.simulationId.toLowerCase(),
+      targets: sanitizeTargets(s.targets), showHints: s.showHints !== false,
+    };
+  }
+  throw new LmsError('Тип задания — выбор, число, развёрнутый ответ или состояние симуляции.');
 }
 
 export function sanitizeBlockBody(kind: BlockKind, raw: unknown): BlockBody {
@@ -186,12 +200,14 @@ export function sanitizeBlockBody(kind: BlockKind, raw: unknown): BlockBody {
       if (typeof points !== 'number' || !Number.isInteger(points) || points < 0 || points > LIMITS.maxPoints) {
         throw new LmsError(`Баллы — целое число от 0 до ${LIMITS.maxPoints}.`);
       }
+      const spec = sanitizeSpec(p.spec);
       return { kind, payload: {
         prompt: requireText(p.prompt, LIMITS.text, 'Текст задания'),
         points,
-        stand: sanitizeStand(p.stand),
+        // Симуляция задания-состояния уже стоит в карточке: второй стенд не нужен.
+        stand: spec.type === 'sim_state' ? null : sanitizeStand(p.stand),
         allowRetry: p.allowRetry === true,
-        spec: sanitizeSpec(p.spec),
+        spec,
       } };
     }
   }
@@ -215,6 +231,9 @@ export function toStudentBody(body: BlockBody): StudentBlockBody {
     safe = { type: 'choice', multiple: spec.multiple, options: spec.options.map(({ id, text }) => ({ id, text })) };
   } else if (spec.type === 'number') {
     safe = { type: 'number', unit: spec.unit };
+  } else if (spec.type === 'sim_state') {
+    safe = { type: 'sim_state', simulationId: spec.simulationId, showHints: spec.showHints };
+    if (spec.showHints) safe.targets = spec.targets.map(({ name, label }) => ({ name, label }));
   } else {
     safe = { type: 'text' };
   }
@@ -229,7 +248,9 @@ function answerKey(p: AssignmentPayload): string {
       correct: s.options.filter((o) => o.correct).map((o) => o.id) }
     : s.type === 'number'
       ? { type: s.type, answer: s.answer, tolerance: s.tolerance }
-      : { type: s.type };
+      : s.type === 'sim_state'
+        ? { type: s.type, hints: s.showHints, targets: s.targets.map((t) => [t.name, t.value, t.tolerance]) }
+        : { type: s.type };
   return JSON.stringify({ points: p.points, key });
 }
 
@@ -239,8 +260,9 @@ export function answerKeyChanged(before: AssignmentPayload, after: AssignmentPay
 
 export function simulationIdsOf(body: BlockBody | StudentBlockBody): string[] {
   if (body.kind === 'simulation') return body.payload.simulationId ? [body.payload.simulationId] : [];
-  if (body.kind === 'assignment' && body.payload.stand?.kind === 'simulation') {
-    return [body.payload.stand.simulationId];
+  if (body.kind === 'assignment') {
+    if (body.payload.spec.type === 'sim_state') return [body.payload.spec.simulationId];
+    if (body.payload.stand?.kind === 'simulation') return [body.payload.stand.simulationId];
   }
   return [];
 }
@@ -248,6 +270,9 @@ export function simulationIdsOf(body: BlockBody | StudentBlockBody): string[] {
 /** Вставка симуляции: в блок «Тренажёр» или стендом в задание. */
 export function withSimulation(body: BlockBody, simulationId: string): BlockBody {
   if (body.kind === 'simulation') return { kind: 'simulation', payload: { ...body.payload, simulationId } };
+  if (body.kind === 'assignment' && body.payload.spec.type === 'sim_state') {
+    throw new LmsError('В задании «Состояние симуляции» симуляцию выбирают в редакторе: к ней привязана цель.');
+  }
   if (body.kind === 'assignment') {
     return { kind: 'assignment', payload: { ...body.payload, stand: { kind: 'simulation', simulationId } } };
   }

@@ -1,6 +1,7 @@
 import type {
   AssignmentPayload, AssignmentSpec, AssignmentType, StudentAssignmentSpec,
 } from './block-schema';
+import { checkTargets, sanitizeControls, simScore, type SimHint } from './sim-state';
 import { LIMITS, LmsError, type AnswerState, type SubmissionStatus } from './types';
 
 /**
@@ -11,7 +12,9 @@ import { LIMITS, LmsError, type AnswerState, type SubmissionStatus } from './typ
 export type Answer =
   | { type: 'choice'; selected: string[] }
   | { type: 'number'; value: string }
-  | { type: 'text'; text: string };
+  | { type: 'text'; text: string }
+  /** hints дописывает сервер при сдаче, если учитель разрешил подсказки; от клиента они не принимаются. */
+  | { type: 'sim_state'; controls: Record<string, number>; capturedAt: string; hints?: SimHint[] };
 
 /** Автосохранение черновика текстового ответа. */
 export const AUTOSAVE_MS = 5000;
@@ -19,6 +22,7 @@ export const AUTOSAVE_MS = 5000;
 export function emptyAnswer(spec: { type: AssignmentType }): Answer {
   if (spec.type === 'choice') return { type: 'choice', selected: [] };
   if (spec.type === 'number') return { type: 'number', value: '' };
+  if (spec.type === 'sim_state') return { type: 'sim_state', controls: {}, capturedAt: '' };
   return { type: 'text', text: '' };
 }
 
@@ -46,6 +50,14 @@ export function sanitizeAnswer(spec: AssignmentSpec | StudentAssignmentSpec, raw
     }
     return { type: 'number', value };
   }
+  if (spec.type === 'sim_state') {
+    const known = spec.targets ? spec.targets.map((t: { name: string }) => t.name) : null;
+    const at = typeof a.capturedAt === 'string' ? Date.parse(a.capturedAt) : NaN;
+    return {
+      type: 'sim_state', controls: sanitizeControls(a.controls, known),
+      capturedAt: Number.isFinite(at) ? new Date(at).toISOString() : new Date().toISOString(),
+    };
+  }
   if (typeof a.text !== 'string') throw new LmsError(MISMATCH);
   if (a.text.length > LIMITS.textAnswer) {
     throw new LmsError(`Ответ — не длиннее ${LIMITS.textAnswer} символов.`);
@@ -64,6 +76,8 @@ export function parseNumber(value: string): number | null {
 export function isAnswerComplete(a: Answer): boolean {
   if (a.type === 'choice') return a.selected.length > 0;
   if (a.type === 'number') return parseNumber(a.value) !== null;
+  // Состояние снимается кнопкой «Сдать»: пустым оно бывает, только если мост ничего не отдал.
+  if (a.type === 'sim_state') return Object.keys(a.controls).length > 0;
   return a.text.trim().length > 0;
 }
 
@@ -86,7 +100,18 @@ export function autoScore(payload: AssignmentPayload, answer: Answer): number | 
     const slack = spec.tolerance + EPS * Math.max(1, Math.abs(spec.answer));
     return Math.abs(n - spec.answer) <= slack ? payload.points : 0;
   }
+  if (spec.type === 'sim_state' && answer.type === 'sim_state') {
+    return simScore(payload.points, checkTargets(spec.targets, answer.controls));
+  }
   return 0;
+}
+
+/** Ответ для записи в базу: к состоянию симуляции дописываются подсказки, если они разрешены. */
+export function withHints(payload: AssignmentPayload, answer: Answer): Answer {
+  if (payload.spec.type !== 'sim_state' || answer.type !== 'sim_state') return answer;
+  const { hints: _drop, ...rest } = answer;
+  void _drop;
+  return payload.spec.showHints ? { ...rest, hints: checkTargets(payload.spec.targets, answer.controls) } : rest;
 }
 
 export function canSaveDraft(state: AnswerState): boolean {

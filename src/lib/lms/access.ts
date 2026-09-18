@@ -82,8 +82,8 @@ export async function studentBlock(
 /**
  * Кто видит симуляцию (спецификация §6): владелец, любой вошедший — если она в
  * каталоге, админ платформы, а также ученик опубликованного курса, открытого его
- * группе, и владелец или админ организации курса, куда она вставлена блоком или
- * стендом задания. Правка и удаление по-прежнему только у владельца (storage.ts).
+ * группе, и владелец или админ организации курса, куда она вставлена блоком,
+ * стендом задания или симуляцией задания «Состояние симуляции». Правка и удаление по-прежнему только у владельца (storage.ts).
  * Без базы (юнит-тесты на памяти) — только владелец, а его проверяет storage.ts.
  */
 export async function canView(user: Pick<AuthUser, 'id' | 'role'>, simulationId: string): Promise<boolean> {
@@ -98,7 +98,8 @@ export async function canView(user: Pick<AuthUser, 'id' | 'role'>, simulationId:
            JOIN topics t ON t.id = b.topic_id
            JOIN courses c ON c.id = t.course_id
            JOIN organizations o ON o.id = c.org_id AND o.archived_at IS NULL
-           WHERE (b.payload->>'simulationId' = $3 OR b.payload#>>'{stand,simulationId}' = $3)
+           WHERE (b.payload->>'simulationId' = $3 OR b.payload#>>'{stand,simulationId}' = $3
+                  OR b.payload#>>'{spec,simulationId}' = $3)
              AND (
                c.owner_id = $2
                OR EXISTS (SELECT 1 FROM memberships m
