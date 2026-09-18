@@ -90,3 +90,37 @@ export const IconVr = svg(<>
   <path d="M3 9.5A2.5 2.5 0 0 1 5.5 7h13A2.5 2.5 0 0 1 21 9.5v5a2.5 2.5 0 0 1-2.5 2.5h-3l-2.2-2.6a1.7 1.7 0 0 0-2.6 0L8.5 17h-3A2.5 2.5 0 0 1 3 14.5z" />
   <circle cx="8" cy="12" r="1.2" opacity=".6" /><circle cx="16" cy="12" r="1.2" opacity=".6" />
 </>);
+
+/** Курсы ученика: раскрытая книга. */
+export const IconCourses = svg(<>
+  <path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5z" />
+  <path d="M12 6.5v13" opacity=".6" />
+</>);
+
+/** Преподавание: доска с указкой. */
+export const IconTeach = svg(<>
+  <rect x="3" y="4" width="18" height="12" rx="1.8" />
+  <path d="M8 20l2-4M16 20l-2-4M7 9h6M7 12h4" />
+</>);
+
+/** Организация: здание. */
+export const IconOrg = svg(<>
+  <path d="M4 20V8l8-4 8 4v12" /><path d="M2.5 20h19" />
+  <path d="M9 20v-5h6v5M8 10.5h.01M12 10.5h.01M16 10.5h.01" />
+</>);
+
+/** Админка: щит. */
+export const IconAdmin = svg(<>
+  <path d="M12 3 19.5 6v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6z" />
+  <path d="m9 12 2.2 2.2L15.5 10" />
+</>);
+
+export const IconArrowUp = svg(<><path d="M12 19V5M6 11l6-6 6 6" /></>);
+export const IconArrowDown = svg(<><path d="M12 5v14M6 13l6 6 6-6" /></>);
+export const IconCopy = svg(<>
+  <rect x="8.5" y="8.5" width="11" height="11" rx="2" /><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5" />
+</>);
+export const IconPrint = svg(<>
+  <path d="M7 9V4h10v5" /><rect x="3.5" y="9" width="17" height="7.5" rx="1.8" /><path d="M7 14h10v6H7z" />
+</>);
+export const IconEdit = svg(<><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></>);
