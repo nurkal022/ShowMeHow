@@ -76,7 +76,7 @@ describe.skipIf(!pool)('скрипт управления организация
     const student = (await findUserByIdentifier('ivanov.i.sch12'))!;
     expect(student.mustChangePassword).toBe(false);
     expect(navSections(student, await listMemberships(student.id)).map((s) => s.key))
-      .toEqual(['library', 'labs']);
+      .toEqual(['learn', 'library', 'labs']);
 
     const { rows } = await pool!.query<{ gm: number; gt: number }>(
       'SELECT (SELECT count(*)::int FROM group_members) AS gm, (SELECT count(*)::int FROM group_teachers) AS gt');

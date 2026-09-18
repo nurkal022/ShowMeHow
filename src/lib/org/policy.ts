@@ -13,7 +13,7 @@ export const GENERATION_FORBIDDEN_MESSAGE = 'Генерация недоступ
 
 export type SessionKind = 'long' | 'short';
 
-export type NavSectionKey = 'teach' | 'create' | 'library' | 'labs' | 'org' | 'admin';
+export type NavSectionKey = 'learn' | 'teach' | 'create' | 'library' | 'labs' | 'org' | 'admin';
 
 export interface NavSection {
   key: NavSectionKey;
@@ -21,11 +21,9 @@ export interface NavSection {
   label: string;
 }
 
-/**
- * Только разделы, у которых уже есть страницы. Следующие циклы добавляют сюда
- * «Курсы», «Преподавание» и прочие вместе со своими страницами.
- */
+/** Порядок в шапке. B2C-пользователь видит только три средних раздела — как раньше. */
 export const ALL_NAV_SECTIONS: readonly NavSection[] = [
+  { key: 'learn', href: '/learn', label: 'Курсы' },
   { key: 'teach', href: '/teach', label: 'Преподавание' },
   { key: 'create', href: '/', label: 'Создать' },
   { key: 'library', href: '/library', label: 'Библиотека' },
@@ -80,8 +78,8 @@ export function generationLimit(user: PolicyUser, memberships: Membership[]): nu
 }
 
 export function navSections(user: PolicyUser, memberships: Membership[]): NavSection[] {
-  // «Курсы» ученика появятся вместе со страницами /learn.
   const visible: Record<NavSectionKey, boolean> = {
+    learn: memberships.some((m) => m.role === 'student'),
     teach: hasStaffRole(memberships),
     create: canGenerate(user, memberships),
     library: true,
@@ -94,11 +92,12 @@ export function navSections(user: PolicyUser, memberships: Membership[]): NavSec
 
 /**
  * Куда отправить с «/» (там форма генерации). Ученик без права генерации
- * попадает в библиотеку: навигация раздел «Создать» ему уже не показывает.
- * null — остаться на «/». Библиотека сама никуда не переадресует, петли нет.
+ * попадает в свои курсы: «Создать» ему не показывается, а «Курсы» видны
+ * всегда, когда есть ученическое членство. null — остаться на «/».
+ * /learn сам никуда не переадресует, петли нет.
  */
 export function homeRedirect(user: PolicyUser, memberships: Membership[]): string | null {
-  return canGenerate(user, memberships) ? null : '/library';
+  return canGenerate(user, memberships) ? null : '/learn';
 }
 
 /** org_admin включает права учителя — то же правило, что в requireOrgRole. */

@@ -888,6 +888,7 @@ body:hover .present-exit { opacity: .85; }
 @media (max-width: 720px) {
   .navlinks { overflow-x: auto; scrollbar-width: none; }
   .navlinks::-webkit-scrollbar { width: 0; height: 0; }
+  .navlinks > a { flex-shrink: 0; }
 }
 
 @media (max-width: 720px) {

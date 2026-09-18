@@ -2,12 +2,16 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { IconAdmin, IconLab, IconLibrary, IconOrg, IconTeach, IconLogout, IconMonitor, IconMoon, IconPlus, IconSun, IconUser } from './icons';
+import {
+  IconAdmin, IconCourses, IconLab, IconLibrary, IconLogout, IconMonitor, IconMoon, IconOrg,
+  IconPlus, IconSun, IconTeach, IconUser,
+} from './icons';
 import { applyTheme, readStoredTheme, storeTheme, type Theme } from '@/lib/theme';
 import type { NavSection, NavSectionKey } from '@/lib/org/policy';
 
 // Иконки живут на клиенте: компонент нельзя передать из серверного layout.
-const ICONS: Record<NavSectionKey, typeof IconPlus> = {
+export const ICONS: Record<NavSectionKey, typeof IconPlus> = {
+  learn: IconCourses,
   teach: IconTeach,
   create: IconPlus,
   library: IconLibrary,

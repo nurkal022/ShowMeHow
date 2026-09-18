@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   navSections, homeRedirect, canGenerate, sessionKind, generationLimit, hasStaffRole, isPlatformAdmin,
-  ALL_NAV_SECTIONS, TRIAL_LIMIT,
+  ALL_NAV_SECTIONS, GUEST_NAV_SECTIONS, TRIAL_LIMIT,
 } from '@/lib/org/policy';
 import { resolveOrgSettings, type OrgSettings } from '@/lib/org/settings';
 import type { Membership, OrgRole } from '@/lib/org/types';
@@ -84,10 +84,11 @@ describe('тип сессии', () => {
 });
 
 describe('разделы навигации', () => {
-  const keys = (s: { key: string }[]) => s.map((x) => x.key);
+  const keys = (s: readonly { key: string }[]) => s.map((x) => x.key);
 
-  it('полный список разделов', () => {
+  it('полный список и гостевой', () => {
     expect(ALL_NAV_SECTIONS.map((s) => [s.key, s.href, s.label])).toEqual([
+      ['learn', '/learn', 'Курсы'],
       ['teach', '/teach', 'Преподавание'],
       ['create', '/', 'Создать'],
       ['library', '/library', 'Библиотека'],
@@ -95,23 +96,31 @@ describe('разделы навигации', () => {
       ['org', '/org', 'Организация'],
       ['admin', '/admin', 'Админка'],
     ]);
+    // Гостю показываем только то, что открывается без входа: «Создать» и «Библиотека»
+    // увели бы его на /login (см. middleware и requirePageUser этих страниц).
+    expect(keys(GUEST_NAV_SECTIONS)).toEqual(['labs']);
   });
-  it('без членств — как раньше; учитель, админ организации и платформы видят свои кабинеты', () => {
+  it('без членств — как раньше: Создать, Библиотека, Лаборатории', () => {
     expect(keys(navSections(USER, []))).toEqual(['create', 'library', 'labs']);
+  });
+  it('учитель видит «Преподавание», админ организации — ещё и «Организацию»', () => {
     expect(keys(navSections(USER, [member('teacher')]))).toEqual(['teach', 'create', 'library', 'labs']);
     expect(keys(navSections(USER, [member('org_admin')]))).toEqual(['teach', 'create', 'library', 'labs', 'org']);
-    expect(keys(navSections(ADMIN, [member('student')]))).toEqual(['create', 'library', 'labs', 'admin']);
   });
-  it('ученик без права генерации не видит «Создать»', () => {
-    expect(keys(navSections(USER, [member('student')]))).toEqual(['library', 'labs']);
+  it('ученик видит «Курсы» и не видит «Создать» без разрешения', () => {
+    expect(keys(navSections(USER, [member('student')]))).toEqual(['learn', 'library', 'labs']);
     expect(keys(navSections(USER, [member('student', { studentsCanGenerate: true })])))
-      .toEqual(['create', 'library', 'labs']);
+      .toEqual(['learn', 'create', 'library', 'labs']);
+  });
+  it('админ платформы видит «Админку»; ученик-админ — и «Курсы»', () => {
+    expect(keys(navSections(ADMIN, []))).toEqual(['create', 'library', 'labs', 'admin']);
+    expect(keys(navSections(ADMIN, [member('student')]))).toEqual(['learn', 'create', 'library', 'labs', 'admin']);
   });
 });
 
 describe('посадочная страница «/»', () => {
-  it('без права генерации — в библиотеку', () => {
-    expect(homeRedirect(USER, [member('student')])).toBe('/library');
+  it('ученик без права генерации — в курсы', () => {
+    expect(homeRedirect(USER, [member('student')])).toBe('/learn');
   });
   it('с правом генерации — остаёмся на «/»', () => {
     expect(homeRedirect(USER, [])).toBeNull();
