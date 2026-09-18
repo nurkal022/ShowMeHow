@@ -7,13 +7,14 @@ export default async function GradesPage() {
   const user = await requirePageUser('/learn/grades');
   if (!user) return null;
   return (
-    <div className="cabinet">
-      <div className="cabinet-head">
-        <div className="page-head">
-          <Link href="/learn" className="muted">← Мои курсы</Link>
+    <div className="learn-page learn-narrow">
+      <Link href="/learn" className="learn-back">← Мои курсы</Link>
+      <header className="learn-head">
+        <div>
           <h1>Мои оценки</h1>
+          <p className="muted">Балл появляется после проверки учителем.</p>
         </div>
-      </div>
+      </header>
       <GradesTable grades={await listStudentGrades(user.id)} />
     </div>
   );

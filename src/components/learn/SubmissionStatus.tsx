@@ -1,5 +1,5 @@
 import type { StudentSubmission } from '@/lib/lms/answers';
-import { formatScore } from '@/lib/lms/format';
+import { formatDateTime, formatScore } from '@/lib/lms/format';
 
 /** Что случилось с ответом — одной фразой. null — ученик ещё ничего не отправлял. */
 export function submissionLine(sub: StudentSubmission | null, points: number): string | null {
@@ -14,12 +14,19 @@ export function submissionLine(sub: StudentSubmission | null, points: number): s
 
 export default function SubmissionStatus({ sub, points }: { sub: StudentSubmission | null; points: number }) {
   const line = submissionLine(sub, points);
-  if (!line) return null;
-  const tone = sub?.status === 'graded' ? 'ok-box' : sub?.status === 'returned' ? 'warn-banner' : 'cancel-banner';
+  if (!line || !sub) {
+    return <div className="learn-status none" role="status"><span className="learn-status-dot" />Не сдано</div>;
+  }
   return (
-    <div className="settings-list">
-      <p className={tone} role="status">{line}</p>
-      {sub?.comment && <p className="teacher-note">{`Комментарий учителя: ${sub.comment}`}</p>}
+    <div className="learn-status-wrap">
+      <div className={`learn-status ${sub.status}`} role="status">
+        <span className="learn-status-dot" />
+        <span className="learn-status-line">{line}</span>
+        {sub.submittedAt && sub.status !== 'draft' && (
+          <span className="learn-status-when">{formatDateTime(sub.submittedAt)}</span>
+        )}
+      </div>
+      {sub.comment && <p className="teacher-note learn-note">{`Комментарий учителя: ${sub.comment}`}</p>}
     </div>
   );
 }
