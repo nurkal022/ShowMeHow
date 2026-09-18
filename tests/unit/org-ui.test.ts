@@ -1,6 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+// В строке группы есть меню действий с router.refresh(); вне приложения роутера нет.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh() {}, push() {} }) }));
+
 import GroupsTable from '@/components/org/GroupsTable';
 
 describe('таблица групп', () => {

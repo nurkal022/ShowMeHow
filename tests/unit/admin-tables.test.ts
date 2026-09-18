@@ -49,7 +49,9 @@ describe('таблицы админки', () => {
     }));
     expect(html).toContain('t@example.com');
     expect(html).toContain('учитель');
-    expect(html).toContain('7А, 7Б');
+    // Группы показываются отдельными метками, а не строкой через запятую.
+    expect(html).toContain('>7А<');
+    expect(html).toContain('>7Б<');
     expect(html).toContain('ждёт смены пароля');
     expect(html).toContain('Сбросить пароль');
     expect(render(createElement(PeopleTable, { people: [] }))).toContain('Пока никого нет.');
