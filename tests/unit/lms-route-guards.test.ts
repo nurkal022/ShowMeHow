@@ -12,6 +12,17 @@ import { PATCH as orgGroupPatch, DELETE as orgGroupDelete } from '@/app/api/org/
 import { PUT as orgGroupTeachers } from '@/app/api/org/[slug]/groups/[groupId]/teachers/route';
 import { POST as orgGroupStudents } from '@/app/api/org/[slug]/groups/[groupId]/students/route';
 import { POST as orgMember } from '@/app/api/org/[slug]/members/[userId]/route';
+import { POST as teachCourses } from '@/app/api/teach/courses/route';
+import { PATCH as teachCourse } from '@/app/api/teach/courses/[id]/route';
+import { POST as teachTopics } from '@/app/api/teach/courses/[id]/topics/route';
+import { GET as teachJournal } from '@/app/api/teach/courses/[id]/journal/route';
+import { PATCH as teachTopic, DELETE as teachTopicDelete } from '@/app/api/teach/topics/[id]/route';
+import { POST as teachBlocks } from '@/app/api/teach/topics/[id]/blocks/route';
+import { PATCH as teachBlock, DELETE as teachBlockDelete } from '@/app/api/teach/blocks/[id]/route';
+import { POST as teachBlockSim } from '@/app/api/teach/blocks/[id]/simulation/route';
+import { POST as teachRecalc } from '@/app/api/teach/blocks/[id]/recalculate/route';
+import { PATCH as teachSubmission } from '@/app/api/teach/submissions/[id]/route';
+import { GET as teachSims } from '@/app/api/teach/simulations/route';
 
 // Роуты вызываются без базы: отказ «не вошёл» и «не админ» случается до первого запроса.
 const session = vi.hoisted(() => ({ current: null as AuthUser | null }));
@@ -61,6 +72,19 @@ const ANON_CALLS: Call[] = [
   ['PUT /api/org/[slug]/groups/[groupId]/teachers', () => orgGroupTeachers(req('PUT'), group())],
   ['POST /api/org/[slug]/groups/[groupId]/students', () => orgGroupStudents(req(), group())],
   ['POST /api/org/[slug]/members/[userId]', () => orgMember(req(), member())],
+  ['POST /api/teach/courses', () => teachCourses(req())],
+  ['PATCH /api/teach/courses/[id]', () => teachCourse(req('PATCH'), idParams())],
+  ['POST /api/teach/courses/[id]/topics', () => teachTopics(req(), idParams())],
+  ['GET /api/teach/courses/[id]/journal', () => teachJournal(new Request('http://t'), idParams())],
+  ['PATCH /api/teach/topics/[id]', () => teachTopic(req('PATCH'), idParams())],
+  ['DELETE /api/teach/topics/[id]', () => teachTopicDelete(req('DELETE'), idParams())],
+  ['POST /api/teach/topics/[id]/blocks', () => teachBlocks(req(), idParams())],
+  ['PATCH /api/teach/blocks/[id]', () => teachBlock(req('PATCH'), idParams())],
+  ['DELETE /api/teach/blocks/[id]', () => teachBlockDelete(req('DELETE'), idParams())],
+  ['POST /api/teach/blocks/[id]/simulation', () => teachBlockSim(req(), idParams())],
+  ['POST /api/teach/blocks/[id]/recalculate', () => teachRecalc(req(), idParams())],
+  ['PATCH /api/teach/submissions/[id]', () => teachSubmission(req('PATCH'), idParams())],
+  ['GET /api/teach/simulations', () => teachSims(new Request('http://t/api/teach/simulations'))],
 ];
 
 describe('роуты кабинетов без входа', () => {
