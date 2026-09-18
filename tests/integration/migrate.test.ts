@@ -43,7 +43,7 @@ describe.skipIf(!pool)('миграции', () => {
         "INSERT INTO jobs (id, owner_id, status, request) VALUES (gen_random_uuid(), $1, $2, '{}'::jsonb)",
         [userId, status]);
     }
-    expect(await applyMigrations(p)).toEqual(['005_job_queue.sql']);
+    expect(await applyMigrations(p, { until: '005_job_queue.sql' })).toEqual(['005_job_queue.sql']);
     const { rows } = await p.query<{ status: string; error: string | null; kind: string }>(
       'SELECT status, error, kind FROM jobs ORDER BY status');
     expect(rows).toEqual([
