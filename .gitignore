@@ -13,3 +13,4 @@ playwright-report/
 .stand-*.mjs
 shot-tmp.mjs
 certificates/
+CLAUDE.local.md
