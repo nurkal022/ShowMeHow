@@ -1,7 +1,9 @@
 import type { AuthUser } from '../auth/users';
-import { requireOrgRole } from '../org/access';
+import { hasDb, db } from '../db/client';
+import { isPlatformAdmin, isUuid, requireOrgRole } from '../org/access';
 import { listGroups, teacherGroupIds } from '../org/groups';
 import type { Membership } from '../org/types';
+import { getBlock, type Block } from './blocks';
 import { getCourse, getTopic, isCourseVisibleToStudent } from './courses';
 import type { Course, Topic } from './types';
 
@@ -55,4 +57,67 @@ export async function learnerCourse(
 export async function allowedGroupIds(user: AuthUser, membership: Membership): Promise<string[]> {
   if (membership.role === 'org_admin') return (await listGroups(membership.orgId)).map((g) => g.id);
   return teacherGroupIds(user.id, membership.orgId);
+}
+
+export async function staffBlock(
+  user: AuthUser, blockId: string,
+): Promise<(StaffCourse & { topic: Topic; block: Block }) | null> {
+  const block = await getBlock(blockId);
+  if (!block) return null;
+  const staff = await staffTopic(user, block.topicId);
+  return staff ? { ...staff, block } : null;
+}
+
+export async function studentBlock(
+  user: AuthUser, blockId: string,
+): Promise<{ course: Course; topic: Topic; block: Block } | null> {
+  const block = await getBlock(blockId);
+  if (!block) return null;
+  const topic = await getTopic(block.topicId);
+  if (!topic) return null;
+  const course = await studentCourse(user, topic.courseId);
+  return course ? { course, topic, block } : null;
+}
+
+/**
+ * Кто видит симуляцию (спецификация §6): владелец, любой вошедший — если она в
+ * каталоге, админ платформы, а также ученик опубликованного курса, открытого его
+ * группе, и владелец или админ организации курса, куда она вставлена блоком или
+ * стендом задания. Правка и удаление по-прежнему только у владельца (storage.ts).
+ * Без базы (юнит-тесты на памяти) — только владелец, а его проверяет storage.ts.
+ */
+export async function canView(user: Pick<AuthUser, 'id' | 'role'>, simulationId: string): Promise<boolean> {
+  if (!hasDb() || !isUuid(simulationId)) return false;
+  const { rows } = await db().query<{ ok: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM simulations s
+       WHERE s.id = $1 AND (
+         s.owner_id = $2 OR s.visibility = 'catalog' OR $4
+         OR EXISTS (
+           SELECT 1 FROM blocks b
+           JOIN topics t ON t.id = b.topic_id
+           JOIN courses c ON c.id = t.course_id
+           JOIN organizations o ON o.id = c.org_id AND o.archived_at IS NULL
+           WHERE (b.payload->>'simulationId' = $3 OR b.payload#>>'{stand,simulationId}' = $3)
+             AND (
+               c.owner_id = $2
+               OR EXISTS (SELECT 1 FROM memberships m
+                          WHERE m.org_id = c.org_id AND m.user_id = $2 AND m.role = 'org_admin')
+               OR (c.status = 'published' AND EXISTS (
+                     SELECT 1 FROM course_groups cg
+                     JOIN groups g ON g.id = cg.group_id AND g.archived_at IS NULL
+                     JOIN group_members gm ON gm.group_id = g.id AND gm.user_id = $2
+                     WHERE cg.course_id = c.id))
+             )))) AS ok`,
+    [simulationId, user.id, simulationId.toLowerCase(), isPlatformAdmin(user)]);
+  return rows[0].ok;
+}
+
+/** Вставить в курс можно свою симуляцию или симуляцию из общего каталога. */
+export async function canUseInCourse(userId: string, simulationId: string): Promise<boolean> {
+  if (!isUuid(simulationId)) return false;
+  const { rowCount } = await db().query(
+    `SELECT 1 FROM simulations WHERE id = $1 AND (owner_id = $2 OR visibility = 'catalog')`,
+    [simulationId, userId]);
+  return (rowCount ?? 0) > 0;
 }
