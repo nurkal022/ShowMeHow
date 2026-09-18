@@ -13,6 +13,8 @@ export default function LessonBlock({ blockId, body, missing, submission, previe
 }) {
   switch (body.kind) {
     case 'text':
+      // Пустой текстовый блок (учитель добавил и не заполнил) ученику не показываем.
+      if (!body.payload.title.trim() && !body.payload.body.trim()) return null;
       return (
         <article className="learn-block learn-text">
           {body.payload.title && <h2>{body.payload.title}</h2>}
