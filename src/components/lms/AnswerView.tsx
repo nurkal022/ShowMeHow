@@ -2,14 +2,17 @@ import type { Answer } from '@/lib/lms/answers';
 import type { AssignmentSpec, StudentAssignmentSpec } from '@/lib/lms/block-schema';
 import { formatScore } from '@/lib/lms/format';
 import { checkTargets } from '@/lib/lms/sim-state';
+import { normalizeWord, parseGaps } from '@/lib/lms/block-schema';
 import { IconCheck, IconClose } from '@/components/icons';
 
 /**
  * Ответ ученика. Учительская схема несёт правильные варианты и число — тогда
  * они видны; студенческая их не содержит, и показать их нечем.
  */
-export default function AnswerView({ spec, answer }: {
+export default function AnswerView({ spec, answer, keyed = true }: {
   spec: AssignmentSpec | StudentAssignmentSpec; answer: Answer | null;
+  /** «Порядок» у учительской и студенческой схем выглядит одинаково: false — шаги перемешаны, сверять не с чем. */
+  keyed?: boolean;
 }) {
   if (!answer) return <p className="muted">Ответа нет.</p>;
   if (spec.type === 'choice' && answer.type === 'choice') {
@@ -39,6 +42,73 @@ export default function AnswerView({ spec, answer }: {
     const unit = spec.unit ? ` ${spec.unit}` : '';
     const key = 'answer' in spec ? ` (правильный ответ: ${formatScore(spec.answer)} ± ${formatScore(spec.tolerance)})` : '';
     return <p className="cf-answer-number">{`${answer.value || '—'}${unit}${key}`}</p>;
+  }
+  if (spec.type === 'short' && answer.type === 'short') {
+    const accepted = 'accepted' in spec ? spec.accepted : null;
+    const ok = accepted ? accepted.some((a) => normalizeWord(a) === normalizeWord(answer.text)) : undefined;
+    return (
+      <p className={`cf-answer-number ${ok === undefined ? '' : ok ? 'good' : 'bad'}`.trim()}>
+        {answer.text || '—'}{accepted && !ok ? ` (правильно: ${accepted.join(' или ')})` : ''}
+      </p>
+    );
+  }
+  if (spec.type === 'gaps' && answer.type === 'gaps') {
+    const parts = 'parts' in spec ? spec.parts : parseGaps(spec.text).parts;
+    const key = 'text' in spec ? parseGaps(spec.text).answers : null;
+    return (
+      <p className="cf-answer-gaps">
+        {parts.map((part, i) => {
+          const given = answer.values[i] ?? '';
+          const ok = key?.[i] ? key[i].some((a) => normalizeWord(a) === normalizeWord(given)) : undefined;
+          return (
+            <span key={i}>{part}{i < parts.length - 1 && (
+              <mark className={ok === undefined ? '' : ok ? 'good' : 'bad'}>
+                {given || '—'}{ok === false && key ? <small>{` → ${key[i][0]}`}</small> : null}
+              </mark>
+            )}</span>
+          );
+        })}
+      </p>
+    );
+  }
+  if (spec.type === 'match' && answer.type === 'match') {
+    const rows = 'pairs' in spec
+      ? spec.pairs.map((p) => ({ id: p.id, left: p.left, want: p.right, wantId: p.rightId as string | undefined,
+        given: spec.pairs.find((x) => x.rightId === answer.pairs[p.id])?.right }))
+      : spec.left.map((l) => ({ id: l.id, left: l.text, want: undefined as string | undefined, wantId: undefined as string | undefined,
+        given: spec.right.find((r) => r.id === answer.pairs[l.id])?.text }));
+    return (
+      <ul className="cf-answer-options">
+        {rows.map((r) => {
+          const ok = r.wantId === undefined ? undefined : answer.pairs[r.id] === r.wantId;
+          return (
+            <li key={r.id} className={`cf-answer-option ${ok === undefined ? '' : ok ? 'good' : 'bad'}`.trim()}>
+              <span className="cf-answer-mark" aria-hidden="true">{ok === undefined ? null : ok ? <IconCheck size={13} /> : <IconClose size={13} />}</span>
+              <span className="cf-answer-option-text">{`${r.left} → ${r.given ?? '—'}${ok === false ? ` (правильно: ${r.want})` : ''}`}</span>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+  if (spec.type === 'order' && answer.type === 'order') {
+    const text = new Map(spec.items.map((i) => [i.id, i.text]));
+    // Учительская схема хранит шаги в правильном порядке; у студенческой они перемешаны, сверять не с чем.
+    const graded = keyed;
+    const given = answer.order.length ? answer.order : spec.items.map((i) => i.id);
+    return (
+      <ol className="cf-answer-options cf-answer-order">
+        {given.map((id, i) => {
+          const ok = graded ? spec.items[i]?.id === id : undefined;
+          return (
+            <li key={id} className={`cf-answer-option ${ok === undefined ? '' : ok ? 'good' : 'bad'}`.trim()}>
+              <span className="cf-answer-mark" aria-hidden="true">{ok === undefined ? null : ok ? <IconCheck size={13} /> : <IconClose size={13} />}</span>
+              <span className="cf-answer-option-text">{`${i + 1}. ${text.get(id) ?? '—'}${ok === false ? ` (здесь: ${spec.items[i]?.text ?? '—'})` : ''}`}</span>
+            </li>
+          );
+        })}
+      </ol>
+    );
   }
   if (spec.type === 'sim_state' && answer.type === 'sim_state') {
     // Учительская схема несёт цель и допуск; студенческая — только подписи (и то с подсказками).

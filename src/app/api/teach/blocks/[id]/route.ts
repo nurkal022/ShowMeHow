@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { guardUser } from '@/lib/http/guards';
 import { badRequest, INVALID_BODY_MESSAGE, notFound, readBody, withUserErrors, type IdParams } from '@/lib/http/route-kit';
 import { canUseInCourse, staffBlock } from '@/lib/lms/access';
-import { deleteBlock, moveBlock, updateBlock } from '@/lib/lms/blocks';
+import { deleteBlock, moveBlock, moveBlockTo, updateBlock } from '@/lib/lms/blocks';
 import { sanitizeBlockBody, simulationIdsOf } from '@/lib/lms/block-schema';
 import { isMoveDirection } from '@/lib/lms/order';
 
@@ -20,6 +20,11 @@ export async function PATCH(req: Request, { params }: IdParams) {
   const body = await readBody(req);
   if (!body) return badRequest(INVALID_BODY_MESSAGE);
   return withUserErrors(async () => {
+    if (body.position !== undefined) {
+      if (typeof body.position !== 'number' || !Number.isFinite(body.position)) return badRequest(INVALID_BODY_MESSAGE);
+      await moveBlockTo(staff.block.id, body.position);
+      return NextResponse.json({ ok: true });
+    }
     if (body.move !== undefined) {
       if (!isMoveDirection(body.move)) return badRequest(INVALID_BODY_MESSAGE);
       await moveBlock(staff.block.id, body.move);

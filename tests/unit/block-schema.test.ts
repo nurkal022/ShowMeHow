@@ -56,7 +56,7 @@ describe('санация блоков', () => {
   });
   it('задание с выбором: варианты, правильные, один или несколько', () => {
     const p = choice();
-    expect(p.spec).toEqual({ type: 'choice', multiple: false, options: [
+    expect(p.spec).toEqual({ type: 'choice', multiple: false, shuffle: false, options: [
       { id: 'len', text: 'От длины нити', correct: true },
       { id: 'mass', text: 'От массы', correct: false },
     ] });
@@ -86,7 +86,7 @@ describe('санация блоков', () => {
     const body = sanitizeBlockBody('assignment', {
       prompt: 'Период?', points: 5, spec: { type: 'number', answer: '2,0', tolerance: '0.1', unit: 'с' } });
     expect(body).toEqual({ kind: 'assignment', payload: {
-      prompt: 'Период?', points: 5, stand: null, allowRetry: false,
+      prompt: 'Период?', points: 5, stand: null, allowRetry: false, explanation: '',
       spec: { type: 'number', answer: 2, tolerance: 0.1, unit: 'с' },
     } });
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', spec: { type: 'number' } }))
@@ -98,7 +98,7 @@ describe('санация блоков', () => {
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', points: 1.5, spec: { type: 'text' } }))
       .toThrow('Баллы — целое число от 0 до 1000.');
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', spec: { type: 'essay' } }))
-      .toThrow('Тип задания — выбор, число, развёрнутый ответ или состояние симуляции.');
+      .toThrow('Неизвестный тип задания.');
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', stand: { kind: 'lab', slug: 'zzz' }, spec: { type: 'text' } }))
       .toThrow('Стенд задания указан неверно.');
     expect(() => sanitizeBlockBody('assignment', { prompt: '', spec: { type: 'text' } }))
@@ -106,7 +106,7 @@ describe('санация блоков', () => {
   });
   it('испорченная строка из базы превращается в блок по умолчанию', () => {
     expect(bodyFromRow('lab', { slug: 'nope' })).toEqual(defaultBody('lab'));
-    expect(bodyFromRow('video', {})).toEqual(defaultBody('text'));
+    expect(bodyFromRow('hologram', {})).toEqual(defaultBody('text'));
   });
 });
 

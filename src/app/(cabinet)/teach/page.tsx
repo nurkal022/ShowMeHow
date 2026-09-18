@@ -109,13 +109,6 @@ export default async function TeachPage({ searchParams }: { searchParams: Search
         )}
       </section>
 
-      <ChartCard title="Ответы по дням" days={d.chart.days}
-        emptyHint="За 30 дней ответов не было: опубликуйте курс с заданиями и откройте его группе."
-        series={[
-          { key: 'submitted', label: 'Сдано', values: d.chart.submitted, color: 1, area: true },
-          { key: 'graded', label: 'Проверено', values: d.chart.graded, color: 3, dashed: true },
-        ]} />
-
       <div className="cab-grid-2">
         <section className="cab-card">
           <header className="cab-card-head">
@@ -158,6 +151,13 @@ export default async function TeachPage({ searchParams }: { searchParams: Search
           )}
         </section>
       </div>
+
+      <ChartCard title="Ответы по дням" days={d.chart.days}
+        emptyHint="За 30 дней ответов не было: опубликуйте курс с заданиями и откройте его группе."
+        series={[
+          { key: 'submitted', label: 'Сдано', values: d.chart.submitted, color: 1, area: true },
+          { key: 'graded', label: 'Проверено', values: d.chart.graded, color: 3, dashed: true },
+        ]} />
     </>
   );
 }

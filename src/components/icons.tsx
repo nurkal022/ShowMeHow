@@ -146,3 +146,24 @@ export const IconScissors = svg(<>
   <circle cx="6" cy="7" r="2.4" /><circle cx="6" cy="17" r="2.4" /><path d="M8 8.4 20 17M8 15.6 20 7" />
 </>);
 export const IconSwap = svg(<><path d="M4 8h13m0 0-3.5-3.5M17 8l-3.5 3.5" /><path d="M20 16H7m0 0 3.5-3.5M7 16l3.5 3.5" /></>);
+
+/* ---- редактор уроков: типы блоков и заданий ---- */
+export const IconGrip = svg(<><circle cx="9" cy="6" r="1.2" /><circle cx="15" cy="6" r="1.2" /><circle cx="9" cy="12" r="1.2" /><circle cx="15" cy="12" r="1.2" /><circle cx="9" cy="18" r="1.2" /><circle cx="15" cy="18" r="1.2" /></>, { fill: true });
+export const IconInfo = svg(<><circle cx="12" cy="12" r="9" /><path d="M12 11v5.5M12 7.6v.2" /></>);
+export const IconBook = svg(<><path d="M5 4.5h10.5a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3z" /><path d="M5 17a3 3 0 0 1 3-3h10.5" /></>);
+export const IconBulb = svg(<><path d="M9 17.5h6M10 20.5h4" /><path d="M8.2 14.2A6 6 0 1 1 15.8 14.2c-.6.5-.8 1-.8 1.8H9c0-.8-.2-1.3-.8-1.8z" /></>);
+export const IconFormula = svg(<><path d="M17.5 4.5H7l5.5 7.5L7 19.5h10.5" /></>);
+export const IconVideo = svg(<><rect x="3" y="5.5" width="13" height="13" rx="2.5" /><path d="m16 10.5 5-3v9l-5-3z" /></>);
+export const IconCode = svg(<><path d="m8.5 7.5-5 4.5 5 4.5M15.5 7.5l5 4.5-5 4.5M13.2 5l-2.4 14" /></>);
+export const IconFold = svg(<><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="m9 10.5 3 3 3-3" /></>);
+export const IconDivider = svg(<><path d="M3.5 12h17M8 6.5h8M8 17.5h8" opacity=".9" /></>);
+export const IconQuote = svg(<><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="M7.5 4.5v15" /><path d="M11 10h6M11 14h4" /></>);
+export const IconChoice = svg(<><circle cx="6.5" cy="7" r="2.5" /><path d="M12 7h8.5" /><circle cx="6.5" cy="17" r="2.5" /><path d="M12 17h8.5" /><circle cx="6.5" cy="7" r=".6" /></>);
+export const IconNumber = svg(<><path d="M9.5 4 7.5 20M16.5 4l-2 16M4.5 9h16M3.5 15h16" /></>);
+export const IconShort = svg(<><rect x="3" y="8" width="18" height="8" rx="2.5" /><path d="M7 12h5" /></>);
+export const IconGaps = svg(<><path d="M3.5 7h6M14.5 7h6M3.5 17h3M11 17h9.5" /><rect x="10.5" y="4.5" width="3" height="5" rx="1" /><rect x="7.2" y="14.5" width="3" height="5" rx="1" /></>);
+export const IconMatch = svg(<><circle cx="5.5" cy="7" r="2" /><circle cx="5.5" cy="17" r="2" /><circle cx="18.5" cy="7" r="2" /><circle cx="18.5" cy="17" r="2" /><path d="M7.5 7.6 16.5 16.4M7.5 16.4 16.5 7.6" /></>);
+export const IconOrder = svg(<><path d="M10 6.5h10.5M10 12h10.5M10 17.5h10.5" /><path d="M5.5 4.5v15M3.5 17.5l2 2 2-2M3.5 6.5l2-2 2 2" /></>);
+export const IconEssay = svg(<><path d="M4 6.5h16M4 11h16M4 15.5h10" /><path d="m16.5 19.5 4-4-1.6-1.6-4 4-.5 2.1z" /></>);
+export const IconTarget = svg(<><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><circle cx="12" cy="12" r=".8" /></>);
+export const IconUndo = svg(<><path d="M8 5.5 3.5 10 8 14.5" /><path d="M3.5 10H14a6 6 0 0 1 0 12h-3" /></>);

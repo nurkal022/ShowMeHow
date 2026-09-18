@@ -2,7 +2,7 @@
  * Простая разметка текста урока → HTML. Сначала экранируется ВСЁ, потом в уже
  * безопасном тексте распознаются разрешённые конструкции: абзацы, **жирный**,
  * *курсив*, списки «- », заголовки «## », ссылки [текст](адрес). Адрес — только
- * http(s) или путь сайта от корня. Модуль чистый и без зависимостей: его зовут
+ * http(s) или путь сайта от корня. Формулы $…$ и $$…$$ рисует переданный снаружи рендерер. Модуль чистый и без зависимостей: его зовут
  * и сервер, и клиентский предпросмотр в редакторе.
  */
 
@@ -29,9 +29,19 @@ function inline(escaped: string): string {
     .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
 }
 
-const format = (s: string) => inline(escapeHtml(s));
+/** Рисует формулу: (tex, блочная ли) → готовый HTML. Без него формула остаётся текстом в $…$. */
+export type MathRenderer = (tex: string, display: boolean) => string;
 
-export function renderMarkup(src: string): string {
+const MATH_RE = /\$(\S(?:[^$\n]*\S)?)\$/g;
+
+export function renderMarkup(src: string, math?: MathRenderer): string {
+  // Формулы вынимаем до экранирования и возвращаем после разметки: иначе «*» и «_» в TeX стали бы курсивом.
+  const format = (s: string) => {
+    if (!math) return inline(escapeHtml(s));
+    const found: string[] = [];
+    const masked = s.replace(MATH_RE, (_, tex: string) => `\u0000${found.push(tex) - 1}\u0000`);
+    return inline(escapeHtml(masked)).replace(/\u0000(\d+)\u0000/g, (_, i: string) => math(found[Number(i)], false));
+  };
   const out: string[] = [];
   let para: string[] = [];
   let list: string[] = [];
@@ -45,6 +55,13 @@ export function renderMarkup(src: string): string {
   };
   for (const raw of src.replace(/\r\n?/g, '\n').split('\n')) {
     const line = raw.trim();
+    const display = math ? /^\$\$(.+)\$\$$/.exec(line) : null;
+    if (display && math) {
+      flushPara();
+      flushList();
+      out.push(`<div class="markup-math">${math(display[1].trim(), true)}</div>`);
+      continue;
+    }
     if (line === '') {
       flushPara();
       flushList();

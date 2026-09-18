@@ -6,7 +6,7 @@ import { learnerCourse } from '@/lib/lms/access';
 import { getTopic, listTopics, recordTopicView } from '@/lib/lms/courses';
 import { existingSimulationIds, listBlocks } from '@/lib/lms/blocks';
 import { listOwnSubmissions, type Submission } from '@/lib/lms/submissions';
-import { simulationIdsOf, toStudentBody } from '@/lib/lms/block-schema';
+import { revealFor, simulationIdsOf, toStudentBody } from '@/lib/lms/block-schema';
 import { toStudentSubmission } from '@/lib/lms/answers';
 import { learnCourseHref, learnTopicHref } from '@/lib/lms/links';
 import LessonBlock from '@/components/learn/LessonBlock';
@@ -25,12 +25,15 @@ export default async function LearnTopicPage({ params, searchParams }: {
   if (!preview) await recordTopicView(topic.id, user.id);
 
   const [blocks, topics] = await Promise.all([listBlocks(topic.id), listTopics(course.id)]);
-  // Дальше в клиентские компоненты уходит только студенческий вид блока.
-  const bodies = blocks.map((b) => ({ id: b.id, body: toStudentBody(b.body) }));
   const [existing, subs] = await Promise.all([
-    existingSimulationIds(bodies.flatMap((b) => simulationIdsOf(b.body))),
+    existingSimulationIds(blocks.flatMap((b) => simulationIdsOf(b.body))),
     preview ? Promise.resolve(new Map<string, Submission>()) : listOwnSubmissions(user.id, blocks.map((b) => b.id)),
   ]);
+  // Дальше в клиентские компоненты уходит только студенческий вид блока; ключ — лишь к проверенной работе.
+  const bodies = blocks.map((b) => ({
+    id: b.id,
+    body: toStudentBody(b.body, b.body.kind === 'assignment' && revealFor(b.body.payload, subs.get(b.id))),
+  }));
   const index = topics.findIndex((t) => t.id === topic.id);
   const prev = topics[index - 1];
   const next = topics[index + 1];

@@ -46,7 +46,8 @@ const iso = (d: Date | null) => (d ? d.toISOString() : null);
 function asAnswer(raw: unknown): Answer | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const t = (raw as { type?: unknown }).type;
-  return t === 'choice' || t === 'number' || t === 'text' || t === 'sim_state' ? raw as Answer : null;
+  return typeof t === 'string' && ['choice', 'number', 'text', 'sim_state', 'short', 'gaps', 'match', 'order'].includes(t)
+    ? raw as Answer : null;
 }
 
 export function toSubmission(r: SubmissionRow): Submission {

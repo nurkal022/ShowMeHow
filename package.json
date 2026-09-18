@@ -24,6 +24,7 @@
     "labs:thumbs": "tsx scripts/lab-thumbs.ts"
   },
   "dependencies": {
+    "katex": "^0.16.47",
     "next": "^15.5.20",
     "openai": "^6.45.0",
     "pg": "^8.23.0",

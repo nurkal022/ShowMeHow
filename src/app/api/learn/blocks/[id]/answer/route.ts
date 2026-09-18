@@ -4,6 +4,7 @@ import { badRequest, INVALID_BODY_MESSAGE, notFound, readBody, withUserErrors, t
 import { studentBlock } from '@/lib/lms/access';
 import { saveAnswer } from '@/lib/lms/submissions';
 import { toStudentSubmission } from '@/lib/lms/answers';
+import { revealFor, revealOf } from '@/lib/lms/block-schema';
 
 /**
  * Черновик или сдача ответа учеником. Отдаётся только студенческий вид ответа:
@@ -20,6 +21,9 @@ export async function PUT(req: Request, { params }: IdParams) {
   if (!body || typeof submit !== 'boolean') return badRequest(INVALID_BODY_MESSAGE);
   return withUserErrors(async () => {
     const sub = await saveAnswer(ctx.block, user.id, body.answer, submit);
-    return NextResponse.json({ submission: toStudentSubmission(sub) });
+    const payload = ctx.block.body.kind === 'assignment' ? ctx.block.body.payload : null;
+    // Ключ и пояснение уходят ученику только после проверки (см. revealFor).
+    const reveal = payload && revealFor(payload, sub) ? revealOf(payload) : null;
+    return NextResponse.json({ submission: toStudentSubmission(sub), reveal });
   });
 }

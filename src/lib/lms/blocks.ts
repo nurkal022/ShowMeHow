@@ -53,14 +53,51 @@ export async function getBlock(blockId: string): Promise<Block | null> {
   return rows[0] ? toBlock(rows[0]) : null;
 }
 
-export async function createBlock(topicId: string, kind: BlockKind): Promise<Block> {
-  const body = defaultBody(kind);
-  const position = await nextPosition(BLOCKS, topicId);
+/**
+ * afterBlockId — вставка сразу под этим блоком (null — в начало, undefined — в конец).
+ * payload — готовое содержимое (дублирование): оно уже прошло sanitizeBlockBody у вызывающего.
+ */
+export async function createBlock(
+  topicId: string, kind: BlockKind, opts: { afterBlockId?: string | null; payload?: BlockBody['payload'] } = {},
+): Promise<Block> {
+  const payload = opts.payload ?? defaultBody(kind).payload;
+  const id = crypto.randomUUID();
+  let position: number;
+  if (opts.afterBlockId === undefined) {
+    position = await nextPosition(BLOCKS, topicId);
+  } else {
+    const ids = (await listBlocks(topicId)).map((b) => b.id);
+    const at = opts.afterBlockId === null ? 0 : ids.indexOf(opts.afterBlockId) + 1;
+    position = at + 1;
+    // Сдвигаем хвост: позиции не уникальны в схеме, поэтому одним оператором.
+    await db().query(
+      `UPDATE blocks b SET position = o.ord + 1
+       FROM unnest($2::uuid[]) WITH ORDINALITY AS o(id, ord)
+       WHERE b.id = o.id AND b.topic_id = $1 AND o.ord > $3`, [topicId, ids, at]);
+    await db().query(
+      `UPDATE blocks b SET position = o.ord
+       FROM unnest($2::uuid[]) WITH ORDINALITY AS o(id, ord)
+       WHERE b.id = o.id AND b.topic_id = $1 AND o.ord <= $3`, [topicId, ids, at]);
+  }
   const { rows } = await db().query<BlockRow>(
     `INSERT INTO blocks (id, topic_id, position, kind, payload) VALUES ($1, $2, $3, $4, $5)
-     RETURNING ${COLUMNS}`, [crypto.randomUUID(), topicId, position, kind, JSON.stringify(body.payload)]);
+     RETURNING ${COLUMNS}`, [id, topicId, position, kind, JSON.stringify(payload)]);
   await touchCourseOfTopic(topicId);
   return toBlock(rows[0]);
+}
+
+/** Перетаскивание: блок встаёт на место index (с нуля) среди блоков своей темы. */
+export async function moveBlockTo(blockId: string, index: number): Promise<void> {
+  const current = await getBlock(blockId);
+  if (!current) throw new LmsError('Блок не найден.');
+  const ids = (await listBlocks(current.topicId)).map((b) => b.id).filter((id) => id !== blockId);
+  const at = Math.max(0, Math.min(ids.length, Math.trunc(index)));
+  ids.splice(at, 0, blockId);
+  await db().query(
+    `UPDATE blocks b SET position = o.ord
+     FROM unnest($2::uuid[]) WITH ORDINALITY AS o(id, ord)
+     WHERE b.id = o.id AND b.topic_id = $1`, [current.topicId, ids]);
+  await touchCourseOfTopic(current.topicId);
 }
 
 async function saveBody(blockId: string, body: BlockBody, bump: boolean): Promise<Block> {

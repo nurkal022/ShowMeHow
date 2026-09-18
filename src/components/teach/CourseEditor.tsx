@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Block } from '@/lib/lms/blocks';
-import { BLOCK_KINDS, simulationIdsOf, type BlockKind } from '@/lib/lms/block-schema';
+import { simulationIdsOf, type AssignmentType, type BlockKind } from '@/lib/lms/block-schema';
 import { COURSE_STATUS_LABELS, LIMITS, type Course, type Topic } from '@/lib/lms/types';
 import { answersHref, courseEditorHref, learnCourseHref, learnTopicHref } from '@/lib/lms/links';
 import { ruPlural } from '@/lib/lms/format';
@@ -11,13 +11,15 @@ import { callApi } from '@/components/cabinet/api';
 import StatusPill from '@/components/cabinet/StatusPill';
 import {
   IconAlert, IconArrowDown, IconArrowUp, IconBack, IconCheck, IconChevron, IconCopy, IconCourses, IconEdit, IconEye,
-  IconLock, IconPlus, IconTrash,
+  IconGrip, IconLock, IconPlus, IconSearch, IconTrash,
 } from '@/components/icons';
 import RowMenu from '@/components/lms/ui/RowMenu';
 import { useConfirm, type ConfirmOptions } from '@/components/lms/ui/useConfirm';
 import BlockEditor from './BlockEditor';
 import BlockSummary from './BlockSummary';
-import { BLOCK_META, BlockKindIcon, blockHeadline, blockProblem } from './block-meta';
+import {
+  ASSIGNMENT_META, ASSIGNMENT_TYPES, BLOCK_GROUPS, BLOCK_META, BlockKindIcon, blockHeadline, blockProblem,
+} from './block-meta';
 
 export interface GroupOption { id: string; title: string }
 
@@ -43,12 +45,22 @@ type SaveState = 'idle' | 'saving' | 'saved';
 type Act = <T>(path: string, method: string, body?: unknown) => Promise<T | null>;
 type Ask = (o: ConfirmOptions) => Promise<boolean>;
 
+/** Что выбрано в меню вставки: тип блока и, для задания, тип ответа. */
+export interface InsertPick { kind: BlockKind; assignmentType?: AssignmentType }
+
 const blocksLabel = (n: number) => `${n} ${ruPlural(n, 'блок', 'блока', 'блоков')}`;
 
 /** Каждое действие — отдельный запрос; после ответа страница перечитывает данные. */
 export default function CourseEditor(props: CourseEditorProps) {
-  const { course, topics, activeTopicId, blocks } = props;
+  const { course, topics, activeTopicId } = props;
   const router = useRouter();
+  // Локальный порядок: перетаскивание видно сразу, сервер догоняет.
+  const [blocks, setBlocks] = useState(props.blocks);
+  useEffect(() => { setBlocks(props.blocks); }, [props.blocks]);
+  const [pendingTypes, setPendingTypes] = useState<Record<string, AssignmentType>>({});
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropAt, setDropAt] = useState<number | null>(null);
+  const [freshId, setFreshId] = useState<string | null>(null);
   const [save, setSave] = useState<SaveState>('idle');
   const [error, setError] = useState('');
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());
@@ -109,15 +121,18 @@ export default function CourseEditor(props: CourseEditorProps) {
     });
   }
 
-  async function addBlock(kind: BlockKind) {
+  /** after — id блока, под который вставить; null — в начало; undefined — в конец. */
+  async function addBlock(pick: InsertPick, after?: string | null) {
     if (!activeTopicId) return;
-    const data = await act<{ block: Block }>(`/api/teach/topics/${activeTopicId}/blocks`, 'POST', { kind });
+    const data = await act<{ block: Block }>(`/api/teach/topics/${activeTopicId}/blocks`, 'POST', { kind: pick.kind, after });
     if (!data) return;
     scrollTo.current = data.block.id;
-    setOpenIds((s) => toggle(s, data.block.id, true));
+    setFreshId(data.block.id);
+    if (pick.assignmentType) setPendingTypes((m) => ({ ...m, [data.block.id]: pick.assignmentType as AssignmentType }));
+    if (pick.kind !== 'divider') setOpenIds((s) => toggle(s, data.block.id, true));
   }
 
-  async function saveBlock(block: Block, payload: unknown): Promise<boolean> {
+  async function saveBlock(block: Block, payload: unknown, keepOpen = false): Promise<boolean> {
     setSave('saving');
     setBlockErrors((m) => ({ ...m, [block.id]: '' }));
     const res = await callApi(`/api/teach/blocks/${block.id}`, 'PATCH', { payload });
@@ -127,11 +142,27 @@ export default function CourseEditor(props: CourseEditorProps) {
       return false;
     }
     setSave('saved');
+    if (keepOpen) return true;
     setSavedId(block.id);
     setOpenIds((s) => toggle(s, block.id, false));
     setDirtyIds((s) => toggle(s, block.id, false));
     router.refresh();
     return true;
+  }
+
+  /** Перетаскивание: блок встаёт перед блоком с индексом target (или в конец). */
+  async function dropBlock(target: number) {
+    const from = blocks.findIndex((b) => b.id === dragId);
+    setDragId(null);
+    setDropAt(null);
+    if (from < 0) return;
+    const to = target > from ? target - 1 : target;
+    if (to === from) return;
+    const next = [...blocks];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setBlocks(next);
+    await act(`/api/teach/blocks/${moved.id}`, 'PATCH', { position: to });
   }
 
   async function closeBlock(block: Block) {
@@ -142,6 +173,8 @@ export default function CourseEditor(props: CourseEditorProps) {
     setOpenIds((s) => toggle(s, block.id, false));
     setDirtyIds((s) => toggle(s, block.id, false));
     setBlockErrors((m) => ({ ...m, [block.id]: '' }));
+    // Автосохранённое содержимое страница ещё не перечитывала.
+    router.refresh();
   }
 
   async function deleteBlock(block: Block) {
@@ -158,30 +191,14 @@ export default function CourseEditor(props: CourseEditorProps) {
     }
   }
 
-  /** Отдельного запроса «копировать» нет: создаём блок того же типа, кладём в него содержимое и ставим под оригинал. */
-  async function duplicateBlock(block: Block, index: number) {
+  async function duplicateBlock(block: Block) {
     if (!activeTopicId) return;
-    setSave('saving');
-    setError('');
-    const created = await callApi<{ block: Block }>(`/api/teach/topics/${activeTopicId}/blocks`, 'POST', { kind: block.body.kind });
-    if (!created.ok) { setSave('idle'); setError(created.error); return; }
-    const copyId = created.data.block.id;
-    const filled = await callApi(`/api/teach/blocks/${copyId}`, 'PATCH', { payload: block.body.payload });
-    if (!filled.ok) {
-      await callApi(`/api/teach/blocks/${copyId}`, 'DELETE');
-      setSave('idle');
-      setError(`Не получилось скопировать блок. ${filled.error}`);
-      router.refresh();
-      return;
-    }
-    for (let step = blocks.length - 1 - index; step > 0; step -= 1) {
-      const moved = await callApi(`/api/teach/blocks/${copyId}`, 'PATCH', { move: 'up' });
-      if (!moved.ok) break;
-    }
-    scrollTo.current = copyId;
-    setSavedId(copyId);
-    setSave('saved');
-    router.refresh();
+    const data = await act<{ block: Block }>(`/api/teach/topics/${activeTopicId}/blocks`, 'POST',
+      { kind: block.body.kind, after: block.id, payload: block.body.payload });
+    if (!data) return;
+    scrollTo.current = data.block.id;
+    setFreshId(data.block.id);
+    setSavedId(data.block.id);
   }
 
   const noAudience = props.selectedGroupIds.length === 0 && props.lockedGroups.length === 0;
@@ -277,68 +294,100 @@ export default function CourseEditor(props: CourseEditorProps) {
             const problem = blockProblem(block, missing);
             const stale = props.stale[block.id] ?? 0;
             const kind = block.body.kind;
-            const label = BLOCK_META[kind].label;
+            const aType = block.body.kind === 'assignment' ? block.body.payload.spec.type : undefined;
+            const label = aType ? ASSIGNMENT_META[aType].label : BLOCK_META[kind].label;
+            const busy = save === 'saving';
             return (
-              <article key={block.id} id={`block-${block.id}`}
-                className={['cf-block', open ? 'open' : '', dirty ? 'dirty' : ''].filter(Boolean).join(' ')}>
-                <header className="cf-block-head">
-                  <button type="button" className="cf-block-toggle" aria-expanded={open}
-                    aria-controls={`block-body-${block.id}`}
-                    onClick={() => (open ? void closeBlock(block) : setOpenIds((s) => toggle(s, block.id, true)))}>
-                    <BlockKindIcon kind={kind} />
-                    <span className="cf-block-titles">
-                      <span className="cf-block-kind">{`${i + 1}. ${label}`}</span>
-                      <span className="cf-block-headline">{blockHeadline(block, simTitle)}</span>
-                    </span>
-                    <span className="visually-hidden">{open ? 'Свернуть блок' : 'Изменить блок'}</span>
-                  </button>
-                  <span className="cf-block-state">
-                    {dirty && <StatusPill tone="warn">не сохранено</StatusPill>}
-                    {!dirty && !open && problem && <StatusPill tone="warn">{problem.toLowerCase()}</StatusPill>}
-                    {!dirty && !open && !problem && savedId === block.id && <StatusPill tone="ok">сохранено</StatusPill>}
-                  </span>
-                  <span className="cf-block-tools">
-                    <button type="button" className="icon-btn cf-icon-btn" aria-label={`Поднять блок ${i + 1}`} title="Поднять"
-                      disabled={i === 0 || save === 'saving'}
-                      onClick={() => act(`/api/teach/blocks/${block.id}`, 'PATCH', { move: 'up' })}><IconArrowUp size={16} /></button>
-                    <button type="button" className="icon-btn cf-icon-btn" aria-label={`Опустить блок ${i + 1}`} title="Опустить"
-                      disabled={i === blocks.length - 1 || save === 'saving'}
-                      onClick={() => act(`/api/teach/blocks/${block.id}`, 'PATCH', { move: 'down' })}><IconArrowDown size={16} /></button>
-                    <button type="button" className="icon-btn cf-icon-btn" aria-label={`Дублировать блок ${i + 1}`}
-                      title={dirty ? 'Сначала сохраните блок' : 'Дублировать'} disabled={dirty || save === 'saving'}
-                      onClick={() => duplicateBlock(block, i)}><IconCopy size={16} /></button>
-                    <button type="button" className="icon-btn cf-icon-btn danger" aria-label={`Удалить блок ${i + 1}`} title="Удалить"
-                      disabled={save === 'saving'} onClick={() => deleteBlock(block)}><IconTrash size={16} /></button>
-                    <button type="button" className="btn btn-sm cf-block-edit"
+              <div key={block.id} className="cf-block-slot">
+                <InsertLine busy={busy} active={dropAt === i} onPick={(pick) => addBlock(pick, i === 0 ? null : blocks[i - 1].id)}
+                  onDragOver={dragId ? (e) => { e.preventDefault(); setDropAt(i); } : undefined}
+                  onDrop={dragId ? (e) => { e.preventDefault(); void dropBlock(i); } : undefined} />
+                <article id={`block-${block.id}`}
+                  className={['cf-block', open ? 'open' : '', dirty ? 'dirty' : '', dragId === block.id ? 'dragging' : '',
+                    freshId === block.id ? 'fresh' : '', kind === 'divider' ? 'slim' : ''].filter(Boolean).join(' ')}
+                  onDragOver={dragId && dragId !== block.id ? (e) => {
+                    e.preventDefault();
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setDropAt(e.clientY < r.top + r.height / 2 ? i : i + 1);
+                  } : undefined}
+                  onDrop={dragId ? (e) => { e.preventDefault(); if (dropAt !== null) void dropBlock(dropAt); } : undefined}>
+                  <header className="cf-block-head">
+                    <span className="cf-grip" draggable={!open && !busy} title="Перетащите, чтобы переставить" aria-hidden="true"
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', block.id);
+                        const card = e.currentTarget.closest('.cf-block');
+                        if (card) e.dataTransfer.setDragImage(card, 24, 24);
+                        setDragId(block.id);
+                      }}
+                      onDragEnd={() => { setDragId(null); setDropAt(null); }}><IconGrip size={16} /></span>
+                    <button type="button" className="cf-block-toggle" aria-expanded={open}
+                      aria-controls={`block-body-${block.id}`} disabled={kind === 'divider'}
                       onClick={() => (open ? void closeBlock(block) : setOpenIds((s) => toggle(s, block.id, true)))}>
-                      {open ? 'Свернуть' : <><IconEdit size={14} />Изменить</>}
+                      <BlockKindIcon kind={kind} assignmentType={aType} />
+                      <span className="cf-block-titles">
+                        <span className="cf-block-kind">{label}</span>
+                        <span className="cf-block-headline">{blockHeadline(block, simTitle)}</span>
+                      </span>
+                      <span className="visually-hidden">{open ? 'Свернуть блок' : 'Изменить блок'}</span>
                     </button>
-                  </span>
-                </header>
-                <div className="cf-block-body" id={`block-body-${block.id}`}>
-                  {open
-                    ? <BlockEditor block={block} simulationTitle={simTitle} error={blockErrors[block.id] || undefined}
-                        onCancel={() => void closeBlock(block)}
-                        onDirtyChange={(d) => setDirtyIds((s) => (s.has(block.id) === d ? s : toggle(s, block.id, d)))}
-                        onSave={(payload) => saveBlock(block, payload)} />
-                    : <BlockSummary block={block} simulationTitle={simTitle} missing={missing} />}
-                </div>
-                {kind === 'assignment' && !open && (
-                  <footer className="cf-block-foot">
-                    <Link className="btn btn-sm btn-ghost" href={answersHref(course.id, block.id)}>Ответы учеников</Link>
-                    <Link className="btn btn-sm btn-ghost" href={answersHref(course.id, block.id, { pending: true })}>Ждут проверки</Link>
-                    {stale > 0 && (
-                      <button type="button" className="btn btn-sm" onClick={() => act(`/api/teach/blocks/${block.id}/recalculate`, 'POST')}>
-                        {`Пересчитать ${stale} сданных ответов`}
-                      </button>
-                    )}
-                  </footer>
-                )}
-              </article>
+                    <span className="cf-block-state">
+                      {dirty && <StatusPill tone="warn">правки…</StatusPill>}
+                      {!dirty && !open && problem && <StatusPill tone="warn">{problem.toLowerCase()}</StatusPill>}
+                      {!dirty && !open && !problem && savedId === block.id && <StatusPill tone="ok">сохранено</StatusPill>}
+                    </span>
+                    <span className="cf-block-tools">
+                      {kind !== 'divider' && (
+                        <button type="button" className="btn btn-sm cf-block-edit"
+                          onClick={() => (open ? void closeBlock(block) : setOpenIds((s) => toggle(s, block.id, true)))}>
+                          {open ? 'Свернуть' : <><IconEdit size={14} />Изменить</>}
+                        </button>
+                      )}
+                      <RowMenu label={`Действия с блоком ${i + 1}`} busy={busy} items={[
+                        { key: 'up', label: 'Поднять', icon: <IconArrowUp size={16} />, disabled: i === 0,
+                          onSelect: () => void act(`/api/teach/blocks/${block.id}`, 'PATCH', { move: 'up' }) },
+                        { key: 'down', label: 'Опустить', icon: <IconArrowDown size={16} />, disabled: i === blocks.length - 1,
+                          onSelect: () => void act(`/api/teach/blocks/${block.id}`, 'PATCH', { move: 'down' }) },
+                        { key: 'copy', label: 'Дублировать', icon: <IconCopy size={16} />, disabled: dirty,
+                          hint: dirty ? 'Сначала сохраните блок' : undefined, onSelect: () => void duplicateBlock(block) },
+                        { key: 'delete', label: 'Удалить', icon: <IconTrash size={16} />, danger: true, onSelect: () => void deleteBlock(block) },
+                      ]} />
+                    </span>
+                  </header>
+                  {kind !== 'divider' && (
+                    <div className="cf-block-body" id={`block-body-${block.id}`}>
+                      {open
+                        ? <BlockEditor block={block} simulationTitle={simTitle} error={blockErrors[block.id] || undefined}
+                            initialType={pendingTypes[block.id]}
+                            onCancel={() => void closeBlock(block)}
+                            onDirtyChange={(d) => setDirtyIds((s) => (s.has(block.id) === d ? s : toggle(s, block.id, d)))}
+                            onSave={(payload, opts) => saveBlock(block, payload, opts?.keepOpen)} />
+                        : <BlockSummary block={block} simulationTitle={simTitle} missing={missing} />}
+                    </div>
+                  )}
+                  {kind === 'assignment' && !open && (
+                    <footer className="cf-block-foot">
+                      <Link className="btn btn-sm btn-ghost" href={answersHref(course.id, block.id)}>Ответы учеников</Link>
+                      <Link className="btn btn-sm btn-ghost" href={answersHref(course.id, block.id, { pending: true })}>Ждут проверки</Link>
+                      {stale > 0 && (
+                        <button type="button" className="btn btn-sm" onClick={() => act(`/api/teach/blocks/${block.id}/recalculate`, 'POST')}>
+                          {`Пересчитать ${stale} сданных ответов`}
+                        </button>
+                      )}
+                    </footer>
+                  )}
+                </article>
+              </div>
             );
           })}
 
-          {activeTopic && <AddBlockMenu empty={blocks.length === 0} busy={save === 'saving'} onAdd={addBlock} />}
+          {activeTopic && blocks.length > 0 && dragId && (
+            <div className={dropAt === blocks.length ? 'cf-drop-end active' : 'cf-drop-end'}
+              onDragOver={(e) => { e.preventDefault(); setDropAt(blocks.length); }}
+              onDrop={(e) => { e.preventDefault(); void dropBlock(blocks.length); }} />
+          )}
+
+          {activeTopic && <AddBlockMenu empty={blocks.length === 0} busy={save === 'saving'} onAdd={(pick) => addBlock(pick)} />}
         </section>
       </div>
       {confirmDialog}
@@ -552,9 +601,109 @@ function FirstTopic({ onAdd }: { onAdd: (title: string) => Promise<boolean> }) {
 
 /* ----------------------------- добавить блок ---------------------------- */
 
-function AddBlockMenu({ empty, busy, onAdd }: { empty: boolean; busy: boolean; onAdd: (kind: BlockKind) => Promise<void> }) {
+/** Список вставки с поиском: «/» или «+» — и сразу печатать название. Стрелки и Enter работают. */
+function InsertPalette({ busy, onPick, onClose, autoFocus = true }: {
+  busy: boolean; onPick: (pick: InsertPick) => void; onClose?: () => void; autoFocus?: boolean;
+}) {
+  const [q, setQ] = useState('');
+  const [cursor, setCursor] = useState(0);
+  const needle = q.trim().toLowerCase();
+  const hit = (label: string, hint: string) => !needle || `${label} ${hint}`.toLowerCase().includes(needle);
+  const groups = [
+    ...BLOCK_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.kinds.filter((k) => hit(BLOCK_META[k].label, BLOCK_META[k].hint))
+        .map((k) => ({ key: k as string, pick: { kind: k } as InsertPick, meta: BLOCK_META[k], badge: '' })),
+    })),
+    {
+      title: 'Задание',
+      items: ASSIGNMENT_TYPES.filter((t) => hit(`${ASSIGNMENT_META[t].label} задание`, ASSIGNMENT_META[t].hint))
+        .map((t) => ({
+          key: `a-${t}`, pick: { kind: 'assignment', assignmentType: t } as InsertPick, meta: ASSIGNMENT_META[t],
+          badge: ASSIGNMENT_META[t].auto ? 'авто' : 'вручную',
+        })),
+    },
+  ].filter((g) => g.items.length > 0);
+  const flatItems = groups.flatMap((g) => g.items);
+  const at = Math.min(cursor, Math.max(0, flatItems.length - 1));
+
+  return (
+    <div className="cf-palette" role="dialog" aria-label="Добавить блок"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); onClose?.(); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((at + 1) % Math.max(1, flatItems.length)); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((at - 1 + flatItems.length) % Math.max(1, flatItems.length)); }
+        if (e.key === 'Enter' && flatItems[at] && !busy) { e.preventDefault(); onPick(flatItems[at].pick); }
+      }}>
+      <label className="cf-palette-search">
+        <IconSearch size={16} />
+        <input value={q} autoFocus={autoFocus} placeholder="Что добавить? Например: формула, видео, пропуски" aria-label="Поиск типа блока"
+          onChange={(e) => { setQ(e.target.value); setCursor(0); }} />
+      </label>
+      <div className="cf-palette-list">
+        {groups.length === 0 && <p className="muted cf-palette-empty">Такого блока нет. Попробуйте «текст», «картинка», «задание».</p>}
+        {groups.map((g) => (
+          <div key={g.title} className="cf-palette-group">
+            <span className="cf-palette-title">{g.title}</span>
+            <div className="cf-palette-grid">
+              {g.items.map((it) => (
+                <button key={it.key} type="button" disabled={busy}
+                  className={flatItems[at]?.key === it.key ? 'cf-palette-item active' : 'cf-palette-item'}
+                  onMouseEnter={() => setCursor(flatItems.findIndex((x) => x.key === it.key))}
+                  onClick={() => onPick(it.pick)}>
+                  <span className={`cf-kind cf-kind-${it.pick.kind}`} aria-hidden="true">{it.meta.icon(18)}</span>
+                  <span className="cf-palette-text"><strong>{it.meta.label}</strong><span className="muted">{it.meta.hint}</span></span>
+                  {it.badge && <span className={it.badge === 'авто' ? 'cf-type-badge auto' : 'cf-type-badge'}>{it.badge}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Тонкая линия между блоками: при наведении — «+», по клику — меню вставки прямо здесь. */
+function InsertLine({ busy, active, onPick, onDragOver, onDrop }: {
+  busy: boolean; active: boolean; onPick: (pick: InsertPick) => Promise<void>;
+  onDragOver?: (e: React.DragEvent) => void; onDrop?: (e: React.DragEvent) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', away);
+    return () => document.removeEventListener('mousedown', away);
+  }, [open]);
+  return (
+    <div ref={wrap} className={['cf-insert', open ? 'open' : '', active ? 'drop' : ''].filter(Boolean).join(' ')}
+      onDragOver={onDragOver} onDrop={onDrop}>
+      <button type="button" className="cf-insert-btn" aria-expanded={open} aria-label="Вставить блок сюда" title="Вставить блок сюда"
+        onClick={() => setOpen((v) => !v)}><IconPlus size={14} /></button>
+      {open && <InsertPalette busy={busy} onClose={() => setOpen(false)} onPick={async (pick) => { setOpen(false); await onPick(pick); }} />}
+    </div>
+  );
+}
+
+function AddBlockMenu({ empty, busy, onAdd }: { empty: boolean; busy: boolean; onAdd: (pick: InsertPick) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const shown = empty || open;
+
+  // «/» вне полей ввода открывает меню — как в современных редакторах.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || el?.closest('input, textarea, select, [contenteditable], dialog')) return;
+      e.preventDefault();
+      setOpen(true);
+      document.querySelector('.cf-add')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <div className={empty ? 'cf-add cf-add-empty' : 'cf-add'}>
       {empty && (
@@ -565,21 +714,11 @@ function AddBlockMenu({ empty, busy, onAdd }: { empty: boolean; busy: boolean; o
       )}
       {!empty && (
         <button type="button" className="cf-add-line" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          <IconPlus size={16} />Добавить блок
+          <IconPlus size={16} />Добавить блок<kbd>/</kbd>
         </button>
       )}
-      {shown && (
-        <div className="cf-add-grid" role="group" aria-label="Тип нового блока">
-          {BLOCK_KINDS.map((kind) => (
-            <button key={kind} type="button" className="cf-add-tile" disabled={busy}
-              aria-label={`Добавить блок «${BLOCK_META[kind].label}»`}
-              onClick={async () => { await onAdd(kind); setOpen(false); }}>
-              <BlockKindIcon kind={kind} size={20} />
-              <span><strong>{BLOCK_META[kind].label}</strong><span className="muted">{BLOCK_META[kind].hint}</span></span>
-            </button>
-          ))}
-        </div>
-      )}
+      {shown && <InsertPalette busy={busy} autoFocus={!empty} onClose={() => setOpen(false)}
+        onPick={async (pick) => { await onAdd(pick); setOpen(false); }} />}
     </div>
   );
 }

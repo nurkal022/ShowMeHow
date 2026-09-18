@@ -217,3 +217,94 @@
 @media (max-width: 420px) {
   .learn-sticky-count { display: none; }
 }
+
+/* ======================= новые блоки и поля ответа ====================== */
+.learn-bare { padding: 0; border: none; background: none; }
+.learn-divider { margin: 8px 0; }
+.learn-short { max-width: 420px; }
+.learn-hint { font-size: 13px; }
+
+.learn-gaps { font-size: 16px; line-height: 2.4; }
+.learn-gap {
+  min-width: 6ch; max-width: 100%; margin: 0 4px; padding: 3px 8px; font: inherit; font-size: 15px; text-align: center;
+  color: var(--accent); background: var(--accent-soft); border: none; border-bottom: 2px solid var(--accent); border-radius: 6px 6px 0 0;
+  transition: background .12s ease, box-shadow .12s ease;
+}
+.learn-gap:focus { outline: none; background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+.learn-gap:disabled { color: var(--text-2); border-bottom-color: var(--border-strong); background: var(--surface-2); }
+
+.learn-match { display: flex; flex-direction: column; gap: 10px; }
+.learn-match-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 28px; }
+.learn-match-col { display: flex; flex-direction: column; gap: 8px; }
+.learn-match-card {
+  --tone: var(--accent);
+  display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 10px 12px; text-align: left; font: inherit; font-size: 14.5px;
+  color: var(--text); background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 12px; cursor: pointer;
+  transition: border-color .14s ease, background .14s ease, transform .14s ease, box-shadow .14s ease;
+}
+.learn-match-card:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.learn-match-card:disabled { cursor: default; opacity: .75; }
+.learn-match-card.picked { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+.learn-match-card.target { border-style: dashed; border-color: var(--accent); animation: learn-pulse 1.2s ease-in-out infinite; }
+@keyframes learn-pulse { 50% { background: var(--accent-soft); } }
+.learn-match-card.paired { border-color: var(--tone); background: color-mix(in srgb, var(--tone) 9%, var(--surface)); opacity: 1; animation: learn-snap .22s cubic-bezier(.3, 1.5, .6, 1); }
+@keyframes learn-snap { from { transform: scale(.96); } }
+.learn-match-card.tone-0 { --tone: #3457e6; } .learn-match-card.tone-1 { --tone: #0c8f7f; } .learn-match-card.tone-2 { --tone: #c77700; }
+.learn-match-card.tone-3 { --tone: #d6336c; } .learn-match-card.tone-4 { --tone: #6d3fd6; } .learn-match-card.tone-5 { --tone: #2f8f3a; }
+.learn-match-num { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; font-size: 12px; font-weight: 700; background: var(--surface-2); color: var(--muted); }
+.learn-match-card.paired .learn-match-num { background: var(--tone); color: #fff; }
+.learn-match-x { margin-left: auto; color: var(--muted); }
+
+.learn-order { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.learn-order-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 6px; background: var(--surface); border: 1.5px solid var(--border-strong);
+  border-radius: 12px; font-size: 14.5px; cursor: grab; transition: border-color .14s ease, box-shadow .14s ease, transform .14s ease;
+}
+.learn-order-item:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+.learn-order-item.dragging { opacity: .4; }
+.learn-order-item.over { border-color: var(--accent); box-shadow: 0 -3px 0 var(--accent); }
+.learn-order-item[draggable='false'] { cursor: default; }
+.learn-order-grip { color: var(--border-strong); }
+.learn-order-num { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; font-size: 12px; font-weight: 700; background: var(--accent-soft); color: var(--accent); }
+.learn-order-text { flex: 1; min-width: 0; }
+.learn-order-tools { display: inline-flex; }
+.learn-order-tools .icon-btn { width: 30px; height: 30px; }
+
+/* сдача и разбор */
+.learn-answer { position: relative; }
+.learn-answer-foot { flex-wrap: wrap; gap: 12px; align-items: center; }
+.learn-draft-note { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.learn-status.graded.zero { background: var(--danger-soft); color: var(--danger); }
+.learn-status.graded.part { background: var(--warn-soft); color: var(--warn); }
+.learn-review {
+  --tone: var(--success); --tone-soft: var(--success-soft);
+  display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: var(--r);
+  border: 1px solid color-mix(in srgb, var(--tone) 30%, transparent); background: color-mix(in srgb, var(--tone-soft) 55%, var(--surface));
+  animation: lb-reveal .3s ease;
+}
+.learn-review.part { --tone: var(--warn); --tone-soft: var(--warn-soft); }
+.learn-review.zero { --tone: var(--danger); --tone-soft: var(--danger-soft); }
+.learn-review-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.learn-review-score { font-size: 14px; color: var(--text-2); }
+.learn-review-score strong { font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: var(--tone); margin-right: 2px; }
+.learn-review-title { font-weight: 600; color: var(--tone); }
+.learn-explain { display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--border); }
+.learn-explain svg { color: var(--warn); margin-top: 3px; }
+.learn-explain .markup { font-size: 14.5px; }
+
+.learn-answer.celebrate .learn-review { animation: learn-win .5s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes learn-win { from { transform: scale(.97); } }
+.learn-burst { position: absolute; left: 50%; top: 40px; width: 0; height: 0; pointer-events: none; }
+.learn-burst i {
+  position: absolute; width: 8px; height: 8px; border-radius: 2px; background: hsl(calc(var(--i) * 30) 85% 58%);
+  animation: learn-confetti 1.3s cubic-bezier(.15, .7, .3, 1) forwards;
+  --a: calc(var(--i) * 30deg);
+}
+@keyframes learn-confetti {
+  to { transform: rotate(var(--a)) translateY(-150px) rotate(240deg) scale(.4); opacity: 0; }
+}
+@media (max-width: 640px) { .learn-match-cols { gap: 10px 12px; } .learn-match-card { font-size: 13.5px; padding: 8px 10px; } }
+@media (prefers-reduced-motion: reduce) {
+  .learn-match-card, .learn-review, .learn-burst i { animation: none !important; }
+  .learn-burst { display: none; }
+}

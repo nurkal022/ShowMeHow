@@ -5,6 +5,7 @@ import type { StudentAssignmentSpec } from '@/lib/lms/block-schema';
 import { LIMITS } from '@/lib/lms/types';
 import type { CaptureSimState } from '@/components/lms/SimStateFrame';
 import SimStateAnswer from './SimStateAnswer';
+import { GapsInput, MatchInput, OrderInput } from './InteractiveInputs';
 
 /** Поля ответа ученика. Управляемые: состояние хранит AnswerForm. */
 export default function AnswerInputs({ name, spec, answer, disabled, onChange, captureRef }: {
@@ -32,6 +33,27 @@ export default function AnswerInputs({ name, spec, answer, disabled, onChange, c
           </label>
         ))}
       </fieldset>
+    );
+  }
+  if (spec.type === 'gaps') {
+    return <GapsInput parts={spec.parts} values={answer.type === 'gaps' ? answer.values : []} disabled={disabled}
+      onChange={(values) => onChange({ type: 'gaps', values })} />;
+  }
+  if (spec.type === 'match') {
+    return <MatchInput left={spec.left} right={spec.right} pairs={answer.type === 'match' ? answer.pairs : {}} disabled={disabled}
+      onChange={(pairs) => onChange({ type: 'match', pairs })} />;
+  }
+  if (spec.type === 'order') {
+    return <OrderInput items={spec.items} order={answer.type === 'order' ? answer.order : []} disabled={disabled}
+      onChange={(order) => onChange({ type: 'order', order })} />;
+  }
+  if (spec.type === 'short') {
+    return (
+      <label className="field learn-short"><span>Ваш ответ</span>
+        <input className="input" value={answer.type === 'short' ? answer.text : ''} maxLength={100} disabled={disabled}
+          placeholder="Слово или короткая фраза" autoComplete="off"
+          onChange={(e) => onChange({ type: 'short', text: e.target.value })} />
+      </label>
     );
   }
   if (spec.type === 'number') {

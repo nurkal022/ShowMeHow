@@ -12,6 +12,12 @@ export function submissionLine(sub: StudentSubmission | null, points: number): s
   }
 }
 
+/** Проверенная работа: полный балл, часть или ноль — цвет не должен врать. */
+export function scoreTone(score: number | null, points: number): 'full' | 'part' | 'zero' {
+  if (score === null || score <= 0) return points === 0 ? 'full' : 'zero';
+  return score >= points ? 'full' : 'part';
+}
+
 export default function SubmissionStatus({ sub, points }: { sub: StudentSubmission | null; points: number }) {
   const line = submissionLine(sub, points);
   if (!line || !sub) {
@@ -19,7 +25,7 @@ export default function SubmissionStatus({ sub, points }: { sub: StudentSubmissi
   }
   return (
     <div className="learn-status-wrap">
-      <div className={`learn-status ${sub.status}`} role="status">
+      <div className={`learn-status ${sub.status}${sub.status === 'graded' ? ` ${scoreTone(sub.score, points)}` : ''}`} role="status">
         <span className="learn-status-dot" />
         <span className="learn-status-line">{line}</span>
         {sub.submittedAt && sub.status !== 'draft' && (

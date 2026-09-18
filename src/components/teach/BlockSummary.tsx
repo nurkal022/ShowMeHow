@@ -2,7 +2,9 @@ import type { Block } from '@/lib/lms/blocks';
 import { ASSIGNMENT_TYPE_LABELS, type Stand } from '@/lib/lms/block-schema';
 import { LABS } from '@/lib/labs';
 import { formatScore, ruPlural } from '@/lib/lms/format';
+import { parseGaps } from '@/lib/lms/block-schema';
 import Markup from '@/components/lms/Markup';
+import { CalloutBlock, CodeBlock, FormulaBlock, ImageBlock, SpoilerBlock, VideoBlock } from '@/components/lms/ContentBlocks';
 
 function standText(stand: Stand, simulationTitle: string | null, missing: boolean): string {
   if (!stand) return 'без стенда';
@@ -26,6 +28,20 @@ export default function BlockSummary({ block, simulationTitle, missing }: {
             : !b.payload.title && <p className="muted">Текст пока пустой. Нажмите «Изменить».</p>}
         </div>
       );
+    case 'callout':
+      return b.payload.title || b.payload.body ? <CalloutBlock payload={b.payload} /> : <p className="muted">Врезка пока пустая.</p>;
+    case 'formula':
+      return b.payload.latex.trim() ? <FormulaBlock payload={b.payload} /> : <p className="muted">Формула не написана.</p>;
+    case 'image':
+      return b.payload.src ? <ImageBlock payload={b.payload} /> : <p className="muted">Картинка не выбрана.</p>;
+    case 'video':
+      return b.payload.url ? <VideoBlock payload={b.payload} /> : <p className="muted">Видео не выбрано.</p>;
+    case 'spoiler':
+      return b.payload.body.trim() ? <SpoilerBlock payload={b.payload} /> : <p className="muted">Спойлер пока пустой.</p>;
+    case 'code':
+      return b.payload.code.trim() ? <CodeBlock payload={b.payload} /> : <p className="muted">Код не написан.</p>;
+    case 'divider':
+      return <hr className="lb-divider" />;
     case 'simulation': {
       if (!b.payload.simulationId) {
         return <p className="muted">Тренажёр не выбран. Нажмите «Изменить», чтобы выбрать или сгенерировать его.</p>;
@@ -70,6 +86,25 @@ export default function BlockSummary({ block, simulationTitle, missing }: {
               ))}
             </ul>
           )}
+          {p.spec.type === 'short' && <p className="muted">{`Засчитывается: ${p.spec.accepted.join(' · ')}`}</p>}
+          {p.spec.type === 'gaps' && (
+            <p className="cf-summary-gaps">
+              {parseGaps(p.spec.text).parts.map((part, i, all) => (
+                <span key={i}>{part}{i < all.length - 1 && <mark>{parseGaps(p.spec.type === 'gaps' ? p.spec.text : '').answers[i].join(' / ')}</mark>}</span>
+              ))}
+            </p>
+          )}
+          {p.spec.type === 'match' && (
+            <ul className="cf-summary-options">
+              {p.spec.pairs.map((pair) => <li key={pair.id}>{`${pair.left} → ${pair.right}`}</li>)}
+            </ul>
+          )}
+          {p.spec.type === 'order' && (
+            <ol className="cf-summary-options cf-summary-order">
+              {p.spec.items.map((it) => <li key={it.id}>{it.text}</li>)}
+            </ol>
+          )}
+          {p.explanation && <p className="muted">{`Пояснение после проверки: ${p.explanation}`}</p>}
           {p.spec.type === 'number' && (
             <p className="muted">
               {`Правильный ответ: ${formatScore(p.spec.answer)} ± ${formatScore(p.spec.tolerance)}${p.spec.unit ? ` ${p.spec.unit}` : ''}`}

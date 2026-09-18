@@ -1,6 +1,7 @@
 import { LABS } from '@/lib/labs';
 import {
-  newOptionId, type AssignmentPayload, type AssignmentType, type ChoiceOption,
+  GAP_LIMITS, newOptionId, parseGaps,
+  type AssignmentPayload, type AssignmentType, type ChoiceOption, type MatchPair, type OrderItem,
 } from '@/lib/lms/block-schema';
 import { SIM_LIMITS } from '@/lib/lms/sim-state';
 import { LIMITS } from '@/lib/lms/types';
@@ -20,7 +21,15 @@ export interface AssignmentForm {
   standLab: string;
   type: AssignmentType;
   multiple: boolean;
+  shuffle: boolean;
   options: ChoiceOption[];
+  /** Короткий ответ: допустимые написания. */
+  accepted: string[];
+  /** Пропуски: текст с {{ответами}}. */
+  gapsText: string;
+  pairs: MatchPair[];
+  items: OrderItem[];
+  explanation: string;
   answer: string;
   tolerance: string;
   unit: string;
@@ -38,6 +47,9 @@ export function blankOptions(): ChoiceOption[] {
   ];
 }
 
+export const blankPairs = (): MatchPair[] => [0, 1, 2].map(() => ({ id: newOptionId(), left: '', rightId: newOptionId(), right: '' }));
+export const blankItems = (): OrderItem[] => [0, 1, 2].map(() => ({ id: newOptionId(), text: '' }));
+
 export function toAssignmentForm(p: AssignmentPayload, standTitle: string | null): AssignmentForm {
   const s = p.spec;
   return {
@@ -51,7 +63,13 @@ export function toAssignmentForm(p: AssignmentPayload, standTitle: string | null
     standLab: p.stand?.kind === 'lab' ? p.stand.slug : LABS[0].slug,
     type: s.type,
     multiple: s.type === 'choice' ? s.multiple : false,
+    shuffle: s.type === 'choice' ? s.shuffle : false,
     options: s.type === 'choice' ? s.options : blankOptions(),
+    accepted: s.type === 'short' ? s.accepted : [''],
+    gapsText: s.type === 'gaps' ? s.text : '',
+    pairs: s.type === 'match' ? s.pairs : blankPairs(),
+    items: s.type === 'order' ? s.items : blankItems(),
+    explanation: p.explanation,
     answer: s.type === 'number' ? String(s.answer) : '',
     tolerance: s.type === 'number' ? String(s.tolerance) : '0',
     unit: s.type === 'number' ? s.unit : '',
@@ -69,7 +87,11 @@ export function fromAssignmentForm(f: AssignmentForm): Record<string, unknown> {
       ? { kind: 'simulation', simulationId: f.standSimulationId }
       : null;
   const spec = f.type === 'choice'
-    ? { type: 'choice', multiple: f.multiple, options: f.options }
+    ? { type: 'choice', multiple: f.multiple, shuffle: f.shuffle, options: f.options }
+    : f.type === 'short' ? { type: 'short', accepted: f.accepted }
+    : f.type === 'gaps' ? { type: 'gaps', text: f.gapsText }
+    : f.type === 'match' ? { type: 'match', pairs: f.pairs }
+    : f.type === 'order' ? { type: 'order', items: f.items }
     : f.type === 'number'
       ? { type: 'number', answer: f.answer, tolerance: f.tolerance, unit: f.unit }
       : f.type === 'sim_state'
@@ -79,7 +101,7 @@ export function fromAssignmentForm(f: AssignmentForm): Record<string, unknown> {
         : { type: 'text' };
   // Пустое поле баллов — не ноль: сервер ответит понятной ошибкой.
   const points = f.points.trim() === '' ? Number.NaN : Number(f.points);
-  return { prompt: f.prompt, points, allowRetry: f.allowRetry, stand, spec };
+  return { prompt: f.prompt, points, allowRetry: f.allowRetry, explanation: f.explanation, stand, spec };
 }
 
 export function markCorrect(options: ChoiceOption[], id: string, multiple: boolean): ChoiceOption[] {
@@ -98,7 +120,7 @@ function parseNumber(raw: string): number | null {
 }
 
 export type AssignmentErrors = Partial<Record<
-  'prompt' | 'options' | 'correct' | 'answer' | 'tolerance' | 'points' | 'stand' | 'targets', string>>;
+  'prompt' | 'options' | 'correct' | 'accepted' | 'gaps' | 'pairs' | 'items' | 'answer' | 'tolerance' | 'points' | 'stand' | 'targets', string>>;
 
 /**
  * Проверка до отправки: те же правила, что на сервере, но ошибка встаёт рядом
@@ -113,6 +135,15 @@ export function validateAssignmentForm(f: AssignmentForm): AssignmentErrors {
     if (correct === 0) errors.correct = 'Отметьте хотя бы один правильный вариант.';
     else if (!f.multiple && correct > 1) errors.correct = 'В задании с одним ответом правильный вариант должен быть один.';
   }
+  if (f.type === 'short' && !f.accepted.some((a) => a.trim())) errors.accepted = 'Укажите хотя бы один правильный ответ.';
+  if (f.type === 'gaps') {
+    const { answers } = parseGaps(f.gapsText);
+    if (answers.length === 0) errors.gaps = 'Выделите слово и нажмите «Сделать пропуском» — или напишите {{слово}} вручную.';
+    else if (answers.length > GAP_LIMITS.maxGaps) errors.gaps = `Пропусков — не больше ${GAP_LIMITS.maxGaps}.`;
+    else if (answers.some((a) => a.length === 0)) errors.gaps = 'В каждом пропуске должен быть ответ.';
+  }
+  if (f.type === 'match' && f.pairs.some((p) => !p.left.trim() || !p.right.trim())) errors.pairs = 'Заполните обе стороны каждой пары или удалите пустые.';
+  if (f.type === 'order' && f.items.some((i) => !i.text.trim())) errors.items = 'Заполните каждый шаг или удалите пустые.';
   if (f.type === 'number') {
     if (parseNumber(f.answer) === null) errors.answer = 'Укажите правильное число, например 9,8.';
     const tolerance = f.tolerance.trim() === '' ? 0 : parseNumber(f.tolerance);
