@@ -139,6 +139,10 @@ export function deriveProgress(events: PipelineEvent[]): ProgressState {
       case 'refine-round':
         refineRounds.push({ round: e.round, before: e.before, after: e.after });
         break;
+      case 'gen-progress':
+      case 'draft':
+        // Живая лента кода и версии рисует рабочая область (LiveStage), а не лента этапов.
+        break;
       case 'warning':
         warnings.push(e.message);
         break;

@@ -41,7 +41,7 @@ describe('executeJob', () => {
     const deps = makeDeps();
     expect(await executeJob(claimed(), io, deps)).toEqual({ status: 'done', simulationId: SIM });
     expect(deps.makeCtx).toHaveBeenCalledWith(io.emit);
-    expect(deps.runPipeline).toHaveBeenCalledWith({}, {
+    expect(deps.runPipeline).toHaveBeenCalledWith({ draft: expect.any(Function) }, {
       ownerId: OWNER, prompt: 'маятник', mode: 'fast',
       imageDataUrl: 'data:image/png;base64,AA', onSaved: io.markSaved,
     }, io.cancelled);
@@ -54,7 +54,7 @@ describe('executeJob', () => {
       kind: 'refine', request: { instruction: 'медленнее' }, targetSimulationId: SIM, imageDataUrl: null,
     });
     expect(await executeJob(job, io, deps)).toEqual({ status: 'done', simulationId: SIM });
-    expect(deps.refineExisting).toHaveBeenCalledWith({}, OWNER, SIM, 'медленнее',
+    expect(deps.refineExisting).toHaveBeenCalledWith({ draft: expect.any(Function) }, OWNER, SIM, 'медленнее',
       { signal: io.cancelled, onSaved: io.markSaved });
     expect(deps.runPipeline).not.toHaveBeenCalled();
   });

@@ -12,6 +12,9 @@ import { callApi } from './cabinet/api';
 import ProgressView from './progress/ProgressView';
 import PreviewFrame from './PreviewFrame';
 import ConstructorStand from './constructor/ConstructorStand';
+import LiveStage from './workbench/LiveStage';
+import SessionsPanel from './workbench/SessionsPanel';
+import type { SessionItem } from '@/lib/jobs/sessions';
 import { useVoiceInput } from './useVoiceInput';
 import {
   IconClose, IconDownload, IconHistory, IconImage, IconMic,
@@ -29,10 +32,12 @@ const SUGGESTIONS = [
   'Орбита спутника вокруг планеты',
 ];
 
+// Первая рабочая версия появляется в рабочей области через 1–2 минуты в любом режиме;
+// режим задаёт, сколько ещё её будут проверять и доводить (остановить можно в любой момент).
 const QUALITY_OPTIONS: [QualityMode, string, string][] = [
-  ['max', 'Максимум', '3–6 мин'],
-  ['standard', 'Стандарт', '1–3 мин'],
-  ['fast', 'Быстро', '~1 мин'],
+  ['fast', 'Быстро', 'только первая версия и проверка запуском'],
+  ['standard', 'Стандарт', 'плюс оценка со стороны и один круг доводки'],
+  ['max', 'Максимум', 'до трёх кругов доводки — дольше всего'],
 ];
 
 /**
@@ -142,7 +147,7 @@ export default function Workbench() {
   const [html, setHtml] = useState<string | null>(null);
   const [simId, setSimId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [mode, setMode] = useState<QualityMode>('max');
+  const [mode, setMode] = useState<QualityMode>('standard');
   const [prefs, setPrefs] = useState<UserPrefs>({});
   // Стенд — то, что человек видит первым: он показывает, что система умеет.
   // Свободный текст остаётся на расстоянии одной кнопки.
@@ -154,6 +159,8 @@ export default function Workbench() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobKind, setJobKind] = useState<JobKind>('generate');
   const [cancelling, setCancelling] = useState(false);
+  const [keeping, setKeeping] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [quotaMessage, setQuotaMessage] = useState<string | null>(null);
   // Мобильные вкладки: на узком экране видна только одна колонка. На десктопе
@@ -290,10 +297,59 @@ export default function Workbench() {
       const { html } = await res.json();
       setSimId(id); setHtml(html); setPhase('ready');
       loadHistory(id);
+      loadThread(id);
     } catch (err) {
       setError('Не удалось загрузить симуляцию: '
         + (err instanceof Error ? err.message : String(err)));
       setPhase('error');
+    }
+  }
+
+  /** Переписка по симуляции из истории заданий — чтобы вернуться и продолжить с того же места. */
+  async function loadThread(id: string) {
+    try {
+      const res = await fetch(`/api/simulations/${id}/thread`);
+      if (!res.ok) return;
+      const body = await res.json() as { messages: Message[] };
+      // Живую ленту текущей сессии не затираем: история нужна, когда лента пуста.
+      if (body.messages.length > 0) setMessages((prev) => (prev.length > 0 ? prev : body.messages.map(({ role, text }) => ({ role, text }))));
+    } catch { /* переписка — удобство */ }
+  }
+
+  /** «Оставить эту версию»: черновик сразу становится симуляцией, полировка останавливается. */
+  async function keepDraft(version: number) {
+    if (!jobId || keeping) return;
+    setKeeping(true);
+    const res = await callApi<{ simulationId: string }>(`/api/jobs/${jobId}/keep`, 'POST', { version });
+    setKeeping(false);
+    if (!res.ok) return setError(res.error);
+    streamAbortRef.current?.abort();
+    clearActiveJob();
+    setEvents([]);
+    say('bot', `Оставил версию ${version}. Полировку остановил — можно показывать или дорабатывать словами.`);
+    setActiveTab('preview');
+    await openSimulation(res.data.simulationId);
+    fetchQuota();
+  }
+
+  async function openSession(s: SessionItem) {
+    if (busy) return;
+    streamAbortRef.current?.abort();
+    setEvents([]); setError(null); setMessages([]); setHistory([]); setImage(null);
+    if (s.simulationId) {
+      setInputMode('text');
+      await openSimulation(s.simulationId);
+      return;
+    }
+    // Результата нет: возвращаем запрос в поле ввода, а черновик, если он был, можно сохранить.
+    setSimId(null); setHtml(null); setPhase('idle'); setInputMode('text');
+    setPrompt(s.prompt);
+    if (s.drafts > 0) {
+      const res = await callApi<{ simulationId: string }>(`/api/jobs/${s.jobId}/keep`, 'POST', {});
+      if (res.ok) { setPrompt(''); say('bot', 'Открыл последний черновик этой попытки и сохранил его в библиотеку.'); await openSimulation(res.data.simulationId); }
+    } else {
+      say('bot', s.status === 'error' ? `Эта попытка не удалась${s.error ? `: ${s.error}` : ''}. Запрос вернул в поле ввода — можно поправить и отправить снова.`
+        : 'Эта генерация была остановлена до первой версии. Запрос вернул в поле ввода.');
     }
   }
 
@@ -576,6 +632,9 @@ export default function Workbench() {
   // генерация или открыта симуляция, возвращается обычная мастерская.
   if (!hasSim && phase === 'idle' && inputMode === 'stand') {
     return (
+      <>
+      <button type="button" className="sessions-fab" onClick={() => setSessionsOpen(true)}><IconHistory size={17} />История</button>
+      <SessionsPanel open={sessionsOpen} onClose={() => setSessionsOpen(false)} onOpen={openSession} onNew={startNew} activeSimulationId={simId} />
       <ConstructorStand
         disabled={busy || outOfQuota}
         defaultLevel={prefs.level}
@@ -593,11 +652,13 @@ export default function Workbench() {
         onCreate={(text) => { if (!busy) generate(text); }}
         onWriteText={(text) => { setPrompt(text); setInputMode('text'); }}
       />
+      </>
     );
   }
 
   return (
     <div className={`workbench tab-${activeTab}`}>
+      <SessionsPanel open={sessionsOpen} onClose={() => setSessionsOpen(false)} onOpen={openSession} onNew={startNew} activeSimulationId={simId} />
       <div className="mobile-tabs" role="tablist" aria-label="Разделы">
         <button role="tab" aria-selected={activeTab === 'create'}
           className={activeTab === 'create' ? 'active' : ''}
@@ -609,16 +670,17 @@ export default function Workbench() {
 
       <aside className="chat-pane">
         <div className="thread">
-          {(hasSim || messages.length > 0) && (
-            <div className="thread-top">
-              <span className="label">{hasSim ? 'Доработка' : 'Диалог'}</span>
-              {!busy && (
-                <button className="btn btn-sm btn-secondary" onClick={startNew}>
-                  <IconPlus size={16} />Новая
-                </button>
-              )}
-            </div>
-          )}
+          <div className="thread-top">
+            <button type="button" className="btn btn-sm btn-ghost thread-history" disabled={busy} onClick={() => setSessionsOpen(true)}>
+              <IconHistory size={16} />История
+            </button>
+            <span className="spacer" />
+            {(hasSim || messages.length > 0) && !busy && (
+              <button className="btn btn-sm btn-secondary" onClick={startNew}>
+                <IconPlus size={16} />Новая
+              </button>
+            )}
+          </div>
 
           {returnTo && (
             <div className="queue-banner">
@@ -752,7 +814,9 @@ export default function Workbench() {
             {jobKind === 'refine' ? 'идёт доработка — к процессу' : 'идёт генерация — к процессу'}
           </button>
         )}
-        <PreviewFrame html={html} />
+        {busy && jobKind === 'generate'
+          ? <LiveStage events={events} jobId={jobId} onKeep={keepDraft} keeping={keeping} />
+          : <PreviewFrame html={html} />}
         {simId && (
           <div className="preview-actions">
             <a className="btn btn-sm btn-ghost" href={`/present/${simId}`} target="_blank" rel="noopener noreferrer">

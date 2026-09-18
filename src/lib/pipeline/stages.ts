@@ -1,5 +1,5 @@
 import type { CandidateResult, CriticIssue, PipelineEvent, PlanSpec, RenderReport, Role } from '../types';
-import type { ChatMessage } from '../provider';
+import type { ChatCallOpts, ChatMessage } from '../provider';
 import { textPart, imagePart } from '../provider';
 import type { RenderFn } from '../renderer';
 import { extractHtml, extractJson, findForbiddenUrls, instrument, stripRuntime } from '../artifact';
@@ -9,7 +9,9 @@ import {
 
 export interface Ctx {
   /** Один вход в модель для всех ролей: конфиг роли резолвится в provider-слое. */
-  chat: (role: Role, messages: ChatMessage[]) => Promise<string>;
+  chat: (role: Role, messages: ChatMessage[], opts?: ChatCallOpts) => Promise<string>;
+  /** Сохраняет версию, которую человек может открыть уже сейчас. Без него (тесты, eval) черновиков нет. */
+  draft?: (label: string, html: string) => Promise<void>;
   /** Доступна ли vision-модель (критик и судья). */
   hasVision: boolean;
   render: RenderFn;
@@ -33,8 +35,21 @@ export async function generateCandidate(
   const out = await ctx.chat('generator', [
     { role: 'system', content: generatorSystem(exemplar) },
     { role: 'user', content: 'Спецификация:\n' + JSON.stringify(spec, null, 2) },
-  ]);
+  ], { onDelta: codeTicker(ctx, 'generator') });
   return instrument(extractHtml(out));
+}
+
+/** Лента «модель пишет код»: не чаще раза в две секунды, с хвостом последних строк. */
+export function codeTicker(ctx: Ctx, role: Role): (chunk: string) => void {
+  let text = '';
+  let last = 0;
+  return (chunk) => {
+    text += chunk;
+    const now = Date.now();
+    if (now - last < 2000) return;
+    last = now;
+    ctx.emit({ type: 'gen-progress', role, chars: text.length, tail: text.slice(-600) });
+  };
 }
 
 export async function fixArtifact(ctx: Ctx, html: string, errors: string[]): Promise<string> {

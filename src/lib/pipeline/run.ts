@@ -11,7 +11,7 @@ import { extractHtml, findForbiddenUrls, instrument, stripRuntime } from '../art
 import { pickExemplar } from '../exemplars';
 import { listBundledDemos } from '../demos';
 import { REFINER_SYSTEM, CDN_WHITELIST } from './prompts';
-import { plan, generateCandidate, verifyCandidate, fixArtifact, type Ctx } from './stages';
+import { plan, generateCandidate, verifyCandidate, fixArtifact, codeTicker, type Ctx } from './stages';
 import { judge, rescore } from './judge';
 
 const ZERO_SCORES: RubricScores = { physics: 0, clarity: 0, interactivity: 0, aesthetics: 0 };
@@ -47,9 +47,9 @@ export function makeCtx(emit: (e: PipelineEvent) => void): Ctx {
       promptTokens: u.promptTokens, completionTokens: u.completionTokens, ms: u.ms });
   const chats = new Map<Role, ChatFn>();
   return {
-    chat: (role, messages) => {
+    chat: (role, messages, opts) => {
       if (!chats.has(role)) chats.set(role, bindChat(p, role, onUsage));
-      return chats.get(role)!(messages);
+      return chats.get(role)!(messages, opts);
     },
     hasVision: !!p.visionModel,
     render: (html) => renderArtifact(html),
@@ -112,7 +112,10 @@ export async function runPipeline(
     ctx.emit({ type: 'candidate', index: 0, status: 'generating' });
     try {
       const html = await generateCandidate(ctx, spec, exemplarHtml);
+      // Первая версия уходит человеку сразу: проверка и полировка идут, а он уже пробует.
+      if (findForbiddenUrls(html, CDN_ALLOWED).length === 0) await ctx.draft?.('Первая версия', html);
       candidate = await verifyCandidate(ctx, spec, html, 0);
+      if (candidate.alive && candidate.html !== html) await ctx.draft?.('После проверки', candidate.html);
     } catch {
       ctx.emit({ type: 'candidate', index: 0, status: 'failed' });
       candidate = null;
@@ -187,6 +190,7 @@ export async function runPipeline(
               }
               const re = await rescore(ctx, spec, verified);
               best = verified;
+              await ctx.draft?.(`Доводка ${round + 1}`, verified.html);
               current = re.scores;
               feedback = re.feedback;
               ctx.emit({ type: 'refine-round', round: round + 1, before, after: current });
@@ -233,7 +237,7 @@ async function refineHtml(ctx: Ctx, html: string, feedback: string): Promise<str
   const out = await ctx.chat('refiner', [
     { role: 'system', content: REFINER_SYSTEM },
     { role: 'user', content: `Замечания:\n${feedback}\n\nHTML:\n\`\`\`html\n${base}\n\`\`\`` },
-  ]);
+  ], { onDelta: codeTicker(ctx, 'refiner') });
   return instrument(extractHtml(out));
 }
 

@@ -11,7 +11,9 @@ export interface ChatMessage {
   content: string | ContentPart[];
 }
 
-export type ChatFn = (messages: ChatMessage[]) => Promise<string>;
+/** onDelta — ответ читается потоком, каждый кусок текста отдаётся наружу по мере прихода. */
+export interface ChatCallOpts { onDelta?: (chunk: string) => void }
+export type ChatFn = (messages: ChatMessage[], opts?: ChatCallOpts) => Promise<string>;
 
 export function textPart(text: string): ContentPart {
   return { type: 'text', text };
@@ -40,6 +42,7 @@ interface ChatOpts {
   /** Сколько раз добирать ответ, оборванный по лимиту токенов. */
   maxContinuations?: number;
   onUsage?: (u: UsageInfo) => void;
+  onDelta?: (chunk: string) => void;
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -86,7 +89,7 @@ export async function chatWithClient(
   messages: ChatMessage[],
   {
     retries = 3, sleep = defaultSleep, extraBody, maxTokens,
-    maxContinuations = 2, onUsage,
+    maxContinuations = 2, onUsage, onDelta,
   }: ChatOpts = {},
 ): Promise<string> {
   const convo: ChatMessage[] = [...messages];
@@ -96,7 +99,7 @@ export async function chatWithClient(
     let text: string, truncated: boolean;
     try {
       ({ text, truncated } = await once(
-        client, model, convo, { retries, sleep, extraBody, maxTokens, onUsage }));
+        client, model, convo, { retries, sleep, extraBody, maxTokens, onUsage, onDelta }));
     } catch (e) {
       // Пустое продолжение — нормальный способ модели сказать «добавить нечего».
       // Выбрасывать из-за него уже почти собранный ответ нельзя; пустой ПЕРВЫЙ
@@ -117,13 +120,39 @@ async function once(
   client: OpenAI,
   model: string,
   messages: ChatMessage[],
-  { retries, sleep, extraBody, maxTokens, onUsage }: Required<Pick<ChatOpts, 'retries' | 'sleep'>>
-    & Pick<ChatOpts, 'extraBody' | 'maxTokens' | 'onUsage'>,
+  { retries, sleep, extraBody, maxTokens, onUsage, onDelta }: Required<Pick<ChatOpts, 'retries' | 'sleep'>>
+    & Pick<ChatOpts, 'extraBody' | 'maxTokens' | 'onUsage' | 'onDelta'>,
 ): Promise<{ text: string; truncated: boolean }> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < retries; attempt++) {
     const started = Date.now();
     try {
+      if (onDelta) {
+        // Потоковый ответ: текст собирается из кусков, usage приходит последним кадром.
+        const stream = await client.chat.completions.create({
+          model,
+          messages: messages as never,
+          ...(maxTokens ? { max_tokens: maxTokens } : {}),
+          ...extraBody,
+          stream: true,
+          stream_options: { include_usage: true },
+        } as never) as unknown as AsyncIterable<{
+          choices?: { delta?: { content?: string | null }; finish_reason?: string | null }[];
+          usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+        }>;
+        let text = '';
+        let finish: string | null = null;
+        let usage: { prompt_tokens?: number; completion_tokens?: number } | null = null;
+        for await (const chunk of stream) {
+          const piece = chunk.choices?.[0]?.delta?.content;
+          if (piece) { text += piece; onDelta(piece); }
+          finish = chunk.choices?.[0]?.finish_reason ?? finish;
+          if (chunk.usage) usage = chunk.usage;
+        }
+        if (!text) throw new EmptyResponseError();
+        onUsage?.({ promptTokens: usage?.prompt_tokens ?? 0, completionTokens: usage?.completion_tokens ?? 0, ms: Date.now() - started });
+        return { text, truncated: finish === 'length' };
+      }
       const res = await client.chat.completions.create({
         model,
         messages: messages as never,
@@ -155,8 +184,8 @@ export function bindChat(
 ): ChatFn {
   const client = makeClient(p);
   const { model, maxTokens, extraBody } = resolveRole(p, role);
-  return (messages) => chatWithClient(client, model, messages, {
-    extraBody, maxTokens,
+  return (messages, opts) => chatWithClient(client, model, messages, {
+    extraBody, maxTokens, onDelta: opts?.onDelta,
     onUsage: onUsage ? (u) => onUsage({ ...u, role, model }) : undefined,
   });
 }

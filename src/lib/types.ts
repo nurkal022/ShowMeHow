@@ -140,6 +140,10 @@ export type PipelineEvent =
   | { type: 'judge-verdict'; scores: RubricScores[]; candidateIndices: number[];
       winnerIndex: number; feedback: string }
   | { type: 'refine-round'; round: number; before: RubricScores; after: RubricScores | null }
+  /** Модель пишет код: сколько символов уже есть и хвост написанного — для живой ленты. */
+  | { type: 'gen-progress'; role: Role; chars: number; tail: string }
+  /** Готова версия, которую можно открыть и пробовать; HTML лежит в черновиках задания. */
+  | { type: 'draft'; version: number; label: string }
   | { type: 'warning'; message: string }
   | { type: 'cancelled' }
   | { type: 'done'; simulationId: string }

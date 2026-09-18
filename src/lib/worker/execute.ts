@@ -2,6 +2,7 @@ import type { ClaimedJob, GenerateRequest, JobOutcome, RefineRequest } from '../
 import { needsRun } from '../jobs/policy';
 import { makeCtx, runPipeline, refineExisting, CancelledError } from '../pipeline/run';
 import type { JobIO } from './worker';
+import { saveDraft } from '../jobs/drafts';
 
 export interface ExecuteDeps {
   makeCtx: typeof makeCtx;
@@ -24,6 +25,13 @@ export async function executeJob(
   }
   try {
     const ctx = deps.makeCtx(io.emit);
+    // Черновик сначала ложится в хранилище, потом о нём узнаёт поток: интерфейс не спросит то, чего ещё нет.
+    ctx.draft = async (label, html) => {
+      try {
+        const version = await saveDraft(job.id, label, html);
+        io.emit({ type: 'draft', version, label });
+      } catch { /* черновик — удобство, генерацию он не роняет */ }
+    };
     if (job.kind === 'refine') {
       const target = job.targetSimulationId;
       if (!target) return { status: 'error', message: 'У задания доработки не указана симуляция.' };
