@@ -18,8 +18,8 @@ export default function Sparkline({ values, label }: { values: number[]; label: 
   const line = smoothPath(points);
   return (
     <svg className="spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={label}>
-      <path d={areaPath(line, points, H)} fill="currentColor" opacity=".16" />
-      <path d={line} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
+      <path className="chart-area-in" d={areaPath(line, points, H)} fill="currentColor" opacity=".16" />
+      <path className="chart-line-fade" d={line} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
         strokeLinecap="round" vectorEffect="non-scaling-stroke" opacity=".9" />
     </svg>
   );

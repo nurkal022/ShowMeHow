@@ -35,8 +35,8 @@ export default function MeasureChart({ columns, rows }: { columns: TableColumn[]
         {ticks(x0, x1).map((t) => (
           <text key={`x${t}`} x={px(t)} y={H - PAD.b + 16} textAnchor="middle" className="chart-tick">{fmt(t)}</text>
         ))}
-        <polyline points={pts.map((p) => `${px(p[0])},${py(p[1])}`).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
-        {pts.map((p, i) => <circle key={i} cx={px(p[0])} cy={py(p[1])} r="4.5" fill="var(--surface)" stroke="var(--accent)" strokeWidth="2.5" />)}
+        <polyline className="chart-line-draw" pathLength={1} points={pts.map((p) => `${px(p[0])},${py(p[1])}`).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
+        {pts.map((p, i) => <circle key={i} className="chart-dot-in" style={{ animationDelay: `${300 + i * 90}ms` }} cx={px(p[0])} cy={py(p[1])} r="4.5" fill="var(--surface)" stroke="var(--accent)" strokeWidth="2.5" />)}
         <text x={(W + PAD.l - PAD.r) / 2} y={H - 6} textAnchor="middle" className="chart-axis">{label(columns[0])}</text>
         <text x={14} y={(H - PAD.b + PAD.t) / 2} textAnchor="middle" className="chart-axis" transform={`rotate(-90 14 ${(H - PAD.b + PAD.t) / 2})`}>{label(columns[1])}</text>
       </svg>

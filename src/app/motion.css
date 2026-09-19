@@ -1,0 +1,149 @@
+/* =========================================================================
+   Движение. Один файл на весь продукт: вход страницы, появление карточек и
+   строк, отклик кнопок, прорисовка графиков, заглушки загрузки.
+   Правила: коротко (до 0,5 с), только transform/opacity, всё выключается
+   системной настройкой «уменьшить движение» — блок в самом конце файла.
+   ========================================================================= */
+:root {
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-spring: cubic-bezier(.3, 1.45, .55, 1);
+  --t-fast: .14s;
+  --t-med: .26s;
+  --t-slow: .46s;
+}
+
+@keyframes m-rise { from { opacity: 0; transform: translateY(12px); } }
+@keyframes m-rise-sm { from { opacity: 0; transform: translateY(6px); } }
+@keyframes m-pop { from { opacity: 0; transform: scale(.94); } }
+@keyframes m-fade { from { opacity: 0; } }
+@keyframes m-grow-x { from { transform: scaleX(0); } }
+@keyframes m-shimmer { to { background-position: -200% 0; } }
+@keyframes m-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+/* ------------------------------ вход страницы --------------------------- */
+.page-in { animation: m-rise var(--t-slow) var(--ease-out) backwards; }
+/* Мастерская и стенд занимают весь экран: им хватает проявления, без сдвига. */
+.page-in:has(> .workbench), .page-in:has(> .stand) { animation-name: m-fade; }
+
+/* --------------- сетки карточек: появляются по очереди ------------------ */
+.stat-cards > *, .course-cards > *, .learn-cards > *, .cards > *,
+.cf-add-grid > *, .cf-type-tiles > *, .cf-lab-grid > *, .hero-suggestions > * {
+  animation: m-rise var(--t-slow) var(--ease-out) backwards;
+}
+.stat-cards > :nth-child(1), .course-cards > :nth-child(1), .learn-cards > :nth-child(1), .cards > :nth-child(1) { animation-delay: 40ms; }
+.stat-cards > :nth-child(2), .course-cards > :nth-child(2), .learn-cards > :nth-child(2), .cards > :nth-child(2) { animation-delay: 90ms; }
+.stat-cards > :nth-child(3), .course-cards > :nth-child(3), .learn-cards > :nth-child(3), .cards > :nth-child(3) { animation-delay: 140ms; }
+.stat-cards > :nth-child(4), .course-cards > :nth-child(4), .learn-cards > :nth-child(4), .cards > :nth-child(4) { animation-delay: 190ms; }
+.cards > :nth-child(n+5), .course-cards > :nth-child(n+5), .learn-cards > :nth-child(n+5) { animation-delay: 240ms; }
+.cf-type-tiles > :nth-child(n) { animation-duration: var(--t-med); }
+.cf-type-tiles > :nth-child(2n) { animation-delay: 40ms; }
+.cf-type-tiles > :nth-child(3n) { animation-delay: 80ms; }
+
+/* строки таблиц и списков — лёгкий каскад первых десяти */
+.data-table tbody tr, .cab-list li, .cab-feed li, .learn-topic, .cf-topic, .session {
+  animation: m-rise-sm var(--t-med) var(--ease-out) backwards;
+}
+.data-table tbody tr:nth-child(2), .cab-list li:nth-child(2), .cab-feed li:nth-child(2), .learn-topic:nth-child(2), .session:nth-child(2) { animation-delay: 30ms; }
+.data-table tbody tr:nth-child(3), .cab-list li:nth-child(3), .cab-feed li:nth-child(3), .learn-topic:nth-child(3), .session:nth-child(3) { animation-delay: 60ms; }
+.data-table tbody tr:nth-child(4), .cab-list li:nth-child(4), .cab-feed li:nth-child(4), .session:nth-child(4) { animation-delay: 90ms; }
+.data-table tbody tr:nth-child(5), .cab-list li:nth-child(5), .cab-feed li:nth-child(5), .session:nth-child(5) { animation-delay: 120ms; }
+.data-table tbody tr:nth-child(n+6), .cab-list li:nth-child(n+6), .cab-feed li:nth-child(n+6), .session:nth-child(n+6) { animation-delay: 150ms; }
+
+/* ----------------- блоки ниже экрана: проявление при прокрутке ---------- */
+.reveal { opacity: 0; transform: translateY(18px); }
+.reveal.reveal-in { opacity: 1; transform: none; transition: opacity .5s var(--ease-out), transform .5s var(--ease-out); }
+
+/* ------------------------------- отклик --------------------------------- */
+.btn, .icon-btn, .cab-icon-btn, .cf-chip, .chip, .segmented-item, .cf-mark, .composer-send, .suggestion, .avatar {
+  transition: background var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease,
+    box-shadow var(--t-fast) ease, transform var(--t-fast) var(--ease-out), opacity var(--t-fast) ease;
+}
+.btn:active:not(:disabled), .cf-chip:active, .chip:active, .suggestion:active, .cf-palette-item:active, .learn-match-card:active:not(:disabled) { transform: scale(.97); }
+.icon-btn:active:not(:disabled), .cab-icon-btn:active, .composer-send:active:not(:disabled), .avatar:active { transform: scale(.9); }
+.btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 32%, transparent); }
+.btn-primary:active:not(:disabled) { transform: translateY(0) scale(.98); box-shadow: none; }
+
+/* карточки-ссылки приподнимаются */
+.sim-card, .course-card, .learn-card, .lab-card, .learn-nav-card, .cf-add-tile, .cf-choice-tile, .cf-type-tile, a.stat-card {
+  transition: transform var(--t-med) var(--ease-out), box-shadow var(--t-med) ease, border-color var(--t-fast) ease, background var(--t-fast) ease;
+}
+.sim-card:hover, .course-card:hover, .learn-card:hover, .lab-card:hover, .learn-nav-card:hover, a.stat-card:hover { transform: translateY(-3px); }
+.sim-card img, .lab-card img, .session img { transition: transform .5s var(--ease-out); }
+.sim-card:hover img, .lab-card:hover img { transform: scale(1.04); }
+.stat-card-icon { transition: transform var(--t-med) var(--ease-spring); }
+.stat-card:hover .stat-card-icon { transform: scale(1.12) rotate(-6deg); }
+
+/* навигация: активный пункт «наливается», иконка отзывается */
+.navlinks > a, .cab-nav-item, .cab-tabs a { transition: background var(--t-med) ease, color var(--t-fast) ease; }
+.cab-nav-item svg, .navlinks > a svg { transition: transform var(--t-med) var(--ease-spring), color var(--t-fast) ease; }
+.cab-nav-item:hover svg, .navlinks > a:hover svg { transform: scale(1.12); }
+.cab-nav-item.active { animation: m-pop var(--t-med) var(--ease-out); }
+.cab-tabs a.active::after { animation: m-grow-x var(--t-med) var(--ease-out); transform-origin: center; }
+.segmented-item.active { animation: m-pop var(--t-fast) var(--ease-out); }
+
+/* меню, подсказки, окна */
+.menu, .popover, .sim-pick-menu, .cf-menu, .history-dropdown ul { animation: m-pop var(--t-fast) var(--ease-out); transform-origin: top right; }
+.modal-backdrop { animation: m-fade var(--t-med) ease; }
+.error-box, .ok-box, .warn-banner, .cf-field-error, .saved-note { animation: m-rise-sm var(--t-med) var(--ease-out); }
+.status-pill, .cf-count, .badge, .learn-task-points { animation: m-pop var(--t-med) var(--ease-spring) backwards; }
+
+/* поля ввода: мягкое кольцо фокуса */
+.input, .select, .field input, .field select, .field textarea, .composer-box, .cf-board-search, .sessions-search {
+  transition: border-color var(--t-fast) ease, box-shadow var(--t-med) ease, background var(--t-fast) ease;
+}
+input[type='checkbox'], input[type='radio'] { transition: transform var(--t-fast) var(--ease-spring); }
+input[type='checkbox']:active, input[type='radio']:active { transform: scale(.85); }
+.choice { transition: border-color var(--t-fast) ease, background var(--t-med) ease, transform var(--t-fast) var(--ease-out); }
+.choice:hover { transform: translateX(3px); }
+.choice:has(input:checked) { animation: m-pop var(--t-med) var(--ease-spring); }
+
+/* ------------------------- графики и индикаторы ------------------------- */
+.chart-line-draw { stroke-dasharray: 1; animation: m-draw 1.1s var(--ease-out) .15s backwards; }
+.chart-line-fade { animation: m-fade .8s ease .5s backwards; }
+.chart-area-in { animation: m-fade .9s ease .45s backwards; }
+.chart-dot-in { animation: m-pop var(--t-med) var(--ease-spring) backwards; transform-box: fill-box; transform-origin: center; }
+.meter i, .learn-bar-fill, .chart-share i, .learn-sticky-bar > div, .cf-progress-fill {
+  transform-origin: left center; animation: m-grow-x .8s var(--ease-out) .2s backwards;
+}
+.learn-step-dot, .learn-ladder-num { animation: m-pop var(--t-med) var(--ease-spring) backwards; }
+
+/* --------------------------- заглушки загрузки -------------------------- */
+.skeleton, .preview-empty, .sim-card.skeleton {
+  background-image: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--text) 6%, transparent) 50%, transparent 70%);
+  background-size: 200% 100%; background-repeat: no-repeat; animation: m-shimmer 1.4s linear infinite;
+}
+
+/* ------------------------------ мастерская ------------------------------ */
+.msg { animation: m-rise-sm var(--t-med) var(--ease-out); }
+.msg-user { transform-origin: bottom right; }
+.bubble { transition: background var(--t-fast) ease; }
+.composer-send:not(:disabled) { animation: m-pop var(--t-med) var(--ease-spring); }
+.stage-chip, .timeline-chip { transition: background var(--t-med) ease, color var(--t-med) ease; }
+.preview-pane .preview-wrap { animation: m-fade .5s ease; }
+
+/* ---------------------------- вход в систему ---------------------------- */
+.auth-page { position: relative; overflow: hidden; }
+.auth-page::before, .auth-page::after {
+  content: ''; position: absolute; z-index: 0; width: 46vw; height: 46vw; max-width: 620px; max-height: 620px; border-radius: 50%;
+  filter: blur(90px); opacity: .5; pointer-events: none; animation: m-float 16s ease-in-out infinite alternate;
+}
+.auth-page::before { left: -12vw; top: -14vw; background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.auth-page::after { right: -14vw; bottom: -18vw; background: color-mix(in srgb, #12b886 40%, transparent); animation-delay: -8s; }
+@keyframes m-float { to { transform: translate(6vw, 4vw) scale(1.15); } }
+.auth-page > * { position: relative; z-index: 1; }
+.auth-card { animation: m-rise .6s var(--ease-out) backwards; }
+.auth-card > * { animation: m-rise-sm .5s var(--ease-out) backwards; }
+.auth-card > :nth-child(2) { animation-delay: 60ms; } .auth-card > :nth-child(3) { animation-delay: 110ms; }
+.auth-card > :nth-child(4) { animation-delay: 160ms; } .auth-card > :nth-child(n+5) { animation-delay: 210ms; }
+.brand-mark { transition: transform .5s var(--ease-spring); }
+.brand:hover .brand-mark, .cab-brand:hover .brand-mark { transform: rotate(90deg) scale(1.08); }
+
+/* ------------------------------ уважение ------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important; scroll-behavior: auto !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+  .auth-page::before, .auth-page::after { display: none; }
+}

@@ -1,4 +1,6 @@
 import './globals.css';
+import './motion.css';
+import RevealOnScroll from '@/components/motion/RevealOnScroll';
 import ForcePasswordChange from '@/components/ForcePasswordChange';
 import { Brand } from '@/components/SiteChrome';
 import ImpersonationBar from '@/components/ImpersonationBar';
@@ -42,6 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <main><ForcePasswordChange label={userLabel(user)} /></main>
           </>
         ) : children}
+        <RevealOnScroll />
       </body>
     </html>
   );

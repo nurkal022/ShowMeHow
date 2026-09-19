@@ -111,8 +111,9 @@ export default function AreaLineChart({ days, series, label }: {
             const line = smoothPath(points);
             return (
               <g key={s.key}>
-                {s.area && <path d={areaPath(line, points, M.top + plotH)} fill={`url(#${gid}-${s.key})`} />}
-                <path d={line} fill="none" stroke={`var(--chart-${s.color})`} strokeWidth="2"
+                {s.area && <path className="chart-area-in" d={areaPath(line, points, M.top + plotH)} fill={`url(#${gid}-${s.key})`} />}
+                <path className={s.dashed ? 'chart-line-fade' : 'chart-line-draw'} pathLength={s.dashed ? undefined : 1}
+                  d={line} fill="none" stroke={`var(--chart-${s.color})`} strokeWidth="2"
                   strokeLinejoin="round" strokeLinecap="round" strokeDasharray={s.dashed ? '6 5' : undefined} />
               </g>
             );

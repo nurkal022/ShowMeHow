@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Sparkline from './charts/Sparkline';
+import CountUp from '@/components/motion/CountUp';
 
 export type StatTone = 'indigo' | 'blue' | 'amber' | 'rose' | 'teal';
 
@@ -18,7 +19,7 @@ export default function StatCard({ tone, value, label, hint, spark, sparkLabel, 
     <>
       <div className="stat-card-top">
         <div>
-          <strong>{typeof value === 'number' ? value.toLocaleString('ru-RU') : value}</strong>
+          <strong>{typeof value === 'number' ? <CountUp value={value} /> : value}</strong>
           <span className="stat-card-label">{label}</span>
         </div>
         {icon && <span className="stat-card-icon">{icon}</span>}
