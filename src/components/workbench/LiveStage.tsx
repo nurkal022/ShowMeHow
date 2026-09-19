@@ -49,13 +49,13 @@ export default function LiveStage({ events, jobId, onKeep, keeping }: {
     for (let i = events.length - 1; i >= 0; i -= 1) { const e = events[i]; if (e.type === 'gen-progress') return e; }
     return null;
   }, [events]);
-  const usable = drafts.filter((d) => !broken.has(d.version));
-  const latest = usable[usable.length - 1]?.version ?? null;
   const [pinned, setPinned] = useState<number | null>(null);
   const [html, setHtml] = useState<Record<number, string>>({});
   const [flash, setFlash] = useState(false);
   // Версии, упавшие уже в браузере человека: их не показываем, остаёмся на прошлой рабочей.
   const [broken, setBroken] = useState<ReadonlySet<number>>(new Set());
+  const usable = drafts.filter((d) => !broken.has(d.version));
+  const latest = usable[usable.length - 1]?.version ?? null;
   const wanted = pinned ?? latest;
   // Пока новая версия грузится, на экране остаётся прежняя — без мигания пустотой.
   const shown = wanted !== null && html[wanted] ? wanted
