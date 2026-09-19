@@ -11,6 +11,7 @@ export default function CourseTabs({ courseId }: { courseId: string }) {
     { href: `${root}/journal`, label: 'Журнал', active: pathname.startsWith(`${root}/journal`) },
     { href: `${root}/progress`, label: 'Прогресс', active: pathname.startsWith(`${root}/progress`) },
     { href: `${root}/answers`, label: 'Ответы', active: pathname.startsWith(`${root}/answers`) },
+    { href: `${root}/analytics`, label: 'Аналитика', active: pathname.startsWith(`${root}/analytics`) || pathname.startsWith(`${root}/students`) },
   ];
   return (
     <nav className="cab-tabs no-print" aria-label="Разделы курса">

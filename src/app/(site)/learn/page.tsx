@@ -5,6 +5,8 @@ import { continueTopicId, courseTeacherNames, listTopicProgress, progressTotals 
 import CourseCard from '@/components/learn/CourseCard';
 import { IconCourses } from '@/components/icons';
 import { studentToday } from '@/lib/lms/today';
+import { studentAchievements } from '@/lib/lms/achievements';
+import Achievements from '@/components/learn/Achievements';
 import { dueLabel } from '@/lib/lms/learn';
 import { learnTopicHref } from '@/lib/lms/links';
 import { formatScore, ruPlural } from '@/lib/lms/format';
@@ -24,6 +26,7 @@ export default async function LearnPage() {
     Promise.all(cards.map((c) => listTopicProgress(c.course.id, user.id))),
     cards.length > 0 ? studentToday(user.id) : Promise.resolve(null),
   ]);
+  const achievements = cards.length > 0 ? await studentAchievements(user.id) : null;
   const name = (user.displayName ?? userLabel(user)).split(' ').slice(-1)[0];
   return (
     <div className="learn-page">
@@ -86,6 +89,7 @@ export default async function LearnPage() {
           )}
         </section>
       )}
+      {achievements && <Achievements data={achievements} />}
       {cards.length > 0 && <h2 className="learn-section-title">Мои курсы</h2>}
       {cards.length === 0
         ? (

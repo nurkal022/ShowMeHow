@@ -17,6 +17,7 @@ import type { Theme } from '@/lib/theme';
 import { isCabinetItemActive } from './CabinetNav';
 import { useDismiss } from './useDismiss';
 import NotificationsBell from '@/components/NotificationsBell';
+import { PaletteButton } from '@/components/CommandPalette';
 import { useImpersonate } from '@/components/admin/useImpersonate';
 import type { SwitchTarget } from '@/lib/admin/switch';
 import { ORG_ROLE_LABELS } from '@/lib/org/types';
@@ -101,6 +102,7 @@ export default function ShellFrame({ menu, user, switchTargets = [], children }:
           <Suspense fallback={<div className="cab-crumbs" />}>
             <Crumbs menu={menu} pathname={pathname} />
           </Suspense>
+          <PaletteButton />
           <ThemeButton />
           <NotificationsBell />
           <AccountMenu user={user} switchTargets={switchTargets} />

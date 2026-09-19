@@ -171,3 +171,5 @@ export const IconTable = svg(<><rect x="3.5" y="4.5" width="17" height="15" rx="
 export const IconPipette = svg(<><path d="m14 6 4 4M12.5 7.5l4 4-7.8 7.8a2 2 0 0 1-1.4.6H5v-2.3a2 2 0 0 1 .6-1.4z" /><path d="m15.5 4.5 1-1a2.1 2.1 0 0 1 3 3l-1 1" /></>);
 export const IconKeyboard = svg(<><rect x="2.5" y="6" width="19" height="12" rx="2.5" /><path d="M6.5 10h.1M10 10h.1M13.5 10h.1M17 10h.1M7 14h10" /></>);
 export const IconBell = svg(<><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></>);
+export const IconFlame = svg(<><path d="M12 21a6.5 6.5 0 0 0 6.5-6.5c0-3.7-2.6-5.6-3.7-8.5-.3 2-1.3 3.2-2.6 3.9C12.4 6.8 10.6 4.4 8.7 3c.3 3.4-3.2 5.6-3.2 11.5A6.5 6.5 0 0 0 12 21z" /><path d="M12 21a2.8 2.8 0 0 1-2.8-2.8c0-1.9 1.5-2.7 2.1-4.2.8 1 3.5 2.2 3.5 4.2A2.8 2.8 0 0 1 12 21z" /></>);
+export const IconTrophy = svg(<><path d="M8 4.5h8v5a4 4 0 0 1-8 0z" /><path d="M8 6.5H4.5a3 3 0 0 0 3.7 3M16 6.5h3.5a3 3 0 0 1-3.7 3M12 13.5V17M8.5 20h7M9.5 17h5v3h-5z" /></>);

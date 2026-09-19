@@ -14,7 +14,7 @@ function cellTone(c: JournalCell, points: number): string {
 }
 
 /** Журнал: имя ученика и шапка остаются на месте, прокручиваются только оценки — внутри карточки. */
-export default function JournalTable({ journal }: { journal: Journal }) {
+export default function JournalTable({ journal, studentHref }: { journal: Journal; studentHref?: (id: string) => string }) {
   if (journal.rows.length === 0 || journal.assignments.length === 0) {
     return (
       <p className="empty-state">
@@ -54,7 +54,7 @@ export default function JournalTable({ journal }: { journal: Journal }) {
               <tr key={r.student.id}>
                 <th scope="row" className="cf-sticky-col">
                   <span className="cf-person">
-                    <strong>{r.student.name}</strong>
+                    <strong>{studentHref ? <a href={studentHref(r.student.id)}>{r.student.name}</a> : r.student.name}</strong>
                     {r.student.groups.length > 0 && <span className="muted">{r.student.groups.join(', ')}</span>}
                   </span>
                 </th>

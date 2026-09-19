@@ -17,7 +17,7 @@ export default async function JournalPage({ params }: { params: Promise<{ id: st
       <CabinetHeader title={`Журнал: ${staff.course.title}`} subtitle="В клетке — балл после проверки или статус работы">
         <a className="btn" href={`/api/teach/courses/${id}/journal`}><IconDownload size={16} />Скачать CSV</a>
       </CabinetHeader>
-      <JournalTable journal={await courseJournal(id)} />
+      <JournalTable journal={await courseJournal(id)} studentHref={(sid) => `/teach/courses/${id}/students/${sid}`} />
     </>
   );
 }

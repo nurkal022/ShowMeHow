@@ -39,7 +39,10 @@ const STAFF = {
   director: { email: 'director@lyceum.demo', name: 'Гульнара Ахметова' },
   physics: { email: 'physics@lyceum.demo', name: 'Айдар Сапаров' },
   second: { email: 'nurlan@lyceum.demo', name: 'Нурлан Беков' },
+  chemistry: { email: 'chemistry@lyceum.demo', name: 'Жанна Омарова' },
 };
+const INFO_TITLE = 'Информатика 8: алгоритмы';
+const CHEM_TITLE = 'Химия 8: признаки реакций';
 
 const CLASS_A: [string, string][] = [
   ['Абенов', 'Алихан'], ['Белова', 'Софья'], ['Жумабаев', 'Ерлан'], ['Ким', 'Алина'], ['Касымова', 'Дана'],
@@ -243,6 +246,84 @@ async function buildCourse(orgId: string, teacherId: string, groupIds: string[],
   return built;
 }
 
+async function buildInformatics(orgId: string, teacherId: string, groupIds: string[]): Promise<Built> {
+  const course = await createCourse({ orgId, ownerId: teacherId, title: INFO_TITLE, subject: 'Информатика',
+    description: 'Сортировки, поиск и графы — руками в «Зале алгоритмов» и на коде. Считаем шаги и сравниваем, кто быстрее.' });
+  const built: Built = { courseId: course.id, topics: [] };
+  const t1 = await createTopic(course.id, 'Сортировка пузырьком');
+  const b1: Block[] = [];
+  b1.push(await add(t1.id, 'text', { title: 'Идея', body: 'Идём по массиву и **меняем соседей местами**, если левый больше правого. '
+    + 'После первого прохода самый большой элемент «всплывает» в конец — как пузырёк.\n\n'
+    + 'Для массива из $n$ элементов в худшем случае нужно около $n^2/2$ сравнений.' }));
+  b1.push(await add(t1.id, 'code', { language: 'Python', code: 'def bubble_sort(a):\n    n = len(a)\n    for i in range(n - 1):\n        for j in range(n - 1 - i):\n            if a[j] > a[j + 1]:\n                a[j], a[j + 1] = a[j + 1], a[j]\n    return a' }));
+  b1.push(await add(t1.id, 'lab', { slug: 'informatics', caption: 'Станция «Сортировки»: запустите гонку пузырька против быстрой сортировки.' }));
+  b1.push(await add(t1.id, 'callout', { tone: 'warning', title: 'Частая ошибка', body: 'Во внутреннем цикле граница — `n - 1 - i`: хвост уже отсортирован, сравнивать его заново незачем.' }));
+  b1.push(await add(t1.id, 'assignment', task('Расставьте состояния массива [5, 2, 4, 1] после каждого прохода пузырька.', {
+    type: 'order', items: [{ text: '[5, 2, 4, 1]' }, { text: '[2, 4, 1, 5]' }, { text: '[2, 1, 4, 5]' }, { text: '[1, 2, 4, 5]' }] }, { allowRetry: true })));
+  b1.push(await add(t1.id, 'assignment', task('Сколько сравнений сделает пузырёк на массиве из 5 элементов в худшем случае?', {
+    type: 'number', answer: 10, tolerance: 0, unit: '' }, { explanation: '$4 + 3 + 2 + 1 = 10$ — сумма первых $n-1$ чисел.' })));
+  built.topics.push({ id: t1.id, kind: 'lesson', blocks: b1 });
+
+  const t2 = await createTopic(course.id, 'Двоичный поиск');
+  await setTopicFormat(t2.id, 'slides', null);
+  const b2: Block[] = [];
+  b2.push(await add(t2.id, 'callout', { tone: 'info', title: 'Игра «угадай число»', body: 'Загадано число от 1 до 100. Каждый раз называем середину оставшегося отрезка — и отбрасываем половину.' }));
+  b2.push(await add(t2.id, 'formula', { latex: '\\text{шагов} \\le \\lceil \\log_2 n \\rceil', caption: 'Для 100 чисел хватит 7 вопросов' }));
+  b2.push(await add(t2.id, 'code', { language: 'Python', code: 'def binary_search(a, x):\n    lo, hi = 0, len(a) - 1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        if a[mid] == x:\n            return mid\n        if a[mid] < x:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return -1' }));
+  b2.push(await add(t2.id, 'assignment', task('Сколько шагов двоичного поиска нужно в худшем случае для 1000 элементов?', {
+    type: 'number', answer: 10, tolerance: 0, unit: '' })));
+  b2.push(await add(t2.id, 'assignment', task('Соедините алгоритм и его сложность.', { type: 'match', pairs: [
+    { left: 'Пузырёк', right: 'O(n²)' }, { left: 'Двоичный поиск', right: 'O(log n)' }, { left: 'Линейный поиск', right: 'O(n)' }] })));
+  built.topics.push({ id: t2.id, kind: 'slides', blocks: b2 });
+
+  const t3 = await createTopic(course.id, 'Графы: обход в ширину');
+  const b3: Block[] = [];
+  b3.push(await add(t3.id, 'text', { title: 'Волна по графу', body: 'Обход в ширину идёт **слоями**: сначала все соседи, потом соседи соседей. '
+    + 'Так соцсеть считает «друзей друзей», а навигатор — кратчайший путь без весов.' }));
+  b3.push(await add(t3.id, 'lab', { slug: 'informatics', caption: 'Станция «Обход графа»: сравните BFS и DFS на одном графе.' }));
+  b3.push(await add(t3.id, 'assignment', task('Какая структура данных нужна для обхода в ширину?', { type: 'short', accepted: ['очередь', 'queue'] },
+    { explanation: 'Очередь: кто раньше найден, тот раньше обработан — поэтому обход идёт слоями.' })));
+  b3.push(await add(t3.id, 'assignment', task('Объясните, чем обход в глубину отличается от обхода в ширину. Приведите пример из жизни.', { type: 'text' }, {
+    rubric: [{ label: 'Верное отличие', points: 5 }, { label: 'Пример из жизни', points: 3 }, { label: 'Ясно изложено', points: 2 }] })));
+  built.topics.push({ id: t3.id, kind: 'lesson', blocks: b3 });
+
+  await setCourseGroups(course.id, groupIds, new Set(groupIds));
+  await setCourseStatus(course.id, 'published');
+  return built;
+}
+
+async function buildChemistry(orgId: string, teacherId: string, groupIds: string[]): Promise<Built> {
+  const course = await createCourse({ orgId, ownerId: teacherId, title: CHEM_TITLE, subject: 'Химия',
+    description: 'Как понять, что реакция идёт: осадок, газ, цвет, пламя. Всё — на «Столе реакций», в браузере и в очках.' });
+  const built: Built = { courseId: course.id, topics: [] };
+  const t1 = await createTopic(course.id, 'Четыре признака реакции');
+  const b1: Block[] = [];
+  b1.push(await add(t1.id, 'text', { title: 'Что меняется', body: '- **Выпадает осадок** — нерастворимое вещество.\n- **Выделяется газ** — пузырьки.\n'
+    + '- **Меняется цвет.**\n- **Выделяется тепло или свет.**' }));
+  b1.push(await add(t1.id, 'lab', { slug: 'chemistry', caption: 'Смешайте CuSO₄ и NaOH — что увидите? Затем попробуйте соду с уксусом.' }));
+  b1.push(await add(t1.id, 'formula', { latex: '\\mathrm{CuSO_4 + 2NaOH \\rightarrow Cu(OH)_2\\downarrow + Na_2SO_4}', caption: 'Голубой осадок гидроксида меди' }));
+  b1.push(await add(t1.id, 'assignment', task('Сопоставьте опыт и признак реакции.', { type: 'match', pairs: [
+    { left: 'CuSO₄ + NaOH', right: 'голубой осадок' }, { left: 'Сода + уксус', right: 'пузырьки газа' },
+    { left: 'Фенолфталеин + щёлочь', right: 'малиновый цвет' }, { left: 'Горение магния', right: 'яркий свет' }] })));
+  b1.push(await add(t1.id, 'assignment', task('Заполните пропуски.', { type: 'gaps',
+    text: 'Нерастворимое вещество, образующееся в растворе, называют {{осадком|осадок}}. Соли меди окрашивают пламя в {{зелёный|зеленый}} цвет.' }, { allowRetry: true })));
+  built.topics.push({ id: t1.id, kind: 'lesson', blocks: b1 });
+
+  const t2 = await createTopic(course.id, 'Окраска пламени');
+  const b2: Block[] = [];
+  b2.push(await add(t2.id, 'callout', { tone: 'example', title: 'Фейерверк — это химия', body: 'Цвет салюта задают соли металлов: натрий — жёлтый, стронций — красный, медь — зелёный, калий — фиолетовый.' }));
+  b2.push(await add(t2.id, 'lab', { slug: 'chemistry', caption: 'Станция «Пламя»: внесите по очереди соли и запишите цвета.' }));
+  b2.push(await add(t2.id, 'assignment', task('Какой металл окрашивает пламя в жёлтый цвет?', { type: 'choice', multiple: false, shuffle: true, options: [
+    { id: 'na', text: 'Натрий', correct: true }, { id: 'cu', text: 'Медь', correct: false }, { id: 'k', text: 'Калий', correct: false }] })));
+  b2.push(await add(t2.id, 'assignment', task('Опишите опыт с окраской пламени: что делали и что увидели.', { type: 'text' }, {
+    stand: { kind: 'lab', slug: 'chemistry' }, rubric: [{ label: 'Порядок опыта', points: 4 }, { label: 'Наблюдения', points: 4 }, { label: 'Вывод', points: 2 }] })));
+  built.topics.push({ id: t2.id, kind: 'lesson', blocks: b2 });
+
+  await setCourseGroups(course.id, groupIds, new Set(groupIds));
+  await setCourseStatus(course.id, 'published');
+  return built;
+}
+
 /* ------------------------------ «прожитая» учёба ----------------------------- */
 
 const TEXT_ANSWERS = {
@@ -258,6 +339,14 @@ const TEXT_ANSWERS = {
     'Солнечный свет заходит в капли дождя и преломляется. Разные цвета преломляются под разным углом, поэтому белый свет раскладывается, и мы видим радугу.',
     'Радуга появляется потому что капли воды как маленькие призмы. Свет в них преломляется и отражается, и цвета расходятся.',
     'Радуга бывает когда солнце и дождь одновременно.',
+  ],
+  graph: [
+    'В ширину идём слоями — сначала все соседи, потом их соседи, для этого очередь. В глубину идём по одной ветке до конца и возвращаемся — стек. Пример: в ширину — рассылка друзьям друзей, в глубину — выход из лабиринта.',
+    'Обход в глубину сначала уходит далеко по одному пути, а в ширину проверяет всё рядом. Как искать ключи: сначала вся комната, потом соседние.',
+  ],
+  flame: [
+    'Брали проволоку, опускали в раствор соли и вносили в пламя горелки. Натрий дал жёлтое пламя, медь — зелёное, калий — фиолетовое. Вывод: цвет пламени зависит от металла.',
+    'Вносили соли в огонь, пламя стало разного цвета.',
   ],
 };
 
@@ -298,7 +387,10 @@ function answerFor(block: Block, kid: Kid, r: () => number): Answer | null {
       return { type: 'table', rows: kid.diligence > 0.45 ? rows : rows.slice(0, 4) };
     }
     case 'text': {
-      const pool = block.body.payload.prompt.includes('радуг') ? TEXT_ANSWERS.rainbow
+      const prompt = block.body.payload.prompt;
+      const pool = prompt.includes('радуг') ? TEXT_ANSWERS.rainbow
+        : prompt.includes('глубину') ? TEXT_ANSWERS.graph
+        : prompt.includes('пламени') ? TEXT_ANSWERS.flame
         : kid.skill > 0.7 ? TEXT_ANSWERS.good : TEXT_ANSWERS.ok;
       return { type: 'text', text: pool[Math.floor(r() * pool.length)] };
     }
@@ -317,10 +409,11 @@ async function liveThrough(built: Built, kids: Kid[], teacherId: string): Promis
   const now = Date.now();
   const day = 86_400_000;
   // Когда тема была «пройдена»: первая — три недели назад, дальше ближе к сегодняшнему дню.
-  const topicAge = [20, 13, 8, 3, 1];
+  const topicAge = built.topics.length >= 5 ? [20, 13, 8, 3, 1] : [18, 9, 3, 1];
   let pending = 0;
   for (const kid of kids) {
-    const r = rng(kid.login);
+    // Своё зерно на курс: один и тот же ученик по разным предметам ведёт себя по-разному.
+    const r = rng(kid.login + built.courseId);
     for (const [ti, topic] of built.topics.entries()) {
       // Контрольную пишут только самые старательные; свежие темы открыты не у всех.
       if (topic.kind === 'exam' && kid.diligence < 0.7) continue;
@@ -371,6 +464,8 @@ export async function seedShowcase(print: (line: string) => void, allowProductio
   await addMember(org.id, director.id, 'org_admin');
   await addMember(org.id, physics.id, 'teacher');
   await addMember(org.id, second.id, 'teacher');
+  const chem = await staff(STAFF.chemistry.email, STAFF.chemistry.name);
+  await addMember(org.id, chem.id, 'teacher');
 
   const groups: { id: string; title: string; roster: [string, string][] }[] = [];
   for (const [title, roster] of [['8А', CLASS_A], ['8Б', CLASS_B]] as const) {
@@ -379,6 +474,7 @@ export async function seedShowcase(print: (line: string) => void, allowProductio
     groups.push({ id: g.id, title, roster: [...roster] });
   }
   await assignTeacher(groups[1].id, second.id);
+  for (const g of groups) await assignTeacher(g.id, chem.id);
 
   const kids: Kid[] = [];
   for (const g of groups) {
@@ -429,10 +525,24 @@ export async function seedShowcase(print: (line: string) => void, allowProductio
     }
   }
 
+  const extra: [string, () => Promise<Built>, string, Kid[]][] = [
+    [INFO_TITLE, () => buildInformatics(org.id, second.id, [groups[1].id]), second.id, kids.filter((k) => k.group === '8Б')],
+    [CHEM_TITLE, () => buildChemistry(org.id, chem.id, groups.map((g) => g.id)), chem.id, kids],
+  ];
+  for (const [title, build, owner, audience] of extra) {
+    const has = await db().query('SELECT 1 FROM courses WHERE org_id = $1 AND title = $2', [org.id, title]);
+    if (has.rowCount) continue;
+    const built = await build();
+    const active = audience.filter((k) => !kids.slice(-2).includes(k));
+    const r = await liveThrough(built, active, owner);
+    pending += r.pending;
+  }
+
   print(`Витрина готова: ${org.name} (${org.slug}).`);
   print(`Директор:            ${STAFF.director.email} / ${SHOWCASE_PASSWORD}`);
   print(`Учитель физики:      ${STAFF.physics.email} / ${SHOWCASE_PASSWORD}`);
-  print(`Второй учитель (8Б): ${STAFF.second.email} / ${SHOWCASE_PASSWORD}`);
+  print(`Информатика (8Б):   ${STAFF.second.email} / ${SHOWCASE_PASSWORD}`);
+  print(`Химия:               ${STAFF.chemistry.email} / ${SHOWCASE_PASSWORD}`);
   print(`Ученики — пароль lyceum-2026, например: ${kids.slice(0, 3).map((k) => k.login).join(', ')}`);
   print(exists.rows[0] ? `Курс «${COURSE_TITLE}» уже был — оставлен как есть.`
     : `Курс «${COURSE_TITLE}»: 5 тем, ${kids.length} учеников, работ ждут проверки: ${pending}.`);

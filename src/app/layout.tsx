@@ -1,6 +1,10 @@
 import './globals.css';
 import './motion.css';
+import './landing.css';
 import RevealOnScroll from '@/components/motion/RevealOnScroll';
+import CommandPalette from '@/components/CommandPalette';
+import { paletteActions } from '@/lib/palette-actions';
+import { listMemberships } from '@/lib/org/access';
 import ForcePasswordChange from '@/components/ForcePasswordChange';
 import { Brand } from '@/components/SiteChrome';
 import ImpersonationBar from '@/components/ImpersonationBar';
@@ -23,6 +27,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const user = await currentUserAllowingPasswordChangeFromCookies();
   const mustChangePassword = !!user?.mustChangePassword;
   const impersonator = user ? await impersonatorFromCookies() : null;
+  const actions = user && !mustChangePassword ? paletteActions(user, await listMemberships(user.id)) : null;
   return (
     // data-theme проставляет скрипт ниже до отрисовки, поэтому значение на сервере
     // и на клиенте расходится намеренно — предупреждение о гидрации здесь ложное.
@@ -45,6 +50,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </>
         ) : children}
         <RevealOnScroll />
+        {actions && <CommandPalette actions={actions} />}
       </body>
     </html>
   );

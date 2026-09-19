@@ -96,16 +96,16 @@ export interface Crumb { href: string; label: string }
 const SEGMENT_LABELS: Record<string, string> = {
   admin: 'Платформа', orgs: 'Организации', users: 'Пользователи', catalog: 'Каталог', log: 'Журнал',
   org: 'Организация', teachers: 'Учителя', groups: 'Группы', settings: 'Настройки', credentials: 'Лист паролей',
-  teach: 'Преподавание', journal: 'Журнал', progress: 'Прогресс', answers: 'Ответы',
+  teach: 'Преподавание', journal: 'Журнал', progress: 'Прогресс', answers: 'Ответы', analytics: 'Аналитика',
 };
 
 /** Подпись сегмента-идентификатора — по тому, что стоит перед ним. */
 const ID_LABELS: Record<string, string> = {
-  orgs: 'Организация', users: 'Пользователь', groups: 'Группа', courses: 'Курс', answers: 'Задание',
+  orgs: 'Организация', users: 'Пользователь', groups: 'Группа', courses: 'Курс', answers: 'Задание', students: 'Ученик',
 };
 
 /** Сегменты без собственной страницы: в крошки не попадают. */
-const SKIPPED = new Set(['courses']);
+const SKIPPED = new Set(['courses', 'students']);
 
 export function breadcrumbs(pathname: string): Crumb[] {
   const parts = pathname.split('/').filter(Boolean);

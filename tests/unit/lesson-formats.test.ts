@@ -116,3 +116,12 @@ describe('сроки сдачи', () => {
     expect(dueLabel('2026-10-01T09:00:00', now)).toMatchObject({ tone: 'later' });
   });
 });
+
+describe('серия дней', () => {
+  it('считает текущую и лучшую серию', async () => {
+    const { streakOf } = await import('@/lib/lms/achievements');
+    expect(streakOf(['2026-09-17', '2026-09-18', '2026-09-19'], '2026-09-19')).toEqual({ current: 3, best: 3 });
+    expect(streakOf(['2026-09-17', '2026-09-18'], '2026-09-19')).toEqual({ current: 2, best: 2 });
+    expect(streakOf(['2026-09-10', '2026-09-11', '2026-09-12', '2026-09-18'], '2026-09-20')).toEqual({ current: 0, best: 3 });
+  });
+});
