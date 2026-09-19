@@ -25,7 +25,10 @@ export async function studentToday(userId: string): Promise<Today> {
           WHERE b.topic_id = t.id AND b.kind = 'assignment' AND (s.id IS NULL OR s.status IN ('draft', 'returned'))) AS left
        FROM topic_views v JOIN topics t ON t.id = v.topic_id JOIN courses c ON c.id = t.course_id
        WHERE v.user_id = $1 AND c.status = 'published' AND c.id IN (${VISIBLE_TO_STUDENT})
-       ORDER BY v.last_at DESC LIMIT 1`, [userId]),
+       -- «Продолжить» ведёт туда, где ещё есть что сдать; всё сдано везде — к последней открытой теме.
+       ORDER BY (SELECT count(*) FROM blocks b LEFT JOIN submissions s ON s.block_id = b.id AND s.student_id = $1
+                 WHERE b.topic_id = t.id AND b.kind = 'assignment' AND (s.id IS NULL OR s.status IN ('draft', 'returned'))) > 0 DESC,
+         v.last_at DESC LIMIT 1`, [userId]),
     db().query<{ topic_id: string; topic: string; course: string; due_at: Date; left: number }>(
       `SELECT t.id AS topic_id, t.title AS topic, c.title AS course, t.due_at,
          count(b.id) FILTER (WHERE s.id IS NULL OR s.status IN ('draft', 'returned'))::int AS left
