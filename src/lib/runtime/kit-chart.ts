@@ -155,14 +155,25 @@ export const KIT_CHART_JS = `
 
     draw();
 
+    function push(x, vals) {
+      // Модели путают API с chart.js: push(y) без x, push({x, y}), push([x, y]) — принимаем всё.
+      if (vals === undefined && x && typeof x === 'object' && !Array.isArray(x)) { vals = x.y !== undefined ? x.y : x.value; x = x.x !== undefined ? x.x : x.t; }
+      if (vals === undefined && Array.isArray(x)) { vals = x.slice(1); x = x[0]; }
+      if (vals === undefined) { vals = x; x = xs.length ? xs[xs.length - 1] + 1 : 0; }
+      xs.push(Number(x));
+      ys.push(vals && vals.slice ? vals.slice(0) : [vals]);
+      if (xs.length > maxPoints) { xs.shift(); ys.shift(); }
+      schedule();
+    }
+    function clear() { xs = []; ys = []; schedule(); }
+    function noop() {}
     return {
-      push: function (x, vals) {
-        xs.push(x);
-        ys.push(vals && vals.slice ? vals.slice(0) : [vals]);
-        if (xs.length > maxPoints) { xs.shift(); ys.shift(); }
-        schedule();
-      },
-      clear: function () { xs = []; ys = []; schedule(); },
+      push: push,
+      clear: clear,
+      // Синонимы из чужих библиотек графиков: вызов не должен ронять симуляцию.
+      pushData: push, addData: push, addPoint: push, add: push, append: push, addDataPoint: push, plot: push,
+      reset: clear, clearData: clear,
+      update: noop, render: noop, draw: noop, redraw: noop, resize: noop,
       element: cv,
       // Внутренний тестовый шов (не документируется в UIKIT_DOC): текущий bounds().
       __bounds: function () { return bounds(); },

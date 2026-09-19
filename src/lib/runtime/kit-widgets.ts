@@ -29,13 +29,11 @@ export const KIT_WIDGETS_JS = `
     row.appendChild(val);
     readoutBodies[corner].appendChild(row);
     var digits = o.digits == null ? 2 : o.digits;
-    return {
-      set: function (v) {
-        var t = (typeof v === 'number' && isFinite(v)) ? v.toFixed(digits) : String(v);
-        val.textContent = t + (o.unit ? ' ' + o.unit : '');
-      },
-      element: row,
-    };
+    function set(v) {
+      var t = (typeof v === 'number' && isFinite(v)) ? v.toFixed(digits) : String(v);
+      val.textContent = t + (o.unit ? ' ' + o.unit : '');
+    }
+    return { set: set, setValue: set, update: set, setText: set, element: row };
   }
 
   // ---------- Легенда цветов ----------
@@ -129,7 +127,7 @@ export const KIT_WIDGETS_JS = `
       });
     }
     var vars = o.vars || {};
-    return {
+    var api = {
       set: function (values) {
         var parts = [];
         for (var k in values) {
@@ -143,6 +141,9 @@ export const KIT_WIDGETS_JS = `
       },
       element: body,
     };
+    api.update = api.set;
+    api.setValues = api.set;
+    return api;
   }
 
   // ---------- Дискретные контролы в панели управления ----------

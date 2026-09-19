@@ -1283,3 +1283,4 @@ html[data-theme='dark'] .lb-callout.tone-definition { --tone: #c0a8ff; --tone-so
 .pal-foot span { display: inline-flex; align-items: center; gap: 4px; }
 @keyframes live-spin { to { transform: rotate(360deg); } }
 @media (max-width: 720px) { .pal-btn span, .pal-btn kbd { display: none; } .cab-topbar .pal-btn { min-width: 0; } .pal-foot { display: none; } }
+.live-note { font-style: normal; font-weight: 500; color: var(--warn); }

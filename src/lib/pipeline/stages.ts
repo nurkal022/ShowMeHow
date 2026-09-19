@@ -3,8 +3,10 @@ import type { ChatCallOpts, ChatMessage } from '../provider';
 import { textPart, imagePart } from '../provider';
 import type { RenderFn } from '../renderer';
 import { extractHtml, extractJson, findForbiddenUrls, instrument, stripRuntime } from '../artifact';
+import { applyEdits, looksLikeHtml, parseEdits } from './edits';
 import {
   PLANNER_SYSTEM, generatorSystem, FIXER_SYSTEM, CRITIC_SYSTEM, REFINER_SYSTEM, CDN_WHITELIST,
+  FIXER_EDITS_SYSTEM, REFINER_EDITS_SYSTEM,
 } from './prompts';
 
 export interface Ctx {
@@ -52,11 +54,28 @@ export function codeTicker(ctx: Ctx, role: Role): (chunk: string) => void {
   };
 }
 
+/**
+ * Починка. Модели уходит HTML без нашего рантайма (кит и harness она не должна переписывать —
+ * раньше именно из-за них ответ упирался в предел токенов и шёл минутами). Сначала просим
+ * точечные правки; если они не легли — полный файл, как раньше.
+ */
 export async function fixArtifact(ctx: Ctx, html: string, errors: string[]): Promise<string> {
+  const base = stripRuntime(html);
+  const problems = `Ошибки:\n${errors.join('\n')}`;
+  try {
+    const out = await ctx.chat('fixer', [
+      { role: 'system', content: FIXER_EDITS_SYSTEM },
+      { role: 'user', content: `${problems}\n\nHTML:\n\`\`\`html\n${base}\n\`\`\`` },
+    ], { onDelta: codeTicker(ctx, 'fixer') });
+    const edits = parseEdits(out);
+    const patched = edits ? applyEdits(base, edits) : null;
+    if (patched) return instrument(patched);
+    if (!edits && looksLikeHtml(out)) return instrument(extractHtml(out));
+  } catch { /* точечная починка не удалась — ниже полный файл */ }
   const out = await ctx.chat('fixer', [
     { role: 'system', content: FIXER_SYSTEM },
-    { role: 'user', content: `Ошибки:\n${errors.join('\n')}\n\nHTML:\n\`\`\`html\n${html}\n\`\`\`` },
-  ]);
+    { role: 'user', content: `${problems}\n\nHTML:\n\`\`\`html\n${base}\n\`\`\`` },
+  ], { onDelta: codeTicker(ctx, 'fixer') });
   return instrument(extractHtml(out));
 }
 
@@ -83,10 +102,17 @@ interface Ranked { html: string; report: RenderReport }
 
 export async function verifyCandidate(
   ctx: Ctx, spec: PlanSpec, html: string, index: number,
+  /** Проверка после доводки: версии для человека подписываются иначе, чем первая. */
+  phase: 'first' | 'refine' = 'first',
 ): Promise<CandidateResult> {
   ctx.emit({ type: 'candidate', index, status: 'rendering' });
   let current = html;
   let report = await ctx.render(current, { probes: true });
+  // Человеку в рабочую область уходят только версии, которые запустились без ошибок.
+  const offer = async (label: string, h: string, r: RenderReport) => {
+    if (r.ok && r.errors.length === 0 && findForbiddenUrls(h, CDN_ALLOWED).length === 0) await ctx.draft?.(label, h);
+  };
+  await offer(phase === 'refine' ? 'Доводка' : 'Первая версия', current, report);
   // best-so-far: если попытки починки только ухудшают результат, в конце возвращаем лучшую
   // из виденных версий, а не последнюю сломанную.
   let best: Ranked = { html: current, report };
@@ -94,6 +120,9 @@ export async function verifyCandidate(
     const forbidden = findForbiddenUrls(current, CDN_ALLOWED);
     const probeFailed = (report.probes?.failures.length ?? 0) > 0;
     if (report.ok && report.animated && forbidden.length === 0 && !probeFailed) break;
+    // Рабочая и живая симуляция, у которой не прошли только пробы поведения, — один круг
+    // починки, не два: второй редко что-то меняет, а стоит минуту-две ожидания.
+    if (attempt > 0 && report.ok && report.animated && forbidden.length === 0) break;
     ctx.emit({ type: 'candidate', index, status: 'fixing' });
     const errors = [...report.errors];
     if (report.ok && !report.animated) errors.push(STATIC_ANIMATION_ERROR);
@@ -105,7 +134,10 @@ export async function verifyCandidate(
       break; // фиксер сам упал — используем лучшее из уже отрендеренного
     }
     report = await ctx.render(current, { probes: true });
-    if (rank(current, report) > rank(best.html, best.report)) best = { html: current, report };
+    if (rank(current, report) > rank(best.html, best.report)) {
+      best = { html: current, report };
+      await offer('Починена', current, report);
+    }
   }
   if (rank(current, report) < rank(best.html, best.report)) {
     current = best.html;
@@ -171,15 +203,22 @@ export async function verifyCandidate(
     try {
       const instruction = 'Исправь именно эти замечания рецензента, не трогая остальное:\n- ' +
         serious.map((i) => i.text).join('\n- ');
+      const base = stripRuntime(current);
       const out = await ctx.chat('refiner', [
-        { role: 'system', content: REFINER_SYSTEM },
-        { role: 'user', content: `${instruction}\n\nHTML:\n\`\`\`html\n${stripRuntime(current)}\n\`\`\`` },
-      ]);
-      const fixed = instrument(extractHtml(out));
+        { role: 'system', content: REFINER_EDITS_SYSTEM },
+        { role: 'user', content: `${instruction}\n\nHTML:\n\`\`\`html\n${base}\n\`\`\`` },
+      ], { onDelta: codeTicker(ctx, 'refiner') });
+      const edits = parseEdits(out);
+      const patched = edits ? applyEdits(base, edits) : null;
+      const whole = !edits && looksLikeHtml(out) ? extractHtml(out) : null;
+      // Правки не легли — целевая починка пропускается: кандидат уже рабочий.
+      if (!patched && !whole) throw new Error('правки рецензента не применились');
+      const fixed = instrument(patched ?? whole!);
       const fixedReport = await ctx.render(fixed, { probes: true });
       if (rank(fixed, fixedReport) >= rank(current, report)) {
         current = fixed;
         report = fixedReport;
+        await offer('По замечаниям рецензента', current, report);
       }
     } catch {
       // Целевая починка — попытка улучшить, а не обязательный этап:

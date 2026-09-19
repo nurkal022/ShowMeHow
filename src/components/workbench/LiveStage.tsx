@@ -49,14 +49,17 @@ export default function LiveStage({ events, jobId, onKeep, keeping }: {
     for (let i = events.length - 1; i >= 0; i -= 1) { const e = events[i]; if (e.type === 'gen-progress') return e; }
     return null;
   }, [events]);
-  const latest = drafts[drafts.length - 1]?.version ?? null;
+  const usable = drafts.filter((d) => !broken.has(d.version));
+  const latest = usable[usable.length - 1]?.version ?? null;
   const [pinned, setPinned] = useState<number | null>(null);
   const [html, setHtml] = useState<Record<number, string>>({});
   const [flash, setFlash] = useState(false);
+  // Версии, упавшие уже в браузере человека: их не показываем, остаёмся на прошлой рабочей.
+  const [broken, setBroken] = useState<ReadonlySet<number>>(new Set());
   const wanted = pinned ?? latest;
   // Пока новая версия грузится, на экране остаётся прежняя — без мигания пустотой.
   const shown = wanted !== null && html[wanted] ? wanted
-    : [...drafts].reverse().find((d) => html[d.version])?.version ?? null;
+    : [...usable].reverse().find((d) => html[d.version])?.version ?? null;
   const activity = currentActivity(events);
 
   useEffect(() => {
@@ -85,14 +88,14 @@ export default function LiveStage({ events, jobId, onKeep, keeping }: {
         <div className={flash ? 'live-bar flash' : 'live-bar'}>
           <span className="live-pulse" aria-hidden="true" />
           <div className="live-bar-text">
-            <strong>{`Версия ${shown} · ${current?.label ?? ''}`}</strong>
+            <strong>{`Версия ${shown} · ${current?.label ?? ''}`}{broken.size > 0 && <em className="live-note">{' · версия с ошибкой скрыта'}</em>}</strong>
             <span>{pinned !== null && pinned !== latest
               ? `Есть версия новее (v${latest}) — вы смотрите закреплённую`
               : `${activity}… — с симуляцией уже можно работать`}</span>
           </div>
-          {drafts.length > 1 && (
+          {usable.length > 1 && (
             <div className="live-versions" role="group" aria-label="Версии">
-              {drafts.map((d) => (
+              {usable.map((d) => (
                 <button key={d.version} type="button" title={d.label} aria-pressed={d.version === shown}
                   className={d.version === shown ? 'on' : undefined}
                   onClick={() => setPinned(d.version === latest ? null : d.version)}>{`v${d.version}`}</button>
@@ -104,7 +107,10 @@ export default function LiveStage({ events, jobId, onKeep, keeping }: {
             <IconCheck size={15} />{keeping ? 'Сохраняю…' : 'Оставить эту версию'}
           </button>
         </div>
-        <PreviewFrame html={html[shown]} />
+        <PreviewFrame html={html[shown]} key={shown} onSimError={() => {
+          // Упала — отмечаем и откатываемся; если откатываться некуда, показываем как есть.
+          if (usable.length > 1) { setBroken((b) => new Set(b).add(shown)); setPinned(null); }
+        }} />
       </div>
     );
   }

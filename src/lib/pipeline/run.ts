@@ -10,7 +10,8 @@ import { createSimulation, saveThumbnail, getArtifact, updateArtifact } from '..
 import { extractHtml, findForbiddenUrls, instrument, stripRuntime } from '../artifact';
 import { pickExemplar } from '../exemplars';
 import { listBundledDemos } from '../demos';
-import { REFINER_SYSTEM, CDN_WHITELIST } from './prompts';
+import { REFINER_SYSTEM, REFINER_EDITS_SYSTEM, CDN_WHITELIST } from './prompts';
+import { applyEdits, looksLikeHtml, parseEdits } from './edits';
 import { plan, generateCandidate, verifyCandidate, fixArtifact, codeTicker, type Ctx } from './stages';
 import { judge, rescore } from './judge';
 
@@ -112,10 +113,8 @@ export async function runPipeline(
     ctx.emit({ type: 'candidate', index: 0, status: 'generating' });
     try {
       const html = await generateCandidate(ctx, spec, exemplarHtml);
-      // Первая версия уходит человеку сразу: проверка и полировка идут, а он уже пробует.
-      if (findForbiddenUrls(html, CDN_ALLOWED).length === 0) await ctx.draft?.('Первая версия', html);
+      // Рабочие версии verifyCandidate отдаёт человеку сам — только те, что запустились без ошибок.
       candidate = await verifyCandidate(ctx, spec, html, 0);
-      if (candidate.alive && candidate.html !== html) await ctx.draft?.('После проверки', candidate.html);
     } catch {
       ctx.emit({ type: 'candidate', index: 0, status: 'failed' });
       candidate = null;
@@ -182,7 +181,7 @@ export async function runPipeline(
             const before = current;
             try {
               const refined = await refineHtml(ctx, best.html, feedback);
-              const verified = await verifyCandidate(ctx, spec, refined, 0);
+              const verified = await verifyCandidate(ctx, spec, refined, 0, 'refine');
               if (!verified.alive) {
                 // доводка сломала — оставляем предыдущее
                 ctx.emit({ type: 'refine-round', round: round + 1, before, after: null });
@@ -190,7 +189,6 @@ export async function runPipeline(
               }
               const re = await rescore(ctx, spec, verified);
               best = verified;
-              await ctx.draft?.(`Доводка ${round + 1}`, verified.html);
               current = re.scores;
               feedback = re.feedback;
               ctx.emit({ type: 'refine-round', round: round + 1, before, after: current });
@@ -232,11 +230,23 @@ export async function runPipeline(
   return meta;
 }
 
+/** Доводка и правка по просьбе: сначала точечные правки, если не легли — весь файл. */
 async function refineHtml(ctx: Ctx, html: string, feedback: string): Promise<string> {
   const base = stripRuntime(html);
+  const user = `Замечания:\n${feedback}\n\nHTML:\n\`\`\`html\n${base}\n\`\`\``;
+  try {
+    const out = await ctx.chat('refiner', [
+      { role: 'system', content: REFINER_EDITS_SYSTEM },
+      { role: 'user', content: user },
+    ], { onDelta: codeTicker(ctx, 'refiner') });
+    const edits = parseEdits(out);
+    const patched = edits ? applyEdits(base, edits) : null;
+    if (patched) return instrument(patched);
+    if (!edits && looksLikeHtml(out)) return instrument(extractHtml(out));
+  } catch { /* ниже — полный файл */ }
   const out = await ctx.chat('refiner', [
     { role: 'system', content: REFINER_SYSTEM },
-    { role: 'user', content: `Замечания:\n${feedback}\n\nHTML:\n\`\`\`html\n${base}\n\`\`\`` },
+    { role: 'user', content: user },
   ], { onDelta: codeTicker(ctx, 'refiner') });
   return instrument(extractHtml(out));
 }

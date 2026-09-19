@@ -5,13 +5,17 @@ interface SimError { id: number; message: string }
 
 let nextId = 0;
 
-export default function PreviewFrame({ html, frameRef }: {
+export default function PreviewFrame({ html, frameRef, onSimError }: {
   html: string | null;
+  /** Ошибка внутри симуляции — вызывающий может откатиться на прошлую рабочую версию. */
+  onSimError?: (message: string) => void;
   /** Кому нужен сам iframe: задание «Состояние симуляции» спрашивает у него значения контролов. */
   frameRef?: MutableRefObject<HTMLIFrameElement | null>;
 }) {
   const [errors, setErrors] = useState<SimError[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const onSimErrorRef = useRef(onSimError);
+  onSimErrorRef.current = onSimError;
 
   useEffect(() => {
     setErrors([]);
@@ -24,6 +28,7 @@ export default function PreviewFrame({ html, frameRef }: {
       if (e.source !== iframeRef.current?.contentWindow) return;
       if (e.data?.type !== 'sim-error') return;
       const message = String(e.data.message ?? '');
+      if (onSimErrorRef.current) { onSimErrorRef.current(message); return; }
       setErrors((prev) => [...prev, { id: nextId++, message }].slice(-3));
     }
     window.addEventListener('message', onMessage);
