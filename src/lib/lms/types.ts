@@ -95,4 +95,6 @@ export interface Topic {
   format: TopicFormat;
   /** Только для контрольной: минут на работу. null — без ограничения. */
   timeLimitMin: number | null;
+  /** Срок сдачи темы. null — без срока. */
+  dueAt: string | null;
 }

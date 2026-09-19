@@ -44,7 +44,7 @@ export default async function AnswersPage({ params, searchParams }: {
         </Link>
       </CabinetHeader>
       <div className="grading">
-        <AnswersTable rows={shown} points={payload.points} selectedId={selected} hrefFor={(s) => href(s)} />
+        <AnswersTable rows={shown} points={payload.points} selectedId={selected} hrefFor={(s) => href(s)} dueAt={staff.topic.dueAt} />
         <section className="panel">
           {current?.submission ? (
             <>
@@ -60,6 +60,7 @@ export default async function AnswersPage({ params, searchParams }: {
               <GradeForm key={current.submission.id} submissionId={current.submission.id} points={payload.points}
                 score={current.submission.score} comment={current.submission.comment} rubric={payload.rubric}
                 suggested={current.submission.autoScore}
+                canSuggest={payload.spec.type === 'text' || payload.spec.type === 'table'}
                 prevHref={nav.prev ? href(nav.prev) : null} nextAnyHref={nav.next ? href(nav.next) : null} />
             </>
           ) : (

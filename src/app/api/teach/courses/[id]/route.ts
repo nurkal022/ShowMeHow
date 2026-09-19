@@ -1,3 +1,6 @@
+import { courseStudents } from '@/lib/lms/courses';
+import { notify } from '@/lib/notifications';
+import { learnCourseHref } from '@/lib/lms/links';
 import { NextResponse } from 'next/server';
 import { guardUser } from '@/lib/http/guards';
 import {
@@ -31,7 +34,15 @@ export async function PATCH(req: Request, { params }: IdParams) {
       const allowed = new Set(await allowedGroupIds(user, staff.membership));
       await setCourseGroups(staff.course.id, groupIds, allowed);
     }
-    if (status !== undefined) await setCourseStatus(staff.course.id, status);
+    if (status !== undefined) {
+      await setCourseStatus(staff.course.id, status);
+      if (status === 'published' && staff.course.status !== 'published') {
+        for (const st of await courseStudents(staff.course.id)) {
+          await notify(st.id, { key: `course:${staff.course.id}`, kind: 'published', title: `Новый курс: «${staff.course.title}»`,
+            body: 'Учитель открыл курс вашей группе.', href: learnCourseHref(staff.course.id, false) });
+        }
+      }
+    }
     return NextResponse.json({ course: await getCourse(staff.course.id) });
   });
 }

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { LIMITS } from '@/lib/lms/types';
 import type { RubricItem } from '@/lib/lms/block-schema';
 import { callApi } from '@/components/cabinet/api';
-import { IconClose, IconKeyboard, IconPlus } from '@/components/icons';
+import { IconClose, IconKeyboard, IconPlus, IconSpark } from '@/components/icons';
 
 const BANK_KEY = 'tesseract.grade.comments';
 const DEFAULT_BANK = [
@@ -18,7 +18,7 @@ const fmt = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');
  * Alt+←/→ — соседние работы, Alt+1…3 — быстрый балл. Критерии складывают балл сами,
  * заготовки комментариев живут в браузере учителя.
  */
-export default function GradeForm({ submissionId, points, score, comment, nextHref, rubric = [], suggested = null, prevHref, nextAnyHref }: {
+export default function GradeForm({ submissionId, points, score, comment, nextHref, rubric = [], suggested = null, prevHref, nextAnyHref, canSuggest = false }: {
   submissionId: string; points: number; score: number | null; comment: string | null;
   /** Следующая непроверенная работа. Без него форма сама находит её в таблице ответов. */
   nextHref?: string | null;
@@ -26,6 +26,8 @@ export default function GradeForm({ submissionId, points, score, comment, nextHr
   /** Балл автопроверки — подставляется, пока учитель не поставил свой. */
   suggested?: number | null;
   prevHref?: string | null; nextAnyHref?: string | null;
+  /** Развёрнутый ответ или таблица: помощник может предложить оценку. */
+  canSuggest?: boolean;
 }) {
   const router = useRouter();
   const [value, setValue] = useState(score !== null ? fmt(score) : suggested !== null ? fmt(suggested) : '');
@@ -37,6 +39,20 @@ export default function GradeForm({ submissionId, points, score, comment, nextHr
   const [scoreError, setScoreError] = useState('');
   const [done, setDone] = useState('');
   const form = useRef<HTMLFormElement>(null);
+  const [suggesting, setSuggesting] = useState(false);
+
+  async function suggest() {
+    setSuggesting(true);
+    setError('');
+    const res = await callApi<{ score: number; comment: string; marks: Record<string, number> }>(
+      '/api/teach/ai', 'POST', { action: 'grade', submissionId });
+    setSuggesting(false);
+    if (!res.ok) return setError(res.error);
+    setMarks(res.data.marks);
+    setValue(fmt(res.data.score));
+    if (res.data.comment) setText(res.data.comment);
+    setDone('Помощник предложил оценку — проверьте и поправьте перед сохранением.');
+  }
 
   useEffect(() => {
     try {
@@ -113,6 +129,11 @@ export default function GradeForm({ submissionId, points, score, comment, nextHr
   return (
     <form ref={form} className="cf-grade" noValidate onSubmit={(e) => { e.preventDefault(); void send('grade', true); }}
       onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send('grade', true); } }}>
+      {canSuggest && (
+        <button type="button" className="btn btn-sm ai-btn cf-suggest" disabled={suggesting} onClick={suggest}>
+          <IconSpark size={15} />{suggesting ? 'Помощник читает ответ…' : 'Предложить оценку'}
+        </button>
+      )}
       {rubric.length > 0 && (
         <fieldset className="cf-rubric">
           <legend>Критерии</legend>

@@ -104,3 +104,15 @@ describe('волна 2: тренажёр, таблица, контрольная
     expect(toStudentSubmission(sub)).toMatchObject({ status: 'graded', score: 7 });
   });
 });
+
+describe('сроки сдачи', () => {
+  it('подписи срока для ученика', async () => {
+    const { dueLabel } = await import('@/lib/lms/learn');
+    const now = new Date('2026-09-19T10:00:00');
+    expect(dueLabel('2026-09-19T18:00:00', now)).toMatchObject({ tone: 'soon' });
+    expect(dueLabel('2026-09-19T18:00:00', now).text).toContain('сегодня');
+    expect(dueLabel('2026-09-20T09:00:00', now).text).toContain('завтра');
+    expect(dueLabel('2026-09-18T09:00:00', now)).toMatchObject({ tone: 'late' });
+    expect(dueLabel('2026-10-01T09:00:00', now)).toMatchObject({ tone: 'later' });
+  });
+});

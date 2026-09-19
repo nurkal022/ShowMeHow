@@ -53,6 +53,7 @@ const PLATFORM_ITEMS: CabinetMenuItem[] = [
   { href: '/admin/users', label: 'Пользователи', icon: 'users' },
   { href: '/admin/catalog', label: 'Каталог', icon: 'catalog' },
   { href: '/admin/log', label: 'Журнал', icon: 'log' },
+  { href: '/admin/settings', label: 'Настройки', icon: 'settings' },
 ];
 
 const ORG_ITEMS: CabinetMenuItem[] = [

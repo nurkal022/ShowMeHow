@@ -19,7 +19,7 @@ export function authRequestBody(mode: 'login' | 'register', identifier: string, 
   return mode === 'login' ? { identifier, password } : { email: identifier, password };
 }
 
-export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
+export default function AuthForm({ mode, registrationOpen = true }: { mode: 'login' | 'register'; registrationOpen?: boolean }) {
   const search = useSearchParams();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -79,8 +79,12 @@ export default function AuthForm({ mode }: { mode: 'login' | 'register' }) {
         {busy ? 'Минуту…' : isLogin ? 'Войти' : 'Зарегистрироваться'}
       </button>
       <p className="muted" style={{ textAlign: 'center' }}>
-        {isLogin ? 'Нет аккаунта? ' : 'Уже есть аккаунт? '}
-        <a href={isLogin ? '/register' : '/login'}>{isLogin ? 'Регистрация' : 'Вход'}</a>
+        {isLogin && !registrationOpen ? 'Логин и пароль выдаёт школа. Потеряли пароль — спросите учителя.' : (
+          <>
+            {isLogin ? 'Нет аккаунта? ' : 'Уже есть аккаунт? '}
+            <a href={isLogin ? '/register' : '/login'}>{isLogin ? 'Регистрация' : 'Вход'}</a>
+          </>
+        )}
       </p>
     </form>
   );

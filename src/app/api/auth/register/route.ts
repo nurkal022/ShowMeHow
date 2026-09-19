@@ -3,10 +3,14 @@ import { createUser, EmailTakenError, normalizeEmail } from '@/lib/auth/users';
 import { createSession } from '@/lib/auth/session';
 import { setSessionCookie, isSecureRequest, MIN_PASSWORD_LENGTH } from '@/lib/auth/cookie';
 import { MAX_IDENTIFIER_LENGTH } from '@/lib/auth/identifier';
+import { getPlatformSettings, REGISTRATION_CLOSED_MESSAGE } from '@/lib/platform-settings';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: Request) {
+  if (!(await getPlatformSettings()).registrationOpen) {
+    return NextResponse.json({ error: REGISTRATION_CLOSED_MESSAGE }, { status: 403 });
+  }
   const { email, password } = (await req.json()) as { email?: string; password?: string };
   const normalized = email ? normalizeEmail(email) : '';
   if (!normalized || !EMAIL_RE.test(normalized)) {

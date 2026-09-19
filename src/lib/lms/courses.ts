@@ -134,11 +134,12 @@ export async function setCourseGroups(
   }
 }
 
-interface TopicRow { id: string; course_id: string; position: number; title: string; format: TopicFormat; time_limit_min: number | null }
-const TOPIC_COLUMNS = 'id, course_id, position, title, format, time_limit_min';
+interface TopicRow { id: string; course_id: string; position: number; title: string; format: TopicFormat; time_limit_min: number | null; due_at: Date | null }
+const TOPIC_COLUMNS = 'id, course_id, position, title, format, time_limit_min, due_at';
 
 function toTopic(r: TopicRow): Topic {
-  return { id: r.id, courseId: r.course_id, position: r.position, title: r.title, format: r.format, timeLimitMin: r.time_limit_min };
+  return { id: r.id, courseId: r.course_id, position: r.position, title: r.title, format: r.format, timeLimitMin: r.time_limit_min,
+    dueAt: r.due_at ? r.due_at.toISOString() : null };
 }
 
 export async function listTopics(courseId: string): Promise<Topic[]> {
@@ -170,6 +171,16 @@ export async function renameTopic(topicId: string, title: unknown): Promise<void
 }
 
 /** Удаляет тему вместе с блоками и ответами (каскад в схеме). */
+/** Срок сдачи: ISO-строка или null. Прошедшие даты разрешены — учитель мог забыть поставить вовремя. */
+export async function setTopicDue(topicId: string, raw: unknown): Promise<void> {
+  let due: Date | null = null;
+  if (raw !== null && raw !== '' && raw !== undefined) {
+    if (typeof raw !== 'string' || Number.isNaN(Date.parse(raw))) throw new LmsError('Срок сдачи указан неверно.');
+    due = new Date(raw);
+  }
+  await db().query('UPDATE topics SET due_at = $2 WHERE id = $1', [topicId, due]);
+}
+
 export async function setTopicFormat(topicId: string, format: unknown, rawLimit: unknown): Promise<void> {
   if (typeof format !== 'string' || !(TOPIC_FORMATS as readonly string[]).includes(format)) throw new LmsError('Неизвестный формат темы.');
   let limit: number | null = null;

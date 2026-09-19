@@ -16,6 +16,7 @@ import { withOrgParam } from '@/lib/lms/links';
 import type { Theme } from '@/lib/theme';
 import { isCabinetItemActive } from './CabinetNav';
 import { useDismiss } from './useDismiss';
+import NotificationsBell from '@/components/NotificationsBell';
 import { useImpersonate } from '@/components/admin/useImpersonate';
 import type { SwitchTarget } from '@/lib/admin/switch';
 import { ORG_ROLE_LABELS } from '@/lib/org/types';
@@ -101,6 +102,7 @@ export default function ShellFrame({ menu, user, switchTargets = [], children }:
             <Crumbs menu={menu} pathname={pathname} />
           </Suspense>
           <ThemeButton />
+          <NotificationsBell />
           <AccountMenu user={user} switchTargets={switchTargets} />
         </header>
         <main className="cab-content">{children}</main>

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import NotificationsBell from './NotificationsBell';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -95,6 +96,7 @@ export default function NavLinks({ sections, user }: { sections: NavSection[]; u
           <Link href="/login" className="btn btn-sm btn-primary">Войти</Link>
         </div>
       )}
+      {user && <NotificationsBell />}
       {user && (
         <div className="account" ref={boxRef}>
           <button type="button" className="avatar" aria-haspopup="menu" aria-expanded={open}

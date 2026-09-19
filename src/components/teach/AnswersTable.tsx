@@ -15,8 +15,10 @@ export function stateTone(state: AnswerState): PillTone {
  * Ответы на задание. Сам компонент серверный: он превращает строки и функцию
  * ссылок в простые данные, а фильтр «ждут проверки» живёт в клиентском списке.
  */
-export default function AnswersTable({ rows, points, hrefFor, selectedId }: {
+export default function AnswersTable({ rows, points, hrefFor, selectedId, dueAt = null }: {
   rows: AnswerRow[]; points: number; hrefFor: (submissionId: string) => string; selectedId: string | null;
+  /** Срок темы: сданное позже помечается «с опозданием». */
+  dueAt?: string | null;
 }) {
   if (rows.length === 0) {
     return <p className="empty-state">Ответов пока нет: курс не открыт ни одной группе или в группах нет учеников.</p>;
@@ -31,7 +33,8 @@ export default function AnswersTable({ rows, points, hrefFor, selectedId }: {
       stateLabel: ANSWER_STATE_LABELS[state],
       tone: stateTone(state),
       score: s?.status === 'graded' ? `${formatScore(s.score)} из ${points}` : '—',
-      submittedAt: formatDateTime(s?.submittedAt ?? null),
+      submittedAt: formatDateTime(s?.submittedAt ?? null)
+        + (dueAt && s?.submittedAt && s.submittedAt > dueAt ? ' · с опозданием' : ''),
       href: s && s.status !== 'draft' ? hrefFor(s.id) : null,
       selected: Boolean(s && s.id === selectedId),
     };

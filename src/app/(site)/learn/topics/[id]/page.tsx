@@ -13,6 +13,7 @@ import LessonBlock from '@/components/learn/LessonBlock';
 import SlideDeck from '@/components/learn/SlideDeck';
 import ExamTimer from '@/components/learn/ExamTimer';
 import { ruPlural } from '@/lib/lms/format';
+import { dueLabel } from '@/lib/lms/learn';
 import { IconBack } from '@/components/icons';
 
 export default async function LearnTopicPage({ params, searchParams }: {
@@ -68,6 +69,7 @@ export default async function LearnTopicPage({ params, searchParams }: {
             {assignmentIds.length > 0 && !preview && ` · задания ${doneCount}/${assignmentIds.length}`}
           </span>
           {exam && window?.deadline && !finished && <ExamTimer deadline={window.deadline} />}
+          {topic.dueAt && !preview && doneCount < assignmentIds.length && (() => { const d = dueLabel(topic.dueAt); return <span className={`learn-due ${d.tone}`}>{d.text}</span>; })()}
           <span className="learn-sticky-nav">
             {prev
               ? <Link className="btn btn-sm btn-ghost" href={learnTopicHref(prev.id, preview)} aria-label={`Предыдущая тема: ${prev.title}`} title={prev.title}>←</Link>

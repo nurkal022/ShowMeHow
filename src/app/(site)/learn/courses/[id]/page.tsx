@@ -26,7 +26,7 @@ export default async function LearnCoursePage({ params, searchParams }: {
   // В режиме «Как видит ученик» прогресса нет: все темы «не начато».
   const [topics, teachers] = await Promise.all([
     preview
-      ? listTopics(course.id).then((list): TopicProgress[] => list.map((t) => ({
+      ? listTopics(course.id).then((list): TopicProgress[] => list.map((t) => ({ dueAt: t.dueAt,
         topicId: t.id, title: t.title, viewed: false, blocksTotal: 0, assignmentsTotal: 0, assignmentsDone: 0,
         assignmentsReturned: 0, pointsEarned: 0, pointsMax: 0, state: 'none',
       })))

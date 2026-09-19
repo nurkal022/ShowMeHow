@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { guardUser } from '@/lib/http/guards';
 import { badRequest, INVALID_BODY_MESSAGE, notFound, readBody, withUserErrors, type IdParams } from '@/lib/http/route-kit';
 import { staffTopic } from '@/lib/lms/access';
-import { deleteTopic, moveTopic, renameTopic, setTopicFormat, touchCourse } from '@/lib/lms/courses';
+import { deleteTopic, moveTopic, renameTopic, setTopicDue, setTopicFormat, touchCourse } from '@/lib/lms/courses';
 import { isMoveDirection } from '@/lib/lms/order';
 
 /** Переименование или перестановка темы — одно действие за запрос. */
@@ -18,6 +18,8 @@ export async function PATCH(req: Request, { params }: IdParams) {
     if (body.move !== undefined) {
       if (!isMoveDirection(body.move)) return badRequest(INVALID_BODY_MESSAGE);
       await moveTopic(staff.topic.id, body.move);
+    } else if (body.dueAt !== undefined) {
+      await setTopicDue(staff.topic.id, body.dueAt);
     } else if (body.format !== undefined) {
       await setTopicFormat(staff.topic.id, body.format, body.timeLimitMin);
     } else {

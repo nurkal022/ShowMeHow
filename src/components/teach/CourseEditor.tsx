@@ -13,11 +13,12 @@ import { callApi } from '@/components/cabinet/api';
 import StatusPill from '@/components/cabinet/StatusPill';
 import {
   IconAlert, IconArrowDown, IconArrowUp, IconBack, IconCheck, IconChevron, IconCopy, IconCourses, IconEdit, IconEye,
-  IconGrip, IconLock, IconPlus, IconSearch, IconTrash,
+  IconGrip, IconLock, IconPlus, IconSearch, IconSpark, IconTrash,
 } from '@/components/icons';
 import RowMenu from '@/components/lms/ui/RowMenu';
 import { useConfirm, type ConfirmOptions } from '@/components/lms/ui/useConfirm';
 import BlockEditor from './BlockEditor';
+import { AiBusy, AiLessonButton, aiBlockAction } from './AiAssist';
 import BlockSummary from './BlockSummary';
 import {
   ASSIGNMENT_META, ASSIGNMENT_TYPES, BLOCK_GROUPS, BLOCK_META, BlockKindIcon, blockHeadline, blockProblem,
@@ -63,6 +64,7 @@ export default function CourseEditor(props: CourseEditorProps) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropAt, setDropAt] = useState<number | null>(null);
   const [freshId, setFreshId] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState('');
   const [save, setSave] = useState<SaveState>('idle');
   const [error, setError] = useState('');
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());
@@ -193,6 +195,16 @@ export default function CourseEditor(props: CourseEditorProps) {
     }
   }
 
+  async function runAi(action: 'tasks' | 'variants', block: Block) {
+    setAiBusy(action === 'tasks' ? 'Помощник составляет задания по тексту…' : 'Помощник делает варианты задания…');
+    setError('');
+    const res = await aiBlockAction(action, block.id, 3);
+    setAiBusy('');
+    if (!res.ok) return setError(res.error);
+    if (res.data.firstId) { scrollTo.current = res.data.firstId; setFreshId(res.data.firstId); }
+    router.refresh();
+  }
+
   async function duplicateBlock(block: Block) {
     if (!activeTopicId) return;
     const data = await act<{ block: Block }>(`/api/teach/topics/${activeTopicId}/blocks`, 'POST',
@@ -281,6 +293,10 @@ export default function CourseEditor(props: CourseEditorProps) {
                 <h2>{activeTopic.title}</h2>
               </div>
               <span className="muted">{blocksLabel(blocks.length)}</span>
+              {blocks.length > 0 && (
+                <AiLessonButton topicId={activeTopic.id} topicTitle={activeTopic.title} subject={course.subject} empty={false}
+                  onDone={(firstId) => { if (firstId) { scrollTo.current = firstId; setFreshId(firstId); } router.refresh(); }} />
+              )}
               <a className="btn btn-sm btn-ghost" href={learnTopicHref(activeTopic.id, true)} target="_blank" rel="noopener noreferrer">
                 <IconEye size={15} />Тема глазами ученика
               </a>
@@ -355,6 +371,12 @@ export default function CourseEditor(props: CourseEditorProps) {
                           onSelect: () => void act(`/api/teach/blocks/${block.id}`, 'PATCH', { move: 'up' }) },
                         { key: 'down', label: 'Опустить', icon: <IconArrowDown size={16} />, disabled: i === blocks.length - 1,
                           onSelect: () => void act(`/api/teach/blocks/${block.id}`, 'PATCH', { move: 'down' }) },
+                        ...(kind === 'text' || kind === 'callout' || kind === 'spoiler' ? [{
+                          key: 'ai-tasks', label: 'Задания по этому тексту', icon: <IconSpark size={16} />, disabled: dirty || !!aiBusy,
+                          onSelect: () => void runAi('tasks', block) }] : []),
+                        ...(kind === 'assignment' ? [{
+                          key: 'ai-variants', label: 'Сделать 3 варианта', icon: <IconSpark size={16} />, disabled: dirty || !!aiBusy,
+                          hint: 'Та же идея, другие числа — чтобы не списывали', onSelect: () => void runAi('variants', block) }] : []),
                         { key: 'copy', label: 'Дублировать', icon: <IconCopy size={16} />, disabled: dirty,
                           hint: dirty ? 'Сначала сохраните блок' : undefined, onSelect: () => void duplicateBlock(block) },
                         { key: 'delete', label: 'Удалить', icon: <IconTrash size={16} />, danger: true, onSelect: () => void deleteBlock(block) },
@@ -394,6 +416,14 @@ export default function CourseEditor(props: CourseEditorProps) {
               onDrop={(e) => { e.preventDefault(); void dropBlock(blocks.length); }} />
           )}
 
+          {aiBusy && <AiBusy text={aiBusy} />}
+          {activeTopic && blocks.length === 0 && (
+            <div className="ai-empty">
+              <AiLessonButton topicId={activeTopic.id} topicTitle={activeTopic.title} subject={course.subject} empty
+                onDone={(firstId) => { if (firstId) { scrollTo.current = firstId; setFreshId(firstId); } router.refresh(); }} />
+              <span className="muted">или соберите тему сами из блоков ниже</span>
+            </div>
+          )}
           {activeTopic && <AddBlockMenu empty={blocks.length === 0} busy={save === 'saving'} onAdd={(pick) => addBlock(pick)} />}
         </section>
       </div>
@@ -429,6 +459,44 @@ function TopicFormatBar({ topic, onChange }: { topic: Topic; onChange: (format: 
         )}
       </div>
       <p className="muted">{TOPIC_FORMAT_HINTS[topic.format]}</p>
+      <DueField topic={topic} />
+    </div>
+  );
+}
+
+/** Срок сдачи темы: ученик видит его в курсе и в уроке, опоздания помечаются в ответах. */
+function DueField({ topic }: { topic: Topic }) {
+  const router = useRouter();
+  const local = (iso: string | null) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  };
+  const [value, setValue] = useState(local(topic.dueAt));
+  const [state, setState] = useState<'' | 'saving' | 'saved' | 'error'>('');
+  async function save(next: string) {
+    setValue(next);
+    setState('saving');
+    const res = await callApi(`/api/teach/topics/${topic.id}`, 'PATCH', { dueAt: next ? new Date(next).toISOString() : null });
+    setState(res.ok ? 'saved' : 'error');
+    if (res.ok) router.refresh();
+  }
+  const quick = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    d.setHours(23, 59, 0, 0);
+    return local(d.toISOString());
+  };
+  return (
+    <div className="cf-due">
+      <span className="label">Срок сдачи</span>
+      <input type="datetime-local" className="input" value={value} aria-label="Срок сдачи темы" onChange={(e) => void save(e.target.value)} />
+      <span className="cf-due-quick">
+        <button type="button" className="cf-chip" onClick={() => void save(quick(1))}>завтра</button>
+        <button type="button" className="cf-chip" onClick={() => void save(quick(7))}>через неделю</button>
+        {value && <button type="button" className="cf-chip" onClick={() => void save('')}>без срока</button>}
+      </span>
+      <span className="muted">{state === 'saving' ? 'Сохраняю…' : state === 'saved' ? 'Сохранено' : state === 'error' ? 'Не сохранилось' : value ? 'Ученики видят срок в курсе и в уроке' : 'Без срока'}</span>
     </div>
   );
 }

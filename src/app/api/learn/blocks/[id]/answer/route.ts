@@ -7,6 +7,9 @@ import { toStudentSubmission } from '@/lib/lms/answers';
 import { revealFor, revealOf } from '@/lib/lms/block-schema';
 import { examFinished, examWindow } from '@/lib/lms/courses';
 import { LmsError } from '@/lib/lms/types';
+import { notify } from '@/lib/notifications';
+import { answersHref } from '@/lib/lms/links';
+import { assignmentTitle as taskTitle } from '@/lib/lms/block-schema';
 
 /**
  * Черновик или сдача ответа учеником. Отдаётся только студенческий вид ответа:
@@ -29,6 +32,14 @@ export async function PUT(req: Request, { params }: IdParams) {
       if (window.over) throw new LmsError('Время контрольной вышло — ответы больше не принимаются.');
     }
     const sub = await saveAnswer(ctx.block, user.id, body.answer, submit);
+    // Работа ждёт человека — учителю сигнал. Повторы по тому же заданию копятся в один счётчик.
+    if (submit && sub.status === 'submitted' && ctx.block.body.kind === 'assignment') {
+      await notify(ctx.course.ownerId, {
+        key: `submitted:${ctx.block.id}`, kind: 'submitted',
+        title: `Новые работы: «${taskTitle(ctx.block.body.payload.prompt)}»`, body: `${ctx.course.title} · ${ctx.topic.title}`,
+        href: answersHref(ctx.course.id, ctx.block.id, { pending: true }),
+      });
+    }
     if (exam && !(await examFinished(ctx.topic, user.id))) {
       return NextResponse.json({ submission: toStudentSubmission(sub, true), reveal: null });
     }

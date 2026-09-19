@@ -21,6 +21,7 @@ export interface TopicProgress {
   pointsEarned: number;
   pointsMax: number;
   state: TopicState;
+  dueAt: string | null;
 }
 
 const POINTS = `CASE WHEN b.payload->>'points' ~ '^[0-9]+(\\.[0-9]+)?$' THEN (b.payload->>'points')::numeric ELSE 0 END`;
@@ -28,10 +29,10 @@ const POINTS = `CASE WHEN b.payload->>'points' ~ '^[0-9]+(\\.[0-9]+)?$' THEN (b.
 /** Темы курса по порядку с состоянием ученика. Права проверяет вызывающий (learnerCourse). */
 export async function listTopicProgress(courseId: string, userId: string): Promise<TopicProgress[]> {
   const { rows } = await db().query<{
-    id: string; title: string; viewed: boolean; blocks_total: number; a_total: number; a_done: number;
+    id: string; title: string; due_at: Date | null; viewed: boolean; blocks_total: number; a_total: number; a_done: number;
     a_returned: number; a_touched: number; earned: string | null; max: string | null;
   }>(
-    `SELECT t.id, t.title,
+    `SELECT t.id, t.title, t.due_at,
        EXISTS (SELECT 1 FROM topic_views v WHERE v.topic_id = t.id AND v.user_id = $2) AS viewed,
        count(b.id)::int AS blocks_total,
        count(b.id) FILTER (WHERE b.kind = 'assignment')::int AS a_total,
@@ -44,7 +45,7 @@ export async function listTopicProgress(courseId: string, userId: string): Promi
      LEFT JOIN blocks b ON b.topic_id = t.id
      LEFT JOIN submissions s ON s.block_id = b.id AND s.student_id = $2 AND b.kind = 'assignment'
      WHERE t.course_id = $1
-     GROUP BY t.id, t.title, t.position
+     GROUP BY t.id, t.title, t.due_at, t.position
      ORDER BY t.position, t.id`, [courseId, userId]);
   return rows.map((r) => {
     const done = r.viewed && r.a_done >= r.a_total;
@@ -53,6 +54,7 @@ export async function listTopicProgress(courseId: string, userId: string): Promi
       topicId: r.id, title: r.title, viewed: r.viewed, blocksTotal: r.blocks_total,
       assignmentsTotal: r.a_total, assignmentsDone: r.a_done, assignmentsReturned: r.a_returned,
       pointsEarned: Number(r.earned ?? 0), pointsMax: Number(r.max ?? 0), state,
+      dueAt: r.due_at ? r.due_at.toISOString() : null,
     };
   });
 }
@@ -87,4 +89,19 @@ export async function courseTeacherNames(courseIds: string[]): Promise<Map<strin
     `SELECT c.id, coalesce(u.display_name, u.login) AS name
      FROM courses c JOIN users u ON u.id = c.owner_id WHERE c.id = ANY($1::uuid[])`, [courseIds]);
   return new Map(rows.flatMap((r) => (r.name ? [[r.id, r.name] as [string, string]] : [])));
+}
+
+export type DueTone = 'late' | 'soon' | 'later';
+
+/** Срок глазами ученика: «просрочено», «сегодня», «завтра», «до 25 сент.». Тон — для цвета. */
+export function dueLabel(dueAt: string, now = new Date()): { text: string; tone: DueTone } {
+  const due = new Date(dueAt);
+  const ms = due.getTime() - now.getTime();
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((day(due) - day(now)) / 86_400_000);
+  const time = due.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  if (ms < 0) return { text: `срок прошёл ${due.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`, tone: 'late' };
+  if (days === 0) return { text: `сдать сегодня до ${time}`, tone: 'soon' };
+  if (days === 1) return { text: `сдать завтра до ${time}`, tone: 'soon' };
+  return { text: `сдать до ${due.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`, tone: days <= 3 ? 'soon' : 'later' };
 }

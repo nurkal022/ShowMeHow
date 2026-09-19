@@ -776,3 +776,34 @@ html[data-theme='dark'] .cf-bulk .btn { background: rgba(0, 0, 0, .12); }
 .cf-answer-table th, .cf-answer-table td { padding: 6px 14px; border: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
 .cf-answer-table th { background: var(--bg-subtle); font-weight: 600; font-size: 12.5px; }
 @media (prefers-reduced-motion: reduce) { .cab-drawer, .cab-drawer-scrim, .cf-bulk { animation: none; } }
+
+/* ---------------------- настройки платформы ---------------------------- */
+.cf-setting { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.cf-setting > div { display: flex; flex-direction: column; gap: 4px; max-width: 640px; }
+.cf-switch { position: relative; width: 48px; height: 28px; flex-shrink: 0; border: none; border-radius: 999px; background: var(--surface-3); cursor: pointer; transition: background .2s ease; }
+.cf-switch i { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-sm); transition: transform .22s cubic-bezier(.3, 1.4, .6, 1); }
+.cf-switch.on { background: var(--success); }
+.cf-switch.on i { transform: translateX(20px); }
+.usage-share { display: inline-block; width: 80px; height: 6px; margin-right: 8px; vertical-align: middle; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.usage-share i { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+
+/* ------------------------------- помощник ------------------------------- */
+.ai-btn { position: relative; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), color-mix(in srgb, #9b5cff 14%, var(--surface))); border-color: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent); }
+.ai-btn.btn-primary { background: linear-gradient(135deg, var(--accent), #8b5cf6); color: #fff; border-color: transparent; }
+.ai-btn svg { animation: ai-twinkle 2.4s ease-in-out infinite; }
+@keyframes ai-twinkle { 50% { transform: rotate(18deg) scale(1.15); } }
+.ai-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px; margin-bottom: 12px; border-radius: var(--r); border: 1px dashed color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+.ai-busy { display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin: 10px 0; border-radius: var(--r); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), color-mix(in srgb, #9b5cff 10%, var(--surface))); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); animation: m-rise-sm .3s ease; }
+.ai-busy > div { display: flex; flex-direction: column; gap: 2px; }
+.ai-busy strong { font-size: 14px; }
+.ai-busy span { font-size: 12.5px; color: var(--muted); }
+.ai-busy-orb { position: relative; width: 34px; height: 34px; flex-shrink: 0; }
+.ai-busy-orb i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--accent); animation: live-spin 1.2s linear infinite; }
+.ai-busy-orb i:nth-child(2) { inset: 6px; border-top-color: #8b5cf6; animation-duration: .9s; animation-direction: reverse; }
+.ai-busy-orb i:nth-child(3) { inset: 12px; border-top-color: #12b886; animation-duration: .7s; }
+.cf-suggest { align-self: flex-start; }
+@keyframes live-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ai-btn svg, .ai-busy-orb i { animation: none; } }
+.cf-due { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+.cf-due .input { width: auto; min-height: 34px; padding: 4px 10px; }
+.cf-due-quick { display: inline-flex; gap: 4px; }
