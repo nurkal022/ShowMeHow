@@ -44,9 +44,38 @@ export function extractJson<T>(llmOutput: string): T {
     } else if (ch === '}') {
       depth--;
     }
-    if (depth === 0) return JSON.parse(source.slice(start, i + 1));
+    if (depth === 0) return JSON.parse(repairJsonEscapes(source.slice(start, i + 1)));
   }
   throw new Error('unbalanced JSON in LLM output');
+}
+
+/**
+ * Модели пишут LaTeX прямо в строках JSON: «\alpha», «\sqrt» — недопустимые экранирования,
+ * и JSON.parse падает; а «\frac», «\theta», «\nu» — допустимые (\f, \t, \n), но молча
+ * портят формулу. Внутри строк удваиваем обратный слеш, если за ним не настоящее JSON-
+ * экранирование: \" \\ \/ \uXXXX, или \b \f \n \r \t, за которыми не идёт латинская буква
+ * (буква после них — это уже LaTeX-команда).
+ */
+export function repairJsonEscapes(json: string): string {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i];
+    if (!inString) {
+      if (ch === '"') inString = true;
+      out += ch;
+      continue;
+    }
+    if (ch === '"') { inString = false; out += ch; continue; }
+    if (ch !== '\\') { out += ch; continue; }
+    const next = json[i + 1] ?? '';
+    const after = json[i + 2] ?? '';
+    const real = next === '"' || next === '\\' || next === '/'
+      || (next === 'u' && /^[0-9a-fA-F]{4}$/.test(json.slice(i + 2, i + 6)))
+      || ('bfnrt'.includes(next) && next !== '' && !/[a-zA-Z]/.test(after));
+    if (real) { out += ch + next; i++; } else { out += '\\\\'; }
+  }
+  return out;
 }
 
 const ATTR_URL_RE = /(?:src|href)\s*=\s*["']([^"']+)["']/gi;
