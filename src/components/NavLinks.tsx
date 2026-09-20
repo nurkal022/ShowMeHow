@@ -5,15 +5,17 @@ import { PaletteButton } from './CommandPalette';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  IconAdmin, IconCourses, IconLab, IconLibrary, IconLogout, IconMonitor, IconMoon, IconOrg,
-  IconPlus, IconSun, IconTeach, IconUser,
+  IconAdmin, IconBook, IconCourses, IconLab, IconLibrary, IconLogout, IconMonitor, IconMoon, IconOrg,
+  IconPlus, IconSliders, IconSun, IconTable, IconTeach, IconUser,
 } from './icons';
+import { IconStar } from './cabinet/icons';
 import { applyTheme, readStoredTheme, storeTheme, type Theme } from '@/lib/theme';
 import type { NavSection, NavSectionKey } from '@/lib/org/policy';
 
 // Иконки живут на клиенте: компонент нельзя передать из серверного layout.
 export const ICONS: Record<NavSectionKey, typeof IconPlus> = {
-  learn: IconCourses,
+  learn: IconBook,
+  catalog: IconCourses,
   teach: IconTeach,
   create: IconPlus,
   library: IconLibrary,
@@ -24,7 +26,13 @@ export const ICONS: Record<NavSectionKey, typeof IconPlus> = {
 
 export function isSectionActive(href: string, pathname: string | null): boolean {
   if (!pathname) return false;
-  return href === '/' ? pathname === '/' : pathname.startsWith(href);
+  if (href === '/') return pathname === '/';
+  // «Моё обучение» и «Каталог» делят префикс /learn: курс и урок относятся к обучению,
+  // а страницы профиля ученика (оценки, заметки) не подсвечивают ни один раздел.
+  if (href === '/learn') {
+    return pathname === '/learn' || pathname.startsWith('/learn/topics') || pathname.startsWith('/learn/courses');
+  }
+  return pathname.startsWith(href);
 }
 
 const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof IconSun }[] = [
@@ -35,7 +43,16 @@ const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof IconSun }[] = [
 
 interface NavUser { label: string; role: string }
 
-export default function NavLinks({ sections, user }: { sections: NavSection[]; user?: NavUser }) {
+/** Личные страницы ученика живут в меню аккаунта, а не в шапке. */
+const STUDENT_MENU: { href: string; label: string; Icon: typeof IconUser }[] = [
+  { href: '/learn/me', label: 'Профиль ученика', Icon: IconUser },
+  { href: '/learn/grades', label: 'Мои оценки', Icon: IconTable },
+  { href: '/learn/notes', label: 'Заметки и закладки', Icon: IconStar },
+];
+
+export default function NavLinks({ sections, user, student = false }: {
+  sections: NavSection[]; user?: NavUser; student?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -111,8 +128,14 @@ export default function NavLinks({ sections, user }: { sections: NavSection[]; u
                 <strong>{user.label}</strong>
                 <span>{user.role === 'admin' ? 'Администратор' : 'Пользователь'}</span>
               </div>
+              {student && STUDENT_MENU.map(({ href, label, Icon }) => (
+                <Link key={href} href={href} className="menu-item" role="menuitem" onClick={() => setOpen(false)}>
+                  <Icon size={18} />{label}
+                </Link>
+              ))}
+              {student && <div className="menu-sep" />}
               <Link href="/profile" className="menu-item" role="menuitem" onClick={() => setOpen(false)}>
-                <IconUser size={18} />Профиль и настройки
+                <IconSliders size={18} />Настройки аккаунта
               </Link>
               <div className="menu-sep" />
               <div className="menu-theme" role="group" aria-label="Тема оформления">

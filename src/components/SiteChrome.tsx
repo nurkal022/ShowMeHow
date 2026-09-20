@@ -22,12 +22,14 @@ export function Brand() {
  */
 export default async function SiteChrome({ children }: { children: React.ReactNode }) {
   const user = await currentUserFromCookies();
-  const sections = user ? navSections(user, await listMemberships(user.id)) : [...GUEST_NAV_SECTIONS];
+  const memberships = user ? await listMemberships(user.id) : [];
+  const sections = user ? navSections(user, memberships) : [...GUEST_NAV_SECTIONS];
+  const student = memberships.some((m) => m.role === 'student');
   return (
     <>
       <nav className="topnav">
         <Brand />
-        <NavLinks sections={sections}
+        <NavLinks sections={sections} student={student}
           user={user ? { label: userContact(user), role: user.role } : undefined} />
       </nav>
       <main>{children}</main>

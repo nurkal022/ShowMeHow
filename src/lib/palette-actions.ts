@@ -12,8 +12,10 @@ export function paletteActions(user: AuthUser, memberships: Membership[]): Palet
   const student = memberships.some((m) => m.role === 'student');
   if (staff[0]) {
     const org = staff[0].orgSlug;
-    out.push({ id: 'new-course', title: 'Создать курс', subtitle: 'Преподавание', href: withOrgParam('/teach?new=1', org), keywords: 'новый курс урок' });
-    out.push({ id: 'teach', title: 'Мои курсы', subtitle: 'Преподавание', href: withOrgParam('/teach', org), keywords: 'курсы преподавание журнал' });
+    out.push({ id: 'new-course', title: 'Создать курс', subtitle: 'Преподавание', href: withOrgParam('/teach/courses?new=1', org), keywords: 'новый курс урок' });
+    out.push({ id: 'teach', title: 'Мои курсы', subtitle: 'Преподавание', href: withOrgParam('/teach/courses', org), keywords: 'курсы преподавание журнал' });
+    out.push({ id: 'teach-groups', title: 'Мои группы', subtitle: 'Преподавание', href: withOrgParam('/teach/groups', org), keywords: 'группы классы ученики' });
+    out.push({ id: 'teach-review', title: 'Проверка работ', subtitle: 'Преподавание', href: withOrgParam('/teach/review', org), keywords: 'проверить ответы оценки' });
   }
   if (admin) {
     out.push({ id: 'groups', title: 'Группы и ученики', subtitle: admin.orgName, href: withOrgParam('/org/groups', admin.orgSlug), keywords: 'классы ученики пароли' });

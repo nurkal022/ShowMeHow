@@ -88,7 +88,8 @@ describe('разделы навигации', () => {
 
   it('полный список и гостевой', () => {
     expect(ALL_NAV_SECTIONS.map((s) => [s.key, s.href, s.label])).toEqual([
-      ['learn', '/learn', 'Курсы'],
+      ['learn', '/learn', 'Моё обучение'],
+      ['catalog', '/learn/catalog', 'Каталог курсов'],
       ['teach', '/teach', 'Преподавание'],
       ['create', '/', 'Создать'],
       ['library', '/library', 'Библиотека'],
@@ -108,13 +109,14 @@ describe('разделы навигации', () => {
     expect(keys(navSections(USER, [member('org_admin')]))).toEqual(['teach', 'create', 'library', 'labs', 'org']);
   });
   it('ученик видит «Курсы» и не видит «Создать» без разрешения', () => {
-    expect(keys(navSections(USER, [member('student')]))).toEqual(['learn', 'library', 'labs']);
+    expect(keys(navSections(USER, [member('student')]))).toEqual(['learn', 'catalog', 'library', 'labs']);
     expect(keys(navSections(USER, [member('student', { studentsCanGenerate: true })])))
-      .toEqual(['learn', 'create', 'library', 'labs']);
+      .toEqual(['learn', 'catalog', 'create', 'library', 'labs']);
   });
   it('админ платформы видит «Админку»; ученик-админ — и «Курсы»', () => {
     expect(keys(navSections(ADMIN, []))).toEqual(['create', 'library', 'labs', 'admin']);
-    expect(keys(navSections(ADMIN, [member('student')]))).toEqual(['learn', 'create', 'library', 'labs', 'admin']);
+    expect(keys(navSections(ADMIN, [member('student')])))
+      .toEqual(['learn', 'catalog', 'create', 'library', 'labs', 'admin']);
   });
 });
 

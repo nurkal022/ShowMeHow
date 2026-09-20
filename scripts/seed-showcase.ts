@@ -55,15 +55,15 @@ const CLASS_B: [string, string][] = [
 ];
 
 /** Ученик и его «характер»: насколько он старается и насколько точен. Одинаковый при каждом запуске. */
-interface Kid { user: AuthUser; login: string; password: string; group: string; diligence: number; skill: number }
+export interface Kid { user: AuthUser; login: string; password: string; group: string; diligence: number; skill: number }
 
-function rng(seed: string): () => number {
+export function rng(seed: string): () => number {
   let h = 2166136261;
   for (const ch of seed) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
   return () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296; };
 }
 
-async function staff(email: string, name: string): Promise<AuthUser> {
+export async function staff(email: string, name: string): Promise<AuthUser> {
   const user = (await findUserByIdentifier(email)) ?? await createUser(email, SHOWCASE_PASSWORD);
   await updatePassword(user.id, SHOWCASE_PASSWORD);
   await updateProfile(user.id, { displayName: name });
@@ -71,7 +71,7 @@ async function staff(email: string, name: string): Promise<AuthUser> {
   return user;
 }
 
-async function demoSimulation(ownerId: string, slug: string): Promise<string> {
+export async function demoSimulation(ownerId: string, slug: string): Promise<string> {
   const { rows } = await db().query<{ id: string }>('SELECT id FROM simulations WHERE owner_id = $1 AND demo = $2', [ownerId, slug]);
   if (rows[0]) return rows[0].id;
   const demo = listBundledDemos().find((d) => d.slug === slug);
@@ -83,20 +83,20 @@ async function demoSimulation(ownerId: string, slug: string): Promise<string> {
   return meta.id;
 }
 
-async function add(topicId: string, kind: BlockKind, payload: unknown): Promise<Block> {
+export async function add(topicId: string, kind: BlockKind, payload: unknown): Promise<Block> {
   const body = sanitizeBlockBody(kind, payload);
   return createBlock(topicId, kind, { payload: body.payload });
 }
 
-const task = (prompt: string, spec: unknown, extra: Record<string, unknown> = {}) =>
+export const task = (prompt: string, spec: unknown, extra: Record<string, unknown> = {}) =>
   ({ prompt, points: 10, stand: null, allowRetry: false, explanation: '', rubric: [], spec, ...extra });
 
-interface Built {
+export interface Built {
   courseId: string;
   topics: { id: string; kind: 'lesson' | 'slides' | 'exam'; blocks: Block[] }[];
 }
 
-async function buildCourse(orgId: string, teacherId: string, groupIds: string[], sims: Record<string, string>): Promise<Built> {
+export async function buildCourse(orgId: string, teacherId: string, groupIds: string[], sims: Record<string, string>): Promise<Built> {
   const course = await createCourse({
     orgId, ownerId: teacherId, title: COURSE_TITLE, subject: 'Физика',
     description: 'От маятника до радуги: колебания, волны и свет — с тренажёрами, лабораторией в VR и живыми экспериментами. '
@@ -246,7 +246,7 @@ async function buildCourse(orgId: string, teacherId: string, groupIds: string[],
   return built;
 }
 
-async function buildInformatics(orgId: string, teacherId: string, groupIds: string[]): Promise<Built> {
+export async function buildInformatics(orgId: string, teacherId: string, groupIds: string[]): Promise<Built> {
   const course = await createCourse({ orgId, ownerId: teacherId, title: INFO_TITLE, subject: 'Информатика',
     description: 'Сортировки, поиск и графы — руками в «Зале алгоритмов» и на коде. Считаем шаги и сравниваем, кто быстрее.' });
   const built: Built = { courseId: course.id, topics: [] };
@@ -292,7 +292,7 @@ async function buildInformatics(orgId: string, teacherId: string, groupIds: stri
   return built;
 }
 
-async function buildChemistry(orgId: string, teacherId: string, groupIds: string[]): Promise<Built> {
+export async function buildChemistry(orgId: string, teacherId: string, groupIds: string[]): Promise<Built> {
   const course = await createCourse({ orgId, ownerId: teacherId, title: CHEM_TITLE, subject: 'Химия',
     description: 'Как понять, что реакция идёт: осадок, газ, цвет, пламя. Всё — на «Столе реакций», в браузере и в очках.' });
   const built: Built = { courseId: course.id, topics: [] };
@@ -405,7 +405,7 @@ async function backdate(submissionId: string, at: Date): Promise<void> {
      WHERE id = $1`, [submissionId, at]);
 }
 
-async function liveThrough(built: Built, kids: Kid[], teacherId: string): Promise<{ pending: number }> {
+export async function liveThrough(built: Built, kids: Kid[], teacherId: string): Promise<{ pending: number }> {
   const now = Date.now();
   const day = 86_400_000;
   // Когда тема была «пройдена»: первая — три недели назад, дальше ближе к сегодняшнему дню.

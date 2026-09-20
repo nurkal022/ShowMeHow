@@ -1,6 +1,10 @@
 import type { SearchParams } from '@/lib/http/params';
 import { requireCabinet } from '@/lib/http/org-page';
 import { listOrgPeople } from '@/lib/org/people';
+import { teacherActivity } from '@/lib/org/insights';
+import { teacherScorecard } from '@/lib/org/reports';
+import TeacherScoreTable from '@/components/org/TeacherScoreTable';
+import TeacherCards from '@/components/org/TeacherCards';
 import { userLabel } from '@/lib/auth/identifier';
 import CabinetHeader from '@/components/cabinet/CabinetHeader';
 import { PeopleTable } from '@/components/admin/AdminTables';
@@ -14,7 +18,9 @@ export default async function OrgTeachersPage({ searchParams }: { searchParams: 
   const ctx = await requireCabinet('/org/teachers', ['org_admin'], searchParams);
   if (!ctx) return null;
   const m = ctx.cabinet.membership;
-  const people = await listOrgPeople(m.orgId, ['org_admin', 'teacher']);
+  const [people, activity, scores] = await Promise.all([
+    listOrgPeople(m.orgId, ['org_admin', 'teacher']), teacherActivity(m.orgId), teacherScorecard(m.orgId, 30),
+  ]);
   return (
     <>
       <CabinetHeader title="Учителя" subtitle={m.orgName} org={m.orgSlug} choices={ctx.cabinet.choices}>
@@ -23,6 +29,8 @@ export default async function OrgTeachersPage({ searchParams }: { searchParams: 
           <AddTeacherForm slug={m.orgSlug} />
         </Drawer>
       </CabinetHeader>
+      {activity.length > 0 && <TeacherCards teachers={activity} />}
+      {scores.length > 0 && <TeacherScoreTable teachers={scores} />}
       <PeopleTable people={people} actions={(p) => (p.role === 'teacher'
         ? <MemberActions slug={m.orgSlug} userId={p.userId} label={userLabel(p)} disabled={p.disabled} canBlock canRemove />
         : null)} />

@@ -9,31 +9,32 @@ import {
 
 /** Курсы, их группы и темы; что видит ученик. Права проверяет src/lib/lms/access.ts. */
 
-const COURSE_COLUMNS = 'c.id, c.org_id, c.owner_id, c.title, c.subject, c.description, c.status, c.created_at, c.updated_at';
+const COURSE_COLUMNS = 'c.id, c.org_id, c.owner_id, c.title, c.subject, c.grade, c.description, c.status, c.created_at, c.updated_at';
 
 interface CourseRow {
-  id: string; org_id: string; owner_id: string; title: string; subject: string; description: string;
+  id: string; org_id: string; owner_id: string; title: string; subject: string; grade: string; description: string;
   status: CourseStatus; created_at: Date; updated_at: Date;
 }
 
 function toCourse(r: CourseRow): Course {
   return {
     id: r.id, orgId: r.org_id, ownerId: r.owner_id, title: r.title, subject: r.subject,
-    description: r.description, status: r.status,
+    grade: r.grade, description: r.description, status: r.status,
     createdAt: r.created_at.toISOString(), updatedAt: r.updated_at.toISOString(),
   };
 }
 
 export async function createCourse(input: {
-  orgId: string; ownerId: string; title: unknown; subject?: unknown; description?: unknown;
+  orgId: string; ownerId: string; title: unknown; subject?: unknown; grade?: unknown; description?: unknown;
 }): Promise<Course> {
   const title = requireText(input.title, LIMITS.title, 'Название');
   const subject = optionalText(input.subject, LIMITS.subject, 'Предмет');
+  const grade = optionalText(input.grade, LIMITS.grade, 'Класс');
   const description = optionalText(input.description, LIMITS.description, 'Описание');
   const { rows } = await db().query<CourseRow>(
-    `INSERT INTO courses AS c (id, org_id, owner_id, title, subject, description)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${COURSE_COLUMNS}`,
-    [crypto.randomUUID(), input.orgId, input.ownerId, title, subject, description]);
+    `INSERT INTO courses AS c (id, org_id, owner_id, title, subject, grade, description)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${COURSE_COLUMNS}`,
+    [crypto.randomUUID(), input.orgId, input.ownerId, title, subject, grade, description]);
   return toCourse(rows[0]);
 }
 
@@ -44,7 +45,7 @@ export async function getCourse(id: string): Promise<Course | null> {
 }
 
 export async function updateCourse(
-  id: string, patch: { title?: unknown; subject?: unknown; description?: unknown },
+  id: string, patch: { title?: unknown; subject?: unknown; grade?: unknown; description?: unknown },
 ): Promise<Course> {
   const current = await getCourse(id);
   if (!current) throw new LmsError('Курс не найден.');
@@ -53,9 +54,10 @@ export async function updateCourse(
     ? current.subject : optionalText(patch.subject, LIMITS.subject, 'Предмет');
   const description = patch.description === undefined
     ? current.description : optionalText(patch.description, LIMITS.description, 'Описание');
+  const grade = patch.grade === undefined ? current.grade : optionalText(patch.grade, LIMITS.grade, 'Класс');
   const { rows } = await db().query<CourseRow>(
-    `UPDATE courses c SET title = $2, subject = $3, description = $4, updated_at = now()
-     WHERE c.id = $1 RETURNING ${COURSE_COLUMNS}`, [id, title, subject, description]);
+    `UPDATE courses c SET title = $2, subject = $3, description = $4, grade = $5, updated_at = now()
+     WHERE c.id = $1 RETURNING ${COURSE_COLUMNS}`, [id, title, subject, description, grade]);
   return toCourse(rows[0]);
 }
 
@@ -304,4 +306,18 @@ export async function courseTopicViews(courseId: string): Promise<ProgressView[]
     `SELECT v.topic_id, v.user_id FROM topic_views v JOIN topics t ON t.id = v.topic_id
      WHERE t.course_id = $1`, [courseId]);
   return rows.map((r) => ({ topicId: r.topic_id, userId: r.user_id }));
+}
+
+/**
+ * Удаление курса — только пока по нему нет сданных ответов: иначе пропали бы оценки
+ * учеников. Курс с ответами отправляют в архив (его можно вернуть).
+ */
+export async function deleteCourse(courseId: string): Promise<void> {
+  const { rows } = await db().query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM submissions s JOIN blocks b ON b.id = s.block_id JOIN topics t ON t.id = b.topic_id
+     WHERE t.course_id = $1 AND s.status <> 'draft'`, [courseId]);
+  if (rows[0].n > 0) {
+    throw new LmsError(`По курсу уже есть ответы учеников (${rows[0].n}) — удалить его нельзя, чтобы не пропали оценки. Отправьте курс в архив.`);
+  }
+  await db().query('DELETE FROM courses WHERE id = $1', [courseId]);
 }

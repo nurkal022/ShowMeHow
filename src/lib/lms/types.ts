@@ -38,6 +38,7 @@ export const ANSWER_STATE_LABELS: Record<AnswerState, string> = {
 export const LIMITS = {
   title: 200,
   subject: 60,
+  grade: 40,
   description: 2000,
   text: 20000,
   caption: 300,
@@ -72,6 +73,8 @@ export interface Course {
   ownerId: string;
   title: string;
   subject: string;
+  /** Для какого класса: помощник пишет уроки под этот уровень. */
+  grade: string;
   description: string;
   status: CourseStatus;
   createdAt: string;

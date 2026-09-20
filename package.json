@@ -22,7 +22,8 @@
     "seed:school": "tsx scripts/seed-school.ts",
     "demos:thumbs": "tsx scripts/demo-thumbs.ts",
     "labs:thumbs": "tsx scripts/lab-thumbs.ts",
-    "seed:showcase": "tsx scripts/seed-showcase.ts"
+    "seed:showcase": "tsx scripts/seed-showcase.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts"
   },
   "dependencies": {
     "katex": "^0.16.47",

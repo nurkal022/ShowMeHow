@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { requirePageUser } from '@/lib/auth/page-guard';
 import { listStudentGrades } from '@/lib/lms/submissions';
 import GradesTable from '@/components/learn/GradesTable';
@@ -8,7 +7,6 @@ export default async function GradesPage() {
   if (!user) return null;
   return (
     <div className="learn-page learn-narrow">
-      <Link href="/learn" className="learn-back">← Мои курсы</Link>
       <header className="learn-head">
         <div>
           <h1>Мои оценки</h1>

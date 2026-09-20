@@ -7,7 +7,7 @@ import {
   badRequest, INVALID_BODY_MESSAGE, notFound, readBody, withUserErrors, type IdParams,
 } from '@/lib/http/route-kit';
 import { allowedGroupIds, staffCourse } from '@/lib/lms/access';
-import { getCourse, setCourseGroups, setCourseStatus, updateCourse } from '@/lib/lms/courses';
+import { deleteCourse, getCourse, setCourseGroups, setCourseStatus, updateCourse } from '@/lib/lms/courses';
 import { isCourseStatus, type CourseStatus } from '@/lib/lms/types';
 
 /** Правка карточки курса, статус и «Кому открыт». Всё проверяется до первой записи. */
@@ -27,8 +27,8 @@ export async function PATCH(req: Request, { params }: IdParams) {
     : Array.isArray(rawGroups) && rawGroups.every((g) => typeof g === 'string') ? rawGroups as string[] : null;
   if (groupIds === null) return badRequest(INVALID_BODY_MESSAGE);
   return withUserErrors(async () => {
-    if (body.title !== undefined || body.subject !== undefined || body.description !== undefined) {
-      await updateCourse(staff.course.id, { title: body.title, subject: body.subject, description: body.description });
+    if (body.title !== undefined || body.subject !== undefined || body.description !== undefined || body.grade !== undefined) {
+      await updateCourse(staff.course.id, { title: body.title, subject: body.subject, grade: body.grade, description: body.description });
     }
     if (groupIds) {
       const allowed = new Set(await allowedGroupIds(user, staff.membership));
@@ -44,5 +44,18 @@ export async function PATCH(req: Request, { params }: IdParams) {
       }
     }
     return NextResponse.json({ course: await getCourse(staff.course.id) });
+  });
+}
+
+/** Удалить курс целиком — только без ответов учеников (иначе — в архив). */
+export async function DELETE(req: Request, { params }: IdParams) {
+  const user = await guardUser(req);
+  if (user instanceof Response) return user;
+  const { id } = await params;
+  const staff = await staffCourse(user, id);
+  if (!staff) return notFound();
+  return withUserErrors(async () => {
+    await deleteCourse(staff.course.id);
+    return NextResponse.json({ ok: true });
   });
 }

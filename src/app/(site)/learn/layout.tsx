@@ -1,5 +1,7 @@
 import { requirePageUser } from '@/lib/auth/page-guard';
 import '../../learn.css';
+import '../../learn-course.css';
+import '../../learn-home.css';
 
 export const metadata = { title: 'Курсы — Tesseract' };
 

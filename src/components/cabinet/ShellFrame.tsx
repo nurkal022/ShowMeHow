@@ -3,10 +3,10 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  IconBack, IconCourses, IconLogo, IconLogout, IconMonitor, IconMoon, IconOrg, IconPlus, IconSun, IconTeach, IconUser,
+  IconAlert, IconBack, IconCourses, IconLogo, IconSpark, IconLogout, IconMonitor, IconMoon, IconOrg, IconPlus, IconSun, IconTeach, IconUser,
 } from '@/components/icons';
 import {
-  IconCatalog, IconChevronRight, IconDashboard, IconGroup, IconList, IconMenu, IconPeople, IconSettings,
+  IconCatalog, IconChart, IconChevronRight, IconDashboard, IconGroup, IconInbox, IconList, IconMenu, IconPeople, IconSettings,
 } from './icons';
 import {
   SIDEBAR_KEY, breadcrumbs, groupAllows,
@@ -25,7 +25,7 @@ import { useThemeChoice } from './useThemeChoice';
 
 const ICONS: Record<CabinetIcon, typeof IconPlus> = {
   dashboard: IconDashboard, orgs: IconOrg, users: IconPeople, catalog: IconCatalog, log: IconList,
-  teachers: IconTeach, groups: IconGroup, settings: IconSettings, courses: IconCourses, plus: IconPlus,
+  teachers: IconTeach, groups: IconGroup, settings: IconSettings, courses: IconCourses, plus: IconPlus, review: IconInbox, report: IconChart, risk: IconAlert, ask: IconSpark,
 };
 
 const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof IconSun }[] = [
@@ -292,7 +292,7 @@ function AccountMenu({ user, switchTargets }: { user: ShellUser; switchTargets: 
             <strong>{user.name || user.contact}</strong>
             <span>{user.platformAdmin ? 'Администратор платформы' : user.contact}</span>
           </div>
-          <Link href="/profile" className="menu-item" role="menuitem" onClick={() => setOpen(false)}>
+          <Link href="/account" className="menu-item" role="menuitem" onClick={() => setOpen(false)}>
             <IconUser size={18} />Профиль и настройки
           </Link>
           <Link href="/" className="menu-item" role="menuitem" onClick={() => setOpen(false)}>

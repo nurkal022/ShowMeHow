@@ -48,7 +48,7 @@ describe('форма задания', () => {
 describe('список курсов', () => {
   it('статус, группы, непроверенные и владелец', () => {
     const html = renderToStaticMarkup(createElement(CoursesTable, { showOwner: true, courses: [{
-      id: 'c1', orgId: 'o1', ownerId: 'u1', title: 'Физика 7', subject: 'Физика', description: '',
+      id: 'c1', orgId: 'o1', ownerId: 'u1', title: 'Физика 7', subject: 'Физика', grade: '', description: '',
       status: 'published', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z',
       ownerLabel: 'Анна Петровна', groupTitles: ['7А'], topicCount: 2, ungraded: 3,
     }] }));

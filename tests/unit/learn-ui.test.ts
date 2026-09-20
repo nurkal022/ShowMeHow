@@ -13,7 +13,7 @@ const base = { answer: null, comment: null, submittedAt: '2026-09-18T10:00:00.00
 describe('раздел ученика', () => {
   it('карточка курса: прогресс и «Продолжить»', () => {
     const html = render(createElement(CourseCard, {
-      course: { id: 'c1', orgId: 'o1', ownerId: 'u1', title: 'Физика 7', subject: 'Физика', description: '',
+      course: { id: 'c1', orgId: 'o1', ownerId: 'u1', title: 'Физика 7', subject: 'Физика', grade: '', description: '',
         status: 'published', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
       teacher: 'Анна Петровна', continueId: 't2',
       totals: { topicsTotal: 3, topicsDone: 1, topicsViewed: 1, assignmentsTotal: 4, assignmentsDone: 2, pointsEarned: 8, pointsMax: 40 },

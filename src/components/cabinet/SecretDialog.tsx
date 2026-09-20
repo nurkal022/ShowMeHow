@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { IconCopy, IconKey } from '@/components/icons';
+import Layer from './Layer';
 
 /** Временный пароль — один раз, с кнопкой «Скопировать». */
 export default function SecretDialog({ title, lines, secret, onClose }: {
@@ -16,6 +17,7 @@ export default function SecretDialog({ title, lines, secret, onClose }: {
     }
   }
   return (
+    <Layer>
     <div className="modal-backdrop">
       <div className="modal vr-modal" role="dialog" aria-modal="true" aria-labelledby="secret-title">
         <div className="modal-head"><IconKey size={22} /><h2 id="secret-title">{title}</h2></div>
@@ -30,5 +32,6 @@ export default function SecretDialog({ title, lines, secret, onClose }: {
         </div>
       </div>
     </div>
+    </Layer>
   );
 }

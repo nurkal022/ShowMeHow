@@ -477,6 +477,31 @@ svg { flex-shrink: 0; }
 .chip-action.active { border-color: transparent; background: var(--accent-soft); color: var(--accent); font-weight: 500; }
 .count { font-size: 13px; color: var(--muted); }
 
+.library-head > div { margin-right: auto; }
+.library-head > div p { margin: 2px 0 0; font-size: 13.5px; }
+
+/* Каталог: слева разделы, справа сетка — фильтр не уезжает при прокрутке. */
+.lib-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 26px; margin-top: 22px; align-items: start; }
+.lib-side { position: sticky; top: calc(var(--nav-h) + 16px); display: flex; flex-direction: column; gap: 2px; }
+.lib-sub {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px;
+  border: none; background: none; border-radius: var(--r-sm); cursor: pointer;
+  font: inherit; font-size: 13.5px; color: var(--text-2); text-align: left;
+  transition: background .12s ease, color .12s ease;
+}
+.lib-sub b { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lib-sub:hover { background: var(--surface-2); color: var(--text); }
+.lib-sub.active { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+.lib-sub.active b { color: var(--accent); }
+.lib-bar { display: flex; align-items: center; gap: 12px; }
+.lib-bar .count { margin-right: auto; }
+.lib-main .cards { margin-top: 14px; }
+@media (max-width: 860px) {
+  .lib-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .lib-side { position: static; flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 2px; }
+  .lib-sub { width: auto; flex-shrink: 0; border-radius: var(--r-pill); background: var(--surface-2); }
+}
+
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 18px; margin-top: 20px; }
 .sim-card {
   display: flex; flex-direction: column;
@@ -488,8 +513,9 @@ svg { flex-shrink: 0; }
 .card-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .card-thumb iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: var(--surface); }
 .card-thumb-hint {
-  position: absolute; inset: 0; display: grid; place-items: center;
-  background: rgba(16, 24, 40, .34); color: #fff; opacity: 0; transition: opacity .16s ease;
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: rgba(16, 24, 40, .42); color: #fff; font-size: 14px; font-weight: 500;
+  opacity: 0; transition: opacity .16s ease;
 }
 .sim-card:hover .card-thumb-hint { opacity: 1; }
 .card-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
@@ -821,9 +847,30 @@ body:hover .present-exit { opacity: .85; }
 
 /* ---------- Лаборатории ---------- */
 .labs-lead { margin: 6px 0 0; max-width: 640px; }
-.labs .cards { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-.lab-card .card-thumb { background: #0f1420; }
-.lab-blurb { margin: 4px 0 0; font-size: 13px; color: var(--text-2); line-height: 1.45; }
+/* Лаборатории: карточка-плитка «картинка слева, описание справа» — сцен мало,
+   и каждой есть что рассказать, поэтому широкие строки удобнее узкой сетки. */
+.lab-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 18px; margin-top: 22px; }
+.lab-card {
+  display: grid; grid-template-columns: 220px minmax(0, 1fr);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  overflow: hidden; transition: box-shadow .16s ease, border-color .16s ease, transform .16s ease;
+}
+.lab-card:hover { box-shadow: var(--shadow-md); border-color: var(--border-strong); }
+.lab-card .card-thumb { height: 100%; aspect-ratio: auto; background: #0f1420; }
+.lab-card .card-body { padding: 16px 18px 16px 16px; gap: 6px; }
+.lab-card .card-body h3 { font-size: 16px; }
+.lab-card .card-actions { margin-top: auto; padding-top: 10px; gap: 8px; }
+.lab-blurb { margin: 2px 0 0; font-size: 13px; color: var(--text-2); line-height: 1.45; }
+.lab-stations { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.lab-stations li {
+  font-size: 11.5px; color: var(--muted); padding: 3px 9px;
+  background: var(--surface-2); border-radius: var(--r-pill);
+}
+@media (max-width: 720px) {
+  .lab-grid { grid-template-columns: minmax(0, 1fr); }
+  .lab-card { grid-template-columns: minmax(0, 1fr); }
+  .lab-card .card-thumb { aspect-ratio: 16/9; }
+}
 .vr-modal, .soon-modal { max-width: 420px; }
 .vr-steps { margin: 4px 0 0; padding-left: 20px; color: var(--text-2); font-size: 14px; line-height: 1.6; }
 .vr-qr { display: flex; justify-content: center; padding: 10px; background: #fff; border-radius: var(--r-sm); }

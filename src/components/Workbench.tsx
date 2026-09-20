@@ -229,6 +229,12 @@ export default function Workbench() {
     // попадал бы в state дважды.
     if (didInit.current) return;
     didInit.current = true;
+    // Учитель пришёл из задания: помощник уже описал тренажёр — описание ложится в поле запроса.
+    const brief = search.get('brief');
+    if (brief) {
+      setPrompt(brief.slice(0, 2000));
+      setInputMode('text');
+    }
     // Порядок при монтировании: активный (running) job важнее ?id= — он восстанавливается
     // из localStorage и переподключается по SSE; ?id= обрабатывается только если такого
     // job нет (или он уже завершился и был вычищен).

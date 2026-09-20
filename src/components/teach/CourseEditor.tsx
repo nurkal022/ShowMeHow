@@ -18,7 +18,8 @@ import {
 import RowMenu from '@/components/lms/ui/RowMenu';
 import { useConfirm, type ConfirmOptions } from '@/components/lms/ui/useConfirm';
 import BlockEditor from './BlockEditor';
-import { AiBusy, AiLessonButton, aiBlockAction } from './AiAssist';
+import { AiBusy, aiBlockAction } from './AiAssist';
+import { LessonBuilderButton } from './LessonBuilder';
 import BlockSummary from './BlockSummary';
 import {
   ASSIGNMENT_META, ASSIGNMENT_TYPES, BLOCK_GROUPS, BLOCK_META, BlockKindIcon, blockHeadline, blockProblem,
@@ -240,7 +241,7 @@ export default function CourseEditor(props: CourseEditorProps) {
   return (
     <div className="cf-course">
       <header className="cf-card cf-course-head">
-        <Link href="/teach" className="cf-back"><IconBack size={15} />Все курсы</Link>
+        <Link href="/teach/courses" className="cf-back"><IconBack size={15} />Все курсы</Link>
         <div className="cf-course-top">
           <CourseTitle course={course} onSave={(title) => patchCourse({ title })} />
           <div className="cf-course-actions">
@@ -265,7 +266,9 @@ export default function CourseEditor(props: CourseEditorProps) {
         {course.status === 'published' && noAudience && (
           <p className="warn-banner cf-banner"><IconAlert size={16} />Курс опубликован, но не открыт ни одной группе — ученики его не видят.</p>
         )}
-        <CourseDetails course={course} onSave={patchCourse} />
+        <Link className="cf-details-link" href={`/teach/courses/${course.id}/settings`}>
+          <IconChevron size={16} />Описание, класс и план курса — на странице «О курсе»
+        </Link>
       </header>
 
       {error && <p className="error-box" role="alert">{error}</p>}
@@ -279,7 +282,7 @@ export default function CourseEditor(props: CourseEditorProps) {
 
         <section className="cf-blocks" aria-label={activeTopic ? `Блоки темы «${activeTopic.title}»` : 'Блоки темы'}>
           {!activeTopic && (
-            <FirstTopic onAdd={async (title) => {
+            <FirstTopic courseId={course.id} subject={course.subject} onBuilt={(id) => router.push(courseEditorHref(course.id, id))} onAdd={async (title) => {
               const data = await act<{ topic: Topic }>(`/api/teach/courses/${course.id}/topics`, 'POST', { title });
               if (data) router.push(courseEditorHref(course.id, data.topic.id));
               return data !== null;
@@ -294,8 +297,8 @@ export default function CourseEditor(props: CourseEditorProps) {
               </div>
               <span className="muted">{blocksLabel(blocks.length)}</span>
               {blocks.length > 0 && (
-                <AiLessonButton topicId={activeTopic.id} topicTitle={activeTopic.title} subject={course.subject} empty={false}
-                  onDone={(firstId) => { if (firstId) { scrollTo.current = firstId; setFreshId(firstId); } router.refresh(); }} />
+                <LessonBuilderButton courseId={course.id} subject={course.subject} topicId={activeTopic.id} topicTitle={activeTopic.title} variant="small"
+                  onDone={(_t, firstId) => { if (firstId) { scrollTo.current = firstId; setFreshId(firstId); } router.refresh(); }} />
               )}
               <a className="btn btn-sm btn-ghost" href={learnTopicHref(activeTopic.id, true)} target="_blank" rel="noopener noreferrer">
                 <IconEye size={15} />Тема глазами ученика
@@ -419,8 +422,9 @@ export default function CourseEditor(props: CourseEditorProps) {
           {aiBusy && <AiBusy text={aiBusy} />}
           {activeTopic && blocks.length === 0 && (
             <div className="ai-empty">
-              <AiLessonButton topicId={activeTopic.id} topicTitle={activeTopic.title} subject={course.subject} empty
-                onDone={(firstId) => { if (firstId) { scrollTo.current = firstId; setFreshId(firstId); } router.refresh(); }} />
+              <LessonBuilderButton courseId={course.id} subject={course.subject} topicId={activeTopic.id} topicTitle={activeTopic.title}
+                label="Собрать урок с помощником"
+                onDone={(_t, firstId) => { if (firstId) { scrollTo.current = firstId; setFreshId(firstId); } router.refresh(); }} />
               <span className="muted">или соберите тему сами из блоков ниже</span>
             </div>
           )}
@@ -527,27 +531,6 @@ function CourseTitle({ course, onSave }: { course: Course; onSave: (title: strin
       <button type="submit" className="btn btn-sm btn-primary">Сохранить</button>
       <button type="button" className="btn btn-sm" onClick={() => setEditing(false)}>Отмена</button>
     </form>
-  );
-}
-
-function CourseDetails({ course, onSave }: { course: Course; onSave: (patch: Record<string, unknown>) => Promise<unknown> }) {
-  const [subject, setSubject] = useState(course.subject);
-  const [description, setDescription] = useState(course.description);
-  const changed = subject !== course.subject || description !== course.description;
-  return (
-    <details className="cf-details">
-      <summary><IconChevron size={16} />Предмет и описание курса</summary>
-      <form className="cf-details-form" onSubmit={(e) => { e.preventDefault(); void onSave({ subject, description }); }}>
-        <label className="field"><span>Предмет</span>
-          <input value={subject} maxLength={LIMITS.subject} placeholder="Физика" onChange={(e) => setSubject(e.target.value)} />
-        </label>
-        <label className="field"><span>Описание — его видят ученики на странице курса</span>
-          <textarea className="input cf-textarea" rows={3} value={description} maxLength={LIMITS.description}
-            onChange={(e) => setDescription(e.target.value)} />
-        </label>
-        <button type="submit" className="btn btn-sm" disabled={!changed}>Сохранить описание</button>
-      </form>
-    </details>
   );
 }
 
@@ -675,12 +658,21 @@ function TopicPane({ course, topics, activeTopicId, counts, act, ask, beforeLeav
       ) : (
         <button type="button" className="cf-add-line" onClick={() => setAdding(true)}><IconPlus size={16} />Добавить тему</button>
       ))}
+      {topics.length > 0 && !adding && (
+        <LessonBuilderButton courseId={course.id} subject={course.subject} variant="line" label="Урок с помощником"
+          onDone={(id) => onAdded(id)} />
+      )}
     </aside>
   );
 }
 
-function FirstTopic({ onAdd }: { onAdd: (title: string) => Promise<boolean> }) {
+function FirstTopic({ courseId, subject, onAdd, onBuilt }: {
+  courseId: string; subject: string; onAdd: (title: string) => Promise<boolean>; onBuilt: (topicId: string) => void;
+}) {
   const [title, setTitle] = useState('');
+  // ?build=1 — курс создан с выбором «Первый урок с помощником»: студия открывается сама.
+  const [autoBuild, setAutoBuild] = useState(false);
+  useEffect(() => { setAutoBuild(new URLSearchParams(window.location.search).get('build') === '1'); }, []);
   const [busy, setBusy] = useState(false);
   return (
     <div className="cf-card cf-hero">
@@ -701,6 +693,9 @@ function FirstTopic({ onAdd }: { onAdd: (title: string) => Promise<boolean> }) {
           placeholder="Например, «Колебания маятника»" onChange={(e) => setTitle(e.target.value)} />
         <button type="submit" className="btn btn-primary" disabled={busy}><IconPlus size={16} />{busy ? 'Создаю…' : 'Создать тему'}</button>
       </form>
+      <div className="cf-hero-or"><span>или</span></div>
+      <LessonBuilderButton courseId={courseId} subject={subject} label="Собрать первый урок с помощником" autoOpen={autoBuild}
+        onDone={(id) => onBuilt(id)} />
     </div>
   );
 }

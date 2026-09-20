@@ -193,3 +193,11 @@ export async function listCourseAssignments(courseId: string): Promise<CourseAss
     }];
   });
 }
+
+/** Сколько блоков и заданий в каждой теме курса — для программы курса у ученика. */
+export async function blockCounts(courseId: string): Promise<Map<string, { blocks: number; tasks: number }>> {
+  const { rows } = await db().query<{ topic_id: string; blocks: number; tasks: number }>(
+    `SELECT t.id AS topic_id, count(b.id)::int AS blocks, count(b.id) FILTER (WHERE b.kind = 'assignment')::int AS tasks
+     FROM topics t LEFT JOIN blocks b ON b.topic_id = t.id WHERE t.course_id = $1 GROUP BY t.id`, [courseId]);
+  return new Map(rows.map((r) => [r.topic_id, { blocks: r.blocks, tasks: r.tasks }]));
+}

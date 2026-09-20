@@ -32,3 +32,14 @@ export function tail(series: DailySeries, n: number): DailySeries {
 export function sum(values: number[]): number {
   return values.reduce((a, b) => a + b, 0);
 }
+
+/** Даты 'YYYY-MM-DD' последних `n` дней по локальному времени сервера, от старой к сегодняшней. */
+export function lastDays(n: number): string[] {
+  const out: string[] = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+  }
+  return out;
+}

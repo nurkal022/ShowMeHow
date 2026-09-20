@@ -21,3 +21,17 @@ export function ruPlural(n: number, one: string, few: string, many: string): str
   if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return few;
   return many;
 }
+
+/** «только что», «5 мин назад», «вчера», «3 дн. назад» — для лент и «последнего захода». */
+export function formatAgo(iso: string | null, now = Date.now()): string {
+  if (!iso) return 'никогда';
+  const min = Math.round((now - new Date(iso).getTime()) / 60_000);
+  if (min < 1) return 'только что';
+  if (min < 60) return `${min} мин назад`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} ч назад`;
+  const d = Math.round(h / 24);
+  if (d === 1) return 'вчера';
+  if (d < 30) return `${d} дн. назад`;
+  return formatDate(iso);
+}

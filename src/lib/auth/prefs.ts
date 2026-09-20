@@ -18,6 +18,12 @@ export interface UserPrefs {
   startWithConstructor?: boolean;
   /** Голосовой ввод в композере. */
   voiceInput?: boolean;
+  /** Учитель: класс, уровень и длительность урока по умолчанию в конструкторе урока. */
+  teachGrade?: string;
+  teachLevel?: 'basic' | 'standard' | 'advanced';
+  teachMinutes?: number;
+  /** Учитель: подпись, которую удобно добавлять к комментариям ученикам. */
+  teachSignature?: string;
 }
 
 const QUALITY = ['fast', 'standard', 'max'];
@@ -45,6 +51,11 @@ export function sanitizePrefs(raw: unknown): UserPrefs {
   if (style) out.style = style;
   if (typeof src.startWithConstructor === 'boolean') out.startWithConstructor = src.startWithConstructor;
   if (typeof src.voiceInput === 'boolean') out.voiceInput = src.voiceInput;
+  if (typeof src.teachGrade === 'string') out.teachGrade = src.teachGrade.trim().slice(0, 40);
+  const teachLevel = pickEnum<'basic' | 'standard' | 'advanced'>(src.teachLevel, ['basic', 'standard', 'advanced']);
+  if (teachLevel) out.teachLevel = teachLevel;
+  if (Number.isInteger(src.teachMinutes) && (src.teachMinutes as number) >= 5 && (src.teachMinutes as number) <= 180) out.teachMinutes = src.teachMinutes as number;
+  if (typeof src.teachSignature === 'string') out.teachSignature = src.teachSignature.trim().slice(0, 120);
   return out;
 }
 

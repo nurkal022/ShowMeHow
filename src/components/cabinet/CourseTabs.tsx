@@ -7,10 +7,12 @@ export default function CourseTabs({ courseId }: { courseId: string }) {
   const pathname = usePathname() ?? '';
   const root = `/teach/courses/${courseId}`;
   const tabs = [
+    { href: `${root}/settings`, label: 'О курсе', active: pathname.startsWith(`${root}/settings`) },
     { href: root, label: 'Редактор', active: pathname === root },
     { href: `${root}/journal`, label: 'Журнал', active: pathname.startsWith(`${root}/journal`) },
     { href: `${root}/progress`, label: 'Прогресс', active: pathname.startsWith(`${root}/progress`) },
     { href: `${root}/answers`, label: 'Ответы', active: pathname.startsWith(`${root}/answers`) },
+    { href: `${root}/debrief`, label: 'Разбор', active: pathname.startsWith(`${root}/debrief`) },
     { href: `${root}/analytics`, label: 'Аналитика', active: pathname.startsWith(`${root}/analytics`) || pathname.startsWith(`${root}/students`) },
   ];
   return (

@@ -86,13 +86,21 @@ describe('санация блоков', () => {
     const body = sanitizeBlockBody('assignment', {
       prompt: 'Период?', points: 5, spec: { type: 'number', answer: '2,0', tolerance: '0.1', unit: 'с' } });
     expect(body).toEqual({ kind: 'assignment', payload: {
-      prompt: 'Период?', points: 5, stand: null, allowRetry: false, rubric: [], explanation: '',
+      prompt: 'Период?', points: 5, stand: null, allowRetry: false, rubric: [], explanation: '', reference: '',
       spec: { type: 'number', answer: 2, tolerance: 0.1, unit: 'с' },
     } });
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', spec: { type: 'number' } }))
       .toThrow('Укажите правильное число.');
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', spec: { type: 'number', answer: 1, tolerance: -1 } }))
       .toThrow('Допуск — неотрицательное число.');
+  });
+  it('эталонный ответ хранится у учителя и не уходит ученику даже после проверки', () => {
+    const body = sanitizeBlockBody('assignment', { prompt: 'Объясните', reference: 'Ответ на отлично: …', spec: { type: 'text' } });
+    expect(body.kind === 'assignment' && body.payload.reference).toBe('Ответ на отлично: …');
+    for (const reveal of [false, true]) {
+      const student = toStudentBody(body, reveal);
+      expect(JSON.stringify(student)).not.toContain('Ответ на отлично');
+    }
   });
   it('баллы, тип и стенд проверяются', () => {
     expect(() => sanitizeBlockBody('assignment', { prompt: 'x', points: 1.5, spec: { type: 'text' } }))

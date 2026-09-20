@@ -1,5 +1,6 @@
 import '../cabinet.css';
 import '../cabinet-flows.css';
+import '../cabinet-home.css';
 import SiteChrome from '@/components/SiteChrome';
 import Shell from '@/components/cabinet/Shell';
 import { currentUserFromCookies } from '@/lib/auth/session';

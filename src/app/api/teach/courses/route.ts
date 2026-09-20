@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   return withUserErrors(async () => NextResponse.json({
     course: await createCourse({
       orgId: membership.orgId, ownerId: user.id,
-      title: body.title, subject: body.subject, description: body.description,
+      title: body.title, subject: body.subject, grade: body.grade, description: body.description,
     }),
   }, { status: 201 }));
 }

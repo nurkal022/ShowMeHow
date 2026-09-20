@@ -13,7 +13,7 @@ export const SIDEBAR_KEY = 'tesseract-cabinet-sidebar';
 
 export type CabinetIcon =
   | 'dashboard' | 'orgs' | 'users' | 'catalog' | 'log'
-  | 'teachers' | 'groups' | 'settings' | 'courses' | 'plus';
+  | 'teachers' | 'groups' | 'settings' | 'courses' | 'plus' | 'review' | 'report' | 'risk' | 'ask';
 
 export type CabinetGroupKey = 'platform' | 'org' | 'teach';
 
@@ -58,14 +58,19 @@ const PLATFORM_ITEMS: CabinetMenuItem[] = [
 
 const ORG_ITEMS: CabinetMenuItem[] = [
   { href: '/org', label: 'Обзор', icon: 'dashboard', exact: true },
+  { href: '/org/reports', label: 'Отчёт недели', icon: 'report' },
+  { href: '/org/risk', label: 'Риски', icon: 'risk' },
+  { href: '/org/ask', label: 'Спросить ИИ', icon: 'ask' },
   { href: '/org/teachers', label: 'Учителя', icon: 'teachers' },
   { href: '/org/groups', label: 'Группы', icon: 'groups' },
   { href: '/org/settings', label: 'Настройки', icon: 'settings' },
 ];
 
 const TEACH_ITEMS: CabinetMenuItem[] = [
-  { href: '/teach', label: 'Курсы', icon: 'courses' },
-  { href: '/teach?new=1', label: 'Новый курс', icon: 'plus', action: true },
+  { href: '/teach', label: 'Сегодня', icon: 'dashboard', exact: true },
+  { href: '/teach/courses', label: 'Курсы', icon: 'courses' },
+  { href: '/teach/groups', label: 'Группы', icon: 'groups' },
+  { href: '/teach/review', label: 'Проверка', icon: 'review' },
 ];
 
 export function buildCabinetMenu(user: Pick<AuthUser, 'role'>, memberships: Membership[]): CabinetMenu {
@@ -96,7 +101,7 @@ export interface Crumb { href: string; label: string }
 const SEGMENT_LABELS: Record<string, string> = {
   admin: 'Платформа', orgs: 'Организации', users: 'Пользователи', catalog: 'Каталог', log: 'Журнал',
   org: 'Организация', teachers: 'Учителя', groups: 'Группы', settings: 'Настройки', credentials: 'Лист паролей',
-  teach: 'Преподавание', journal: 'Журнал', progress: 'Прогресс', answers: 'Ответы', analytics: 'Аналитика',
+  teach: 'Преподавание', account: 'Профиль', courses: 'Курсы', review: 'Проверка', generate: 'Курс из программы', debrief: 'Разбор', reports: 'Отчёт недели', risk: 'Риски', ask: 'Спросить ИИ', journal: 'Журнал', progress: 'Прогресс', answers: 'Ответы', analytics: 'Аналитика',
 };
 
 /** Подпись сегмента-идентификатора — по тому, что стоит перед ним. */
@@ -105,7 +110,7 @@ const ID_LABELS: Record<string, string> = {
 };
 
 /** Сегменты без собственной страницы: в крошки не попадают. */
-const SKIPPED = new Set(['courses', 'students']);
+const SKIPPED = new Set(['students']);
 
 export function breadcrumbs(pathname: string): Crumb[] {
   const parts = pathname.split('/').filter(Boolean);
@@ -113,7 +118,9 @@ export function breadcrumbs(pathname: string): Crumb[] {
   parts.forEach((part, i) => {
     if (SKIPPED.has(part) && i > 0) return;
     const href = `/${parts.slice(0, i + 1).join('/')}`;
-    const label = SEGMENT_LABELS[part] ?? ID_LABELS[parts[i - 1] ?? ''] ?? part;
+    // «settings» внутри курса — страница «О курсе», у организации — её настройки.
+    const label = part === 'settings' && parts[i - 2] === 'courses' ? 'О курсе'
+      : SEGMENT_LABELS[part] ?? ID_LABELS[parts[i - 1] ?? ''] ?? part;
     crumbs.push({ href, label });
   });
   return crumbs;

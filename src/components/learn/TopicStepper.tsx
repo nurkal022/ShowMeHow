@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import type { TopicProgress } from '@/lib/lms/learn';
-import { dueLabel, TOPIC_STATE_LABELS } from '@/lib/lms/learn';
+import type { TopicProgress } from '@/lib/lms/learn-view';
+import { dueLabel, TOPIC_STATE_LABELS } from '@/lib/lms/learn-view';
 import { learnTopicHref } from '@/lib/lms/links';
 import { formatScore, ruPlural } from '@/lib/lms/format';
 import { IconCheck, IconChevron } from '@/components/icons';

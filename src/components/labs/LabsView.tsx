@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import QRCode from 'qrcode';
 import type { LabEntry } from '@/lib/labs';
 import { labUrl } from '@/lib/labs';
 import { IconLab, IconPlay, IconPlus, IconVr } from '@/components/icons';
@@ -35,21 +34,23 @@ export default function LabsView({ labs, isGuest = false }: { labs: LabEntry[]; 
           только на защищённом соединении. Сами сцены доступны уже сейчас.
         </p>
       )}
-      <div className="cards">
-        {labs.map((lab) => (
-          <article key={lab.slug} className="sim-card lab-card">
+      <div className="lab-grid">
+        {labs.map((lab, i) => (
+          <article key={lab.slug} className="lab-card" style={{ animationDelay: `${i * 60}ms` }}>
             <a className="card-thumb" href={labUrl(lab.slug)} target="_blank" rel="noopener">
-              <img src={`/labs/${lab.slug}.png`} alt="" loading="lazy" />
-              <span className="card-thumb-hint"><IconPlay size={16} />Открыть</span>
+              <img src={`/labs/${lab.slug}.png`} alt="" loading="lazy" decoding="async" />
+              <span className="card-thumb-hint"><IconPlay size={22} />Открыть</span>
             </a>
             <div className="card-body">
+              <div className="card-sub"><span className="chip">{lab.subject}</span></div>
               <h3><a href={labUrl(lab.slug)} target="_blank" rel="noopener">{lab.title}</a></h3>
-              <div className="card-sub"><span className="chip">{lab.subject}</span>
-                <span>{lab.stations.join(' · ')}</span></div>
               <p className="lab-blurb">{lab.blurb}</p>
+              <ul className="lab-stations">
+                {lab.stations.map((s) => <li key={s}>{s}</li>)}
+              </ul>
               <div className="card-actions">
-                <a className="btn btn-sm" href={labUrl(lab.slug)} target="_blank" rel="noopener">
-                  <IconPlay size={15} />Открыть
+                <a className="btn btn-sm btn-primary" href={labUrl(lab.slug)} target="_blank" rel="noopener">
+                  <IconPlay size={15} />Открыть сцену
                 </a>
                 {secure && (
                   <button type="button" className="btn btn-sm btn-ghost" onClick={() => setVrFor(lab)}>
@@ -87,9 +88,12 @@ function VrDialog({ lab, onClose }: { lab: LabEntry; onClose: () => void }) {
   useEffect(() => {
     const url = new URL(labUrl(lab.slug), location.href).toString();
     setHref(url);
-    if (canvasRef.current) {
-      QRCode.toCanvas(canvasRef.current, url, { width: 220, margin: 1 }).catch(() => {});
-    }
+    // qrcode тянется только когда окно открыли: в бандл списка лабораторий он не нужен.
+    let alive = true;
+    import('qrcode').then(({ default: QRCode }) => {
+      if (alive && canvasRef.current) QRCode.toCanvas(canvasRef.current, url, { width: 220, margin: 1 }).catch(() => {});
+    }).catch(() => {});
+    return () => { alive = false; };
   }, [lab.slug]);
   useEffect(() => {
     function onEsc(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }

@@ -13,7 +13,7 @@ export const GENERATION_FORBIDDEN_MESSAGE = 'Генерация недоступ
 
 export type SessionKind = 'long' | 'short';
 
-export type NavSectionKey = 'learn' | 'teach' | 'create' | 'library' | 'labs' | 'org' | 'admin';
+export type NavSectionKey = 'learn' | 'catalog' | 'teach' | 'create' | 'library' | 'labs' | 'org' | 'admin';
 
 export interface NavSection {
   key: NavSectionKey;
@@ -23,7 +23,8 @@ export interface NavSection {
 
 /** Порядок в шапке. B2C-пользователь видит только три средних раздела — как раньше. */
 export const ALL_NAV_SECTIONS: readonly NavSection[] = [
-  { key: 'learn', href: '/learn', label: 'Курсы' },
+  { key: 'learn', href: '/learn', label: 'Моё обучение' },
+  { key: 'catalog', href: '/learn/catalog', label: 'Каталог курсов' },
   { key: 'teach', href: '/teach', label: 'Преподавание' },
   { key: 'create', href: '/', label: 'Создать' },
   { key: 'library', href: '/library', label: 'Библиотека' },
@@ -80,6 +81,7 @@ export function generationLimit(user: PolicyUser, memberships: Membership[]): nu
 export function navSections(user: PolicyUser, memberships: Membership[]): NavSection[] {
   const visible: Record<NavSectionKey, boolean> = {
     learn: memberships.some((m) => m.role === 'student'),
+    catalog: memberships.some((m) => m.role === 'student'),
     teach: hasStaffRole(memberships),
     create: canGenerate(user, memberships),
     library: true,

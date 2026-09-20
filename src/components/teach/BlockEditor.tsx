@@ -11,7 +11,8 @@ import { LABS, labUrl } from '@/lib/labs';
 import { generateForBlockHref } from '@/lib/lms/links';
 import Markup, { Tex } from '@/components/lms/Markup';
 import { CalloutBlock, VideoBlock } from '@/components/lms/ContentBlocks';
-import { IconArrowDown, IconArrowUp, IconCheck, IconLibrary, IconPlus, IconTrash, IconUpload, IconWand } from '@/components/icons';
+import { IconArrowDown, IconArrowUp, IconCheck, IconLibrary, IconPlus, IconSpark, IconTrash, IconUpload, IconWand } from '@/components/icons';
+import { callApi } from '@/components/cabinet/api';
 import { ASSIGNMENT_META, ASSIGNMENT_TYPES } from './block-meta';
 import SimulationPicker from './SimulationPicker';
 import SimStateEditor from './SimStateEditor';
@@ -473,13 +474,26 @@ function CodeEditor({ payload, onSave, onCancel, onDirtyChange, error }: { paylo
 
 /* ------------------------------- тренажёр ------------------------------- */
 
-function SimulationChooser({ blockId, simulationId, title, onChange, invalid, pickOnly }: {
+function SimulationChooser({ blockId, simulationId, title, onChange, invalid, pickOnly, prompt }: {
   blockId: string; simulationId: string | null; title: string | null;
   onChange: (id: string, title: string) => void; invalid?: boolean;
   /** Задание «Состояние симуляции»: «Вставить в урок» из мастерской сюда не попадает — только выбор готового. */
   pickOnly?: boolean;
+  /** Текст задания: помощник опишет тренажёр под него, мастерская откроется с готовым описанием. */
+  prompt?: string;
 }) {
   const [picking, setPicking] = useState(false);
+  const [briefing, setBriefing] = useState(false);
+  const [briefError, setBriefError] = useState('');
+
+  async function generateForTask() {
+    setBriefing(true);
+    setBriefError('');
+    const res = await callApi<{ brief: string }>('/api/teach/ai', 'POST', { action: 'simBrief', blockId, prompt });
+    setBriefing(false);
+    if (!res.ok) return setBriefError(res.error);
+    window.location.assign(`${generateForBlockHref(blockId)}&brief=${encodeURIComponent(res.data.brief)}`);
+  }
   return (
     <>
       {simulationId ? (
@@ -502,6 +516,13 @@ function SimulationChooser({ blockId, simulationId, title, onChange, invalid, pi
             <span><strong>Выбрать готовый</strong>
               <span className="muted">Из вашей библиотеки или общего каталога — с поиском и превью.</span></span>
           </button>
+          {!pickOnly && prompt !== undefined && (
+            <button type="button" className="cf-choice-tile cf-choice-ai" disabled={briefing || !prompt.trim()} onClick={generateForTask}>
+              <span className="cf-kind cf-kind-assignment" aria-hidden="true"><IconSpark size={18} /></span>
+              <span><strong>{briefing ? 'Помощник описывает тренажёр…' : 'Сгенерировать под это задание'}</strong>
+                <span className="muted">Помощник прочитает задание и опишет тренажёр, на котором ученик найдёт ответ. Сохраните задание перед переходом.</span></span>
+            </button>
+          )}
           {!pickOnly && <a className="cf-choice-tile" href={generateForBlockHref(blockId)}>
             <span className="cf-kind cf-kind-assignment" aria-hidden="true"><IconWand size={18} /></span>
             <span><strong>Сгенерировать новый</strong>
@@ -509,6 +530,7 @@ function SimulationChooser({ blockId, simulationId, title, onChange, invalid, pi
           </a>}
         </div>
       )}
+      {briefError && <p className="error-box" role="alert">{briefError}</p>}
       {simulationId && !pickOnly && (
         <p className="muted">
           Нужен другой тренажёр? <a href={generateForBlockHref(blockId)}>Сгенерировать новый</a> — генерация тратит вашу квоту;
@@ -926,8 +948,15 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
 
       {(f.type === 'text' || f.type === 'table') && (
         <fieldset className="cf-fieldset">
-          <legend>Критерии оценивания (необязательно)</legend>
-          <p className="muted">Ученик увидит их в задании, а вы при проверке отметите каждый — балл сложится сам.</p>
+          <legend>Критерии оценивания и эталон (необязательно)</legend>
+          <div className="cf-inline cf-rubric-ai">
+            <p className="muted">Ученик увидит критерии в задании, а вы при проверке отметите каждый — балл сложится сам.</p>
+            <RubricAssist blockId={blockId} prompt={f.prompt} points={f.points} type={f.type}
+              onDone={(rubric, reference) => set({
+                rubric: rubric.length ? rubric.map((r) => ({ id: newOptionId(), label: r.label, points: String(r.points).replace('.', ',') })) : f.rubric,
+                reference: reference || f.reference,
+              })} />
+          </div>
           {f.rubric.map((r, i) => (
             <div key={r.id} className="cf-rubric-row">
               <input className="input" value={r.label} maxLength={LIMITS.caption} placeholder={`Критерий ${i + 1}: например, «Сделан вывод»`}
@@ -951,6 +980,11 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
               );
             })()}
           </div>
+          <label className="field cf-reference"><span>Эталонный ответ — видите только вы и помощник при проверке</span>
+            <textarea className="input cf-textarea" rows={f.reference ? 6 : 2} value={f.reference} maxLength={LIMITS.textAnswer}
+              placeholder="Ответ на отлично, каким бывает ответ на удовлетворительно, типичные ошибки"
+              onChange={(e) => set({ reference: e.target.value })} />
+          </label>
         </fieldset>
       )}
 
@@ -992,12 +1026,38 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
         {f.standKind === 'lab' && <LabCards name={`${uid}-lab`} value={f.standLab} onChange={(slug) => set({ standLab: slug })} />}
         {f.standKind === 'simulation' && (
           <>
-            <SimulationChooser blockId={blockId} simulationId={f.standSimulationId} title={f.standTitle}
+            <SimulationChooser blockId={blockId} simulationId={f.standSimulationId} title={f.standTitle} prompt={f.prompt}
               invalid={Boolean(errors.stand)} onChange={(id, t) => set({ standSimulationId: id, standTitle: t })} />
             <FieldError id={`${uid}-stand`} text={errors.stand} />
           </>
         )}
       </fieldset>}
     </EditorForm>
+  );
+}
+
+/** «Критерии и эталон с помощником»: по тексту задания и баллам — критерии с суммой, равной баллу, и эталон. */
+function RubricAssist({ blockId, prompt, points, type, onDone }: {
+  blockId: string; prompt: string; points: string; type: string;
+  onDone: (rubric: { label: string; points: number }[], reference: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function run() {
+    setBusy(true);
+    setError('');
+    const res = await callApi<{ rubric: { label: string; points: number }[]; reference: string }>(
+      '/api/teach/ai', 'POST', { action: 'rubric', blockId, prompt, points: Number(points), type });
+    setBusy(false);
+    if (!res.ok) return setError(res.error);
+    onDone(res.data.rubric, res.data.reference);
+  }
+  return (
+    <span className="cf-rubric-assist">
+      <button type="button" className="btn btn-sm ai-btn" disabled={busy || !prompt.trim()} onClick={run}>
+        <IconSpark size={15} />{busy ? 'Помощник составляет…' : 'Критерии и эталон с помощником'}
+      </button>
+      {error && <span className="cf-field-error" role="alert">{error}</span>}
+    </span>
   );
 }

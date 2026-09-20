@@ -95,6 +95,8 @@ export interface AssignmentPayload {
   rubric: RubricItem[];
   /** Пояснение к правильному ответу: ученик видит его только после проверки. */
   explanation: string;
+  /** Эталонный ответ — только для учителя: подсказка при проверке, ученику не отдаётся никогда. */
+  reference: string;
   spec: AssignmentSpec;
 }
 
@@ -170,7 +172,7 @@ export function defaultBody(kind: BlockKind): BlockBody {
       return { kind, payload: {} };
     case 'assignment':
       return { kind, payload: {
-        prompt: 'Новое задание', points: DEFAULT_POINTS, stand: null, allowRetry: false, rubric: [], explanation: '',
+        prompt: 'Новое задание', points: DEFAULT_POINTS, stand: null, allowRetry: false, rubric: [], explanation: '', reference: '',
         spec: { type: 'text' },
       } };
   }
@@ -496,6 +498,7 @@ export function sanitizeBlockBody(kind: BlockKind, raw: unknown): BlockBody {
         allowRetry: p.allowRetry === true,
         rubric: sanitizeRubric(p.rubric),
         explanation: optionalText(p.explanation, LIMITS.comment, 'Пояснение'),
+        reference: optionalText(p.reference, LIMITS.textAnswer, 'Эталонный ответ'),
         spec,
       } };
     }
@@ -517,7 +520,8 @@ export interface Reveal { explanation: string; solution: AssignmentSpec }
 /** reveal — ответ уже проверен и скрывать ключ незачем: добавляем пояснение и учительскую схему. */
 export function toStudentBody(body: BlockBody, reveal = false): StudentBlockBody {
   if (body.kind !== 'assignment') return body;
-  const { spec, explanation, ...rest } = body.payload;
+  // Эталон учителя не уходит ученику ни до, ни после проверки.
+  const { spec, explanation, reference: _reference, ...rest } = body.payload;
   let safe: StudentAssignmentSpec;
   if (spec.type === 'choice') {
     const options = spec.options.map(({ id, text }) => ({ id, text }));

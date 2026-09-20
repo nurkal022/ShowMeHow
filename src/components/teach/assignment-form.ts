@@ -32,6 +32,7 @@ export interface AssignmentForm {
   columns: TableColumn[];
   minRows: string;
   explanation: string;
+  reference: string;
   rubric: { id: string; label: string; points: string }[];
   answer: string;
   tolerance: string;
@@ -75,6 +76,7 @@ export function toAssignmentForm(p: AssignmentPayload, standTitle: string | null
     columns: s.type === 'table' ? s.columns : [{ id: newOptionId(), label: '', unit: '' }, { id: newOptionId(), label: '', unit: '' }],
     minRows: s.type === 'table' ? String(s.minRows) : '5',
     explanation: p.explanation,
+    reference: p.reference ?? '',
     rubric: p.rubric.map((r) => ({ ...r, points: String(r.points) })),
     answer: s.type === 'number' ? String(s.answer) : '',
     tolerance: s.type === 'number' ? String(s.tolerance) : '0',
@@ -108,7 +110,7 @@ export function fromAssignmentForm(f: AssignmentForm): Record<string, unknown> {
         : { type: 'text' };
   // Пустое поле баллов — не ноль: сервер ответит понятной ошибкой.
   const points = f.points.trim() === '' ? Number.NaN : Number(f.points);
-  return { prompt: f.prompt, points, allowRetry: f.allowRetry, explanation: f.explanation, stand, spec,
+  return { prompt: f.prompt, points, allowRetry: f.allowRetry, explanation: f.explanation, reference: f.reference, stand, spec,
     rubric: f.type === 'text' || f.type === 'table' ? f.rubric.filter((r) => r.label.trim()) : [] };
 }
 

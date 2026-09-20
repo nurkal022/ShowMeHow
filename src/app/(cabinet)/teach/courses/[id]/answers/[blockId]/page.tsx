@@ -57,6 +57,12 @@ export default async function AnswersPage({ params, searchParams }: {
               {current.submission.blockRevision < staff.block.revision && (
                 <p className="warn-banner">Ответ сдан до правки задания. Пересчитать можно в редакторе курса.</p>
               )}
+              {payload.reference && (
+                <details className="reference-box">
+                  <summary>Эталонный ответ</summary>
+                  <Markup text={payload.reference} />
+                </details>
+              )}
               <GradeForm key={current.submission.id} submissionId={current.submission.id} points={payload.points}
                 score={current.submission.score} comment={current.submission.comment} rubric={payload.rubric}
                 suggested={current.submission.autoScore}

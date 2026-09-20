@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useId, useRef } from 'react';
 import { IconClose } from '@/components/icons';
+import Layer from '@/components/cabinet/Layer';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -8,7 +9,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([t
  * Диалог рабочих экранов: фокус остаётся внутри, Esc закрывает, после закрытия
  * фокус возвращается туда, откуда диалог открыли.
  */
-export default function Dialog({ title, subtitle, onClose, children, footer, wide, icon, tone }: {
+type DialogProps = {
   title: string;
   subtitle?: string;
   onClose: () => void;
@@ -18,7 +19,13 @@ export default function Dialog({ title, subtitle, onClose, children, footer, wid
   wide?: boolean;
   icon?: React.ReactNode;
   tone?: 'danger';
-}) {
+};
+
+export default function Dialog(props: DialogProps) {
+  return <Layer><DialogBox {...props} /></Layer>;
+}
+
+function DialogBox({ title, subtitle, onClose, children, footer, wide, icon, tone }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const closeRef = useRef(onClose);

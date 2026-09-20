@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { IconClose } from '@/components/icons';
+import Layer from './Layer';
 
 /**
  * Кнопка, которая открывает форму в панели справа: список на странице остаётся на виду,
@@ -26,6 +27,7 @@ export default function Drawer({ label, title, subtitle, icon, primary = true, o
     <>
       <button type="button" className={primary ? 'btn btn-primary' : 'btn'} onClick={() => setOpen(true)}>{icon}{label}</button>
       {open && (
+        <Layer>
         <div className="cab-drawer-layer">
           <button type="button" className="cab-drawer-scrim" aria-label="Закрыть панель" onClick={() => setOpen(false)} />
           <div ref={panel} className="cab-drawer" role="dialog" aria-modal="true" aria-label={title}>
@@ -36,6 +38,7 @@ export default function Drawer({ label, title, subtitle, icon, primary = true, o
             <div className="cab-drawer-body">{children}</div>
           </div>
         </div>
+        </Layer>
       )}
     </>
   );
