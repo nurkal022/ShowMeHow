@@ -13,6 +13,7 @@ import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
 import { listMemberships } from '@/lib/org/access';
 import { canGenerate, hasStaffRole, GENERATION_FORBIDDEN_MESSAGE } from '@/lib/org/policy';
+import { isLevel, normalizeSpec } from '@/lib/pipeline/spec';
 
 export const maxDuration = 600;
 
@@ -60,7 +61,14 @@ export async function POST(req: Request) {
       ownerId: user.id,
       kind: 'generate',
       priority: jobPriority(user, memberships),
-      request: { prompt, mode: resolveMode(body.mode), hasImage: !!imageDataUrl },
+      request: {
+        prompt, mode: resolveMode(body.mode), hasImage: !!imageDataUrl,
+        // План из карточки проверяется тем же кодом, что и ответ планировщика.
+        ...(body.spec ? { spec: normalizeSpec(body.spec).spec } : {}),
+        ...(isLevel(body.level) ? { level: body.level } : {}),
+        ...(typeof body.audience === 'string' && body.audience.trim()
+          ? { audience: body.audience.trim().slice(0, 80) } : {}),
+      },
       imageDataUrl,
     });
     return NextResponse.json({ jobId: job.id });

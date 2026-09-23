@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { roleOf } from '../../e2e/mock-provider';
 import {
-  PLANNER_SYSTEM, JUDGE_SYSTEM, CRITIC_SYSTEM, FIXER_SYSTEM, REFINER_SYSTEM, generatorSystem,
+  PLANNER_SYSTEM, JUDGE_SYSTEM, CRITIC_SYSTEM, FIXER_SYSTEM, REFINER_SYSTEM, LAYER_SYSTEM, generatorSystem,
 } from '@/lib/pipeline/prompts';
+import { PHYSICS_SYSTEM } from '@/lib/pipeline/core';
 
 describe('mock-provider roleOf', () => {
   it('различает роли по НАСТОЯЩИМ системным промптам', () => {
@@ -14,5 +15,7 @@ describe('mock-provider roleOf', () => {
     expect(roleOf(generatorSystem())).toBe('html');
     expect(roleOf(FIXER_SYSTEM)).toBe('html');
     expect(roleOf(REFINER_SYSTEM)).toBe('html');
+    expect(roleOf(PHYSICS_SYSTEM)).toBe('core');
+    expect(roleOf(LAYER_SYSTEM)).toBe('layer');
   });
 });

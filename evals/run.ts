@@ -1,13 +1,27 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import prompts from './prompts.json';
-import { aggregate, type EvalRow } from './score';
+import { aggregate, complexity, type EvalRow } from './score';
 import { makeCtx, runPipeline } from '../src/lib/pipeline/run';
 import { rescore } from '../src/lib/pipeline/judge';
-import { plan } from '../src/lib/pipeline/stages';
-import { getArtifact } from '../src/lib/storage';
+import { getArtifact, getSpec } from '../src/lib/storage';
 import { renderArtifact, closeBrowser } from '../src/lib/renderer';
-import type { RubricScores } from '../src/lib/types';
+import { listSections } from '../src/lib/pipeline/sections';
+import type { PipelineEvent, QualityMode, RubricScores } from '../src/lib/types';
+
+/**
+ * Эталонный прогон: запросы из prompts.json через настоящий пайплайн. Кроме оценок
+ * судьи, пишет то, по чему видно, стало ли лучше: сложность результата (параметры,
+ * виды, шаги урока, секции, контролы), числовые проверки ядра, пробы, время по этапам
+ * и токены по ролям. Отчёт — evals/results/<дата>.md и .json рядом.
+ *
+ *   npm run eval -- --mode standard --limit 5 --only Лабораторная
+ */
+
+function arg(name: string): string | undefined {
+  const i = process.argv.indexOf(`--${name}`);
+  return i === -1 ? undefined : process.argv[i + 1];
+}
 
 /** Прогоны эвалов принадлежат конкретному пользователю — id задаётся окружением. */
 function evalOwnerId(): string {
@@ -18,48 +32,66 @@ function evalOwnerId(): string {
   return id;
 }
 
-async function evalOne(prompt: string): Promise<EvalRow> {
+async function evalOne(prompt: string, mode: QualityMode): Promise<EvalRow> {
+  const events: PipelineEvent[] = [];
+  const started = Date.now();
   try {
     const ownerId = evalOwnerId();
-    const ctx = makeCtx(() => {});
-    const meta = await runPipeline(ctx, { ownerId, prompt, mode: 'max' });
-    // финальная независимая оценка сохранённого артефакта
-    const spec = await plan(ctx, prompt);
+    const ctx = makeCtx((e) => events.push(e));
+    const meta = await runPipeline(ctx, { ownerId, prompt, mode });
     const html = await getArtifact(ownerId, meta.id);
-    if (html === null) throw new Error('Артефакт прогона не найден');
-    const render = await renderArtifact(html);
-    const { scores } = await rescore(ctx, spec,
-      { html, render, critic: null, alive: render.ok });
-    return { prompt, scores };
+    const spec = await getSpec(ownerId, meta.id);
+    if (html === null || spec === null) throw new Error('Артефакт прогона не найден');
+    // Финальная независимая оценка сохранённого артефакта.
+    const render = await renderArtifact(html, { probes: true });
+    const { scores } = await rescore(ctx, spec, { html, render, critic: null, alive: render.ok });
+    return {
+      prompt, scores, simulationId: meta.id, ms: Date.now() - started,
+      ...complexity(spec, events, render, listSections(html).length),
+    };
   } catch (e) {
-    return { prompt, scores: null, error: e instanceof Error ? e.message : String(e) };
+    return { prompt, scores: null, error: e instanceof Error ? e.message : String(e), ms: Date.now() - started };
   }
 }
 
 function fmt(s: RubricScores): string {
-  return `физика ${s.physics.toFixed(1)}, наглядность ${s.clarity.toFixed(1)}, ` +
-    `интерактив ${s.interactivity.toFixed(1)}, эстетика ${s.aesthetics.toFixed(1)}`;
+  return `физ ${s.physics.toFixed(1)} · нагл ${s.clarity.toFixed(1)} · инт ${s.interactivity.toFixed(1)} · ` +
+    `эст ${s.aesthetics.toFixed(1)}${s.depth !== undefined ? ` · глуб ${s.depth.toFixed(1)}` : ''}`;
 }
 
+const mode = (arg('mode') ?? 'standard') as QualityMode;
+const only = arg('only');
+const limit = Number(arg('limit') ?? prompts.length);
+const list = prompts.filter((p) => !only || p.includes(only)).slice(0, limit);
+
 const rows: EvalRow[] = [];
-for (const p of prompts) {
+for (const p of list) {
   console.log('▶', p);
-  rows.push(await evalOne(p));
+  const row = await evalOne(p, mode);
+  console.log(row.scores ? `  ${fmt(row.scores)} · ${Math.round(row.ms / 1000)} с` : `  ✗ ${row.error}`);
+  rows.push(row);
 }
 await closeBrowser();
 
 const agg = aggregate(rows);
-const today = new Date().toISOString().slice(0, 10);
+const stamp = new Date().toISOString().slice(0, 16).replace(':', '-');
 const lines = [
-  `# Eval ${today}`,
+  `# Eval ${stamp} · режим ${mode}`,
   '',
   `Средние: ${fmt(agg.avg)}`,
   `Порог пройден (все ≥ 8): ${(agg.passRate * 100).toFixed(0)}%`,
+  `Сложность в среднем: ${agg.complexity}`,
+  `Время в среднем: ${agg.avgSeconds} с; по этапам: ${agg.stageSeconds}`,
   '',
-  ...rows.map((r) => `- ${r.scores ? '✅' : '❌'} ${r.prompt}` +
-    (r.scores ? ` — ${fmt(r.scores)}` : ` — ${r.error}`)),
+  '| Запрос | Оценки | Уровень | Парам. | Видов | Шагов | Секций | Ядро | Пробы | Время |',
+  '|---|---|---|---|---|---|---|---|---|---|',
+  ...rows.map((r) => r.scores
+    ? `| ${r.prompt} | ${fmt(r.scores)} | ${r.level} | ${r.params} | ${r.views} | ${r.steps} | ${r.sections} | ` +
+      `${r.coreChecks ?? '—'} | ${r.probePass !== undefined ? Math.round(r.probePass * 100) + '%' : '—'} | ${Math.round(r.ms / 1000)} с |`
+    : `| ${r.prompt} | ❌ ${r.error} | | | | | | | | ${Math.round(r.ms / 1000)} с |`),
 ];
-const out = path.join('evals', 'results', `${today}.md`);
-fs.mkdirSync(path.dirname(out), { recursive: true });
-fs.writeFileSync(out, lines.join('\n'));
-console.log('Отчёт:', out);
+const dir = path.join('evals', 'results');
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(path.join(dir, `${stamp}.md`), lines.join('\n'));
+fs.writeFileSync(path.join(dir, `${stamp}.json`), JSON.stringify({ mode, rows }, null, 2));
+console.log('Отчёт:', path.join(dir, `${stamp}.md`));

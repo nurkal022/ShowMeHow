@@ -70,6 +70,53 @@ export const HARNESS_JS = `
     } catch (e) {}
     try { parent.postMessage(out, '*'); } catch (e2) {}
   }
+  // «Покажи и скажи»: следующий клик по тренажёру не уходит в него, а сообщает родителю,
+  // куда показали и что там лежит — виджет кита с заголовком или сцена.
+  function describeAt(x, y, skip) {
+    var els = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (el === skip) continue;
+      var box = el.closest ? el.closest('.sim-side-panel, .sim-panel, .sim-banner, .sim-control') : null;
+      if (box) {
+        if (box.classList.contains('sim-control')) {
+          var l = box.querySelector('label');
+          return 'контрол «' + ((l && l.textContent) || '').trim().slice(0, 60) + '» на панели параметров';
+        }
+        if (box.classList.contains('sim-panel')) return 'панель параметров';
+        if (box.classList.contains('sim-banner')) return 'баннер фазы «' + (box.textContent || '').trim().slice(0, 60) + '»';
+        var h = box.querySelector('.sim-side-title');
+        return 'панель «' + ((h && h.textContent) || '').trim().slice(0, 60) + '»';
+      }
+      if (el.tagName === 'CANVAS') return 'сцена (canvas)';
+    }
+    return '';
+  }
+  var picker = null;
+  function startPick() {
+    if (picker) return;
+    picker = document.createElement('div');
+    picker.style.cssText = 'position:fixed;inset:0;z-index:2147483647;cursor:crosshair;' +
+      'background:rgba(79,143,247,.06);outline:2px dashed rgba(79,143,247,.7);outline-offset:-4px';
+    picker.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var target = describeAt(e.clientX, e.clientY, picker);
+      var msg = { type: 'smh-pick', x: e.clientX / innerWidth, y: e.clientY / innerHeight, target: target };
+      stopPick();
+      try { parent.postMessage(msg, '*'); } catch (err) {}
+    }, true);
+    document.body.appendChild(picker);
+  }
+  function stopPick() {
+    if (picker && picker.parentNode) picker.parentNode.removeChild(picker);
+    picker = null;
+  }
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && picker) {
+      stopPick();
+      try { parent.postMessage({ type: 'smh-pick', cancelled: true }, '*'); } catch (err) {}
+    }
+  });
   window.addEventListener('error', function (e) {
     report(e.message + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
   });
@@ -84,6 +131,8 @@ export const HARNESS_JS = `
     if (d.type === 'sim-state-request') replyState(d.id);
     if (d.type === 'sim-apply') applyPreset(d);
     if (d.type === 'sim-readouts-request') replyReadouts(d.id);
+    if (d.type === 'smh-pick-start') startPick();
+    if (d.type === 'smh-pick-stop') stopPick();
   });
 })();
 `;

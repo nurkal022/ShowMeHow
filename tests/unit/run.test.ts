@@ -11,7 +11,7 @@ import { __setRepoForTests, createMemoryRepo } from '@/lib/db/repo';
 const OWNER = '11111111-1111-1111-1111-111111111111';
 
 const SPEC = { title: 'Маятник', subject: 'Физика', mode: '2d', learningGoals: ['x'],
-  physics: 'F=ma', parameters: [], visualPlan: 'v' };
+  physics: 'F=ma', parameters: [{ name: 'L', label: 'Длина', min: 0.5, max: 3, step: 0.1, value: 1, unit: 'м' }], visualPlan: 'v' };
 const HTML = '<!DOCTYPE html><html><head></head><body><canvas></canvas></body></html>';
 const okRender: RenderReport = { ok: true, errors: [], animated: true,
   screenshots: [Buffer.from('png')] };
@@ -96,7 +96,7 @@ describe('runPipeline', () => {
       type: 'plan-ready',
       spec: {
         title: 'Маятник', subject: 'Физика', mode: '2d', physics: 'F=ma',
-        goals: ['x'], parameters: [],
+        goals: ['x'], parameters: [{ label: 'Длина', unit: 'м' }], level: 'demo',
       },
     });
   });
@@ -316,6 +316,26 @@ describe('refineExisting', () => {
     expect(await listHistory(OWNER, meta.id)).toHaveLength(1);
   });
 
+  it('отчёт модели о правке уходит в ленту отдельным событием', async () => {
+    const meta = await createSimulation(
+      OWNER, { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>\n<body>old</body>\n</html>');
+    const events: PipelineEvent[] = [];
+    const ctx: Ctx = {
+      chat: vi.fn(async (role: Role) => (role === 'refiner'
+        ? '{"summary":"Замедлил","changed":["период 2 с"],"skipped":[],"next":["добавить график"],'
+          + '"edits":[{"find":"old","replace":"new"}]}'
+        : '```html\n' + HTML + '\n```')),
+      hasVision: true,
+      render: vi.fn(async () => okRender),
+      emit: (e) => events.push(e),
+    };
+    await refineExisting(ctx, OWNER, meta.id, 'сделай медленнее');
+    expect(events.find((e) => e.type === 'note')).toEqual({
+      type: 'note', summary: 'Замедлил', changed: ['период 2 с'], skipped: [], next: ['добавить график'],
+    });
+    expect(await getArtifact(OWNER, meta.id)).toContain('new');
+  });
+
   it('scans refined html for forbidden CDN urls: fixer cleans it -> artifact updated', async () => {
     const meta = await createSimulation(
       OWNER, { title: 't', prompt: 'p', subject: 's', tags: [] }, '<html>old</html>');
@@ -424,8 +444,8 @@ describe('один кандидат', () => {
 
 describe('MODES', () => {
   it('matches spec', () => {
-    expect(MODES.fast).toEqual({ useJudge: false, maxRefine: 0, threshold: 0 });
-    expect(MODES.standard).toEqual({ useJudge: true, maxRefine: 1, threshold: 0 });
-    expect(MODES.max).toEqual({ useJudge: true, maxRefine: 3, threshold: 8 });
+    expect(MODES.fast).toEqual({ useJudge: false, maxRefine: 0, threshold: 0, core: false, layers: false });
+    expect(MODES.standard).toEqual({ useJudge: true, maxRefine: 1, threshold: 0, core: true, layers: true });
+    expect(MODES.max).toEqual({ useJudge: true, maxRefine: 3, threshold: 8, core: true, layers: true });
   });
 });

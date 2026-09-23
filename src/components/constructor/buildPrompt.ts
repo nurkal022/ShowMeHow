@@ -33,7 +33,20 @@ const INSTRUMENT_TEXT: Record<Instrument, string> = {
   formula: 'формулу закона с подстановкой значений',
   presets: 'пресеты — готовые состояния',
   steps: 'пошаговый режим: кнопка «следующий шаг» вместо непрерывного потока',
+  lesson: 'шаги урока: наблюдай, измени, измерь',
+  task: 'задания с проверкой ответа ученика',
+  table: 'таблицу измерений, куда ученик записывает точки опыта',
 };
+
+/**
+ * Приборы урока подсказывают уровень тренажёра: задание — это исследование, шаги
+ * и таблица — лаборатория. Подсказка, а не приказ: планировщик волен решить иначе.
+ */
+export function levelHint(instruments: Instrument[]): 'lab' | 'research' | null {
+  if (instruments.includes('task')) return 'research';
+  if (instruments.includes('lesson') || instruments.includes('table')) return 'lab';
+  return null;
+}
 
 /**
  * Готов ли запрос к отправке. Достаточно ЛИБО раздела, ЛИБО своих слов: явление
@@ -81,9 +94,11 @@ export function buildPrompt(d: ConstructorDraft): string {
     `Уровень объяснения — ${LEVEL_TEXT[d.level]}.`,
   ].filter(Boolean).join(' ');
 
+  const hint = levelHint(d.instruments);
   const spec = [
     'Выбор в конструкторе:',
     `- режим: ${d.mode}`,
+    ...(hint ? [`- уровень тренажёра: ${hint}`] : []),
     `- параметры: ${d.parameters.length ? d.parameters.join(', ') : 'на твоё усмотрение'}`,
     `- приборы: ${d.instruments.length
       ? d.instruments.map((i) => INSTRUMENTS.find((x) => x.value === i)?.label ?? i).join(', ')

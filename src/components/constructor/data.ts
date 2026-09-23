@@ -8,7 +8,9 @@
  */
 
 /** Приборы кита, которые стенд умеет показать. Больше кит и не умеет. */
-export type Instrument = 'slider' | 'readout' | 'chart' | 'formula' | 'presets' | 'steps';
+export type Instrument =
+  | 'slider' | 'readout' | 'chart' | 'formula' | 'presets' | 'steps'
+  | 'lesson' | 'task' | 'table';
 
 /** Мотив образа: вокруг общего ядра раздел надстраивает свой аппарат. */
 export type Motif =
@@ -197,6 +199,9 @@ export const INSTRUMENTS: { value: Instrument; label: string; hint: string }[] =
   { value: 'formula', label: 'Формула', hint: 'закон с подстановкой' },
   { value: 'presets', label: 'Пресеты', hint: 'готовые состояния' },
   { value: 'steps', label: 'Пошагово', hint: 'по одному шагу вместо потока' },
+  { value: 'lesson', label: 'Шаги урока', hint: 'наблюдай → измени → измерь' },
+  { value: 'task', label: 'Задание', hint: 'вопрос с проверкой ответа' },
+  { value: 'table', label: 'Таблица', hint: 'ученик записывает точки опыта' },
 ];
 
 export function sectionByKey(key: string): Section | undefined {

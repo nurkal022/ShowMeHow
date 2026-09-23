@@ -50,6 +50,8 @@ test('reload: генерация переживает перезагрузку �
   // Превью появилось.
   const frame = page.frameLocator('iframe.preview-frame');
   await expect(frame.locator('canvas')).toBeVisible({ timeout: 120_000 });
+  // Холст виден уже на первом черновике — задание ещё идёт. В библиотеку — только после «Готово».
+  await expect(page.getByText(/Готово\. Симуляция справа/)).toBeVisible({ timeout: 120_000 });
 
   // Симуляция в библиотеке.
   await page.goto('/library');

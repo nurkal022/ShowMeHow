@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyEdits, parseEdits } from '@/lib/pipeline/edits';
+import { applyEdits, parseEdits, parseRefineReport } from '@/lib/pipeline/edits';
 
 const SRC = `<script>
   const chart = SimUI.chart({ title: 'x' });
@@ -28,5 +28,18 @@ describe('точечные правки', () => {
   });
   it('неоднозначный фрагмент не применяется', () => {
     expect(applyEdits('a\na\n', [{ find: 'a', replace: 'b' }])).toBeNull();
+  });
+});
+
+describe('parseRefineReport', () => {
+  it('читает отчёт рядом с правками', () => {
+    const out = '{"summary":"Замедлил анимацию","changed":["период 2 с"," "],"skipped":[],"next":["Добавить график"],"edits":[{"find":"a","replace":"b"}]}';
+    expect(parseRefineReport(out)).toEqual({
+      summary: 'Замедлил анимацию', changed: ['период 2 с'], skipped: [], next: ['Добавить график'],
+    });
+  });
+  it('молчание модели — не ошибка, а отсутствие отчёта', () => {
+    expect(parseRefineReport('{"edits":[{"find":"a","replace":"b"}]}')).toBeNull();
+    expect(parseRefineReport('<html></html>')).toBeNull();
   });
 });

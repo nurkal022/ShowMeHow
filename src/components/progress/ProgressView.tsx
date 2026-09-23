@@ -7,6 +7,7 @@ import StageTimeline from './StageTimeline';
 import PlanCard from './PlanCard';
 import CandidateCard from './CandidateCard';
 import RefinePanel from './RefinePanel';
+import BuildCard from './BuildCard';
 import { queuedCopy } from './stepCopy';
 
 /**
@@ -37,6 +38,7 @@ export default function ProgressView(
         ? <div className="queue-banner">{queuedCopy(state.queuePosition)}</div>
         : <StageTimeline stages={state.stages} now={now} />}
       {state.plan && <PlanCard plan={state.plan} />}
+      <BuildCard physics={state.physicsCheck} layers={state.layers} />
       {state.candidates.length > 0 && (
         <div className="candidates-row">
           {state.candidates.map((c) => <CandidateCard key={c.index} candidate={c} />)}

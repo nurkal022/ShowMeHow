@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { listHistory, restoreVersion, getRenderableArtifact, saveThumbnail } from '@/lib/storage';
+import { listHistory, restoreVersion, getRenderableArtifact, saveThumbnail, getHistoryVersion } from '@/lib/storage';
 import { renderArtifact } from '@/lib/renderer';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
@@ -15,6 +15,13 @@ export async function GET(req: Request, { params }: P) {
   if (!user) return unauthorized();
   const { id } = await params;
   try {
+    // ?name=… — HTML одной версии: для сравнения версий бок о бок.
+    const name = new URL(req.url).searchParams.get('name');
+    if (name) {
+      const html = await getHistoryVersion(user.id, id, name);
+      if (html === null) return NextResponse.json({ error: 'not found' }, { status: 404 });
+      return NextResponse.json({ html });
+    }
     const hist = await listHistory(user.id, id);
     if (hist === null) return NextResponse.json({ error: 'not found' }, { status: 404 });
     return NextResponse.json(hist);

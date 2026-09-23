@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getMeta, getRenderableArtifact, deleteSimulation, getSharedArtifact } from '@/lib/storage';
+import { getMeta, getRenderableArtifact, deleteSimulation, getSharedArtifact, isExemplar } from '@/lib/storage';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
 import { canView } from '@/lib/lms/access';
@@ -17,7 +17,7 @@ export async function GET(req: Request, { params }: P) {
   try {
     const meta = await getMeta(user.id, id);
     const html = meta ? await getRenderableArtifact(user.id, id) : null;
-    if (meta && html !== null) return NextResponse.json({ meta, html });
+    if (meta && html !== null) return NextResponse.json({ meta, html, exemplar: await isExemplar(user.id, id) });
     // Не владелец: тренажёр из курса или каталога. Промпт и прочие поля чужому не отдаём.
     if (await canView(user, id)) {
       const shared = await getSharedArtifact(id);

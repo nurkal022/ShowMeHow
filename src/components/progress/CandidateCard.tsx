@@ -10,6 +10,7 @@ const SCORE_DIMS: { key: keyof RubricScores; label: string; cls: string }[] = [
   { key: 'clarity', label: 'Наглядность', cls: 'dim-clarity' },
   { key: 'interactivity', label: 'Интерактив', cls: 'dim-interactivity' },
   { key: 'aesthetics', label: 'Эстетика', cls: 'dim-aesthetics' },
+  { key: 'depth', label: 'Глубина', cls: 'dim-depth' },
 ];
 
 export default function CandidateCard({ candidate }: { candidate: CandidateInfo }) {
@@ -57,6 +58,7 @@ export default function CandidateCard({ candidate }: { candidate: CandidateInfo 
         <div className="score-bars">
           {SCORE_DIMS.map((d) => {
             const value = candidate.scores![d.key];
+            if (value === undefined) return null;
             return (
               <div className="score-bar-row" key={d.key}>
                 <span className="score-bar-label">{d.label}</span>

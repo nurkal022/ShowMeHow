@@ -38,6 +38,8 @@ export const IconTrash = svg(<>
 export const IconCheck = svg(<><path d="M4.5 12.5 9.5 17.5 19.5 6.5" /></>);
 export const IconAlert = svg(<><path d="M12 3.8 21 19.4H3z" /><path d="M12 9.6v4.2M12 16.8h.01" /></>);
 export const IconClose = svg(<><path d="M6 6l12 12M18 6L6 18" /></>);
+// «Не стал делать»: минус рядом с галочкой читается как противоположность сделанному.
+export const IconMinus = svg(<><path d="M5.5 12h13" /></>);
 export const IconMic = svg(<>
   <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0" /><path d="M12 18v3" />
 </>);

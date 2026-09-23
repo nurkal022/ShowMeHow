@@ -16,6 +16,8 @@ export interface ProbeReport {
   failures: string[];
   /** Кадры, снятые пробами (для критика): анимация, слайдер на максимуме. */
   shots: Buffer[];
+  /** Контролы страницы — по ним тренажёр сверяется с планом. */
+  controls?: { kind: string; name: string; label: string }[];
 }
 
 interface ControlInfo {
@@ -28,6 +30,34 @@ interface ControlInfo {
 }
 
 const PLAYPAUSE = '[data-smh-btn="playpause"]';
+
+/**
+ * Видимые крупные холсты вне панелей кита и однотонность их содержимого (уменьшенная
+ * копия 64×64 и разброс яркости). WebGL читается благодаря preserveDrawingBuffer из правил.
+ */
+const SCENE_CHECK = `(function(){
+  var all = document.querySelectorAll('canvas'), vw = innerWidth * innerHeight, big = 0, flat = 0, maxShare = 0;
+  var nested = document.querySelectorAll('canvas canvas').length;
+  for (var i = 0; i < all.length; i++) {
+    var c = all[i];
+    if (c.closest && c.closest('.sim-side-panel, .sim-panel')) continue;
+    var r = c.getBoundingClientRect(), st = getComputedStyle(c);
+    if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) continue;
+    var share = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)) *
+      Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)) / vw;
+    if (share > maxShare) maxShare = share;
+    if (share < 0.3) continue;
+    big++;
+    try {
+      var t = document.createElement('canvas'); t.width = 64; t.height = 64;
+      var x = t.getContext('2d'); x.drawImage(c, 0, 0, 64, 64);
+      var d = x.getImageData(0, 0, 64, 64).data, lo = 1e9, hi = -1e9;
+      for (var k = 0; k < d.length; k += 4) { var y = d[k] * .3 + d[k + 1] * .59 + d[k + 2] * .11; if (y < lo) lo = y; if (y > hi) hi = y; }
+      if (hi - lo < 6) flat++;
+    } catch (e) {}
+  }
+  return { nested: nested, big: big, flat: flat, maxShare: maxShare };
+})()`;
 const RESET = '[data-smh-btn="reset"]';
 
 /**
@@ -356,12 +386,65 @@ export async function runProbes(s: RenderSession): Promise<ProbeReport> {
     add('cdn', 'Внешние ресурсы только из whitelist', 'pass', '');
   }
 
+  // --- 7. Сцена видна ---
+  // Приборы кита анимируются сами (график, баннер), поэтому «кадры меняются» не значит,
+  // что видна сцена. Классический провал — WebGL-холст, вставленный внутрь <canvas>:
+  // браузер содержимое canvas не показывает, и центр экрана пуст при живых панелях.
+  const scene = await safe<{ nested: number; big: number; flat: number; maxShare: number }>(
+    () => s.evaluate(SCENE_CHECK), { nested: 0, big: -1, flat: 0, maxShare: 0 });
+  if (scene.big === -1) {
+    add('scene', 'Сцена видна', 'skip', 'не удалось проверить сцену');
+  } else if (scene.nested > 0) {
+    add('scene', 'Сцена видна', 'fail',
+      'холст вложен внутрь другого <canvas> и не отображается — для three.js передай существующий canvas: ' +
+      "new THREE.WebGLRenderer({canvas: document.getElementById('scene'), antialias:true, preserveDrawingBuffer:true}), " +
+      'а не appendChild(renderer.domElement)');
+  } else if (scene.big === 0) {
+    add('scene', 'Сцена видна', 'fail',
+      `нет видимого холста сцены: самый крупный canvas занимает ${Math.round(scene.maxShare * 100)}% окна — ` +
+      'сцена должна быть canvas на всё окно, видимая под панелями');
+  } else if (scene.flat === scene.big) {
+    add('scene', 'Сцена видна', 'fail',
+      'холст сцены залит одним цветом — объект не нарисован или вне кадра (проверь камеру, масштаб и цвета)');
+  } else {
+    add('scene', 'Сцена видна', 'pass', '');
+  }
+
+  // --- 7. Пресеты меняют состояние ---
+  const presetCount = await safe<number>(
+    () => s.evaluate<number>("document.querySelectorAll('.sim-presets button').length"), 0);
+  if (presetCount === 0 || !hasExpose) {
+    add('presets', 'Пресеты меняют режим', 'skip',
+      presetCount === 0 ? 'пресетов нет' : 'SimUI.expose не реализован');
+  } else {
+    const snapshot = () => safe(() => s.evaluate<string>('JSON.stringify(window.__smh.controls().map(function(c){return c.value;}))'), '');
+    const seen = new Set<string>([await snapshot()]);
+    let same = 0;
+    for (let i = 0; i < Math.min(presetCount, 6); i++) {
+      await safe(() => s.evaluate<boolean>(
+        `(function(){var b=document.querySelectorAll('.sim-presets button')[${i}]; if(b){b.click(); return true;} return false;})()`), false);
+      await s.wait(150);
+      const snap = await snapshot();
+      if (seen.has(snap)) same++;
+      seen.add(snap);
+    }
+    if (same > 0 && seen.size <= 1) {
+      add('presets', 'Пресеты меняют режим', 'fail',
+        'нажатие пресетов не меняет ни одного контрола — values в SimUI.presets не совпадают с name слайдеров');
+    } else {
+      add('presets', 'Пресеты меняют режим', 'pass', '');
+    }
+  }
+
   const judged = results.filter((r) => r.status !== 'skip');
   const passed = judged.filter((r) => r.status === 'pass');
+  const finalControls = await safe<ControlInfo[]>(
+    () => s.evaluate<ControlInfo[]>('window.__smh ? window.__smh.controls() : []'), controls);
   return {
     results,
     passRate: judged.length === 0 ? 1 : passed.length / judged.length,
     failures: results.filter((r) => r.status === 'fail').map((r) => `${r.label}: ${r.detail}`),
     shots,
+    controls: finalControls.map((c) => ({ kind: c.kind, name: c.name, label: c.label })),
   };
 }

@@ -41,7 +41,11 @@ describe('executeJob', () => {
     const deps = makeDeps();
     expect(await executeJob(claimed(), io, deps)).toEqual({ status: 'done', simulationId: SIM });
     expect(deps.makeCtx).toHaveBeenCalledWith(io.emit);
-    expect(deps.runPipeline).toHaveBeenCalledWith({ draft: expect.any(Function) }, {
+    // У генерации есть точки продолжения: повтор после потери воркера не начинает с нуля.
+    expect(deps.runPipeline).toHaveBeenCalledWith({
+      draft: expect.any(Function),
+      checkpoint: { load: expect.any(Function), save: expect.any(Function) },
+    }, {
       ownerId: OWNER, prompt: 'маятник', mode: 'fast',
       imageDataUrl: 'data:image/png;base64,AA', onSaved: io.markSaved,
     }, io.cancelled);

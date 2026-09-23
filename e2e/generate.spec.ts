@@ -22,6 +22,8 @@ test('generate simulation end-to-end', async ({ page }) => {
   // превью появилось
   const frame = page.frameLocator('iframe.preview-frame');
   await expect(frame.locator('canvas')).toBeVisible({ timeout: 92_000 });
+  // Холст виден уже на первом черновике — задание ещё идёт. В библиотеку — только после «Готово».
+  await expect(page.getByText(/Готово\. Симуляция справа/)).toBeVisible({ timeout: 92_000 });
   // симуляция в библиотеке; встроенный пример называется «Диффузия духов в комнате»,
   // поэтому своё название ищем точным совпадением
   await page.goto('/library');

@@ -1,10 +1,16 @@
-import type { PipelineEvent, QualityMode } from '../types';
+import type { PipelineEvent, PlanSpec, QualityMode, SimLevel } from '../types';
 import type { ReapDecision } from './policy';
 
 export type JobKind = 'generate' | 'refine';
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled';
 
-export interface GenerateRequest { prompt: string; mode: QualityMode; hasImage: boolean }
+export interface GenerateRequest {
+  prompt: string; mode: QualityMode; hasImage: boolean;
+  /** План, утверждённый человеком в карточке: воркер не зовёт планировщика. */
+  spec?: PlanSpec;
+  level?: SimLevel;
+  audience?: string;
+}
 export interface RefineRequest { instruction: string }
 export type JobRequest = GenerateRequest | RefineRequest;
 

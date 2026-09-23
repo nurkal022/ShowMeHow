@@ -60,17 +60,24 @@ body { margin:0; background:var(--sim-bg); color:var(--sim-text);
   padding:0!important; overflow:hidden!important; box-sizing:border-box!important; }
 [data-smh-panel].smh-collapsed > *:not(.smh-collapse-btn) { display:none!important; }
 
-.sim-corner { position:fixed; z-index:9; display:flex; flex-direction:column; gap:10px; }
+.sim-corner { position:fixed; z-index:9; display:flex; flex-direction:column; gap:10px;
+  overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
 .sim-corner-tl, .sim-corner-bl { align-items:flex-start; }
 .sim-corner-tr, .sim-corner-br { align-items:flex-end; }
-.sim-corner-tl { left:12px; top:12px; } .sim-corner-bl { left:12px; bottom:12px; }
-.sim-corner-tr { right:12px; top:64px; } .sim-corner-br { right:12px; bottom:12px; }
+/* Верхний и нижний угол одной стороны делят высоту окна: панели урока, таблиц и
+   показаний больше не налезают друг на друга, лишнее прокручивается внутри угла.
+   Правый верхний угол — слева от панели параметров, а не под ней. */
+.sim-corner-tl { left:12px; top:12px; max-height:calc(58vh - 18px); }
+.sim-corner-bl { left:12px; bottom:12px; max-height:calc(42vh - 18px); }
+.sim-corner-tr { right:284px; top:92px; max-height:calc(58vh - 98px); }
+.sim-corner-br { right:12px; bottom:12px; max-height:calc(42vh - 18px); }
 .sim-side-panel { max-width:min(340px,42vw); padding:12px 14px;
   background:color-mix(in srgb, var(--sim-panel) 92%, transparent); border:1px solid #2a3341;
   border-radius:12px; backdrop-filter:blur(6px); font-size:12px; color:var(--sim-text);
   display:flex; flex-direction:column; gap:8px; }
 .sim-side-title { font-size:13px; margin:0; padding-right:26px; }
-@media (max-width:640px) { .sim-side-panel { max-width:calc(100vw - 24px); } }
+@media (max-width:640px) { .sim-side-panel { max-width:calc(100vw - 24px); }
+  .sim-corner-tr { right:12px; top:64px; } }
 
 .sim-chart { display:block; border-radius:8px; border:1px solid #2a3341; }
 .sim-chart-legend { display:flex; flex-wrap:wrap; gap:10px; margin-top:6px;

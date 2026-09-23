@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { PipelineEvent, QualityMode } from '@/lib/types';
+import type { PipelineEvent, PlanSpec, QualityMode, SimLevel } from '@/lib/types';
 import type { JobKind, JobStatus } from '@/lib/jobs/store';
 import type { UserPrefs } from '@/lib/auth/prefs';
 import { historyLabel } from '@/lib/history-label';
@@ -14,11 +14,15 @@ import PreviewFrame from './PreviewFrame';
 import ConstructorStand from './constructor/ConstructorStand';
 import LiveStage from './workbench/LiveStage';
 import SessionsPanel from './workbench/SessionsPanel';
+import PlanEditor, { LEVEL_OPTIONS } from './workbench/PlanEditor';
+import SimSettings from './workbench/SimSettings';
+import CompareVersions from './workbench/CompareVersions';
+import QualityPanel from './workbench/QualityPanel';
 import type { SessionItem } from '@/lib/jobs/sessions';
 import { useVoiceInput } from './useVoiceInput';
 import {
-  IconClose, IconDownload, IconHistory, IconImage, IconMic,
-  IconPlay, IconPlus, IconSend, IconSliders, IconSpark, IconWand,
+  IconCheck, IconClose, IconDownload, IconHistory, IconImage, IconMic, IconMinus,
+  IconPlay, IconPlus, IconSend, IconSliders, IconSpark, IconSwap, IconTarget, IconUndo, IconWand,
 } from './icons';
 
 type Phase = 'idle' | 'generating' | 'ready' | 'error';
@@ -134,7 +138,26 @@ export function pauseUnlessAborted(ms: number, signal: AbortSignal): Promise<voi
 }
 
 interface QuotaInfo { limit: number | null; used: number; remaining: number | null }
-interface Message { role: 'user' | 'bot'; text: string }
+/**
+ * Сообщение ленты. У ответа помощника, кроме текста, бывает разбор правки
+ * (что изменено, чего он делать не стал, что предлагает дальше) и варианты ответа
+ * на уточняющий вопрос — их человек выбирает кликом, не набирая заново.
+ */
+interface Message {
+  role: 'user' | 'bot';
+  text: string;
+  changed?: string[];
+  skipped?: string[];
+  next?: string[];
+  options?: string[];
+  /** Просьба, к которой задан уточняющий вопрос: к ней приклеивается выбранный вариант. */
+  askedFor?: string;
+  /** Правка ухудшила проверки: под сообщением кнопка отката к прошлой версии. */
+  undo?: boolean;
+}
+
+/** Куда человек показал в превью: доли размеров кадра и что там лежит. */
+interface Pick { x: number; y: number; target: string }
 
 export default function Workbench() {
   const search = useSearchParams();
@@ -148,6 +171,23 @@ export default function Workbench() {
   const [simId, setSimId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
   const [mode, setMode] = useState<QualityMode>('standard');
+  // Уровень тренажёра: 'auto' — решает планировщик по теме.
+  const [level, setLevel] = useState<SimLevel | 'auto'>('auto');
+  // Карточка плана перед генерацией: в «Быстро» её нет — там важна скорость.
+  const [planFirst, setPlanFirst] = useState(true);
+  const [draftSpec, setDraftSpec] = useState<PlanSpec | null>(null);
+  const [planPrompt, setPlanPrompt] = useState('');
+  const [planning, setPlanning] = useState(false);
+  const [replanning, setReplanning] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const [exemplar, setExemplar] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [pick, setPick] = useState<Pick | null>(null);
+  const previewRef = useRef<HTMLIFrameElement | null>(null);
+  // Номер текущего запроса плана: ответ на запрос, который уже не актуален, отбрасывается.
+  const planTicket = useRef(0);
   const [prefs, setPrefs] = useState<UserPrefs>({});
   // Стенд — то, что человек видит первым: он показывает, что система умеет.
   // Свободный текст остаётся на расстоянии одной кнопки.
@@ -190,6 +230,33 @@ export default function Workbench() {
 
   useEffect(() => { fetchQuota(); }, []);
   useEffect(() => () => streamAbortRef.current?.abort(), []);
+
+  // «Покажи и скажи»: превью сообщает, куда кликнули, и просьба уходит про это место.
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.source !== previewRef.current?.contentWindow) return;
+      if (e.data?.type !== 'smh-pick') return;
+      setPicking(false);
+      if (e.data.cancelled) return;
+      setPick({ x: Number(e.data.x), y: Number(e.data.y), target: String(e.data.target || 'сцена') });
+      textRef.current?.focus();
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  // Превью перерисовалось (другая версия, настройки, другая симуляция) — режим выбора жил
+  // внутри старого кадра и пропал вместе с ним, а отмеченная точка относится к старому содержимому.
+  useEffect(() => { setPicking(false); setPick(null); }, [html, simId]);
+
+  function togglePick() {
+    const w = previewRef.current?.contentWindow;
+    if (!w) return;
+    if (picking) { w.postMessage({ type: 'smh-pick-stop' }, '*'); setPicking(false); return; }
+    setActiveTab('preview');
+    w.postMessage({ type: 'smh-pick-start' }, '*');
+    setPicking(true);
+  }
 
   // Лента всегда прокручена к последнему событию — иначе прогресс уезжает за край.
   useEffect(() => {
@@ -300,8 +367,8 @@ export default function Workbench() {
         setPhase('error');
         return;
       }
-      const { html } = await res.json();
-      setSimId(id); setHtml(html); setPhase('ready');
+      const { html, exemplar: starred } = await res.json();
+      setSimId(id); setHtml(html); setPhase('ready'); setExemplar(!!starred);
       loadHistory(id);
       loadThread(id);
     } catch (err) {
@@ -318,7 +385,10 @@ export default function Workbench() {
       if (!res.ok) return;
       const body = await res.json() as { messages: Message[] };
       // Живую ленту текущей сессии не затираем: история нужна, когда лента пуста.
-      if (body.messages.length > 0) setMessages((prev) => (prev.length > 0 ? prev : body.messages.map(({ role, text }) => ({ role, text }))));
+      if (body.messages.length > 0) {
+        setMessages((prev) => (prev.length > 0 ? prev : body.messages.map(
+          ({ role, text, changed, skipped, next }) => ({ role, text, changed, skipped, next }))));
+      }
     } catch { /* переписка — удобство */ }
   }
 
@@ -388,6 +458,16 @@ export default function Workbench() {
     }
   }
 
+  /** Эталон: следующие генерации берут отсюда приборы, виды и урок как образец. */
+  async function toggleExemplar() {
+    if (!simId) return;
+    const next = !exemplar;
+    setExemplar(next);
+    const res = await callApi<{ exemplar: boolean }>(`/api/simulations/${simId}/exemplar`, 'POST', { on: next });
+    if (!res.ok) { setExemplar(!next); setError(res.error); return; }
+    if (next) say('bot', 'Отметил как эталон: следующие тренажёры возьмут отсюда уровень приборов, видов и сценария урока.');
+  }
+
   async function insertIntoLesson() {
     if (!simId || !returnTo) return;
     setInserting(true);
@@ -402,8 +482,19 @@ export default function Workbench() {
       : res.error);
   }
 
-  function say(role: Message['role'], text: string) {
-    setMessages((prev) => [...prev, { role, text }]);
+  function say(role: Message['role'], text: string, extra: Partial<Message> = {}) {
+    setMessages((prev) => [...prev, { role, text, ...extra }]);
+  }
+
+  /**
+   * Выбранный вариант уточнения или предложение «что дальше» — такая же доработка,
+   * только формулировку не набирали руками. Второй раз переспрашивать не о чем:
+   * уходит clarified. Варианты у сообщения гасим, чтобы по ним нельзя было кликнуть дважды.
+   */
+  function chooseOption(index: number, option: string, askedFor?: string) {
+    if (busy) return;
+    setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, options: [], next: [] } : m)));
+    refine(askedFor ? `${askedFor}\n\nУточнение: ${option}` : option, true);
   }
 
   /**
@@ -419,6 +510,8 @@ export default function Workbench() {
     let received = 0;
     let logIndex = 0;
     let planned = false;
+    // Разбор правки уже сказал всё, что нужно: дежурное «Готово, обновил» после него — шум.
+    let noted = false;
     try {
       for (;;) {
         const { done, value } = await reader.read();
@@ -436,9 +529,18 @@ export default function Workbench() {
           if (e.type !== 'queued') logIndex++;
           // Реплей после переподключения дописывает только новое: прогресс не мигает.
           setEvents((prev) => applyStreamEvent(prev, index, e));
+          if (e.type === 'note') {
+            noted = true;
+            say('bot', e.summary || doneMessage(kind),
+              { changed: e.changed, skipped: e.skipped, next: e.next });
+          }
+          if (e.type === 'regression') {
+            say('bot', 'После правки перестало работать то, что работало раньше: ' + e.lost.join('; ') +
+              '. Правку сохранил — если так хуже, верните прошлую версию.', { undo: true });
+          }
           if (e.type === 'done') {
             clearActiveJob();
-            say('bot', doneMessage(kind));
+            if (!noted) say('bot', doneMessage(kind));
             // Готовый результат — на мобиле сразу показываем вкладку превью.
             setActiveTab('preview');
             await openSimulation(e.simulationId);
@@ -516,18 +618,67 @@ export default function Workbench() {
     }
   }
 
+  /**
+   * Новая генерация. В «Стандарте» и «Максимуме» сначала план: карточку можно поправить
+   * за секунды, прежде чем уйдут минуты генерации. В «Быстро» — сразу в работу.
+   */
   async function generate(text: string) {
     setInputMode('text');
     // Поле могло остаться заполненным после «Открыть как текст»: запрос уже ушёл,
     // и старая копия в композере выглядела бы как неотправленный черновик.
     setPrompt('');
     say('user', text);
+    if (planFirst && mode !== 'fast') { await requestPlan(text); return; }
+    await startGeneration(text);
+  }
+
+  async function requestPlan(text: string) {
+    setPlanning(true); setError(null); setDraftSpec(null); setPlanPrompt(text);
+    const ticket = ++planTicket.current;
+    const res = await callApi<{ spec: PlanSpec }>('/api/plan', 'POST', {
+      prompt: text, imageDataUrl: image ?? undefined, level: level === 'auto' ? undefined : level,
+    });
+    if (ticket !== planTicket.current) return;
+    setPlanning(false);
+    if (!res.ok) {
+      // План — удобство: без него генерация всё равно возможна.
+      say('bot', `Не получилось показать план (${res.error}). Собираю сразу.`);
+      await startGeneration(text);
+      return;
+    }
+    setDraftSpec(res.data.spec);
+  }
+
+  async function correctPlan(correction: string) {
+    if (!draftSpec || replanning) return;
+    say('user', correction);
+    setReplanning(true);
+    const ticket = ++planTicket.current;
+    const res = await callApi<{ spec: PlanSpec }>('/api/plan', 'POST', { spec: draftSpec, correction });
+    // Пока ждали, карточку могли закрыть («Отмена», «Новая») — поздний ответ её не воскрешает.
+    if (ticket !== planTicket.current) return;
+    setReplanning(false);
+    if (res.ok) setDraftSpec(res.data.spec);
+    else setError(res.error);
+  }
+
+  async function approvePlan() {
+    if (!draftSpec) return;
+    const spec = draftSpec;
+    setDraftSpec(null);
+    await startGeneration(planPrompt, spec);
+  }
+
+  async function startGeneration(text: string, spec?: PlanSpec) {
     setJobKind('generate');
     setPhase('generating'); setEvents([]); setError(null); setHtml(null); setCancelling(false);
     try {
       const res = await fetch('/api/generate', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, imageDataUrl: image ?? undefined, mode }),
+        body: JSON.stringify({
+          prompt: text, imageDataUrl: image ?? undefined, mode, spec,
+          level: level === 'auto' ? undefined : level,
+        }),
       });
       if (isUnauthorized(res)) { loginWithReturnTo('/'); return; }
       if (!res.ok) {
@@ -564,18 +715,27 @@ export default function Workbench() {
 
   // Доработка — такое же задание, как генерация: тот же поток, та же отмена,
   // то же восстановление после перезагрузки страницы.
-  async function refine(instruction: string) {
+  async function refine(instruction: string, clarified = false) {
     if (!simId) return;
-    say('user', instruction);
+    const pointed = pick;
+    setPick(null);
+    say('user', pointed ? `${instruction}\n📍 ${pointed.target}` : instruction);
     setJobKind('refine');
     setPhase('generating'); setError(null); setEvents([]); setCancelling(false);
     try {
       const res = await fetch(`/api/simulations/${simId}/refine`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instruction }),
+        body: JSON.stringify({ instruction, clarified, pick: pointed ?? undefined }),
       });
       if (isUnauthorized(res)) { loginWithReturnTo('/'); return; }
       const body = await res.json().catch(() => ({}));
+      // Просьбу поняли неоднозначно: задание не создано, ждём выбора варианта.
+      if (res.ok && body.clarify) {
+        setPhase('ready');
+        say('bot', String(body.clarify.question),
+          { options: body.clarify.options as string[], askedFor: instruction });
+        return;
+      }
       if (!res.ok) {
         setError(body.error ?? `Ошибка сервера (${res.status})`);
         setPhase('error');
@@ -600,7 +760,9 @@ export default function Workbench() {
 
   function submit() {
     const text = prompt.trim();
-    if (!text || phase === 'generating') return;
+    if (!text || phase === 'generating' || planning) return;
+    // Пока открыта карточка плана, текст в поле — поправка к плану, а не новый запрос.
+    if (draftSpec) { setPrompt(''); correctPlan(text); return; }
     if (!hasSim && quota?.remaining === 0) return;
     setPrompt('');
     // Пока открыта симуляция (simId есть) — любой запрос это доработка,
@@ -622,6 +784,8 @@ export default function Workbench() {
   }
 
   function startNew() {
+    planTicket.current++;
+    setDraftSpec(null); setPick(null); setPicking(false); setPlanning(false); setReplanning(false);
     setPhase('idle'); setSimId(null); setHtml(null); setEvents([]); setError(null);
     setHistory([]); setMessages([]); setImage(null); clearActiveJob();
     setActiveTab('create');
@@ -629,14 +793,16 @@ export default function Workbench() {
   }
 
   const hasSim = simId !== null;
-  const busy = phase === 'generating';
+  // Пока идёт план или его поправка, «Новая», композер и отправка заблокированы: иначе ответ
+  // модели вернул бы карточку уже брошенного запроса или две поправки гонялись бы друг с другом.
+  const busy = phase === 'generating' || planning || replanning;
   const outOfQuota = !hasSim && quota?.remaining === 0;
   const empty = messages.length === 0 && events.length === 0 && !hasSim;
   const voiceOn = voice.supported && prefs.voiceInput !== false;
 
   // Пока ничего не начато — на экране стенд во всю ширину. Как только пошла
   // генерация или открыта симуляция, возвращается обычная мастерская.
-  if (!hasSim && phase === 'idle' && inputMode === 'stand') {
+  if (!hasSim && phase === 'idle' && inputMode === 'stand' && !draftSpec && !planning) {
     return (
       <>
       <button type="button" className="sessions-fab" onClick={() => setSessionsOpen(true)}><IconHistory size={17} />История</button>
@@ -714,9 +880,59 @@ export default function Workbench() {
           {messages.map((m, i) => (
             <div key={i} className={m.role === 'user' ? 'msg msg-user' : 'msg msg-bot'}>
               <Bubble text={m.text} />
+              {(m.changed?.length || m.skipped?.length) ? (
+                <div className="msg-report">
+                  {m.changed && m.changed.length > 0 && (
+                    <ul className="msg-changed">
+                      {m.changed.map((c, k) => <li key={k}><IconCheck size={13} />{c}</li>)}
+                    </ul>
+                  )}
+                  {m.skipped && m.skipped.length > 0 && (
+                    <ul className="msg-skipped">
+                      {m.skipped.map((c, k) => <li key={k}><IconMinus size={13} />{c}</li>)}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+              {m.undo && history.length > 0 && (
+                <div className="msg-choices" role="group" aria-label="Откат">
+                  <button type="button" className="msg-choice" disabled={busy}
+                    onClick={() => { setMessages((prev) => prev.map((x, k) => (k === i ? { ...x, undo: false } : x))); restoreVersion(history[0]); }}>
+                    <IconUndo size={14} />Вернуть прошлую версию
+                  </button>
+                  <button type="button" className="msg-choice" disabled={busy} onClick={() => setCompareOpen(true)}>
+                    <IconSwap size={14} />Сравнить
+                  </button>
+                </div>
+              )}
+              {m.options && m.options.length > 0 && (
+                <div className="msg-choices" role="group" aria-label="Варианты ответа">
+                  {m.options.map((o) => (
+                    <button key={o} type="button" className="msg-choice" disabled={busy}
+                      onClick={() => chooseOption(i, o, m.askedFor)}>{o}</button>
+                  ))}
+                </div>
+              )}
+              {m.next && m.next.length > 0 && (
+                <div className="msg-choices next" role="group" aria-label="Что можно сделать дальше">
+                  <span className="msg-choices-label">Дальше можно:</span>
+                  {m.next.map((o) => (
+                    <button key={o} type="button" className="msg-choice" disabled={busy}
+                      onClick={() => chooseOption(i, o)}>{o}</button>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
 
+          {planning && (
+            <div className="msg msg-bot"><div className="bubble plan-thinking">Составляю план тренажёра…</div></div>
+          )}
+          {draftSpec && (
+            <PlanEditor spec={draftSpec} busy={phase === 'generating'} replanning={replanning}
+              onChange={setDraftSpec} onGenerate={approvePlan} onCorrect={correctPlan}
+              onCancel={() => { planTicket.current++; setReplanning(false); setDraftSpec(null); setPrompt(planPrompt); }} />
+          )}
           {busy && jobKind === 'refine' && (
             <div className="msg msg-bot"><div className="bubble">Дорабатываю…</div></div>
           )}
@@ -746,6 +962,27 @@ export default function Workbench() {
                   </div>
                   <span className="muted">{QUALITY_OPTIONS.find(([v]) => v === mode)?.[2]}</span>
                 </div>
+                <div className="field">
+                  <span>Уровень тренажёра</span>
+                  <div className="segmented segmented-wrap">
+                    <button type="button" aria-pressed={level === 'auto'} disabled={busy}
+                      className={level === 'auto' ? 'segmented-item active' : 'segmented-item'}
+                      onClick={() => setLevel('auto')}>Авто</button>
+                    {LEVEL_OPTIONS.map(([v, label, hint]) => (
+                      <button key={v} type="button" title={hint} aria-pressed={level === v} disabled={busy}
+                        className={level === v ? 'segmented-item active' : 'segmented-item'}
+                        onClick={() => setLevel(v)}>{label}</button>
+                    ))}
+                  </div>
+                  <span className="muted">
+                    {level === 'auto' ? 'планировщик выберет по теме' : LEVEL_OPTIONS.find(([v]) => v === level)?.[2]}
+                  </span>
+                </div>
+                <label className="check-row">
+                  <input type="checkbox" checked={planFirst} disabled={busy || mode === 'fast'}
+                    onChange={(e) => setPlanFirst(e.target.checked)} />
+                  <span>Сначала показать план{mode === 'fast' ? ' (в «Быстро» — сразу в работу)' : ''}</span>
+                </label>
                 <button className="btn btn-sm btn-secondary" onClick={() => setShowSettings(false)}>
                   Готово
                 </button>
@@ -759,7 +996,7 @@ export default function Workbench() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
                 }}
-                placeholder={hasSim ? 'Что изменить?' : 'Опишите симуляцию'}
+                placeholder={draftSpec ? 'Поправка к плану' : pick ? `Что сделать с «${pick.target}»?` : hasSim ? 'Что изменить?' : 'Опишите симуляцию'}
                 rows={1}
                 aria-label={hasSim ? 'Что изменить' : 'Описание симуляции'}
               />
@@ -803,6 +1040,12 @@ export default function Workbench() {
           </div>
           <div className="composer-foot">
             {image && <span className="attach-note"><IconImage size={14} />картинка добавлена</span>}
+            {pick && (
+              <span className="attach-note pick-note">
+                <IconTarget size={14} />{pick.target}
+                <button type="button" aria-label="Убрать отметку" onClick={() => setPick(null)}><IconClose size={12} /></button>
+              </span>
+            )}
             {voice.error && <span className="voice-hint">{voice.error}</span>}
             <span className="spacer" />
             {!hasSim && quota && quota.limit !== null && (
@@ -822,7 +1065,8 @@ export default function Workbench() {
         )}
         {busy && jobKind === 'generate'
           ? <LiveStage events={events} jobId={jobId} onKeep={keepDraft} keeping={keeping} />
-          : <PreviewFrame html={html} />}
+          : <PreviewFrame html={html} frameRef={previewRef} />}
+        {picking && <div className="pick-hint">Кликните по месту в тренажёре, которое нужно изменить · Esc — отмена</div>}
         {simId && (
           <div className="preview-actions">
             <a className="btn btn-sm btn-ghost" href={`/present/${simId}`} target="_blank" rel="noopener noreferrer">
@@ -836,7 +1080,33 @@ export default function Workbench() {
                 {inserting ? 'Вставляю…' : 'Вставить в урок'}
               </button>
             )}
+            {!busy && (
+              <>
+                <button type="button" className={picking ? 'btn btn-sm btn-ghost on' : 'btn btn-sm btn-ghost'}
+                  onClick={togglePick} title="Показать место в тренажёре и сказать, что с ним сделать">
+                  <IconTarget size={16} />{picking ? 'Отмена' : 'Показать место'}
+                </button>
+                <button type="button" className={exemplar ? 'btn btn-sm btn-ghost on' : 'btn btn-sm btn-ghost'}
+                  onClick={toggleExemplar} aria-pressed={exemplar}
+                  title="Следующие генерации будут равняться на приборы и урок этого тренажёра">
+                  <IconSpark size={16} />{exemplar ? 'Эталон' : 'Сделать эталоном'}
+                </button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => setQualityOpen(true)}
+                  title="Пробы поведения и сверка с планом">
+                  <IconCheck size={16} />Проверка
+                </button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => setShowConfig(true)}
+                  title="Подписи, диапазоны, пресеты — без генерации">
+                  <IconSliders size={16} />Настройки
+                </button>
+              </>
+            )}
             <span className="spacer" />
+            {history.length > 0 && (
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setCompareOpen(true)}>
+                <IconSwap size={16} />Сравнить
+              </button>
+            )}
             {history.length > 0 && (
               <details className="history-dropdown">
                 <summary><IconHistory size={16} />&nbsp;Версии ({history.length})</summary>
@@ -854,6 +1124,18 @@ export default function Workbench() {
         )}
       </section>
 
+      {showConfig && simId && (
+        <SimSettings simId={simId} onClose={() => setShowConfig(false)}
+          onSaved={(next) => { setHtml(next); loadHistory(simId); say('bot', 'Настройки сохранил — новая версия уже в превью.'); }} />
+      )}
+      {qualityOpen && simId && (
+        <QualityPanel simId={simId} busy={busy} onClose={() => setQualityOpen(false)}
+          onFix={(instruction) => refine(instruction, true)} />
+      )}
+      {compareOpen && simId && history.length > 0 && (
+        <CompareVersions simId={simId} current={html} history={history} busy={busy}
+          onRestore={restoreVersion} onClose={() => setCompareOpen(false)} />
+      )}
     </div>
   );
 }

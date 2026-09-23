@@ -10,7 +10,9 @@ import type { CandidateStatus } from './deriveProgress';
 /** Короткие подписи чипов таймлайна (совпадают со STAGE_LABELS в deriveProgress). */
 export const STAGE_TITLES: Record<PipelineStage, string> = {
   planning: 'Планирование',
+  physics: 'Ядро физики',
   generating: 'Кандидат',
+  layers: 'Слои',
   critiquing: 'Кандидат',
   judging: 'Суд',
   refining: 'Доводка',
@@ -21,6 +23,8 @@ export const STAGE_TITLES: Record<PipelineStage, string> = {
 export function stageCopy(stage: PipelineStage): string {
   switch (stage) {
     case 'planning': return 'Модель продумывает план симуляции';
+    case 'physics': return 'Пишем ядро физики и проверяем его числами';
+    case 'layers': return 'Достраиваем виды, измерения и сценарий урока';
     case 'generating': return 'Генерируем симуляцию';
     case 'critiquing': return 'Физик-критик проверяет симуляцию';
     case 'judging': return 'Судья оценивает симуляцию по рубрике';

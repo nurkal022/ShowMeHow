@@ -16,9 +16,11 @@ for (const [slug, stations] of Object.entries(STATIONS)) {
   });
 }
 
-test('список лабораторий закрыт для гостя', async ({ page }) => {
+// Список открыт без входа намеренно (см. src/middleware.ts): на него ведут ссылки со
+// сцен лабораторий, которые показывают на занятиях без логина.
+test('список лабораторий открыт для гостя', async ({ page }) => {
   await page.goto('/labs');
-  await expect(page).toHaveURL(/\/login/);
+  await expect(page).toHaveURL(/\/labs$/);
 });
 
 test('в разделе четыре карточки, а «Создать лабораторию» отвечает «Скоро»', async ({ page }) => {

@@ -10,7 +10,10 @@ export default function PlanCard({ plan }: { plan: PlanSummary }) {
         <h3>{plan.title}</h3>
         <span className={`badge badge-${plan.mode}`}>{plan.mode.toUpperCase()}</span>
       </div>
-      <div className="plan-card-subject">{plan.subject}</div>
+      <div className="plan-card-subject">
+        {plan.subject}
+        {plan.level && plan.level !== 'demo' && <> · {plan.level === 'lab' ? 'лаборатория' : 'исследование'}</>}
+      </div>
       {plan.physics && (
         <p
           className={`plan-card-physics ${expanded ? 'expanded' : 'clamped'}`}
@@ -29,6 +32,12 @@ export default function PlanCard({ plan }: { plan: PlanSummary }) {
           ))}
         </div>
       )}
+      {(plan.views?.length || plan.steps?.length) ? (
+        <div className="plan-card-params">
+          {plan.views?.map((v, i) => <span className="param-chip view" key={`v${i}`}>{v}</span>)}
+          {plan.steps?.map((v, i) => <span className="param-chip step" key={`s${i}`}>{i + 1}. {v}</span>)}
+        </div>
+      ) : null}
       {plan.goals.length > 0 && (
         <ul className="plan-card-goals">
           {plan.goals.map((g, i) => <li key={i}>{g}</li>)}

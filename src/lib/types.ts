@@ -61,7 +61,23 @@ export interface SimParameter {
   step: number;
   value: number;   // начальное значение
   unit: string;    // единица измерения, '' если нет
+  /** Группа на панели («Среда», «Источник»): у сложных тренажёров параметров много. */
+  group?: string;
 }
+
+/**
+ * Уровень тренажёра задаёт объём работы: сколько параметров, видов и слоёв.
+ * demo — показ явления; lab — лаборатория с измерениями; research — исследование с заданиями.
+ */
+export type SimLevel = 'demo' | 'lab' | 'research';
+
+export interface PlanEntity { name: string; role: string }
+export interface PlanObservable { name: string; label: string; unit: string }
+export interface PlanView { kind: 'scene' | 'chart' | 'phase' | 'table' | 'formula' | 'section'; title: string; what: string }
+/** Проверяемое утверждение о физике: оно уходит в числовую проверку ядра. */
+export interface PlanInvariant { text: string }
+export interface PlanStep { title: string; task: string; /** Что ученик должен заметить или ответить. */ expect?: string }
+export interface PlanPreset { label: string; values: Record<string, number> }
 
 export interface PlanSpec {
   title: string;
@@ -71,6 +87,16 @@ export interface PlanSpec {
   physics: string;          // законы, уравнения, допущения — текст
   parameters: SimParameter[];
   visualPlan: string;       // что и как рисуем, какие графики
+  // --- План v2: всё необязательно, старые спецификации остаются валидными ---
+  level?: SimLevel;
+  audience?: string;
+  entities?: PlanEntity[];
+  observables?: PlanObservable[];
+  views?: PlanView[];
+  invariants?: PlanInvariant[];
+  scenario?: PlanStep[];
+  presets?: PlanPreset[];
+  wowMoment?: string;
 }
 
 export interface RenderReport {
@@ -98,6 +124,8 @@ export interface RubricScores {
   clarity: number;        // наглядность
   interactivity: number;
   aesthetics: number;
+  /** Глубина: насколько тренажёр дотягивает до заявленного уровня (lab/research). */
+  depth?: number;
 }
 
 export interface JudgeVerdict {
@@ -114,7 +142,7 @@ export interface CandidateResult {
 }
 
 export type PipelineStage =
-  'planning' | 'generating' | 'critiquing' | 'judging' | 'refining' | 'saving';
+  'planning' | 'physics' | 'generating' | 'layers' | 'critiquing' | 'judging' | 'refining' | 'saving';
 
 export interface PlanSummary {
   title: string;
@@ -123,6 +151,10 @@ export interface PlanSummary {
   physics: string;
   parameters: { label: string; unit: string }[];
   goals: string[];
+  level?: SimLevel;
+  views?: string[];
+  steps?: string[];
+  invariants?: string[];
 }
 
 export type PipelineEvent =
@@ -144,6 +176,17 @@ export type PipelineEvent =
   | { type: 'gen-progress'; role: Role; chars: number; tail: string }
   /** Готова версия, которую можно открыть и пробовать; HTML лежит в черновиках задания. */
   | { type: 'draft'; version: number; label: string }
+  /**
+   * Отчёт о доработке: что изменено, чего модель делать не стала и что предлагает дальше.
+   * Живёт в журнале задания, поэтому переписка восстанавливается вместе с ним.
+   */
+  | { type: 'note'; summary: string; changed: string[]; skipped: string[]; next: string[] }
+  /** Ядро физики проверено числами: какие проверки прошли. */
+  | { type: 'physics-check'; ok: boolean; results: { label: string; ok: boolean; detail: string; soft?: boolean }[] }
+  /** Слой тренажёра: приборы и виды, сценарий урока. */
+  | { type: 'layer'; name: string; title: string; status: 'start' | 'ok' | 'skipped' }
+  /** Доработка ухудшила проверки — правка сохранена, но человеку предлагают откат. */
+  | { type: 'regression'; lost: string[] }
   | { type: 'warning'; message: string }
   | { type: 'cancelled' }
   | { type: 'done'; simulationId: string }
@@ -152,5 +195,6 @@ export type PipelineEvent =
       completionTokens: number; ms: number };
 
 export function minScore(s: RubricScores): number {
-  return Math.min(s.physics, s.clarity, s.interactivity, s.aesthetics);
+  const base = Math.min(s.physics, s.clarity, s.interactivity, s.aesthetics);
+  return typeof s.depth === 'number' ? Math.min(base, s.depth) : base;
 }

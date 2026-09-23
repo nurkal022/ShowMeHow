@@ -102,6 +102,23 @@ function build(cfg) {
   if (has('formula') && cfg.tex) {
     K.formula({ title: 'Как это работает', tex: cfg.tex, corner: 'tl' });
   }
+  if (has('lesson')) {
+    K.steps({ items: [
+      { title: 'Наблюдай', text: 'Запусти опыт и посмотри, что происходит.' },
+      { title: 'Измени', text: 'Сдвинь параметр и сравни с тем, что было.' },
+      { title: 'Измерь', text: 'Запиши величину и найди закономерность.' },
+    ], corner: 'tl' });
+  }
+  if (has('task')) {
+    K.task({ question: 'Во сколько раз изменится величина, если параметр удвоить?',
+      options: ['в 2 раза', 'в 4 раза', 'не изменится'], correct: 0, corner: 'tl' });
+  }
+  if (has('table')) {
+    var rows = K.table({ title: 'Измерения', columns: [{ label: cfg.parameters[0] || 'x' },
+      { label: cfg.readoutLabel || 'Величина', unit: cfg.readoutUnit || '' }],
+      record: function () { return [40, 50 + 40 * Math.sin((Date.now() - t0) / 1000 * 1.1)]; }, corner: 'bl' });
+    rows.add([20, 31.4]); rows.add([40, 62.8]);
+  }
 }
 
 // Приборы должны жить: цифры бегут, график рисуется. Иначе панель выглядит макетом.

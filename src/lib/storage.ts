@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { dataDir } from './settings';
 import { reinstrument } from './artifact';
 import { getRepo } from './db/repo';
-import type { SimulationMeta } from './types';
+import type { PlanSpec, SimulationMeta } from './types';
 
 function assertSafe(segment: string): void {
   if (!/^[A-Za-z0-9_.-]+$/.test(segment) || segment === '.' || segment === '..') {
@@ -89,6 +89,69 @@ export async function updateArtifact(ownerId: string, id: string, html: string):
   fs.writeFileSync(artifactPath(id), html);
   await getRepo().touch(id, new Date().toISOString());
   return true;
+}
+
+/**
+ * Спецификация живёт рядом с артефактом: доработка должна знать цели, физику и
+ * параметры, а не только HTML. Старые симуляции спецификации не имеют — это не ошибка.
+ */
+export async function saveSpec(ownerId: string, id: string, spec: PlanSpec): Promise<boolean> {
+  if (!(await owned(ownerId, id))) return false;
+  fs.mkdirSync(simDir(id), { recursive: true });
+  fs.writeFileSync(path.join(simDir(id), 'spec.json'), JSON.stringify(spec, null, 2));
+  return true;
+}
+
+export async function getSpec(ownerId: string, id: string): Promise<PlanSpec | null> {
+  if (!(await owned(ownerId, id))) return null;
+  try {
+    return JSON.parse(fs.readFileSync(path.join(simDir(id), 'spec.json'), 'utf8')) as PlanSpec;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Эталон — удачный тренажёр, на который равняются следующие генерации того же автора.
+ * Отметка — файл рядом с артефактом: колонки в базе для неё не нужно, она личная.
+ */
+export async function setExemplar(ownerId: string, id: string, on: boolean): Promise<boolean> {
+  if (!(await owned(ownerId, id))) return false;
+  const f = path.join(simDir(id), 'exemplar.json');
+  if (on) fs.writeFileSync(f, JSON.stringify({ at: new Date().toISOString() }));
+  else fs.rmSync(f, { force: true });
+  return true;
+}
+
+export async function isExemplar(ownerId: string, id: string): Promise<boolean> {
+  if (!(await owned(ownerId, id))) return false;
+  return fs.existsSync(path.join(simDir(id), 'exemplar.json'));
+}
+
+/** Эталоны автора с планом и кодом — для подбора образца под новую генерацию. */
+export async function listExemplars(ownerId: string, limit = 30): Promise<{ id: string; spec: PlanSpec; html: string }[]> {
+  const out: { id: string; spec: PlanSpec; html: string }[] = [];
+  for (const meta of await listSimulations(ownerId)) {
+    const dir = simDir(meta.id);
+    if (!fs.existsSync(path.join(dir, 'exemplar.json'))) continue;
+    try {
+      const spec = JSON.parse(fs.readFileSync(path.join(dir, 'spec.json'), 'utf8')) as PlanSpec;
+      out.push({ id: meta.id, spec, html: fs.readFileSync(artifactPath(meta.id), 'utf8') });
+    } catch { /* без плана эталон подобрать не по чему */ }
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** HTML одной версии из истории — для сравнения версий бок о бок. */
+export async function getHistoryVersion(ownerId: string, id: string, name: string): Promise<string | null> {
+  assertSafe(name);
+  if (!(await owned(ownerId, id))) return null;
+  try {
+    return reinstrument(fs.readFileSync(path.join(simDir(id), 'history', name), 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 export async function listHistory(ownerId: string, id: string): Promise<string[] | null> {

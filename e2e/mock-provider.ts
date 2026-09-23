@@ -29,7 +29,7 @@ const GENERATOR_MARKER = 'Каркас качественной симуляци
 // через сердцебиение воркера, и кандидат не должен успеть сгенерироваться раньше.
 const GENERATOR_DELAY_MS = 1200;
 
-export type MockRole = 'planner' | 'judge' | 'critic' | 'html';
+export type MockRole = 'planner' | 'judge' | 'critic' | 'core' | 'layer' | 'html';
 
 /**
  * Роль по системному промпту. Маркеры — самоидентификация роли из первой строки
@@ -42,7 +42,9 @@ export type MockRole = 'planner' | 'judge' | 'critic' | 'html';
 export function roleOf(system: string): MockRole {
   if (system.includes('Ты — методист и физик')) return 'planner';
   if (system.includes('Ты — судья качества')) return 'judge';
-  if (system.includes('Ты — придирчивый физик-рецензент')) return 'critic';
+  if (system.includes('Ты — рецензент учебных тренажёров')) return 'critic';
+  if (system.includes('ЯДРО ФИЗИКИ')) return 'core';
+  if (system.includes('Ты достраиваешь работающий учебный тренажёр')) return 'layer';
   return 'html'; // генератор, фиксер, рефайнер — все ждут HTML-документ
 }
 
@@ -56,6 +58,11 @@ function reply(system: string): string {
         feedback: '' });
     case 'critic':
       return '{"physicsOk": true, "issues": []}';
+    case 'core':
+      return '```js\nvar PHYS = { init: function (p) { return { t: 0 }; }, step: function (s, p, dt) { s.t += dt; },\n' +
+        '  observe: function (s, p) { return { t: s.t }; } };\n```';
+    case 'layer':
+      return '```js\n// ==== @section views ====\n// мок: слой без содержимого\n// ==== @end views ====\n```';
     default:
       return '```html\n' + ARTIFACT + '\n```';
   }
@@ -69,12 +76,25 @@ export function startMockProvider(
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {
-      const { messages } = JSON.parse(body || '{}');
+      const { messages, stream } = JSON.parse(body || '{}');
       const system = String(messages?.[0]?.content ?? '');
       const send = () => {
+        const content = reply(system);
+        // Генератор, фиксер и рефайнер читают ответ потоком (живая лента кода) — отвечаем
+        // так же, как настоящий OpenAI-совместимый провайдер: SSE-кусками и [DONE].
+        if (stream) {
+          res.setHeader('Content-Type', 'text/event-stream');
+          for (let i = 0; i < content.length; i += 400) {
+            res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: content.slice(i, i + 400) } }] })}\n\n`);
+          }
+          res.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 10, completion_tokens: 10 } })}\n\n`);
+          res.end('data: [DONE]\n\n');
+          return;
+        }
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({
-          choices: [{ message: { content: reply(system) } }],
+          choices: [{ message: { content } }],
         }));
       };
       if (system.includes(GENERATOR_MARKER)) setTimeout(send, delay);

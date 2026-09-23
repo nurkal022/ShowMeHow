@@ -1,6 +1,7 @@
 import './globals.css';
 import './motion.css';
 import './landing.css';
+import './trainer.css';
 import RevealOnScroll from '@/components/motion/RevealOnScroll';
 import CommandPalette from '@/components/CommandPalette';
 import { paletteActions } from '@/lib/palette-actions';

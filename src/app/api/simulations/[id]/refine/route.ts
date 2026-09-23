@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getArtifact } from '@/lib/storage';
+import { getArtifact, getMeta } from '@/lib/storage';
 import { getJobStore } from '@/lib/jobs/current';
 import { ActiveJobExistsError } from '@/lib/jobs/store';
 import { jobPriority } from '@/lib/jobs/policy';
@@ -9,10 +9,13 @@ import {
 } from '@/lib/jobs/messages';
 import { readJsonObject } from '@/lib/jobs/request-body';
 import { activeProvider, NO_PROVIDER_MESSAGE } from '@/lib/settings';
+import { clarifyRefine } from '@/lib/pipeline/clarify';
+import { pastInstructions } from '@/lib/jobs/sessions';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
 import { listMemberships } from '@/lib/org/access';
 import { canGenerate, GENERATION_FORBIDDEN_MESSAGE } from '@/lib/org/policy';
+import { pickNote } from '@/lib/jobs/pick';
 
 function isInvalidSegment(e: unknown): boolean {
   return e instanceof Error && e.message.includes('invalid path segment');
@@ -21,6 +24,11 @@ function isInvalidSegment(e: unknown): boolean {
 /**
  * Доработка — такое же задание, как генерация: её выполняет воркер, и Chromium
  * больше не поднимается в веб-процессе в обход очереди. Квоту она не тратит.
+ *
+ * Перед постановкой в очередь неоднозначную просьбу переспрашиваем: ответ 200 с полем
+ * clarify и без jobId означает «задание не создано, ждём выбора». Повторный запрос
+ * приходит с clarified: true и уже не переспрашивается — второй круг вопросов
+ * раздражал бы сильнее, чем неверно понятая правка.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await currentUserFromRequest(req);
@@ -35,7 +43,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!body) {
     return NextResponse.json({ error: INVALID_REQUEST_MESSAGE }, { status: 400 });
   }
-  const instruction = typeof body.instruction === 'string' ? body.instruction.trim() : '';
+  const said = typeof body.instruction === 'string' ? body.instruction.trim() : '';
+  // «Покажи и скажи»: человек ткнул в превью — к просьбе добавляется, куда именно.
+  const instruction = said ? said + pickNote(body.pick) : '';
   if (!instruction) {
     return NextResponse.json({ error: EMPTY_INSTRUCTION_MESSAGE }, { status: 400 });
   }
@@ -53,6 +63,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   if (!activeProvider()) {
     return NextResponse.json({ error: NO_PROVIDER_MESSAGE }, { status: 400 });
+  }
+  if (body.clarified !== true) {
+    const meta = await getMeta(user.id, id);
+    const clarify = await clarifyRefine({
+      instruction,
+      title: meta?.title ?? '',
+      subject: meta?.subject ?? '',
+      past: await pastInstructions(user.id, id),
+    });
+    if (clarify) return NextResponse.json({ clarify });
   }
   try {
     const job = await getJobStore().create({

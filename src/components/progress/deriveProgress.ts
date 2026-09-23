@@ -8,12 +8,14 @@ import type { PipelineEvent, PipelineStage, PlanSummary, RubricScores } from '@/
  * агрегирует генерацию и критику одним чипом без специальной обработки.
  */
 export const STAGE_ORDER: PipelineStage[] = [
-  'planning', 'generating', 'judging', 'refining', 'saving',
+  'planning', 'physics', 'generating', 'layers', 'judging', 'refining', 'saving',
 ];
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {
   planning: 'Планирование',
+  physics: 'Ядро физики',
   generating: 'Кандидат',
+  layers: 'Слои',
   critiquing: 'Кандидат',
   judging: 'Суд',
   refining: 'Доводка',
@@ -42,6 +44,8 @@ export interface CandidateInfo {
   targetedFix?: string[];
 }
 
+export interface LayerInfo { name: string; title: string; status: 'start' | 'ok' | 'skipped' }
+
 export interface RefineRoundInfo {
   round: number;
   before: RubricScores;
@@ -63,6 +67,9 @@ export interface ProgressState {
   terminal: TerminalState | null;
   /** Место в очереди генерации (1 — следующий); 0, если задание уже не в очереди. */
   queuePosition: number;
+  /** Числовые проверки ядра физики. */
+  physicsCheck: { ok: boolean; results: { label: string; ok: boolean; detail: string; soft?: boolean }[] } | null;
+  layers: LayerInfo[];
 }
 
 /**
@@ -81,6 +88,8 @@ export function deriveProgress(events: PipelineEvent[]): ProgressState {
   const warnings: string[] = [];
   let terminal: TerminalState | null = null;
   let queuePosition = 0;
+  let physicsCheck: ProgressState['physicsCheck'] = null;
+  const layers: LayerInfo[] = [];
 
   function candidate(index: number): CandidateInfo {
     let c = candMap.get(index);
@@ -139,8 +148,18 @@ export function deriveProgress(events: PipelineEvent[]): ProgressState {
       case 'refine-round':
         refineRounds.push({ round: e.round, before: e.before, after: e.after });
         break;
+      case 'physics-check':
+        physicsCheck = { ok: e.ok, results: e.results };
+        break;
+      case 'layer': {
+        const l = layers.find((x) => x.name === e.name);
+        if (l) l.status = e.status;
+        else layers.push({ name: e.name, title: e.title, status: e.status });
+        break;
+      }
       case 'gen-progress':
       case 'draft':
+      case 'regression':
         // Живая лента кода и версии рисует рабочая область (LiveStage), а не лента этапов.
         break;
       case 'warning':
@@ -184,5 +203,7 @@ export function deriveProgress(events: PipelineEvent[]): ProgressState {
     warnings,
     terminal,
     queuePosition,
+    physicsCheck,
+    layers,
   };
 }

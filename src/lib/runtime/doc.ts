@@ -32,6 +32,28 @@ export const UIKIT_DOC = `
     крупная плашка сверху по центру: текущий такт/фаза/режим
 - SimUI.panel({title:'Своё', corner:'bl'}) -> DIV для произвольного содержимого
 
+Урок и измерения (для лабораторий и исследований):
+- SimUI.steps({title:'Урок', items:[{title:'Наблюдай', text:'что сделать'}, ...],
+    onStep:function(i, item){...}, corner:'tl'}) -> {set(i), get()} — шаги сценария урока
+    с кнопками «Назад/Далее»; onStep может выставить пресет, показать нужный прибор
+- SimUI.task({question:'Каков период при L = 2 м?', answer:function(){return T;},
+    tolerance:0.05, unit:'с', hint:'T = 2π√(L/g)', explain:'период растёт как √L',
+    corner:'tl'}) — числовой ответ с допуском; answer — число или функция от текущего состояния.
+    Выбор варианта: {question, options:['растёт','падает','не меняется'], correct:0}
+- SimUI.table({title:'Измерения', columns:[{label:'L', unit:'м'}, {label:'T', unit:'с'}],
+    record:function(){return [L, T];}, corner:'bl'}) -> {add(row), clear()} — таблица
+    с кнопкой «Записать»: ученик сам собирает точки опыта
+- SimUI.set('temp', 80) — выставить слайдер/контрол по name (как пресет), например из onStep
+
+3D-сцена (если mode 3d) — одной строкой, в существующий холст #scene:
+- var v3 = SimUI.scene3d(THREE, OrbitControls, {radius: 3, background: 0x101318}) ->
+    {scene, camera, renderer, controls, fit(radius, center?), render()} — свет, камера по размеру
+    объекта и соотношению сторон, resize уже настроены; в цикле вызывай v3.render()
+
+Физические помощники SimPhys (и в ядре PHYS, и в сцене): substep, rk4, eulerCromer, verlet, collide,
+walls, field, spring, clamp, lerp; SimPhys.periodMeter() -> {feed(t, x), get(), reset()} — живой
+замер периода для таблиц измерений и заданий.
+
 Самопроверка (ОБЯЗАТЕЛЬНО):
 - SimUI.expose({getState:function(){return {t:state.t, x:state.x, temp:temp};},
     reset:resetSim}) — getState отдаёт простой объект с числами (время, координаты,
