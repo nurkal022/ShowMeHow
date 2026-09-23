@@ -18,7 +18,8 @@ import { SLOT_META, type LessonSpec, type Slot, type SlotKind } from './lesson-b
 
 const MATERIAL_KINDS = new Set<BlockKind>(['text', 'callout', 'formula', 'spoiler']);
 
-const BLOCK_FORMAT = `Каждый блок — объект {"kind": ..., "payload": ...}. Допустимые kind и payload:
+/** Формат блоков для модели: его же переиспользует персональный разбор ошибок. */
+export const BLOCK_FORMAT = `Каждый блок — объект {"kind": ..., "payload": ...}. Допустимые kind и payload:
 - "text": {"title": "...", "body": "..."} — body в простой разметке: абзацы через пустую строку, **жирный**, *курсив*, "- " для списка, "## " для подзаголовка, формулы $...$ в строке.
 - "callout": {"tone": "definition"|"important"|"warning"|"example"|"info", "title": "...", "body": "..."}
 - "formula": {"latex": "LaTeX без $", "caption": "..."}

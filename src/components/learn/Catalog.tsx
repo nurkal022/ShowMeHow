@@ -5,7 +5,7 @@ import type { Course } from '@/lib/lms/types';
 import type { ProgressTotals } from '@/lib/lms/learn-view';
 import { coverStyle } from '@/lib/lms/covers';
 import { formatScore, ruPlural } from '@/lib/lms/format';
-import { IconBook, IconCheck, IconLab, IconLibrary, IconPlay, IconSearch, IconSliders, IconTask, IconTrophy } from '@/components/icons';
+import { IconBook, IconBulb, IconCheck, IconLab, IconLibrary, IconPlay, IconSearch, IconSliders, IconTask, IconTrophy } from '@/components/icons';
 import { IconStar } from '@/components/cabinet/icons';
 
 export interface CatalogItem {
@@ -40,6 +40,7 @@ const MORE = [
   { href: '/labs', title: 'Лаборатории', text: 'Трёхмерные сцены: оптический стол, клетка, реакции', icon: IconLab },
   { href: '/learn/grades', title: 'Мои оценки', text: 'Что сдано, что проверено и сколько баллов набрано', icon: IconTrophy },
   { href: '/learn/notes', title: 'Заметки и закладки', text: 'Всё, что вы отметили в уроках, в одном месте', icon: IconStar },
+  { href: '/learn/mistakes', title: 'Работа над ошибками', text: 'Персональный разбор заданий, которые не получились', icon: IconBulb },
 ];
 
 function stateOf(i: CatalogItem): Exclude<Filter, 'all'> {

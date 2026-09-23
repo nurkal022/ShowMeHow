@@ -5,7 +5,7 @@ import { PaletteButton } from './CommandPalette';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  IconAdmin, IconBook, IconCourses, IconLab, IconLibrary, IconLogout, IconMonitor, IconMoon, IconOrg,
+  IconAdmin, IconBook, IconBulb, IconCourses, IconLab, IconLibrary, IconLogout, IconMonitor, IconMoon, IconOrg,
   IconPlus, IconSliders, IconSun, IconTable, IconTeach, IconUser,
 } from './icons';
 import { IconStar } from './cabinet/icons';
@@ -47,6 +47,7 @@ interface NavUser { label: string; role: string }
 const STUDENT_MENU: { href: string; label: string; Icon: typeof IconUser }[] = [
   { href: '/learn/me', label: 'Профиль ученика', Icon: IconUser },
   { href: '/learn/grades', label: 'Мои оценки', Icon: IconTable },
+  { href: '/learn/mistakes', label: 'Работа над ошибками', Icon: IconBulb },
   { href: '/learn/notes', label: 'Заметки и закладки', Icon: IconStar },
 ];
 

@@ -85,9 +85,12 @@ describe.skipIf(!pool)('API ученика и чужие симуляции', ()
     await setCourseStatus(courseId, 'published');
     const res = await answer(put(sc, { answer: { type: 'choice', selected: ['a'] }, submit: true }), idP(choiceId));
     expect(res.status).toBe(200);
-    const text = await res.text();
-    expect(text).not.toContain('correct');
-    expect(JSON.parse(text).submission).toMatchObject({ status: 'graded', score: 10 });
+    const body = await res.json();
+    // Ключ в самой работе ученика не хранится и не отдаётся; после проверки он приходит
+    // отдельным полем reveal — это разбор ответа, так задумано с волны конструктора урока.
+    expect(JSON.stringify(body.submission)).not.toContain('correct');
+    expect(body.submission).toMatchObject({ status: 'graded', score: 10 });
+    expect(body.reveal).not.toBeNull();
     const again = await answer(put(sc, { answer: { type: 'choice', selected: ['b'] }, submit: true }), idP(choiceId));
     expect(again.status).toBe(400);
   });

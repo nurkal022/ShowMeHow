@@ -51,8 +51,10 @@ describe.skipIf(!pool)('миграция 004 на базе прежней схе
     const s = await p.query<{ sliding: boolean }>('SELECT sliding FROM sessions');
     expect(s.rows[0].sliding).toBe(true);
 
-    // Таблицы login_attempts (миграция 005) в схеме 004 ещё нет — лимиты входа
-    // здесь держим в памяти; проверяется вход на схеме 004, а не хранилище лимитов.
+    // Вход проверяем после того, как база догнала текущую схему: код сессий сегодня пишет
+    // колонки поздних миграций (impersonator_id из 007), а важно, что старый пользователь,
+    // переживший 004, входит почтой. Лимиты входа держим в памяти — речь не о них.
+    await applyMigrations(p);
     __setAttemptStoreForTests(createMemoryAttemptStore());
     try {
       const res = await login(new Request('http://t', {

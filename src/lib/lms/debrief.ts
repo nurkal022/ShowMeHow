@@ -44,7 +44,8 @@ export interface Debrief {
 
 const MAX_SAMPLES = 8;
 
-function answerText(p: AssignmentPayload, a: Answer): string {
+/** Ответ ученика человеческим текстом: варианты и пары разворачиваются в слова. */
+export function answerText(p: AssignmentPayload, a: Answer): string {
   const s = p.spec;
   if (a.type === 'choice' && s.type === 'choice') {
     return a.selected.map((id) => s.options.find((o) => o.id === id)?.text ?? '?').join(' + ') || '(пусто)';

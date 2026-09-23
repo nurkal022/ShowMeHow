@@ -150,6 +150,9 @@ export async function seedDemo(print: (line: string) => void, allowProduction = 
   const science = await staff(STAFF.science.email, STAFF.science.name);
   await addMember(org.id, director.id, 'org_admin');
   for (const t of [physics, cs, science]) await addMember(org.id, t.id, 'teacher');
+  // staff() из витрины ставит свой пароль. В демо-школе он должен быть один для всех:
+  // на показе неудобно помнить, что у учителей пароль не такой, как у учеников.
+  for (const u of [director, physics, cs, science]) await updatePassword(u.id, DEMO_PASSWORD);
 
   const groups: { id: string; title: string; roster: [string, string][] }[] = [];
   for (const [title, roster] of [['8А', CLASS_A], ['8Б', CLASS_B]] as const) {

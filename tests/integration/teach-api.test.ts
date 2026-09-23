@@ -124,7 +124,8 @@ describe.skipIf(!pool)('API учителя', () => {
     expect((await patchTopic(call(tc, { move: 'sideways' }, 'PATCH'), idP(topicId))).status).toBe(400);
     await json(await patchTopic(call(tc, { title: 'Колебания' }, 'PATCH'), idP(topicId)));
 
-    expect((await newBlock(call(tc, { kind: 'video' }), idP(topicId))).status).toBe(400);
+    // video — настоящий блок с волны конструктора урока; неизвестный вид по-прежнему отклоняется.
+    expect((await newBlock(call(tc, { kind: 'hologram' }), idP(topicId))).status).toBe(400);
     const bad = await patchBlock(call(tc, { payload: { prompt: 'x', spec: { type: 'choice', options: [] } } }, 'PATCH'), idP(blockId));
     expect(bad.status).toBe(400);
     expect((await bad.json()).error).toBe('Вариантов должно быть от 2 до 10.');

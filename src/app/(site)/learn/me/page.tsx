@@ -4,27 +4,32 @@ import { userContact, userLabel } from '@/lib/auth/identifier';
 import { listStudentCourses } from '@/lib/lms/courses';
 import { continueTopicId, courseTeacherNames, listTopicProgress, progressTotals } from '@/lib/lms/learn';
 import { studentAchievements } from '@/lib/lms/achievements';
+import { listGaps } from '@/lib/lms/gaps';
+import { getInterests } from '@/lib/lms/interests-store';
 import { activityDays, studentPlaces, studentStats } from '@/lib/lms/student-home';
 import { coverStyle } from '@/lib/lms/covers';
 import { formatScore, ruPlural } from '@/lib/lms/format';
 import Achievements from '@/components/learn/Achievements';
 import ActivityGrid from '@/components/learn/ActivityGrid';
 import StudentProfile from '@/components/learn/StudentProfile';
+import InterestsCard from '@/components/learn/InterestsCard';
 import { Ring } from '@/components/cabinet/viz';
-import { IconCheck, IconChevron, IconTable, IconUser } from '@/components/icons';
+import { IconCheck, IconChevron, IconSpark, IconTable, IconUser } from '@/components/icons';
 
 /** Профиль ученика: кто он, как идут дела, что уже пройдено и какие значки собраны. */
 export default async function StudentProfilePage() {
   const user = await requirePageUser('/learn/me');
   if (!user) return null;
   const cards = await listStudentCourses(user.id);
-  const [teachers, progress, stats, places, achievements, activity] = await Promise.all([
+  const [teachers, progress, stats, places, achievements, activity, interests, gaps] = await Promise.all([
     courseTeacherNames(cards.map((c) => c.course.id)),
     Promise.all(cards.map((c) => listTopicProgress(c.course.id, user.id))),
     studentStats(user.id),
     studentPlaces(user.id),
     studentAchievements(user.id),
     activityDays(user.id),
+    getInterests(user.id),
+    listGaps(user.id),
   ]);
   const day = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Almaty' });
   const items = cards.map((c, i) => ({
@@ -43,6 +48,18 @@ export default async function StudentProfilePage() {
   return (
     <div className="learn-page sp">
       <StudentProfile name={user.displayName ?? ''} contact={userContact(user) || userLabel(user)} places={places} />
+
+      <InterestsCard initial={interests} />
+
+      {gaps.length > 0 && (
+        <Link className="mk-invite" href="/learn/mistakes">
+          <span className="mk-invite-icon"><IconSpark size={20} /></span>
+          <span className="mk-invite-text">
+            <b>{`Есть что подтянуть: ${gaps.length} ${ruPlural(gaps.length, 'задание', 'задания', 'заданий')}`}</b>
+            <small>Помощник разберёт каждое по отдельности — объяснит ошибку и даст похожие задачи без оценок.</small>
+          </span>
+        </Link>
+      )}
 
       <section className="sp-stats" aria-label="Итоги">
         <div className="sp-stat accent">
