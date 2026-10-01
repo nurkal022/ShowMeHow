@@ -1,6 +1,8 @@
 'use client';
 import { useId, useLayoutEffect, useRef, useState } from 'react';
-import { areaPath, formatDay, labelIndexes, niceTicks, smoothPath, type Point } from './scale';
+import { areaPath, formatDay as formatDayIn, labelIndexes, niceTicks, smoothPath, type Point } from './scale';
+import { useLocale, useT } from '@/i18n/client';
+import { cabinet } from '@/i18n/messages/cabinet';
 
 export interface ChartSeries {
   key: string;
@@ -26,6 +28,9 @@ export default function AreaLineChart({ days, series, label }: {
   days: string[]; series: ChartSeries[]; label: string;
 }) {
   const gid = useId();
+  const locale = useLocale();
+  const t = useT(cabinet);
+  const formatDay = (iso: string) => formatDayIn(iso, locale);
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(880);
   const [hover, setHover] = useState<number | null>(null);
@@ -86,7 +91,7 @@ export default function AreaLineChart({ days, series, label }: {
       <div className="chart-box" ref={box} tabIndex={0} onKeyDown={onKey} onBlur={() => setHover(null)}
         onPointerMove={(e) => setHover(indexAt(e.clientX))} onPointerLeave={() => setHover(null)}
         onPointerDown={(e) => setHover(indexAt(e.clientX))}
-        role="group" aria-label={`${label}. Стрелки влево и вправо — выбор дня.`}>
+        role="group" aria-label={t('chartHint', { label })}>
         <svg viewBox={`0 0 ${width} ${H}`} width="100%" height={H} role="img" aria-label={label}>
           <defs>
             {series.filter((s) => s.area).map((s) => (
@@ -144,7 +149,7 @@ export default function AreaLineChart({ days, series, label }: {
       {/* Те же числа таблицей — для читалок экрана. */}
       <table className="visually-hidden">
         <caption>{label}</caption>
-        <thead><tr><th scope="col">День</th>{series.map((s) => <th key={s.key} scope="col">{s.label}</th>)}</tr></thead>
+        <thead><tr><th scope="col">{t('day')}</th>{series.map((s) => <th key={s.key} scope="col">{s.label}</th>)}</tr></thead>
         <tbody>
           {days.map((d, i) => (
             <tr key={d}><th scope="row">{formatDay(d)}</th>{series.map((s) => <td key={s.key}>{s.values[i] ?? 0}</td>)}</tr>

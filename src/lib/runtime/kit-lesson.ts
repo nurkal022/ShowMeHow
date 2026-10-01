@@ -57,12 +57,12 @@ export const KIT_LESSON_JS = `
   function steps(o) {
     o = o || {};
     var items = o.items || [];
-    var body = K.panel({ title: o.title || 'Урок', corner: o.corner || 'tl' });
+    var body = K.panel({ title: o.title || __simT('lesson'), corner: o.corner || 'tl' });
     var head = document.createElement('div'); head.className = 'sim-step-head';
     var text = document.createElement('div'); text.className = 'sim-step-text';
     var nav = document.createElement('div'); nav.className = 'sim-btns';
-    var prev = document.createElement('button'); prev.type = 'button'; prev.textContent = '← Назад';
-    var next = document.createElement('button'); next.type = 'button'; next.textContent = 'Далее →';
+    var prev = document.createElement('button'); prev.type = 'button'; prev.textContent = __simT('back');
+    var next = document.createElement('button'); next.type = 'button'; next.textContent = __simT('next');
     var dots = document.createElement('div'); dots.className = 'sim-step-dots';
     nav.appendChild(prev); nav.appendChild(next);
     body.appendChild(head); body.appendChild(text); body.appendChild(dots); body.appendChild(nav);
@@ -72,7 +72,7 @@ export const KIT_LESSON_JS = `
       i = Math.max(0, Math.min(items.length - 1, Number(i) || 0));
       if (i === cur) return;
       cur = i;
-      head.textContent = 'Шаг ' + (i + 1) + ' из ' + items.length + ': ' + (items[i].title || '');
+      head.textContent = __simT('stepOf', { i: i + 1, n: items.length }) + (items[i].title || '');
       text.textContent = items[i].text || '';
       dots.innerHTML = '';
       for (var d = 0; d < items.length; d++) {
@@ -87,7 +87,7 @@ export const KIT_LESSON_JS = `
     prev.onclick = function () { set(cur - 1); };
     next.onclick = function () { set(cur + 1); };
     set(0);
-    K.__register({ kind: 'steps', name: o.name || 'steps', label: 'Шаги урока',
+    K.__register({ kind: 'steps', name: o.name || 'steps', label: __simT('steps'),
       min: 0, max: Math.max(0, items.length - 1),
       get: function () { return cur; }, set: set });
     return { set: set, get: function () { return cur; }, element: body };
@@ -96,7 +96,7 @@ export const KIT_LESSON_JS = `
   // ---------- Задание с проверкой ответа ----------
   function task(o) {
     o = o || {};
-    var body = K.panel({ title: o.title || 'Задание', corner: o.corner || 'tl' });
+    var body = K.panel({ title: o.title || __simT('task'), corner: o.corner || 'tl' });
     var q = document.createElement('div'); q.className = 'sim-task-q'; q.textContent = o.question || '';
     body.appendChild(q);
     var fb = document.createElement('div'); fb.className = 'sim-task-fb';
@@ -105,8 +105,8 @@ export const KIT_LESSON_JS = `
     function verdict(ok) {
       solved = ok;
       fb.className = 'sim-task-fb ' + (ok ? 'ok' : 'no');
-      fb.textContent = ok ? ('Верно ✓' + (o.explain ? ' ' + o.explain : ''))
-        : ('Пока нет.' + (o.hint ? ' Подсказка: ' + o.hint : ''));
+      fb.textContent = ok ? (__simT('correct') + (o.explain ? ' ' + o.explain : ''))
+        : (__simT('notYet') + (o.hint ? __simT('hint') + o.hint : ''));
       if (o.onAnswer) later(function () { o.onAnswer(ok, value); });
     }
     function check() {
@@ -130,15 +130,15 @@ export const KIT_LESSON_JS = `
     } else {
       var row = document.createElement('div'); row.className = 'sim-task-row';
       var inp = document.createElement('input'); inp.type = 'number'; inp.step = 'any';
-      inp.className = 'sim-task-input'; inp.placeholder = 'ответ' + (o.unit ? ', ' + o.unit : '');
-      var go = document.createElement('button'); go.type = 'button'; go.textContent = 'Проверить';
+      inp.className = 'sim-task-input'; inp.placeholder = __simT('answer') + (o.unit ? ', ' + o.unit : '');
+      var go = document.createElement('button'); go.type = 'button'; go.textContent = __simT('check');
       go.onclick = function () { value = inp.value === '' ? NaN : Number(inp.value); check(); };
       inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') go.onclick(); });
       row.appendChild(inp); row.appendChild(go); body.appendChild(row);
     }
     body.appendChild(fb);
     K.__register({ kind: 'task', name: o.name || ('task' + Math.random().toString(36).slice(2, 6)),
-      label: o.question || 'Задание', get: function () { return solved ? 1 : 0; },
+      label: o.question || __simT('task'), get: function () { return solved ? 1 : 0; },
       set: function (v) { value = v; check(); } });
     return { check: check, solved: function () { return solved; }, element: body };
   }
@@ -148,7 +148,7 @@ export const KIT_LESSON_JS = `
     o = o || {};
     var cols = o.columns || [];
     var max = o.max || 12;
-    var body = K.panel({ title: o.title || 'Измерения', corner: o.corner || 'bl' });
+    var body = K.panel({ title: o.title || __simT('measurements'), corner: o.corner || 'bl' });
     var t = document.createElement('table'); t.className = 'sim-table';
     var thead = document.createElement('tr');
     for (var i = 0; i < cols.length; i++) {
@@ -178,12 +178,12 @@ export const KIT_LESSON_JS = `
     }
     if (typeof o.record === 'function') {
       var btns = document.createElement('div'); btns.className = 'sim-btns';
-      var rec = document.createElement('button'); rec.type = 'button'; rec.textContent = '● Записать';
+      var rec = document.createElement('button'); rec.type = 'button'; rec.textContent = __simT('record');
       rec.onclick = function () { try { add(o.record()); } catch (e) {} };
-      var clr = document.createElement('button'); clr.type = 'button'; clr.textContent = 'Очистить';
+      var clr = document.createElement('button'); clr.type = 'button'; clr.textContent = __simT('clear');
       clr.onclick = clear;
       btns.appendChild(rec); btns.appendChild(clr); body.appendChild(btns);
-      K.__register({ kind: 'table', name: o.name || 'table', label: o.title || 'Измерения',
+      K.__register({ kind: 'table', name: o.name || 'table', label: o.title || __simT('measurements'),
         get: function () { return rows.length; }, activate: rec.onclick });
     }
     return { add: add, clear: clear, rows: function () { return rows.slice(); }, element: body };

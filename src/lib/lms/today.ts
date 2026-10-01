@@ -1,4 +1,6 @@
 import { db } from '../db/client';
+import type { Locale } from '@/i18n/config';
+import { lmsText } from './texts';
 import { assignmentTitle, bodyFromRow } from './block-schema';
 import { VISIBLE_TO_STUDENT } from './courses';
 
@@ -17,7 +19,7 @@ export interface Today { continueAt: ContinueItem | null; due: DueItem[]; result
 
 const POINTS = `CASE WHEN b.payload->>'points' ~ '^[0-9]+$' THEN (b.payload->>'points')::int ELSE 0 END`;
 
-export async function studentToday(userId: string): Promise<Today> {
+export async function studentToday(userId: string, locale: Locale = 'ru'): Promise<Today> {
   const [cont, due, results, week] = await Promise.all([
     db().query<{ topic_id: string; topic: string; course: string; left: number }>(
       `SELECT t.id AS topic_id, t.title AS topic, c.title AS course,
@@ -61,7 +63,7 @@ export async function studentToday(userId: string): Promise<Today> {
       const body = bodyFromRow('assignment', r.payload);
       return {
         topicId: r.topic_id, blockId: r.block_id, courseTitle: r.course,
-        task: body.kind === 'assignment' ? assignmentTitle(body.payload.prompt) : 'Задание',
+        task: body.kind === 'assignment' ? assignmentTitle(body.payload.prompt) : lmsText(locale).task,
         status: r.status, score: r.score === null ? null : Number(r.score), points: r.points, comment: r.comment, at: r.at.toISOString(),
       };
     }),

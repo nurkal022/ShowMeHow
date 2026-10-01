@@ -4,6 +4,8 @@
  * алгоритм сравнивает сейчас, или точку, в которой берут производную.
  */
 import { Axes, Core, Ghost, INK, SAFE_R, type MotifProps } from './primitives';
+import { useT } from '@/i18n/client';
+import { workbenchStand } from '@/i18n/messages/workbench-stand';
 
 /* ----------------------------- информатика ------------------------------ */
 
@@ -22,6 +24,7 @@ function bubbleState(base: number[], swaps: number): number[] {
 const BARS = [6, 2, 8, 1, 5, 9, 3, 7, 4];
 
 export function ArrayScan({ t, mode, style, knob }: MotifProps) {
+  const tr = useT(workbenchStand);
   const n = BARS.length;
   const x0 = 66, w = 19, gap = 4, base = 196;
   // Шаг — дискретный: это и есть режим «пошагово», ради которого он в разделе.
@@ -66,7 +69,7 @@ export function ArrayScan({ t, mode, style, knob }: MotifProps) {
       <Core x={cursorX} y={cursorY} r={10} mode={mode} style={style} />
       <path d={`M${cursorX} ${cursorY + 14} l-5 -7 h10 z`} fill={INK.accent} fillOpacity=".8" />
       <text x={cursorX} y={cursorY - 18} fill={INK.muted} fontSize="10" textAnchor="middle">
-        шаг {step % 40}
+        {tr('motifStep', { n: step % 40 })}
       </text>
     </g>
   );
@@ -110,6 +113,7 @@ export function Curve({ t, mode, style, knob }: MotifProps) {
 /* ------------------------------- биология ------------------------------- */
 
 export function Population({ t, mode, style, knob }: MotifProps) {
+  const tr = useT(workbenchStand);
   const ox = 52, oy = 210, w = 268, h = 162;
   const rate = 0.6 + knob * 2.2;
   // Логистический рост: выходит на ёмкость среды, а не растёт бесконечно.
@@ -131,7 +135,7 @@ export function Population({ t, mode, style, knob }: MotifProps) {
       <Ghost d={`M${ox} ${oy - h} H${ox + w + 8}`} />
       {/* Под линией, а не над ней: сверху подпись стояла на пути точки, которая
           к концу роста выходит на ёмкость и налезала на текст. */}
-      <text x={ox + w - 4} y={oy - h + 12} fill={INK.muted} fontSize="9" textAnchor="end">ёмкость среды</text>
+      <text x={ox + w - 4} y={oy - h + 12} fill={INK.muted} fontSize="9" textAnchor="end">{tr('motifCapacity')}</text>
       {/* Бледный след всей кривой: поле не пустует, пока голова ещё в начале. */}
       <path d={`M${curve(1)}`} fill="none" stroke={INK.accent} strokeOpacity=".18" strokeWidth="1.6" />
       <path d={`M${curve(front)}`} fill="none" stroke={INK.accent} strokeWidth="2.4" strokeLinecap="round" />

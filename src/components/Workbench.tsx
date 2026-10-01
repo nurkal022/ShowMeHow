@@ -20,6 +20,11 @@ import CompareVersions from './workbench/CompareVersions';
 import QualityPanel from './workbench/QualityPanel';
 import type { SessionItem } from '@/lib/jobs/sessions';
 import { useVoiceInput } from './useVoiceInput';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { translator } from '@/i18n/core';
+import type { Locale } from '@/i18n/config';
+import { workbench } from '@/i18n/messages/workbench';
+import { common } from '@/i18n/messages/common';
 import {
   IconCheck, IconClose, IconDownload, IconHistory, IconImage, IconMic, IconMinus,
   IconPlay, IconPlus, IconSend, IconSliders, IconSpark, IconSwap, IconTarget, IconUndo, IconWand,
@@ -29,19 +34,14 @@ type Phase = 'idle' | 'generating' | 'ready' | 'error';
 
 const ACTIVE_JOB_KEY = 'showmehow-active-job';
 
-const SUGGESTIONS = [
-  'Диффузия молекул духов в комнате',
-  'Маятник с изменяемой длиной нити',
-  'Преломление луча на границе двух сред',
-  'Орбита спутника вокруг планеты',
-];
+const SUGGESTIONS = ['sugg1', 'sugg2', 'sugg3', 'sugg4'] as const;
 
 // Первая рабочая версия появляется в рабочей области через 1–2 минуты в любом режиме;
 // режим задаёт, сколько ещё её будут проверять и доводить (остановить можно в любой момент).
-const QUALITY_OPTIONS: [QualityMode, string, string][] = [
-  ['fast', 'Быстро', 'только первая версия и проверка запуском'],
-  ['standard', 'Стандарт', 'плюс оценка со стороны и один круг доводки'],
-  ['max', 'Максимум', 'до трёх кругов доводки — дольше всего'],
+const QUALITY_OPTIONS: [QualityMode, 'qFast' | 'qStandard' | 'qMax', 'qFastHint' | 'qStandardHint' | 'qMaxHint'][] = [
+  ['fast', 'qFast', 'qFastHint'],
+  ['standard', 'qStandard', 'qStandardHint'],
+  ['max', 'qMax', 'qMaxHint'],
 ];
 
 /**
@@ -59,10 +59,9 @@ export function restoredJobAction(status: JobStatus): 'reconnect' | 'open' | 'ca
   return 'error';
 }
 
-export function doneMessage(kind: JobKind): string {
-  return kind === 'refine'
-    ? 'Готово, обновил.'
-    : 'Готово. Симуляция справа — можно показывать или дорабатывать.';
+export function doneMessage(kind: JobKind, locale: Locale = 'ru'): string {
+  const t = translator(workbench, locale);
+  return kind === 'refine' ? t('doneRefine') : t('doneGenerate');
 }
 
 // Паузы между попытками переподключения к потоку. Их суммы хватает, чтобы пережить
@@ -161,6 +160,10 @@ interface Pick { x: number; y: number; target: string }
 
 export default function Workbench() {
   const search = useSearchParams();
+  const t = useT(workbench);
+  const tc = useT(common);
+  const f = useFormat();
+  const locale = useLocale();
   // Учитель пришёл из редактора курса: готовую симуляцию можно вставить в блок урока.
   const returnTo = lessonBlockFromSearch(search.get('returnTo'));
   const [inserting, setInserting] = useState(false);
@@ -238,7 +241,7 @@ export default function Workbench() {
       if (e.data?.type !== 'smh-pick') return;
       setPicking(false);
       if (e.data.cancelled) return;
-      setPick({ x: Number(e.data.x), y: Number(e.data.y), target: String(e.data.target || 'сцена') });
+      setPick({ x: Number(e.data.x), y: Number(e.data.y), target: String(e.data.target || t('pickScene')) });
       textRef.current?.focus();
     }
     window.addEventListener('message', onMessage);
@@ -302,6 +305,9 @@ export default function Workbench() {
       setPrompt(brief.slice(0, 2000));
       setInputMode('text');
     }
+    // Исследователь пришёл из раздела «Исследования»: уровень тренажёра задан заготовкой.
+    const presetLevel = search.get('level');
+    if (presetLevel === 'demo' || presetLevel === 'lab' || presetLevel === 'research') setLevel(presetLevel);
     // Порядок при монтировании: активный (running) job важнее ?id= — он восстанавливается
     // из localStorage и переподключается по SSE; ?id= обрабатывается только если такого
     // job нет (или он уже завершился и был вычищен).
@@ -339,14 +345,14 @@ export default function Workbench() {
             if (kind === 'refine' && target) {
               await openSimulation(target);
             } else {
-              setError('Генерация отменена');
+              setError(t('genCancelled'));
               setPhase('idle');
             }
             break;
           default:
             localStorage.removeItem(ACTIVE_JOB_KEY);
             if (kind === 'refine' && target) await openSimulation(target);
-            setError(job.error ?? (kind === 'refine' ? 'Ошибка доработки' : 'Ошибка генерации'));
+            setError(job.error ?? (kind === 'refine' ? t('refineError') : t('genError')));
             setPhase('error');
             break;
         }
@@ -363,7 +369,7 @@ export default function Workbench() {
       const res = await fetch(`/api/simulations/${id}`);
       if (isUnauthorized(res)) { loginWithReturnTo('/'); return; }
       if (!res.ok) {
-        setError('Не удалось загрузить симуляцию');
+        setError(t('loadSimFailed'));
         setPhase('error');
         return;
       }
@@ -372,8 +378,7 @@ export default function Workbench() {
       loadHistory(id);
       loadThread(id);
     } catch (err) {
-      setError('Не удалось загрузить симуляцию: '
-        + (err instanceof Error ? err.message : String(err)));
+      setError(t('loadSimFailedWith', { error: err instanceof Error ? err.message : String(err) }));
       setPhase('error');
     }
   }
@@ -387,7 +392,7 @@ export default function Workbench() {
       // Живую ленту текущей сессии не затираем: история нужна, когда лента пуста.
       if (body.messages.length > 0) {
         setMessages((prev) => (prev.length > 0 ? prev : body.messages.map(
-          ({ role, text, changed, skipped, next }) => ({ role, text, changed, skipped, next }))));
+          ({ role, text, changed, skipped, next }) => ({ role, text: role === 'bot' ? f.message(text) : text, changed, skipped, next }))));
       }
     } catch { /* переписка — удобство */ }
   }
@@ -402,7 +407,7 @@ export default function Workbench() {
     streamAbortRef.current?.abort();
     clearActiveJob();
     setEvents([]);
-    say('bot', `Оставил версию ${version}. Полировку остановил — можно показывать или дорабатывать словами.`);
+    say('bot', t('keptVersion', { v: version }));
     setActiveTab('preview');
     await openSimulation(res.data.simulationId);
     fetchQuota();
@@ -422,10 +427,11 @@ export default function Workbench() {
     setPrompt(s.prompt);
     if (s.drafts > 0) {
       const res = await callApi<{ simulationId: string }>(`/api/jobs/${s.jobId}/keep`, 'POST', {});
-      if (res.ok) { setPrompt(''); say('bot', 'Открыл последний черновик этой попытки и сохранил его в библиотеку.'); await openSimulation(res.data.simulationId); }
+      if (res.ok) { setPrompt(''); say('bot', t('openedDraft')); await openSimulation(res.data.simulationId); }
     } else {
-      say('bot', s.status === 'error' ? `Эта попытка не удалась${s.error ? `: ${s.error}` : ''}. Запрос вернул в поле ввода — можно поправить и отправить снова.`
-        : 'Эта генерация была остановлена до первой версии. Запрос вернул в поле ввода.');
+      say('bot', s.status === 'error'
+        ? (s.error ? t('attemptFailedWith', { error: f.message(s.error) }) : t('attemptFailed'))
+        : t('stoppedBeforeFirst'));
     }
   }
 
@@ -451,10 +457,10 @@ export default function Workbench() {
         setHtml(body.html);
         loadHistory(simId);
       } else {
-        setError(body.error ?? `Ошибка сервера (${res.status})`);
+        setError(body.error ?? t('serverError', { status: res.status }));
       }
     } catch (err) {
-      setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
+      setError(t('networkError', { error: err instanceof Error ? err.message : String(err) }));
     }
   }
 
@@ -465,7 +471,7 @@ export default function Workbench() {
     setExemplar(next);
     const res = await callApi<{ exemplar: boolean }>(`/api/simulations/${simId}/exemplar`, 'POST', { on: next });
     if (!res.ok) { setExemplar(!next); setError(res.error); return; }
-    if (next) say('bot', 'Отметил как эталон: следующие тренажёры возьмут отсюда уровень приборов, видов и сценария урока.');
+    if (next) say('bot', t('exemplarOn'));
   }
 
   async function insertIntoLesson() {
@@ -478,7 +484,7 @@ export default function Workbench() {
       return;
     }
     setError(res.error === 'Не найдено.'
-      ? 'Блок урока не найден: его могли удалить. Откройте курс и выберите тренажёр заново.'
+      ? t('blockNotFound')
       : res.error);
   }
 
@@ -494,7 +500,7 @@ export default function Workbench() {
   function chooseOption(index: number, option: string, askedFor?: string) {
     if (busy) return;
     setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, options: [], next: [] } : m)));
-    refine(askedFor ? `${askedFor}\n\nУточнение: ${option}` : option, true);
+    refine(askedFor ? t('clarified', { request: askedFor, option }) : option, true);
   }
 
   /**
@@ -531,16 +537,15 @@ export default function Workbench() {
           setEvents((prev) => applyStreamEvent(prev, index, e));
           if (e.type === 'note') {
             noted = true;
-            say('bot', e.summary || doneMessage(kind),
+            say('bot', e.summary || t(kind === 'refine' ? 'doneRefine' : 'doneGenerate'),
               { changed: e.changed, skipped: e.skipped, next: e.next });
           }
           if (e.type === 'regression') {
-            say('bot', 'После правки перестало работать то, что работало раньше: ' + e.lost.join('; ') +
-              '. Правку сохранил — если так хуже, верните прошлую версию.', { undo: true });
+            say('bot', t('regression', { lost: e.lost.join('; ') }), { undo: true });
           }
           if (e.type === 'done') {
             clearActiveJob();
-            if (!noted) say('bot', doneMessage(kind));
+            if (!noted) say('bot', t(kind === 'refine' ? 'doneRefine' : 'doneGenerate'));
             // Готовый результат — на мобиле сразу показываем вкладку превью.
             setActiveTab('preview');
             await openSimulation(e.simulationId);
@@ -591,7 +596,7 @@ export default function Workbench() {
         if (res && isUnauthorized(res)) { clearActiveJob(); loginWithReturnTo('/'); return; }
         if (res && !res.ok && res.status < 500) {
           clearActiveJob();
-          setError(res.status === 404 ? 'Задание не найдено' : `Ошибка сервера (${res.status})`);
+          setError(res.status === 404 ? t('jobNotFound') : t('serverError', { status: res.status }));
           setPhase('error');
           return;
         }
@@ -604,7 +609,7 @@ export default function Workbench() {
         const next = nextReconnect(reconnect, closed);
         if (next.delay === null) {
           // Ключ не чистим: задание может ещё идти, перезагрузка страницы подхватит его.
-          setError('Связь с сервером потеряна. Перезагрузите страницу — работа продолжается на сервере.');
+          setError(t('connectionLost'));
           setPhase('error');
           return;
         }
@@ -642,7 +647,7 @@ export default function Workbench() {
     setPlanning(false);
     if (!res.ok) {
       // План — удобство: без него генерация всё равно возможна.
-      say('bot', `Не получилось показать план (${res.error}). Собираю сразу.`);
+      say('bot', t('planFailed', { error: f.message(res.error) }));
       await startGeneration(text);
       return;
     }
@@ -682,7 +687,7 @@ export default function Workbench() {
       });
       if (isUnauthorized(res)) { loginWithReturnTo('/'); return; }
       if (!res.ok) {
-        let message = `Ошибка сервера (${res.status})`;
+        let message = t('serverError', { status: res.status });
         try {
           const body = await res.json();
           if (body?.error) message = String(body.error);
@@ -696,7 +701,7 @@ export default function Workbench() {
       setJobId(newJobId);
       await connectToJob(newJobId, 'generate');
     } catch (err) {
-      setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
+      setError(t('networkError', { error: err instanceof Error ? err.message : String(err) }));
       setPhase('error');
     }
   }
@@ -737,7 +742,7 @@ export default function Workbench() {
         return;
       }
       if (!res.ok) {
-        setError(body.error ?? `Ошибка сервера (${res.status})`);
+        setError(body.error ?? t('serverError', { status: res.status }));
         setPhase('error');
         return;
       }
@@ -745,7 +750,7 @@ export default function Workbench() {
       setJobId(body.jobId);
       await connectToJob(body.jobId, 'refine');
     } catch (err) {
-      setError('Ошибка сети: ' + (err instanceof Error ? err.message : String(err)));
+      setError(t('networkError', { error: err instanceof Error ? err.message : String(err) }));
       setPhase('error');
     }
   }
@@ -805,7 +810,7 @@ export default function Workbench() {
   if (!hasSim && phase === 'idle' && inputMode === 'stand' && !draftSpec && !planning) {
     return (
       <>
-      <button type="button" className="sessions-fab" onClick={() => setSessionsOpen(true)}><IconHistory size={17} />История</button>
+      <button type="button" className="sessions-fab" onClick={() => setSessionsOpen(true)}><IconHistory size={17} />{t('history')}</button>
       <SessionsPanel open={sessionsOpen} onClose={() => setSessionsOpen(false)} onOpen={openSession} onNew={startNew} activeSimulationId={simId} />
       <ConstructorStand
         disabled={busy || outOfQuota}
@@ -813,11 +818,11 @@ export default function Workbench() {
         defaultStyle={prefs.style}
         quotaNote={(
           <>
-            {returnTo && <span className="quota-line">Тренажёр для урока: после генерации нажмите «Вставить в урок».</span>}
+            {returnTo && <span className="quota-line">{t('forLessonNote')}</span>}
             {quota && quota.limit !== null && (
               outOfQuota
-                ? <span className="quota-line quota-exhausted">{quotaMessage}</span>
-                : <span className="quota-line">Осталось {quota.remaining} из {quota.limit}</span>
+                ? <span className="quota-line quota-exhausted">{quotaMessage && f.message(quotaMessage)}</span>
+                : <span className="quota-line">{t('quotaLeft', { remaining: quota.remaining, limit: quota.limit })}</span>
             )}
           </>
         )}
@@ -831,47 +836,47 @@ export default function Workbench() {
   return (
     <div className={`workbench tab-${activeTab}`}>
       <SessionsPanel open={sessionsOpen} onClose={() => setSessionsOpen(false)} onOpen={openSession} onNew={startNew} activeSimulationId={simId} />
-      <div className="mobile-tabs" role="tablist" aria-label="Разделы">
+      <div className="mobile-tabs" role="tablist" aria-label={t('sectionsAria')}>
         <button role="tab" aria-selected={activeTab === 'create'}
           className={activeTab === 'create' ? 'active' : ''}
-          onClick={() => setActiveTab('create')}>Диалог</button>
+          onClick={() => setActiveTab('create')}>{t('tabDialog')}</button>
         <button role="tab" aria-selected={activeTab === 'preview'}
           className={activeTab === 'preview' ? 'active' : ''}
-          onClick={() => setActiveTab('preview')}>Симуляция</button>
+          onClick={() => setActiveTab('preview')}>{t('tabSim')}</button>
       </div>
 
       <aside className="chat-pane">
         <div className="thread">
           <div className="thread-top">
             <button type="button" className="btn btn-sm btn-ghost thread-history" disabled={busy} onClick={() => setSessionsOpen(true)}>
-              <IconHistory size={16} />История
+              <IconHistory size={16} />{t('history')}
             </button>
             <span className="spacer" />
             {(hasSim || messages.length > 0) && !busy && (
               <button className="btn btn-sm btn-secondary" onClick={startNew}>
-                <IconPlus size={16} />Новая
+                <IconPlus size={16} />{t('newShort')}
               </button>
             )}
           </div>
 
           {returnTo && (
             <div className="queue-banner">
-              Тренажёр для урока: когда симуляция будет готова, нажмите «Вставить в урок» под ней.
+              {t('lessonBanner')}
             </div>
           )}
 
           {empty && (
             <div className="hero">
-              <h2>С чего начнём?</h2>
-              <p>Опишите явление — соберу интерактивную симуляцию.</p>
+              <h2>{t('heroTitle')}</h2>
+              <p>{t('heroText')}</p>
               <div className="hero-suggestions">
                 {SUGGESTIONS.map((s) => (
-                  <button key={s} className="suggestion" onClick={() => setPrompt(s)}>
-                    <IconSpark size={17} />{s}
+                  <button key={s} className="suggestion" onClick={() => setPrompt(t(s))}>
+                    <IconSpark size={17} />{t(s)}
                   </button>
                 ))}
                 <button className="suggestion" onClick={openStand}>
-                  <IconWand size={17} />Собрать по шагам в конструкторе
+                  <IconWand size={17} />{t('heroStand')}
                 </button>
               </div>
             </div>
@@ -895,18 +900,18 @@ export default function Workbench() {
                 </div>
               ) : null}
               {m.undo && history.length > 0 && (
-                <div className="msg-choices" role="group" aria-label="Откат">
+                <div className="msg-choices" role="group" aria-label={t('rollbackAria')}>
                   <button type="button" className="msg-choice" disabled={busy}
                     onClick={() => { setMessages((prev) => prev.map((x, k) => (k === i ? { ...x, undo: false } : x))); restoreVersion(history[0]); }}>
-                    <IconUndo size={14} />Вернуть прошлую версию
+                    <IconUndo size={14} />{t('restorePrev')}
                   </button>
                   <button type="button" className="msg-choice" disabled={busy} onClick={() => setCompareOpen(true)}>
-                    <IconSwap size={14} />Сравнить
+                    <IconSwap size={14} />{t('compare')}
                   </button>
                 </div>
               )}
               {m.options && m.options.length > 0 && (
-                <div className="msg-choices" role="group" aria-label="Варианты ответа">
+                <div className="msg-choices" role="group" aria-label={t('answerOptions')}>
                   {m.options.map((o) => (
                     <button key={o} type="button" className="msg-choice" disabled={busy}
                       onClick={() => chooseOption(i, o, m.askedFor)}>{o}</button>
@@ -914,8 +919,8 @@ export default function Workbench() {
                 </div>
               )}
               {m.next && m.next.length > 0 && (
-                <div className="msg-choices next" role="group" aria-label="Что можно сделать дальше">
-                  <span className="msg-choices-label">Дальше можно:</span>
+                <div className="msg-choices next" role="group" aria-label={t('nextAria')}>
+                  <span className="msg-choices-label">{t('nextLabel')}</span>
                   {m.next.map((o) => (
                     <button key={o} type="button" className="msg-choice" disabled={busy}
                       onClick={() => chooseOption(i, o)}>{o}</button>
@@ -926,7 +931,7 @@ export default function Workbench() {
           ))}
 
           {planning && (
-            <div className="msg msg-bot"><div className="bubble plan-thinking">Составляю план тренажёра…</div></div>
+            <div className="msg msg-bot"><div className="bubble plan-thinking">{t('planning')}</div></div>
           )}
           {draftSpec && (
             <PlanEditor spec={draftSpec} busy={phase === 'generating'} replanning={replanning}
@@ -934,14 +939,14 @@ export default function Workbench() {
               onCancel={() => { planTicket.current++; setReplanning(false); setDraftSpec(null); setPrompt(planPrompt); }} />
           )}
           {busy && jobKind === 'refine' && (
-            <div className="msg msg-bot"><div className="bubble">Дорабатываю…</div></div>
+            <div className="msg msg-bot"><div className="bubble">{t('refining')}</div></div>
           )}
           <ProgressView events={events} kind={jobKind} />
-          {error && <div className="error-box">{error}</div>}
+          {error && <div className="error-box">{f.message(error)}</div>}
           {busy && jobId && (
             <button className="btn btn-sm btn-danger" style={{ alignSelf: 'flex-start' }}
               disabled={cancelling} onClick={cancelJob}>
-              <IconClose size={15} />{cancelling ? 'Отменяю…' : 'Отменить'}
+              <IconClose size={15} />{cancelling ? t('cancelling') : t('cancelJob')}
             </button>
           )}
           <div ref={threadEndRef} />
@@ -950,41 +955,41 @@ export default function Workbench() {
         <div className="composer">
           <div className="composer-wrap">
             {showSettings && (
-              <div className="popover" role="dialog" aria-label="Настройки генерации">
+              <div className="popover" role="dialog" aria-label={t('genSettings')}>
                 <div className="field">
-                  <span>Качество</span>
+                  <span>{t('quality')}</span>
                   <div className="segmented">
                     {QUALITY_OPTIONS.map(([v, label, hint]) => (
-                      <button key={v} type="button" title={hint} aria-pressed={mode === v}
+                      <button key={v} type="button" title={t(hint)} aria-pressed={mode === v}
                         className={mode === v ? 'segmented-item active' : 'segmented-item'}
-                        disabled={busy} onClick={() => setMode(v)}>{label}</button>
+                        disabled={busy} onClick={() => setMode(v)}>{t(label)}</button>
                     ))}
                   </div>
-                  <span className="muted">{QUALITY_OPTIONS.find(([v]) => v === mode)?.[2]}</span>
+                  <span className="muted">{t(QUALITY_OPTIONS.find(([v]) => v === mode)?.[2] ?? 'qStandardHint')}</span>
                 </div>
                 <div className="field">
-                  <span>Уровень тренажёра</span>
+                  <span>{t('simLevel')}</span>
                   <div className="segmented segmented-wrap">
                     <button type="button" aria-pressed={level === 'auto'} disabled={busy}
                       className={level === 'auto' ? 'segmented-item active' : 'segmented-item'}
-                      onClick={() => setLevel('auto')}>Авто</button>
+                      onClick={() => setLevel('auto')}>{t('auto')}</button>
                     {LEVEL_OPTIONS.map(([v, label, hint]) => (
-                      <button key={v} type="button" title={hint} aria-pressed={level === v} disabled={busy}
+                      <button key={v} type="button" title={t(hint)} aria-pressed={level === v} disabled={busy}
                         className={level === v ? 'segmented-item active' : 'segmented-item'}
-                        onClick={() => setLevel(v)}>{label}</button>
+                        onClick={() => setLevel(v)}>{t(label)}</button>
                     ))}
                   </div>
                   <span className="muted">
-                    {level === 'auto' ? 'планировщик выберет по теме' : LEVEL_OPTIONS.find(([v]) => v === level)?.[2]}
+                    {level === 'auto' ? t('autoHint') : t(LEVEL_OPTIONS.find(([v]) => v === level)?.[2] ?? 'levelDemoHint')}
                   </span>
                 </div>
                 <label className="check-row">
                   <input type="checkbox" checked={planFirst} disabled={busy || mode === 'fast'}
                     onChange={(e) => setPlanFirst(e.target.checked)} />
-                  <span>Сначала показать план{mode === 'fast' ? ' (в «Быстро» — сразу в работу)' : ''}</span>
+                  <span>{mode === 'fast' ? t('planFirstFast') : t('planFirst')}</span>
                 </label>
                 <button className="btn btn-sm btn-secondary" onClick={() => setShowSettings(false)}>
-                  Готово
+                  {tc('done')}
                 </button>
               </div>
             )}
@@ -996,25 +1001,25 @@ export default function Workbench() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
                 }}
-                placeholder={draftSpec ? 'Поправка к плану' : pick ? `Что сделать с «${pick.target}»?` : hasSim ? 'Что изменить?' : 'Опишите симуляцию'}
+                placeholder={draftSpec ? t('phPlan') : pick ? t('phPick', { target: pick.target }) : hasSim ? t('phChange') : t('phDescribe')}
                 rows={1}
-                aria-label={hasSim ? 'Что изменить' : 'Описание симуляции'}
+                aria-label={hasSim ? t('ariaChange') : t('ariaDescribe')}
               />
               <div className="composer-tools">
                 {!hasSim && (
                   <>
-                    <button className="icon-btn" title="Собрать в конструкторе"
-                      aria-label="Собрать в конструкторе" disabled={busy}
+                    <button className="icon-btn" title={t('buildInStand')}
+                      aria-label={t('buildInStand')} disabled={busy}
                       onClick={openStand}>
                       <IconWand size={19} />
                     </button>
-                    <button className={image ? 'icon-btn on' : 'icon-btn'} title="Картинка-образец"
-                      aria-label="Картинка-образец" disabled={busy}
+                    <button className={image ? 'icon-btn on' : 'icon-btn'} title={t('sampleImage')}
+                      aria-label={t('sampleImage')} disabled={busy}
                       onClick={() => fileRef.current?.click()}>
                       <IconImage size={19} />
                     </button>
-                    <button className={showSettings ? 'icon-btn on' : 'icon-btn'} title="Качество"
-                      aria-label="Настройки генерации" disabled={busy}
+                    <button className={showSettings ? 'icon-btn on' : 'icon-btn'} title={t('quality')}
+                      aria-label={t('genSettings')} disabled={busy}
                       onClick={() => setShowSettings((v) => !v)}>
                       <IconSliders size={19} />
                     </button>
@@ -1024,34 +1029,34 @@ export default function Workbench() {
                 <span className="spacer" />
                 {voiceOn && (
                   <button className={voice.listening ? 'icon-btn rec' : 'icon-btn'}
-                    title={voice.listening ? 'Остановить запись' : 'Голосовой ввод'}
-                    aria-label="Голосовой ввод" aria-pressed={voice.listening}
+                    title={voice.listening ? t('stopRec') : t('voiceInput')}
+                    aria-label={t('voiceInput')} aria-pressed={voice.listening}
                     onClick={voice.toggle} disabled={busy}>
                     <IconMic size={19} />
                   </button>
                 )}
                 <button className="composer-send" onClick={submit}
                   disabled={busy || !prompt.trim() || outOfQuota}
-                  title="Отправить" aria-label="Отправить">
+                  title={t('send')} aria-label={t('send')}>
                   <IconSend size={19} />
                 </button>
               </div>
             </div>
           </div>
           <div className="composer-foot">
-            {image && <span className="attach-note"><IconImage size={14} />картинка добавлена</span>}
+            {image && <span className="attach-note"><IconImage size={14} />{t('imageAdded')}</span>}
             {pick && (
               <span className="attach-note pick-note">
                 <IconTarget size={14} />{pick.target}
-                <button type="button" aria-label="Убрать отметку" onClick={() => setPick(null)}><IconClose size={12} /></button>
+                <button type="button" aria-label={t('removePick')} onClick={() => setPick(null)}><IconClose size={12} /></button>
               </span>
             )}
             {voice.error && <span className="voice-hint">{voice.error}</span>}
             <span className="spacer" />
             {!hasSim && quota && quota.limit !== null && (
               outOfQuota
-                ? <span className="quota-line quota-exhausted">{quotaMessage}</span>
-                : <span className="quota-line">Осталось {quota.remaining} из {quota.limit}</span>
+                ? <span className="quota-line quota-exhausted">{quotaMessage && f.message(quotaMessage)}</span>
+                : <span className="quota-line">{t('quotaLeft', { remaining: quota.remaining, limit: quota.limit })}</span>
             )}
           </div>
         </div>
@@ -1060,61 +1065,61 @@ export default function Workbench() {
       <section className="preview-pane">
         {busy && (
           <button className="to-process-badge" onClick={() => setActiveTab('create')}>
-            {jobKind === 'refine' ? 'идёт доработка — к процессу' : 'идёт генерация — к процессу'}
+            {jobKind === 'refine' ? t('badgeRefine') : t('badgeGen')}
           </button>
         )}
         {busy && jobKind === 'generate'
           ? <LiveStage events={events} jobId={jobId} onKeep={keepDraft} keeping={keeping} />
           : <PreviewFrame html={html} frameRef={previewRef} />}
-        {picking && <div className="pick-hint">Кликните по месту в тренажёре, которое нужно изменить · Esc — отмена</div>}
+        {picking && <div className="pick-hint">{t('pickHint')}</div>}
         {simId && (
           <div className="preview-actions">
             <a className="btn btn-sm btn-ghost" href={`/present/${simId}`} target="_blank" rel="noopener noreferrer">
-              <IconPlay size={16} />Презентация
+              <IconPlay size={16} />{t('present')}
             </a>
             <a className="btn btn-sm btn-ghost" href={`/api/simulations/${simId}/export`}>
-              <IconDownload size={16} />Экспорт
+              <IconDownload size={16} />{t('export')}
             </a>
             {returnTo && !busy && (
               <button type="button" className="btn btn-sm btn-primary" onClick={insertIntoLesson} disabled={inserting}>
-                {inserting ? 'Вставляю…' : 'Вставить в урок'}
+                {inserting ? t('inserting') : t('insert')}
               </button>
             )}
             {!busy && (
               <>
                 <button type="button" className={picking ? 'btn btn-sm btn-ghost on' : 'btn btn-sm btn-ghost'}
-                  onClick={togglePick} title="Показать место в тренажёре и сказать, что с ним сделать">
-                  <IconTarget size={16} />{picking ? 'Отмена' : 'Показать место'}
+                  onClick={togglePick} title={t('pickTitle')}>
+                  <IconTarget size={16} />{picking ? tc('cancel') : t('pickPlace')}
                 </button>
                 <button type="button" className={exemplar ? 'btn btn-sm btn-ghost on' : 'btn btn-sm btn-ghost'}
                   onClick={toggleExemplar} aria-pressed={exemplar}
-                  title="Следующие генерации будут равняться на приборы и урок этого тренажёра">
-                  <IconSpark size={16} />{exemplar ? 'Эталон' : 'Сделать эталоном'}
+                  title={t('exemplarTitle')}>
+                  <IconSpark size={16} />{exemplar ? t('exemplar') : t('makeExemplar')}
                 </button>
                 <button type="button" className="btn btn-sm btn-ghost" onClick={() => setQualityOpen(true)}
-                  title="Пробы поведения и сверка с планом">
-                  <IconCheck size={16} />Проверка
+                  title={t('checkTitle')}>
+                  <IconCheck size={16} />{t('check')}
                 </button>
                 <button type="button" className="btn btn-sm btn-ghost" onClick={() => setShowConfig(true)}
-                  title="Подписи, диапазоны, пресеты — без генерации">
-                  <IconSliders size={16} />Настройки
+                  title={t('settingsTitle')}>
+                  <IconSliders size={16} />{t('settings')}
                 </button>
               </>
             )}
             <span className="spacer" />
             {history.length > 0 && (
               <button type="button" className="btn btn-sm btn-ghost" onClick={() => setCompareOpen(true)}>
-                <IconSwap size={16} />Сравнить
+                <IconSwap size={16} />{t('compare')}
               </button>
             )}
             {history.length > 0 && (
               <details className="history-dropdown">
-                <summary><IconHistory size={16} />&nbsp;Версии ({history.length})</summary>
+                <summary><IconHistory size={16} />&nbsp;{t('versions', { n: history.length })}</summary>
                 <ul>
                   {history.map((name) => (
                     <li key={name}>
-                      <span>{historyLabel(name)}</span>
-                      <button disabled={busy} onClick={() => restoreVersion(name)}>Восстановить</button>
+                      <span>{historyLabel(name, locale)}</span>
+                      <button disabled={busy} onClick={() => restoreVersion(name)}>{t('restore')}</button>
                     </li>
                   ))}
                 </ul>
@@ -1126,7 +1131,7 @@ export default function Workbench() {
 
       {showConfig && simId && (
         <SimSettings simId={simId} onClose={() => setShowConfig(false)}
-          onSaved={(next) => { setHtml(next); loadHistory(simId); say('bot', 'Настройки сохранил — новая версия уже в превью.'); }} />
+          onSaved={(next) => { setHtml(next); loadHistory(simId); say('bot', t('settingsSaved')); }} />
       )}
       {qualityOpen && simId && (
         <QualityPanel simId={simId} busy={busy} onClose={() => setQualityOpen(false)}
@@ -1147,11 +1152,12 @@ export default function Workbench() {
  */
 function Bubble({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
+  const t = useT(workbench);
   const long = text.length > 220;
   if (!long) return <div className="bubble">{text}</div>;
   return (
     <div className={open ? 'bubble' : 'bubble bubble-clamped'} role="button" tabIndex={0}
-      title={open ? 'Свернуть' : 'Показать целиком'}
+      title={open ? t('collapse') : t('showAll')}
       onClick={() => setOpen((v) => !v)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}>
       {text}

@@ -1,13 +1,15 @@
 'use client';
 import { useMemo, useState } from 'react';
 import {
-  INSTRUMENTS, LEVELS, SECTIONS, STYLES, sectionByKey,
+  INSTRUMENTS, LEVELS, SECTIONS, STYLES, localizeSection, sectionByKey,
   type Instrument, type Level, type Style,
 } from './data';
 import { buildPrompt, isComplete, noteTags, type ConstructorDraft } from './buildPrompt';
 import Stage from './stage/Stage';
 import Examples from './stage/Examples';
 import { IconChevron, IconSend } from '../icons';
+import { useLocale, useT } from '@/i18n/client';
+import { workbenchStand } from '@/i18n/messages/workbench-stand';
 
 interface Props {
   disabled: boolean;
@@ -30,6 +32,8 @@ interface Props {
 export default function ConstructorStand({
   disabled, quotaNote, onCreate, onWriteText, defaultLevel, defaultStyle,
 }: Props) {
+  const t = useT(workbenchStand);
+  const locale = useLocale();
   const [section, setSection] = useState('');
   const [phenomenon, setPhenomenon] = useState('');
   const [custom, setCustom] = useState('');
@@ -47,15 +51,17 @@ export default function ConstructorStand({
   const [edited, setEdited] = useState<string | null>(null);
 
   const current = sectionByKey(section);
+  // Подписи чипов — на языке интерфейса; подбор примеров идёт по русской таблице.
+  const view = current ? localizeSection(current, locale) : undefined;
   const chosen = custom.trim() || phenomenon;
 
   const draft: ConstructorDraft = {
     section, phenomenon: chosen, mode, style, parameters: params, instruments, notes, level,
   };
   const complete = isComplete(draft);
-  const prompt = useMemo(() => (complete ? buildPrompt(draft) : ''),
+  const prompt = useMemo(() => (complete ? buildPrompt(draft, locale) : ''),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [section, chosen, mode, style, level, instruments.join(), params.join(), notes]);
+    [section, chosen, mode, style, level, instruments.join(), params.join(), notes, locale]);
 
   const finalPrompt = edited ?? prompt;
 
@@ -79,30 +85,30 @@ export default function ConstructorStand({
 
   return (
     <div className="stand">
-      <h1 className="visually-hidden">Конструктор симуляции</h1>
+      <h1 className="visually-hidden">{t('heading')}</h1>
       <div className="stand-form">
-        <Block title="Что показываем" hint="например">
-          <div className="chip-wrap" role="group" aria-label="Раздел">
+        <Block title={t('bWhat')} hint={t('hintExample')}>
+          <div className="chip-wrap" role="group" aria-label={t('sectionAria')}>
             {SECTIONS.map((s) => (
               <button key={s.key} type="button" aria-pressed={s.key === section}
                 className={s.key === section ? 'chip chip-action active' : 'chip chip-action'}
-                onClick={() => pickSection(s.key)}>{s.label}</button>
+                onClick={() => pickSection(s.key)}>{localizeSection(s, locale).label}</button>
             ))}
           </div>
-          {current && (
-            <div className="chip-wrap" role="group" aria-label="Явление">
-              {current.phenomena.map((p) => (
+          {view && (
+            <div className="chip-wrap" role="group" aria-label={t('phenomenonAria')}>
+              {view.phenomena.map((p) => (
                 <button key={p} type="button" aria-pressed={p === phenomenon && !custom.trim()}
                   className={p === phenomenon && !custom.trim() ? 'chip chip-action active' : 'chip chip-action'}
                   onClick={() => { setPhenomenon(p); setCustom(''); }}>{p}</button>
               ))}
             </div>
           )}
-          <input className="input" placeholder="Или своё — что угодно"
+          <input className="input" placeholder={t('ownPh')}
             value={custom} onChange={(e) => setCustom(e.target.value)} />
         </Block>
 
-        <Block title="Как выглядит">
+        <Block title={t('bLook')}>
           <div className="segmented">
             {(['2d', '3d'] as const).map((m) => (
               <button key={m} type="button" aria-pressed={mode === m}
@@ -115,60 +121,60 @@ export default function ConstructorStand({
               <button key={s.value} type="button"
                 className={style === s.value ? 'ctor-style active' : 'ctor-style'}
                 onClick={() => setStyle(s.value)}>
-                <strong>{s.label}</strong>
-                <span>{s.hint}</span>
+                <strong>{t(`style_${s.value}`)}</strong>
+                <span>{t(`style_${s.value}_hint`)}</span>
               </button>
             ))}
           </div>
         </Block>
 
-        <Block title="Что на панели" hint="включается справа">
-          <div className="chip-wrap" role="group" aria-label="Приборы на панели">
+        <Block title={t('bPanel')} hint={t('hintPanel')}>
+          <div className="chip-wrap" role="group" aria-label={t('instrumentsAria')}>
             {INSTRUMENTS.map((i) => (
-              <button key={i.value} type="button" title={i.hint}
+              <button key={i.value} type="button" title={t(`inst_${i.value}_hint`)}
                 aria-pressed={instruments.includes(i.value)}
                 className={instruments.includes(i.value) ? 'chip chip-action active' : 'chip chip-action'}
-                onClick={() => setInstruments((v) => toggle(v, i.value))}>{i.label}</button>
+                onClick={() => setInstruments((v) => toggle(v, i.value))}>{t(`inst_${i.value}`)}</button>
             ))}
           </div>
         </Block>
 
-        <Block title="Чем управлять" hint={current ? 'например' : undefined}>
-          {current ? (
-            <div className="chip-wrap" role="group" aria-label="Управляемые параметры">
-              {current.parameters.map((p) => (
+        <Block title={t('bControl')} hint={view ? t('hintExample') : undefined}>
+          {view ? (
+            <div className="chip-wrap" role="group" aria-label={t('paramsAria')}>
+              {view.parameters.map((p) => (
                 <button key={p} type="button" aria-pressed={params.includes(p)}
                   className={params.includes(p) ? 'chip chip-action active' : 'chip chip-action'}
                   onClick={() => setParams((v) => toggle(v, p))}>{p}</button>
               ))}
-              {params.filter((p) => !current.parameters.includes(p)).map((p) => (
+              {params.filter((p) => !view.parameters.includes(p)).map((p) => (
                 <button key={p} type="button" className="chip chip-action active chip-own"
-                  aria-label={`Убрать параметр «${p}»`}
+                  aria-label={t('removeParam', { name: p })}
                   onClick={() => setParams((v) => v.filter((x) => x !== p))}>{p}</button>
               ))}
             </div>
           ) : (
-            <p className="muted">Ничего не выбирайте — подберём сами.</p>
+            <p className="muted">{t('autoParams')}</p>
           )}
-          <input className="input" placeholder="Свой параметр — Enter" value={ownParam}
+          <input className="input" placeholder={t('ownParamPh')} value={ownParam}
             onChange={(e) => setOwnParam(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOwnParam(); } }}
             onBlur={addOwnParam} />
         </Block>
 
-        <Block title="Для кого">
+        <Block title={t('bAudience')}>
           <div className="segmented">
             {LEVELS.map((l) => (
               <button key={l.value} type="button" aria-pressed={level === l.value}
                 className={level === l.value ? 'segmented-item active' : 'segmented-item'}
-                onClick={() => setLevel(l.value)}>{l.label}</button>
+                onClick={() => setLevel(l.value)}>{t(`level_${l.value}`)}</button>
             ))}
           </div>
         </Block>
 
-        <Block title="Что ещё важно" hint="своими словами">
+        <Block title={t('bNotes')} hint={t('hintNotes')}>
           <textarea className="input" rows={2} value={notes}
-            placeholder="Например: два маятника связаны пружиной"
+            placeholder={t('notesPh')}
             onChange={(e) => setNotes(e.target.value)} />
         </Block>
       </div>
@@ -182,14 +188,14 @@ export default function ConstructorStand({
         <div className="stand-bar">
           <button className="btn btn-primary" disabled={disabled || !complete}
             onClick={() => onCreate(finalPrompt)}>
-            <IconSend size={17} />Создать
+            <IconSend size={17} />{t('create')}
           </button>
           {/* Кнопка доступна всегда: без неё человек, который хочет просто
               печатать, оказывался заперт на стенде — пока ничего не выбрано,
               переход в поле был выключен. Ничего не собрано — поле откроется
               пустым, и это ровно то, чего он хотел. */}
           <button className="link-btn" onClick={() => onWriteText(finalPrompt)}>
-            Открыть как текст
+            {t('openAsText')}
           </button>
           <span className="spacer" />
           {quotaNote}
@@ -197,17 +203,17 @@ export default function ConstructorStand({
         {complete && (
           <details className="stand-prompt" open={showText}
             onToggle={(e) => setShowText(e.currentTarget.open)}>
-            <summary><IconChevron size={15} />Запрос целиком{edited !== null && ' · правился вручную'}</summary>
+            <summary><IconChevron size={15} />{t('fullPrompt')}{edited !== null && t('editedManually')}</summary>
             {/* Редактируется на месте: образ и приборы остаются перед глазами,
                 а уточнить можно словом. «Создать» отправит именно этот текст. */}
             <textarea className="stand-prompt-text" value={finalPrompt} rows={7}
-              aria-label="Текст запроса"
+              aria-label={t('promptAria')}
               onChange={(e) => setEdited(e.target.value)} />
             {edited !== null && (
               <div className="stand-prompt-note">
-                Форма больше не меняет этот текст.
+                {t('formLocked')}
                 <button type="button" className="link-btn" onClick={() => setEdited(null)}>
-                  Пересобрать из формы
+                  {t('rebuild')}
                 </button>
               </div>
             )}

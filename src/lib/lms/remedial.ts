@@ -9,6 +9,7 @@ import { getInterests } from './interests-store';
 import { interestsBrief, interestsEmpty } from './interests';
 import { LmsError } from './types';
 import type { Answer } from './answers';
+import type { Locale } from '@/i18n/config';
 
 /**
  * Работа над ошибками: персональный мини-урок по заданию, которое ученик не сдал.
@@ -42,6 +43,8 @@ export interface Remedial {
   createdAt: string;
   updatedAt: string;
 }
+
+const REMEDIAL_PREFIX: Record<Locale, string> = { ru: 'Разбор', kk: 'Талдау', en: 'Review' };
 
 const STATUSES: readonly string[] = ['new', 'in_progress', 'done'];
 
@@ -118,7 +121,7 @@ async function failedTask(userId: string, blockId: string): Promise<TaskRow | nu
   return rows[0] ?? null;
 }
 
-export async function createRemedial(userId: string, blockId: string): Promise<Remedial> {
+export async function createRemedial(userId: string, blockId: string, locale: Locale = 'ru'): Promise<Remedial> {
   if (!isUuid(blockId)) throw new LmsError('Задание не найдено.');
   const row = await failedTask(userId, blockId);
   if (!row) throw new LmsError('Задание недоступно — возможно, курс закрыли.');
@@ -151,9 +154,9 @@ ${personal ? `Чем живёт ученик — ${interestsBrief(interests)}. �
 Поле "body" секции — простая разметка: абзацы через пустую строку, **жирный**, "- " для списка, формулы $...$.
 В "blocks" — 3–4 блока "assignment" нарастающей сложности: та же проверяемая идея, что и в проваленном задании,
 но другие числа и другой сюжет. Тип spec — только "choice", "number", "short", "gaps", "match" или "order":
-ученик проверяет себя сам, учителя рядом нет. У каждого задания заполни "explanation" — почему ответ такой.`, SYSTEM);
+ученик проверяет себя сам, учителя рядом нет. У каждого задания заполни "explanation" — почему ответ такой.`, SYSTEM, locale);
 
-  const draft = parseRemedial(raw, `Разбор: ${assignmentTitle(p.prompt) || row.topic}`);
+  const draft = parseRemedial(raw, `${REMEDIAL_PREFIX[locale] ?? REMEDIAL_PREFIX.ru}: ${assignmentTitle(p.prompt) || row.topic}`);
   const body: RemedialBody = { sections: draft.sections, tasks: draft.tasks, personal };
   const id = crypto.randomUUID();
   const { rows } = await db().query<{ created_at: Date; updated_at: Date }>(

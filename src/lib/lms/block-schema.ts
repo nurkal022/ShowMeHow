@@ -1,5 +1,6 @@
 import { LABS } from '../labs';
 import { sanitizeTargets, type SimTarget } from './sim-state';
+import type { Locale } from '@/i18n/config';
 import { LIMITS, LmsError, optionalText, requireText } from './types';
 
 /**
@@ -15,19 +16,25 @@ export type BlockKind =
 export const BLOCK_KINDS: readonly BlockKind[] = [
   'text', 'callout', 'formula', 'image', 'video', 'code', 'spoiler', 'divider', 'simulation', 'lab', 'assignment',
 ];
-export const BLOCK_KIND_LABELS: Record<BlockKind, string> = {
-  text: 'Текст',
-  callout: 'Врезка',
-  formula: 'Формула',
-  image: 'Картинка',
-  video: 'Видео',
-  code: 'Код',
-  spoiler: 'Спойлер',
-  divider: 'Разделитель',
-  simulation: 'Тренажёр',
-  lab: 'Лаборатория',
-  assignment: 'Задание',
+const BLOCK_KIND_LABELS_BY_LOCALE: Record<Locale, Record<BlockKind, string>> = {
+  ru: {
+    text: 'Текст', callout: 'Врезка', formula: 'Формула', image: 'Картинка', video: 'Видео', code: 'Код',
+    spoiler: 'Спойлер', divider: 'Разделитель', simulation: 'Тренажёр', lab: 'Лаборатория', assignment: 'Задание',
+  },
+  kk: {
+    text: 'Мәтін', callout: 'Ескерту блогы', formula: 'Формула', image: 'Сурет', video: 'Бейне', code: 'Код',
+    spoiler: 'Жасырын мәтін', divider: 'Бөлгіш', simulation: 'Тренажер', lab: 'Зертхана', assignment: 'Тапсырма',
+  },
+  en: {
+    text: 'Text', callout: 'Callout', formula: 'Formula', image: 'Image', video: 'Video', code: 'Code',
+    spoiler: 'Spoiler', divider: 'Divider', simulation: 'Simulator', lab: 'Lab', assignment: 'Assignment',
+  },
 };
+/** Русские подписи — для старых вызовов; на языке пользователя — blockKindLabels(locale). */
+export const BLOCK_KIND_LABELS: Record<BlockKind, string> = BLOCK_KIND_LABELS_BY_LOCALE.ru;
+export function blockKindLabels(locale: Locale = 'ru'): Record<BlockKind, string> {
+  return BLOCK_KIND_LABELS_BY_LOCALE[locale] ?? BLOCK_KIND_LABELS_BY_LOCALE.ru;
+}
 
 export function isBlockKind(v: unknown): v is BlockKind {
   return typeof v === 'string' && (BLOCK_KINDS as readonly string[]).includes(v);
@@ -43,9 +50,15 @@ export interface SimulationPayload {
 export interface LabPayload { slug: string; caption: string }
 export type CalloutTone = 'info' | 'definition' | 'important' | 'warning' | 'example';
 export const CALLOUT_TONES: readonly CalloutTone[] = ['info', 'definition', 'important', 'warning', 'example'];
-export const CALLOUT_TONE_LABELS: Record<CalloutTone, string> = {
-  info: 'Заметка', definition: 'Определение', important: 'Важно', warning: 'Осторожно', example: 'Пример',
+const CALLOUT_TONE_LABELS_BY_LOCALE: Record<Locale, Record<CalloutTone, string>> = {
+  ru: { info: 'Заметка', definition: 'Определение', important: 'Важно', warning: 'Осторожно', example: 'Пример' },
+  kk: { info: 'Ескертпе', definition: 'Анықтама', important: 'Маңызды', warning: 'Абайлаңыз', example: 'Мысал' },
+  en: { info: 'Note', definition: 'Definition', important: 'Important', warning: 'Caution', example: 'Example' },
 };
+export const CALLOUT_TONE_LABELS: Record<CalloutTone, string> = CALLOUT_TONE_LABELS_BY_LOCALE.ru;
+export function calloutToneLabels(locale: Locale = 'ru'): Record<CalloutTone, string> {
+  return CALLOUT_TONE_LABELS_BY_LOCALE[locale] ?? CALLOUT_TONE_LABELS_BY_LOCALE.ru;
+}
 export interface CalloutPayload { tone: CalloutTone; title: string; body: string }
 export interface FormulaPayload { latex: string; caption: string }
 export interface ImagePayload { src: string; alt: string; caption: string; wide: boolean }
@@ -74,17 +87,24 @@ export type AssignmentSpec =
   | { type: 'text' }
   | { type: 'sim_state'; simulationId: string; targets: SimTarget[]; showHints: boolean };
 export type AssignmentType = AssignmentSpec['type'];
-export const ASSIGNMENT_TYPE_LABELS: Record<AssignmentType, string> = {
-  choice: 'Выбор варианта',
-  short: 'Короткий ответ',
-  gaps: 'Пропуски в тексте',
-  match: 'Сопоставление',
-  order: 'Порядок',
-  table: 'Таблица измерений',
-  number: 'Число',
-  text: 'Развёрнутый ответ',
-  sim_state: 'Состояние симуляции',
+const ASSIGNMENT_TYPE_LABELS_BY_LOCALE: Record<Locale, Record<AssignmentType, string>> = {
+  ru: {
+    choice: 'Выбор варианта', short: 'Короткий ответ', gaps: 'Пропуски в тексте', match: 'Сопоставление', order: 'Порядок',
+    table: 'Таблица измерений', number: 'Число', text: 'Развёрнутый ответ', sim_state: 'Состояние симуляции',
+  },
+  kk: {
+    choice: 'Нұсқаны таңдау', short: 'Қысқа жауап', gaps: 'Мәтіндегі бос орындар', match: 'Сәйкестендіру', order: 'Реттілік',
+    table: 'Өлшеулер кестесі', number: 'Сан', text: 'Толық жауап', sim_state: 'Симуляция күйі',
+  },
+  en: {
+    choice: 'Multiple choice', short: 'Short answer', gaps: 'Fill in the gaps', match: 'Matching', order: 'Ordering',
+    table: 'Measurement table', number: 'Number', text: 'Extended answer', sim_state: 'Simulation state',
+  },
 };
+export const ASSIGNMENT_TYPE_LABELS: Record<AssignmentType, string> = ASSIGNMENT_TYPE_LABELS_BY_LOCALE.ru;
+export function assignmentTypeLabels(locale: Locale = 'ru'): Record<AssignmentType, string> {
+  return ASSIGNMENT_TYPE_LABELS_BY_LOCALE[locale] ?? ASSIGNMENT_TYPE_LABELS_BY_LOCALE.ru;
+}
 
 export interface AssignmentPayload {
   prompt: string;

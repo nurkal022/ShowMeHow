@@ -1,9 +1,8 @@
+'use client';
 import type { ActivityDay } from '@/lib/lms/student-home';
-import { ruPlural } from '@/lib/lms/format';
+import { useT } from '@/i18n/client';
+import { learn } from '@/i18n/messages/learn';
 import { IconFlame } from '@/components/icons';
-
-const WEEKDAYS = ['пн', '', 'ср', '', 'пт', '', 'вс'];
-const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
 function level(n: number): 0 | 1 | 2 | 3 {
   if (n === 0) return 0;
@@ -19,6 +18,9 @@ function level(n: number): 0 | 1 | 2 | 3 {
 export default function ActivityGrid({ days, weeks = 12, streak, bestStreak, today }: {
   days: ActivityDay[]; weeks?: number; streak: number; bestStreak: number; today: string;
 }) {
+  const t = useT(learn);
+  const WEEKDAYS = t('weekdays').split(',');
+  const MONTHS = t('months').split(',');
   const counts = new Map(days.map((d) => [d.date, d.count]));
   const end = new Date(`${today}T12:00:00Z`);
   // Сетка заканчивается текущей неделей: последний столбец — эта неделя с понедельника.
@@ -33,18 +35,18 @@ export default function ActivityGrid({ days, weeks = 12, streak, bestStreak, tod
   const active = days.filter((d) => d.count > 0).length;
 
   return (
-    <section className="ag" aria-label="Активность">
+    <section className="ag" aria-label={t('activity')}>
       <header className="ag-head">
         <span className={streak > 0 ? 'ag-flame on' : 'ag-flame'} aria-hidden="true"><IconFlame size={22} /></span>
         <div>
-          <strong>{streak > 0 ? `${streak} ${ruPlural(streak, 'день', 'дня', 'дней')} подряд` : 'Серия прервалась'}</strong>
-          <span className="muted">{streak > 0 ? `Лучшая серия: ${bestStreak}` : 'Позанимайтесь сегодня — начнём заново'}</span>
+          <strong>{streak > 0 ? t('streakDays', { n: streak }) : t('streakBroken')}</strong>
+          <span className="muted">{streak > 0 ? t('bestStreak', { n: bestStreak }) : t('startAgain')}</span>
         </div>
-        <span className="muted ag-total">{`${active} ${ruPlural(active, 'день', 'дня', 'дней')} за ${weeks} недель`}</span>
+        <span className="muted ag-total">{t('activeDaysInWeeks', { n: active, weeks })}</span>
       </header>
       <div className="ag-body">
         <div className="ag-week-labels" aria-hidden="true">{WEEKDAYS.map((w, i) => <span key={i}>{w}</span>)}</div>
-        <div className="ag-cols" role="img" aria-label={`Дни с занятиями за ${weeks} недель: ${active}`}>
+        <div className="ag-cols" role="img" aria-label={t('activityAria', { weeks, n: active })}>
           {cols.map((col, i) => (
             <div key={i} className="ag-col">
               <span className="ag-month" aria-hidden="true">
@@ -53,16 +55,16 @@ export default function ActivityGrid({ days, weeks = 12, streak, bestStreak, tod
               </span>
               {col.map((c) => (
                 <i key={c.key} className={c.future ? 'ag-cell future' : `ag-cell l${level(c.n)}`}
-                  title={c.future ? '' : `${c.date} ${MONTHS[c.month]} — ${c.n === 0 ? 'без занятий' : `${c.n} ${ruPlural(c.n, 'действие', 'действия', 'действий')}`}`} />
+                  title={c.future ? '' : t('cellTitle', { date: c.date, month: MONTHS[c.month], what: c.n === 0 ? t('noActivity') : t('actionsN', { n: c.n }) })} />
               ))}
             </div>
           ))}
         </div>
       </div>
       <footer className="ag-legend">
-        <span className="muted">меньше</span>
+        <span className="muted">{t('less')}</span>
         <i className="ag-cell l0" /><i className="ag-cell l1" /><i className="ag-cell l2" /><i className="ag-cell l3" />
-        <span className="muted">больше</span>
+        <span className="muted">{t('more')}</span>
       </footer>
     </section>
   );

@@ -14,6 +14,7 @@ import { unauthorized } from '@/lib/auth/guard';
 import { listMemberships } from '@/lib/org/access';
 import { canGenerate, hasStaffRole, GENERATION_FORBIDDEN_MESSAGE } from '@/lib/org/policy';
 import { isLevel, normalizeSpec } from '@/lib/pipeline/spec';
+import { localeFromRequest } from '@/i18n/config';
 
 export const maxDuration = 600;
 
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
       kind: 'generate',
       priority: jobPriority(user, memberships),
       request: {
-        prompt, mode: resolveMode(body.mode), hasImage: !!imageDataUrl,
+        prompt, mode: resolveMode(body.mode), hasImage: !!imageDataUrl, lang: localeFromRequest(req),
         // План из карточки проверяется тем же кодом, что и ответ планировщика.
         ...(body.spec ? { spec: normalizeSpec(body.spec).spec } : {}),
         ...(isLevel(body.level) ? { level: body.level } : {}),

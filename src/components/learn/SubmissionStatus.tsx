@@ -1,14 +1,19 @@
 import type { StudentSubmission } from '@/lib/lms/answers';
-import { formatDateTime, formatScore } from '@/lib/lms/format';
+import type { Locale } from '@/i18n/config';
+import { translator } from '@/i18n/core';
+import { useLocale, useT } from '@/i18n/client';
+import { learnLesson } from '@/i18n/messages/learn-lesson';
+import { learnDateTime, learnScore } from './format';
 
 /** Что случилось с ответом — одной фразой. null — ученик ещё ничего не отправлял. */
-export function submissionLine(sub: StudentSubmission | null, points: number): string | null {
+export function submissionLine(sub: StudentSubmission | null, points: number, locale: Locale = 'ru'): string | null {
   if (!sub) return null;
+  const t = translator(learnLesson, locale);
   switch (sub.status) {
-    case 'draft': return 'Черновик сохранён — ответ ещё не сдан.';
-    case 'submitted': return 'Сдано, ждёт проверки.';
-    case 'graded': return `Проверено: ${formatScore(sub.score)} из ${points}.`;
-    case 'returned': return 'Работа возвращена на доработку.';
+    case 'draft': return t('statusDraft');
+    case 'submitted': return t('statusSubmitted');
+    case 'graded': return t('statusGraded', { score: learnScore(sub.score, locale), points });
+    case 'returned': return t('statusReturned');
   }
 }
 
@@ -19,9 +24,11 @@ export function scoreTone(score: number | null, points: number): 'full' | 'part'
 }
 
 export default function SubmissionStatus({ sub, points }: { sub: StudentSubmission | null; points: number }) {
-  const line = submissionLine(sub, points);
+  const t = useT(learnLesson);
+  const locale = useLocale();
+  const line = submissionLine(sub, points, locale);
   if (!line || !sub) {
-    return <div className="learn-status none" role="status"><span className="learn-status-dot" />Не сдано</div>;
+    return <div className="learn-status none" role="status"><span className="learn-status-dot" />{t('notSubmitted')}</div>;
   }
   return (
     <div className="learn-status-wrap">
@@ -29,10 +36,10 @@ export default function SubmissionStatus({ sub, points }: { sub: StudentSubmissi
         <span className="learn-status-dot" />
         <span className="learn-status-line">{line}</span>
         {sub.submittedAt && sub.status !== 'draft' && (
-          <span className="learn-status-when">{formatDateTime(sub.submittedAt)}</span>
+          <span className="learn-status-when">{learnDateTime(sub.submittedAt, locale)}</span>
         )}
       </div>
-      {sub.comment && <p className="teacher-note learn-note">{`Комментарий учителя: ${sub.comment}`}</p>}
+      {sub.comment && <p className="teacher-note learn-note">{t('teacherComment', { text: sub.comment })}</p>}
     </div>
   );
 }

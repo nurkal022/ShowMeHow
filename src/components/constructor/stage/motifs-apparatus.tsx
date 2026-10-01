@@ -6,6 +6,8 @@
  * длинной нитью действительно качается медленнее, и ползунок это показывает.
  */
 import { Core, Ghost, INK, SAFE_R, type MotifProps } from './primitives';
+import { useT } from '@/i18n/client';
+import { workbenchStand } from '@/i18n/messages/workbench-stand';
 
 /** Детерминированный «шум»: одинаковая картинка при каждом рендере. */
 function noise(i: number, k: number): number {
@@ -172,6 +174,7 @@ export function Field({ t, mode, style, knob }: MotifProps) {
 /* -------------------------- молекулярная физика ------------------------- */
 
 export function Particles({ t, mode, style, knob }: MotifProps) {
+  const tr = useT(workbenchStand);
   const x0 = 44, x1 = 292, y0 = 56, y1 = 212;
   const speed = 12 + knob * 46;
   const dot = (i: number, time: number) => {
@@ -202,7 +205,7 @@ export function Particles({ t, mode, style, knob }: MotifProps) {
         stroke={INK.accent} strokeOpacity=".45" strokeWidth="1.4" strokeLinecap="round" />
       <Core x={tracked.x} y={tracked.y} r={9} mode={mode} style={style} />
       {style === 'schematic' && (
-        <text x={x0 + 8} y={y0 - 8} fill={INK.muted} fontSize="10">сосуд</text>
+        <text x={x0 + 8} y={y0 - 8} fill={INK.muted} fontSize="10">{tr('motifVessel')}</text>
       )}
     </g>
   );

@@ -4,6 +4,10 @@ import type { SimParameter } from '@/lib/types';
 import type { SimConfig, ConfigParam } from '@/lib/pipeline/config';
 import { callApi } from '../cabinet/api';
 import { IconClose, IconPlus, IconTrash } from '../icons';
+import { useFormat, useT } from '@/i18n/client';
+import { workbench } from '@/i18n/messages/workbench';
+import { common } from '@/i18n/messages/common';
+
 
 interface Loaded {
   config: SimConfig;
@@ -12,8 +16,8 @@ interface Loaded {
   presets: { label: string; values: Record<string, number> }[];
 }
 
-const FIELDS: [keyof ConfigParam, string][] = [
-  ['min', 'от'], ['max', 'до'], ['step', 'шаг'], ['value', 'сначала'],
+const FIELDS: [keyof ConfigParam, 'colFrom' | 'colTo' | 'fieldStep' | 'colStart'][] = [
+  ['min', 'colFrom'], ['max', 'colTo'], ['step', 'fieldStep'], ['value', 'colStart'],
 ];
 
 /**
@@ -30,6 +34,9 @@ export default function SimSettings({ simId, onClose, onSaved }: {
   const [draft, setDraft] = useState<SimConfig>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = useT(workbench);
+  const tc = useT(common);
+  const f = useFormat();
 
   useEffect(() => {
     let alive = true;
@@ -84,35 +91,34 @@ export default function SimSettings({ simId, onClose, onSaved }: {
 
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <div className="modal sim-settings" role="dialog" aria-label="Настройки тренажёра" onClick={(e) => e.stopPropagation()}>
+      <div className="modal sim-settings" role="dialog" aria-label={t('simSettingsTitle')} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>Настройки тренажёра</h2>
-          <button type="button" className="icon-btn" aria-label="Закрыть" onClick={onClose}><IconClose size={18} /></button>
+          <h2>{t('simSettingsTitle')}</h2>
+          <button type="button" className="icon-btn" aria-label={tc('close')} onClick={onClose}><IconClose size={18} /></button>
         </div>
         <p className="muted sim-settings-note">
-          Меняется только то, что видит ученик на панели: подписи, диапазоны, начальные значения и пресеты.
-          Код тренажёра не трогается — сохранение занимает секунды.
+          {t('simSettingsNote')}
         </p>
-        {!data && !error && <div className="muted">Загружаю…</div>}
+        {!data && !error && <div className="muted">{t('loadingDots')}</div>}
         {data && (
           <>
             <label className="field">
-              <span>Название на панели</span>
+              <span>{t('panelTitle')}</span>
               <input value={draft.title ?? data.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} />
             </label>
             <div className="sim-settings-params">
               {data.parameters.map((p) => (
                 <div className="sim-settings-param" key={p.name}>
                   <div className="sim-settings-row">
-                    <input className="grow" aria-label="Подпись" value={draft.parameters?.[p.name]?.label ?? p.label}
+                    <input className="grow" aria-label={t('colLabel')} value={draft.parameters?.[p.name]?.label ?? p.label}
                       onChange={(e) => setParam(p.name, { label: e.target.value })} />
-                    <input className="unit" aria-label="Единица" value={draft.parameters?.[p.name]?.unit ?? p.unit}
+                    <input className="unit" aria-label={t('unitAria')} value={draft.parameters?.[p.name]?.unit ?? p.unit}
                       onChange={(e) => setParam(p.name, { unit: e.target.value })} />
                   </div>
                   <div className="sim-settings-row">
                     {FIELDS.map(([key, label]) => (
                       <label key={key} className="mini">
-                        <span>{label}</span>
+                        <span>{t(label)}</span>
                         <input inputMode="decimal" defaultValue={paramValue(p, key)}
                           onBlur={(e) => onNumber(p, key, e.target.value)} />
                       </label>
@@ -123,13 +129,13 @@ export default function SimSettings({ simId, onClose, onSaved }: {
               ))}
             </div>
             <div className="plan-section">
-              <div className="plan-section-title">Пресеты</div>
+              <div className="plan-section-title">{t('presets')}</div>
               {presets.map((pr, i) => (
                 // В ключе значения: поля чисел неконтролируемые, и при удалении пресета из середины
                 // позиционный ключ оставил бы в строке цифры удалённого соседа. Подписи в ключе нет —
                 // она контролируемая, и её набор не должен пересоздавать строку и сбивать фокус.
                 <div className="sim-settings-row" key={`${i}:${JSON.stringify(pr.values)}`}>
-                  <input className="grow" aria-label="Название пресета" value={pr.label}
+                  <input className="grow" aria-label={t('presetNameAria')} value={pr.label}
                     onChange={(e) => setPresets(presets.map((x, k) => (k === i ? { ...x, label: e.target.value } : x)))} />
                   {data.parameters.map((p) => (
                     <label key={p.name} className="mini">
@@ -143,23 +149,23 @@ export default function SimSettings({ simId, onClose, onSaved }: {
                         }} />
                     </label>
                   ))}
-                  <button type="button" className="icon-btn" aria-label="Убрать пресет"
+                  <button type="button" className="icon-btn" aria-label={t('removePreset')}
                     onClick={() => setPresets(presets.filter((_, k) => k !== i))}><IconTrash size={15} /></button>
                 </div>
               ))}
               <button type="button" className="btn btn-sm btn-ghost"
-                onClick={() => setPresets([...presets, { label: 'Новый режим', values: {} }])}>
-                <IconPlus size={15} />Пресет
+                onClick={() => setPresets([...presets, { label: t('newPreset'), values: {} }])}>
+                <IconPlus size={15} />{t('addPreset')}
               </button>
             </div>
           </>
         )}
-        {error && <div className="error-box">{error}</div>}
+        {error && <div className="error-box">{f.message(error)}</div>}
         <div className="plan-actions">
           <button type="button" className="btn btn-primary" disabled={!data || saving} onClick={save}>
-            {saving ? 'Сохраняю…' : 'Сохранить'}
+            {saving ? tc('saving') : tc('save')}
           </button>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Отмена</button>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>{tc('cancel')}</button>
         </div>
       </div>
     </div>

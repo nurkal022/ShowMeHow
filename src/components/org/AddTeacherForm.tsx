@@ -5,11 +5,14 @@ import { callApi } from '@/components/cabinet/api';
 import PersonFields, { EMPTY_PERSON, personPayload, type PersonValue } from '@/components/cabinet/PersonFields';
 import SecretDialog from '@/components/cabinet/SecretDialog';
 import { IconPlus } from '@/components/icons';
+import { useT } from '@/i18n/client';
+import { orgPeople } from '@/i18n/messages/org-people';
 
 interface Added { label: string; tempPassword: string | null; created: boolean }
 
 export default function AddTeacherForm({ slug }: { slug: string }) {
   const router = useRouter();
+  const t = useT(orgPeople);
   const [person, setPerson] = useState<PersonValue>(EMPTY_PERSON);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -26,25 +29,22 @@ export default function AddTeacherForm({ slug }: { slug: string }) {
     if (!res.ok) return setError(res.error);
     setPerson(EMPTY_PERSON);
     if (res.data.tempPassword) setSecret(res.data);
-    else setNotice(`${res.data.label} уже был в системе и теперь учитель вашей организации.`);
+    else setNotice(t('teacherExisted', { name: res.data.label }));
     router.refresh();
   }
 
   return (
     <form className="cf-person-form" onSubmit={submit}>
-      <PersonFields who="учителя" value={person} onChange={setPerson} />
-      <p className="muted">
-        Новому учителю создастся временный пароль — он будет показан один раз. Если аккаунт с такой почтой уже есть,
-        он станет учителем без нового пароля.
-      </p>
+      <PersonFields who="teacher" value={person} onChange={setPerson} />
+      <p className="muted">{t('teacherFormNote')}</p>
       {notice && <p className="ok-box" role="status">{notice}</p>}
       {error && <p className="error-box" role="alert">{error}</p>}
       <div className="cf-inline">
-        <button type="submit" className="btn btn-primary" disabled={busy}><IconPlus size={16} />{busy ? 'Добавляю…' : 'Добавить учителя'}</button>
+        <button type="submit" className="btn btn-primary" disabled={busy}><IconPlus size={16} />{busy ? t('adding') : t('addTeacher')}</button>
       </div>
       {secret?.tempPassword && (
-        <SecretDialog title="Учитель добавлен" secret={secret.tempPassword} onClose={() => setSecret(null)}
-          lines={[`${secret.label} входит с этим временным паролем и при первом входе задаёт свой.`]} />
+        <SecretDialog title={t('teacherAdded')} secret={secret.tempPassword} onClose={() => setSecret(null)}
+          lines={[t('teacherAddedLine', { name: secret.label })]} />
       )}
     </form>
   );

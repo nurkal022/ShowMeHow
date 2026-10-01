@@ -4,12 +4,15 @@ import { IconArrowDown, IconArrowUp, IconClose, IconGrip, IconPlus, IconTrash } 
 import { TABLE_LIMITS, type TableColumn } from '@/lib/lms/block-schema';
 import MeasureChart from '@/components/lms/MeasureChart';
 import SimValuePicker from './SimValuePicker';
+import { useT } from '@/i18n/client';
+import { learnLesson } from '@/i18n/messages/learn-lesson';
 
 /** Интерактивные поля ответа: пропуски, пары и порядок. Управляемые — состояние держит AnswerForm. */
 
 export function GapsInput({ parts, values, disabled, onChange }: {
   parts: string[]; values: string[]; disabled: boolean; onChange: (v: string[]) => void;
 }) {
+  const t = useT(learnLesson);
   const count = parts.length - 1;
   const filled = Array.from({ length: count }, (_, i) => values[i] ?? '');
   return (
@@ -19,7 +22,7 @@ export function GapsInput({ parts, values, disabled, onChange }: {
           {part}
           {i < count && (
             <input className="learn-gap" value={filled[i]} disabled={disabled} maxLength={100} autoComplete="off"
-              aria-label={`Пропуск ${i + 1}`} style={{ width: `${Math.max(6, filled[i].length + 2)}ch` }}
+              aria-label={t('gapN', { n: i + 1 })} style={{ width: `${Math.max(6, filled[i].length + 2)}ch` }}
               onChange={(e) => onChange(filled.map((v, k) => (k === i ? e.target.value : v)))} />
           )}
         </span>
@@ -34,6 +37,7 @@ export function MatchInput({ left, right, pairs, disabled, onChange }: {
   left: { id: string; text: string }[]; right: { id: string; text: string }[];
   pairs: Record<string, string>; disabled: boolean; onChange: (p: Record<string, string>) => void;
 }) {
+  const t = useT(learnLesson);
   const [picked, setPicked] = useState<string | null>(null);
   const toneOf = (leftId: string) => left.findIndex((l) => l.id === leftId) % PAIR_TONES;
   const ownerOf = (rightId: string) => Object.keys(pairs).find((l) => pairs[l] === rightId);
@@ -55,7 +59,7 @@ export function MatchInput({ left, right, pairs, disabled, onChange }: {
   return (
     <div className="learn-match">
       <p className="muted learn-hint">
-        {picked ? 'Теперь выберите пару справа.' : 'Нажмите на карточку слева, затем на её пару справа. Повторное нажатие разрывает пару.'}
+        {picked ? t('matchPicked') : t('matchHelp')}
       </p>
       <div className="learn-match-cols">
         <div className="learn-match-col">
@@ -89,6 +93,7 @@ export function MatchInput({ left, right, pairs, disabled, onChange }: {
 export function OrderInput({ items, order, disabled, onChange }: {
   items: { id: string; text: string }[]; order: string[]; disabled: boolean; onChange: (o: string[]) => void;
 }) {
+  const t = useT(learnLesson);
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<number | null>(null);
   // Пока ученик ничего не двигал, показываем порядок выдачи — он уже перемешан сервером.
@@ -117,8 +122,8 @@ export function OrderInput({ items, order, disabled, onChange }: {
           <span className="learn-order-text">{byId.get(id)}</span>
           {!disabled && (
             <span className="learn-order-tools">
-              <button type="button" className="icon-btn" aria-label={`Поднять «${byId.get(id)}»`} disabled={i === 0} onClick={() => move(i, i - 1)}><IconArrowUp size={15} /></button>
-              <button type="button" className="icon-btn" aria-label={`Опустить «${byId.get(id)}»`} disabled={i === ids.length - 1} onClick={() => move(i, i + 1)}><IconArrowDown size={15} /></button>
+              <button type="button" className="icon-btn" aria-label={t('moveUp', { text: byId.get(id) })} disabled={i === 0} onClick={() => move(i, i - 1)}><IconArrowUp size={15} /></button>
+              <button type="button" className="icon-btn" aria-label={t('moveDown', { text: byId.get(id) })} disabled={i === ids.length - 1} onClick={() => move(i, i + 1)}><IconArrowDown size={15} /></button>
             </span>
           )}
         </li>
@@ -130,12 +135,13 @@ export function OrderInput({ items, order, disabled, onChange }: {
 export function TableInput({ columns, minRows, rows, disabled, onChange }: {
   columns: TableColumn[]; minRows: number; rows: string[][]; disabled: boolean; onChange: (r: string[][]) => void;
 }) {
+  const t = useT(learnLesson);
   const height = Math.max(minRows, rows.length);
   const grid = Array.from({ length: height }, (_, r) => columns.map((_, c) => rows[r]?.[c] ?? ''));
   const set = (r: number, c: number, v: string) => onChange(grid.map((row, i) => (i === r ? row.map((x, k) => (k === c ? v : x)) : row)));
   return (
     <div className="learn-table">
-      <p className="muted learn-hint">{`Меняйте параметр в тренажёре и записывайте измерения. Нужно строк: ${minRows}. Пипетка подставит значение из тренажёра.`}</p>
+      <p className="muted learn-hint">{t('tableHelp', { n: minRows })}</p>
       <div className="learn-table-wrap">
         <table>
           <thead><tr><th>№</th>{columns.map((c) => <th key={c.id}>{c.label}{c.unit && <small>{`, ${c.unit}`}</small>}</th>)}<th /></tr></thead>
@@ -147,13 +153,13 @@ export function TableInput({ columns, minRows, rows, disabled, onChange }: {
                   <td key={columns[c].id}>
                     <span className="learn-cell">
                       <input value={cell} inputMode="decimal" disabled={disabled} maxLength={TABLE_LIMITS.cell}
-                        aria-label={`${columns[c].label}, строка ${r + 1}`} onChange={(e) => set(r, c, e.target.value)} />
+                        aria-label={t('cellAria', { col: columns[c].label, n: r + 1 })} onChange={(e) => set(r, c, e.target.value)} />
                       {!disabled && <SimValuePicker compact onPick={(v) => set(r, c, v)} />}
                     </span>
                   </td>
                 ))}
                 <td>{!disabled && grid.length > minRows && (
-                  <button type="button" className="icon-btn" aria-label={`Удалить строку ${r + 1}`} onClick={() => onChange(grid.filter((_, i) => i !== r))}><IconTrash size={15} /></button>
+                  <button type="button" className="icon-btn" aria-label={t('deleteRow', { n: r + 1 })} onClick={() => onChange(grid.filter((_, i) => i !== r))}><IconTrash size={15} /></button>
                 )}</td>
               </tr>
             ))}
@@ -161,7 +167,7 @@ export function TableInput({ columns, minRows, rows, disabled, onChange }: {
         </table>
       </div>
       {!disabled && grid.length < TABLE_LIMITS.maxRows && (
-        <button type="button" className="btn btn-sm" onClick={() => onChange([...grid, columns.map(() => '')])}><IconPlus size={15} />Строка</button>
+        <button type="button" className="btn btn-sm" onClick={() => onChange([...grid, columns.map(() => '')])}><IconPlus size={15} />{t('addRow')}</button>
       )}
       <MeasureChart columns={columns} rows={grid} />
     </div>

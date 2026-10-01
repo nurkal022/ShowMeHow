@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import type { Block } from '@/lib/lms/blocks';
 import { simulationIdsOf, type AssignmentType, type BlockKind } from '@/lib/lms/block-schema';
 import {
-  COURSE_STATUS_LABELS, LIMITS, TOPIC_FORMATS, TOPIC_FORMAT_HINTS, TOPIC_FORMAT_LABELS, type Course, type Topic, type TopicFormat,
+  courseStatusLabels, LIMITS, TOPIC_FORMATS, topicFormatHints, topicFormatLabels, type Course, type Topic, type TopicFormat,
 } from '@/lib/lms/types';
 import { answersHref, courseEditorHref, learnCourseHref, learnTopicHref } from '@/lib/lms/links';
-import { ruPlural } from '@/lib/lms/format';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { teachEditor } from '@/i18n/messages/teach-editor';
 import { callApi } from '@/components/cabinet/api';
 import StatusPill from '@/components/cabinet/StatusPill';
 import {
@@ -22,7 +23,8 @@ import { AiBusy, aiBlockAction } from './AiAssist';
 import { LessonBuilderButton } from './LessonBuilder';
 import BlockSummary from './BlockSummary';
 import {
-  ASSIGNMENT_META, ASSIGNMENT_TYPES, BLOCK_GROUPS, BLOCK_META, BlockKindIcon, blockHeadline, blockProblem,
+  ASSIGNMENT_META, ASSIGNMENT_TYPES, BLOCK_GROUPS, BLOCK_META, BlockKindIcon, assignmentHint, assignmentLabel, blockHeadline, blockHint, blockLabel,
+  blockProblem,
 } from './block-meta';
 
 export interface GroupOption { id: string; title: string }
@@ -52,12 +54,13 @@ type Ask = (o: ConfirmOptions) => Promise<boolean>;
 /** Что выбрано в меню вставки: тип блока и, для задания, тип ответа. */
 export interface InsertPick { kind: BlockKind; assignmentType?: AssignmentType }
 
-const blocksLabel = (n: number) => `${n} ${ruPlural(n, 'блок', 'блока', 'блоков')}`;
-
 /** Каждое действие — отдельный запрос; после ответа страница перечитывает данные. */
 export default function CourseEditor(props: CourseEditorProps) {
   const { course, topics, activeTopicId } = props;
   const router = useRouter();
+  const t = useT(teachEditor);
+  const fmt = useFormat();
+  const locale = useLocale();
   // Локальный порядок: перетаскивание видно сразу, сервер догоняет.
   const [blocks, setBlocks] = useState(props.blocks);
   useEffect(() => { setBlocks(props.blocks); }, [props.blocks]);
@@ -120,9 +123,9 @@ export default function CourseEditor(props: CourseEditorProps) {
   async function leaveDirty(): Promise<boolean> {
     if (!hasDirty) return true;
     return ask({
-      title: 'Есть несохранённые правки',
-      text: 'В открытых блоках остались изменения. Если перейти сейчас, они пропадут.',
-      confirmLabel: 'Перейти без сохранения', danger: true,
+      title: t('unsavedTitle'),
+      text: t('unsavedText'),
+      confirmLabel: t('leaveUnsaved'), danger: true,
     });
   }
 
@@ -172,8 +175,8 @@ export default function CourseEditor(props: CourseEditorProps) {
 
   async function closeBlock(block: Block) {
     if (dirtyIds.has(block.id) && !(await ask({
-      title: 'Отменить правки?', text: 'Изменения в этом блоке не сохранены и пропадут.',
-      confirmLabel: 'Отменить правки', danger: true,
+      title: t('discardTitle'), text: t('discardText'),
+      confirmLabel: t('discard'), danger: true,
     }))) return;
     setOpenIds((s) => toggle(s, block.id, false));
     setDirtyIds((s) => toggle(s, block.id, false));
@@ -185,10 +188,10 @@ export default function CourseEditor(props: CourseEditorProps) {
   async function deleteBlock(block: Block) {
     const withAnswers = block.body.kind === 'assignment';
     if (!(await ask({
-      title: `Удалить блок «${BLOCK_META[block.body.kind].label}»?`,
-      text: withAnswers ? 'Вместе с заданием удалятся ответы учеников и их оценки. Вернуть их будет нельзя.'
-        : 'Блок исчезнет из темы. Вернуть его будет нельзя.',
-      confirmLabel: 'Удалить блок', danger: true,
+      title: t('deleteBlockQ', { label: blockLabel(block.body.kind, locale) }),
+      text: withAnswers ? t('deleteBlockAnswers')
+        : t('deleteBlockText'),
+      confirmLabel: t('deleteBlock'), danger: true,
     }))) return;
     if (await act(`/api/teach/blocks/${block.id}`, 'DELETE')) {
       setOpenIds((s) => toggle(s, block.id, false));
@@ -197,7 +200,7 @@ export default function CourseEditor(props: CourseEditorProps) {
   }
 
   async function runAi(action: 'tasks' | 'variants', block: Block) {
-    setAiBusy(action === 'tasks' ? 'Помощник составляет задания по тексту…' : 'Помощник делает варианты задания…');
+    setAiBusy(action === 'tasks' ? t('aiTasks') : t('aiVariants'));
     setError('');
     const res = await aiBlockAction(action, block.id, 3);
     setAiBusy('');
@@ -220,58 +223,58 @@ export default function CourseEditor(props: CourseEditorProps) {
 
   async function publish() {
     if (topics.length === 0 && !(await ask({
-      title: 'В курсе нет тем', text: 'Ученики увидят пустой курс. Опубликовать всё равно?', confirmLabel: 'Опубликовать',
+      title: t('noTopicsTitle'), text: t('noTopicsText'), confirmLabel: t('publish'),
     }))) return;
     if (topics.length > 0 && noAudience && !(await ask({
-      title: 'Курс никому не открыт',
-      text: 'Вы не выбрали ни одной группы, поэтому ученики курс не увидят. Группы можно выбрать и после публикации.',
-      confirmLabel: 'Опубликовать',
+      title: t('noAudienceTitle'),
+      text: t('noAudienceText'),
+      confirmLabel: t('publish'),
     }))) return;
     await patchCourse({ status: 'published' });
   }
 
   async function unpublish() {
     if (await ask({
-      title: 'Снять курс с публикации?',
-      text: 'Ученики перестанут видеть курс. Их ответы и оценки сохранятся, курс можно опубликовать снова.',
-      confirmLabel: 'Снять с публикации',
+      title: t('unpublishQ'),
+      text: t('unpublishText'),
+      confirmLabel: t('unpublish'),
     })) await patchCourse({ status: 'draft' });
   }
 
   return (
     <div className="cf-course">
       <header className="cf-card cf-course-head">
-        <Link href="/teach/courses" className="cf-back"><IconBack size={15} />Все курсы</Link>
+        <Link href="/teach/courses" className="cf-back"><IconBack size={15} />{t('allCourses')}</Link>
         <div className="cf-course-top">
           <CourseTitle course={course} onSave={(title) => patchCourse({ title })} />
           <div className="cf-course-actions">
             <span className="cf-save-state" role="status" aria-live="polite">
-              {save === 'saving' && 'Сохраняю…'}
-              {save === 'saved' && <><IconCheck size={14} />Изменения сохранены</>}
+              {save === 'saving' && t('saving')}
+              {save === 'saved' && <><IconCheck size={14} />{t('changesSaved')}</>}
             </span>
             <a className="btn" href={learnCourseHref(course.id, true)} target="_blank" rel="noopener noreferrer">
-              <IconEye size={16} />Посмотреть глазами ученика
+              <IconEye size={16} />{t('viewAsStudent')}
             </a>
             {course.status === 'published'
-              ? <button type="button" className="btn" onClick={unpublish}>Снять с публикации</button>
-              : <button type="button" className="btn btn-primary" onClick={publish}>Опубликовать</button>}
+              ? <button type="button" className="btn" onClick={unpublish}>{t('unpublish')}</button>
+              : <button type="button" className="btn btn-primary" onClick={publish}>{t('publish')}</button>}
           </div>
         </div>
         <div className="cf-course-meta">
-          <StatusPill tone={course.status === 'published' ? 'ok' : 'neutral'}>{COURSE_STATUS_LABELS[course.status]}</StatusPill>
+          <StatusPill tone={course.status === 'published' ? 'ok' : 'neutral'}>{courseStatusLabels(locale)[course.status]}</StatusPill>
           {course.subject && <span className="muted">{course.subject}</span>}
-          <span className="muted">{`${topics.length} ${ruPlural(topics.length, 'тема', 'темы', 'тем')}`}</span>
+          <span className="muted">{t('topics', { n: topics.length })}</span>
         </div>
         <GroupChips {...props} onChange={(groupIds) => patchCourse({ groupIds })} />
         {course.status === 'published' && noAudience && (
-          <p className="warn-banner cf-banner"><IconAlert size={16} />Курс опубликован, но не открыт ни одной группе — ученики его не видят.</p>
+          <p className="warn-banner cf-banner"><IconAlert size={16} />{t('publishedNoAudience')}</p>
         )}
         <Link className="cf-details-link" href={`/teach/courses/${course.id}/settings`}>
-          <IconChevron size={16} />Описание, класс и план курса — на странице «О курсе»
+          <IconChevron size={16} />{t('detailsLink')}
         </Link>
       </header>
 
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <p className="error-box" role="alert">{fmt.message(error)}</p>}
 
       <div className="cf-builder">
         <TopicPane course={course} topics={topics} activeTopicId={activeTopicId} act={act} ask={ask}
@@ -280,7 +283,7 @@ export default function CourseEditor(props: CourseEditorProps) {
           onAdded={(id) => router.push(courseEditorHref(course.id, id))}
           onDeleted={(id) => { if (id === activeTopicId) router.push(courseEditorHref(course.id)); }} />
 
-        <section className="cf-blocks" aria-label={activeTopic ? `Блоки темы «${activeTopic.title}»` : 'Блоки темы'}>
+        <section className="cf-blocks" aria-label={activeTopic ? t('topicBlocks', { title: activeTopic.title }) : t('topicBlocksNone')}>
           {!activeTopic && (
             <FirstTopic courseId={course.id} subject={course.subject} onBuilt={(id) => router.push(courseEditorHref(course.id, id))} onAdd={async (title) => {
               const data = await act<{ topic: Topic }>(`/api/teach/courses/${course.id}/topics`, 'POST', { title });
@@ -292,16 +295,16 @@ export default function CourseEditor(props: CourseEditorProps) {
           {activeTopic && (
             <div className="cf-topic-head">
               <div>
-                <span className="label">{`Тема ${topics.indexOf(activeTopic) + 1} из ${topics.length}`}</span>
+                <span className="label">{t('topicOf', { n: topics.indexOf(activeTopic) + 1, total: topics.length })}</span>
                 <h2>{activeTopic.title}</h2>
               </div>
-              <span className="muted">{blocksLabel(blocks.length)}</span>
+              <span className="muted">{t('blocks', { n: blocks.length })}</span>
               {blocks.length > 0 && (
                 <LessonBuilderButton courseId={course.id} subject={course.subject} topicId={activeTopic.id} topicTitle={activeTopic.title} variant="small"
                   onDone={(_t, firstId) => { if (firstId) { scrollTo.current = firstId; setFreshId(firstId); } router.refresh(); }} />
               )}
               <a className="btn btn-sm btn-ghost" href={learnTopicHref(activeTopic.id, true)} target="_blank" rel="noopener noreferrer">
-                <IconEye size={15} />Тема глазами ученика
+                <IconEye size={15} />{t('topicAsStudent')}
               </a>
             </div>
           )}
@@ -317,11 +320,11 @@ export default function CourseEditor(props: CourseEditorProps) {
             const missing = simId !== null && props.missingSimulations.includes(simId);
             const open = openIds.has(block.id);
             const dirty = dirtyIds.has(block.id);
-            const problem = blockProblem(block, missing);
+            const problem = blockProblem(block, missing, locale);
             const stale = props.stale[block.id] ?? 0;
             const kind = block.body.kind;
             const aType = block.body.kind === 'assignment' ? block.body.payload.spec.type : undefined;
-            const label = aType ? ASSIGNMENT_META[aType].label : BLOCK_META[kind].label;
+            const label = aType ? assignmentLabel(aType, locale) : blockLabel(kind, locale);
             const busy = save === 'saving';
             return (
               <div key={block.id} className="cf-block-slot">
@@ -338,7 +341,7 @@ export default function CourseEditor(props: CourseEditorProps) {
                   } : undefined}
                   onDrop={dragId ? (e) => { e.preventDefault(); if (dropAt !== null) void dropBlock(dropAt); } : undefined}>
                   <header className="cf-block-head">
-                    <span className="cf-grip" draggable={!open && !busy} title="Перетащите, чтобы переставить" aria-hidden="true"
+                    <span className="cf-grip" draggable={!open && !busy} title={t('dragHint')} aria-hidden="true"
                       onDragStart={(e) => {
                         e.dataTransfer.effectAllowed = 'move';
                         e.dataTransfer.setData('text/plain', block.id);
@@ -353,36 +356,36 @@ export default function CourseEditor(props: CourseEditorProps) {
                       <BlockKindIcon kind={kind} assignmentType={aType} />
                       <span className="cf-block-titles">
                         <span className="cf-block-kind">{label}</span>
-                        <span className="cf-block-headline">{blockHeadline(block, simTitle)}</span>
+                        <span className="cf-block-headline">{blockHeadline(block, simTitle, locale)}</span>
                       </span>
-                      <span className="visually-hidden">{open ? 'Свернуть блок' : 'Изменить блок'}</span>
+                      <span className="visually-hidden">{open ? t('collapseBlock') : t('editBlock')}</span>
                     </button>
                     <span className="cf-block-state">
-                      {dirty && <StatusPill tone="warn">правки…</StatusPill>}
+                      {dirty && <StatusPill tone="warn">{t('editing')}</StatusPill>}
                       {!dirty && !open && problem && <StatusPill tone="warn">{problem.toLowerCase()}</StatusPill>}
-                      {!dirty && !open && !problem && savedId === block.id && <StatusPill tone="ok">сохранено</StatusPill>}
+                      {!dirty && !open && !problem && savedId === block.id && <StatusPill tone="ok">{t('saved')}</StatusPill>}
                     </span>
                     <span className="cf-block-tools">
                       {kind !== 'divider' && (
                         <button type="button" className="btn btn-sm cf-block-edit"
                           onClick={() => (open ? void closeBlock(block) : setOpenIds((s) => toggle(s, block.id, true)))}>
-                          {open ? 'Свернуть' : <><IconEdit size={14} />Изменить</>}
+                          {open ? t('collapse') : <><IconEdit size={14} />{t('edit')}</>}
                         </button>
                       )}
-                      <RowMenu label={`Действия с блоком ${i + 1}`} busy={busy} items={[
-                        { key: 'up', label: 'Поднять', icon: <IconArrowUp size={16} />, disabled: i === 0,
+                      <RowMenu label={t('blockActions', { n: i + 1 })} busy={busy} items={[
+                        { key: 'up', label: t('moveUp'), icon: <IconArrowUp size={16} />, disabled: i === 0,
                           onSelect: () => void act(`/api/teach/blocks/${block.id}`, 'PATCH', { move: 'up' }) },
-                        { key: 'down', label: 'Опустить', icon: <IconArrowDown size={16} />, disabled: i === blocks.length - 1,
+                        { key: 'down', label: t('moveDown'), icon: <IconArrowDown size={16} />, disabled: i === blocks.length - 1,
                           onSelect: () => void act(`/api/teach/blocks/${block.id}`, 'PATCH', { move: 'down' }) },
                         ...(kind === 'text' || kind === 'callout' || kind === 'spoiler' ? [{
-                          key: 'ai-tasks', label: 'Задания по этому тексту', icon: <IconSpark size={16} />, disabled: dirty || !!aiBusy,
+                          key: 'ai-tasks', label: t('aiTasksMenu'), icon: <IconSpark size={16} />, disabled: dirty || !!aiBusy,
                           onSelect: () => void runAi('tasks', block) }] : []),
                         ...(kind === 'assignment' ? [{
-                          key: 'ai-variants', label: 'Сделать 3 варианта', icon: <IconSpark size={16} />, disabled: dirty || !!aiBusy,
-                          hint: 'Та же идея, другие числа — чтобы не списывали', onSelect: () => void runAi('variants', block) }] : []),
-                        { key: 'copy', label: 'Дублировать', icon: <IconCopy size={16} />, disabled: dirty,
-                          hint: dirty ? 'Сначала сохраните блок' : undefined, onSelect: () => void duplicateBlock(block) },
-                        { key: 'delete', label: 'Удалить', icon: <IconTrash size={16} />, danger: true, onSelect: () => void deleteBlock(block) },
+                          key: 'ai-variants', label: t('aiVariantsMenu'), icon: <IconSpark size={16} />, disabled: dirty || !!aiBusy,
+                          hint: t('aiVariantsHint'), onSelect: () => void runAi('variants', block) }] : []),
+                        { key: 'copy', label: t('duplicate'), icon: <IconCopy size={16} />, disabled: dirty,
+                          hint: dirty ? t('saveFirst') : undefined, onSelect: () => void duplicateBlock(block) },
+                        { key: 'delete', label: t('delete'), icon: <IconTrash size={16} />, danger: true, onSelect: () => void deleteBlock(block) },
                       ]} />
                     </span>
                   </header>
@@ -399,11 +402,11 @@ export default function CourseEditor(props: CourseEditorProps) {
                   )}
                   {kind === 'assignment' && !open && (
                     <footer className="cf-block-foot">
-                      <Link className="btn btn-sm btn-ghost" href={answersHref(course.id, block.id)}>Ответы учеников</Link>
-                      <Link className="btn btn-sm btn-ghost" href={answersHref(course.id, block.id, { pending: true })}>Ждут проверки</Link>
+                      <Link className="btn btn-sm btn-ghost" href={answersHref(course.id, block.id)}>{t('studentAnswers')}</Link>
+                      <Link className="btn btn-sm btn-ghost" href={answersHref(course.id, block.id, { pending: true })}>{t('pending')}</Link>
                       {stale > 0 && (
                         <button type="button" className="btn btn-sm" onClick={() => act(`/api/teach/blocks/${block.id}/recalculate`, 'POST')}>
-                          {`Пересчитать ${stale} сданных ответов`}
+                          {t('recalc', { n: stale })}
                         </button>
                       )}
                     </footer>
@@ -423,9 +426,9 @@ export default function CourseEditor(props: CourseEditorProps) {
           {activeTopic && blocks.length === 0 && (
             <div className="ai-empty">
               <LessonBuilderButton courseId={course.id} subject={course.subject} topicId={activeTopic.id} topicTitle={activeTopic.title}
-                label="Собрать урок с помощником"
+                label={t('buildWithAi')}
                 onDone={(_t, firstId) => { if (firstId) { scrollTo.current = firstId; setFreshId(firstId); } router.refresh(); }} />
-              <span className="muted">или соберите тему сами из блоков ниже</span>
+              <span className="muted">{t('orBuildSelf')}</span>
             </div>
           )}
           {activeTopic && <AddBlockMenu empty={blocks.length === 0} busy={save === 'saving'} onAdd={(pick) => addBlock(pick)} />}
@@ -439,14 +442,18 @@ export default function CourseEditor(props: CourseEditorProps) {
 /* ------------------------------ формат темы ----------------------------- */
 
 function TopicFormatBar({ topic, onChange }: { topic: Topic; onChange: (format: TopicFormat, limit: number | null) => Promise<unknown> }) {
+  const t = useT(teachEditor);
+  const locale = useLocale();
+  const TOPIC_FORMAT_LABELS = topicFormatLabels(locale);
+  const TOPIC_FORMAT_HINTS = topicFormatHints(locale);
   const [limit, setLimit] = useState(topic.timeLimitMin ? String(topic.timeLimitMin) : '');
   const parsed = limit.trim() === '' ? null : Number(limit);
   const valid = parsed === null || (Number.isInteger(parsed) && parsed >= 1 && parsed <= 300);
   return (
     <div className="cf-format">
       <div className="cf-format-row">
-        <span className="label">Формат темы</span>
-        <div className="segmented" role="radiogroup" aria-label="Формат темы">
+        <span className="label">{t('topicFormat')}</span>
+        <div className="segmented" role="radiogroup" aria-label={t('topicFormat')}>
           {TOPIC_FORMATS.map((f) => (
             <button key={f} type="button" role="radio" aria-checked={topic.format === f} title={TOPIC_FORMAT_HINTS[f]}
               className={topic.format === f ? 'segmented-item active' : 'segmented-item'}
@@ -454,8 +461,8 @@ function TopicFormatBar({ topic, onChange }: { topic: Topic; onChange: (format: 
           ))}
         </div>
         {topic.format === 'exam' && (
-          <label className="cf-format-time">Время, мин
-            <input className="input" value={limit} inputMode="numeric" placeholder="без лимита" aria-invalid={valid ? undefined : true}
+          <label className="cf-format-time">{t('timeMin')}
+            <input className="input" value={limit} inputMode="numeric" placeholder={t('noLimit')} aria-invalid={valid ? undefined : true}
               onChange={(e) => setLimit(e.target.value)}
               onBlur={() => { if (valid && parsed !== topic.timeLimitMin) void onChange('exam', parsed); }}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />
@@ -471,6 +478,7 @@ function TopicFormatBar({ topic, onChange }: { topic: Topic; onChange: (format: 
 /** Срок сдачи темы: ученик видит его в курсе и в уроке, опоздания помечаются в ответах. */
 function DueField({ topic }: { topic: Topic }) {
   const router = useRouter();
+  const t = useT(teachEditor);
   const local = (iso: string | null) => {
     if (!iso) return '';
     const d = new Date(iso);
@@ -493,14 +501,14 @@ function DueField({ topic }: { topic: Topic }) {
   };
   return (
     <div className="cf-due">
-      <span className="label">Срок сдачи</span>
-      <input type="datetime-local" className="input" value={value} aria-label="Срок сдачи темы" onChange={(e) => void save(e.target.value)} />
+      <span className="label">{t('due')}</span>
+      <input type="datetime-local" className="input" value={value} aria-label={t('dueAria')} onChange={(e) => void save(e.target.value)} />
       <span className="cf-due-quick">
-        <button type="button" className="cf-chip" onClick={() => void save(quick(1))}>завтра</button>
-        <button type="button" className="cf-chip" onClick={() => void save(quick(7))}>через неделю</button>
-        {value && <button type="button" className="cf-chip" onClick={() => void save('')}>без срока</button>}
+        <button type="button" className="cf-chip" onClick={() => void save(quick(1))}>{t('tomorrow')}</button>
+        <button type="button" className="cf-chip" onClick={() => void save(quick(7))}>{t('inWeek')}</button>
+        {value && <button type="button" className="cf-chip" onClick={() => void save('')}>{t('noDue')}</button>}
       </span>
-      <span className="muted">{state === 'saving' ? 'Сохраняю…' : state === 'saved' ? 'Сохранено' : state === 'error' ? 'Не сохранилось' : value ? 'Ученики видят срок в курсе и в уроке' : 'Без срока'}</span>
+      <span className="muted">{state === 'saving' ? t('saving') : state === 'saved' ? t('savedCap') : state === 'error' ? t('saveFailed') : value ? t('dueVisible') : t('noDueCap')}</span>
     </div>
   );
 }
@@ -508,13 +516,14 @@ function DueField({ topic }: { topic: Topic }) {
 /* ------------------------------ шапка курса ----------------------------- */
 
 function CourseTitle({ course, onSave }: { course: Course; onSave: (title: string) => Promise<unknown> }) {
+  const t = useT(teachEditor);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(course.title);
   if (!editing) {
     return (
       <h1 className="cf-course-title">
         {course.title}
-        <button type="button" className="icon-btn cf-icon-btn" aria-label="Переименовать курс" title="Переименовать курс"
+        <button type="button" className="icon-btn cf-icon-btn" aria-label={t('renameCourse')} title={t('renameCourse')}
           onClick={() => { setValue(course.title); setEditing(true); }}><IconEdit size={16} /></button>
       </h1>
     );
@@ -525,11 +534,11 @@ function CourseTitle({ course, onSave }: { course: Course; onSave: (title: strin
       if (!value.trim()) return;
       if (value.trim() === course.title || (await onSave(value)) !== null) setEditing(false);
     }}>
-      <input className="input cf-title-input" value={value} maxLength={LIMITS.title} autoFocus required aria-label="Название курса"
+      <input className="input cf-title-input" value={value} maxLength={LIMITS.title} autoFocus required aria-label={t('courseName')}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false); }} />
-      <button type="submit" className="btn btn-sm btn-primary">Сохранить</button>
-      <button type="button" className="btn btn-sm" onClick={() => setEditing(false)}>Отмена</button>
+      <button type="submit" className="btn btn-sm btn-primary">{t('save')}</button>
+      <button type="button" className="btn btn-sm" onClick={() => setEditing(false)}>{t('cancel')}</button>
     </form>
   );
 }
@@ -537,26 +546,27 @@ function CourseTitle({ course, onSave }: { course: Course; onSave: (title: strin
 function GroupChips({ groups, lockedGroups, selectedGroupIds, onChange }: CourseEditorProps & {
   onChange: (ids: string[]) => void;
 }) {
+  const t = useT(teachEditor);
   const selected = new Set(selectedGroupIds);
   return (
-    <div className="cf-audience" role="group" aria-label="Кому открыт курс">
-      <span className="label">Кому открыт</span>
+    <div className="cf-audience" role="group" aria-label={t('audienceGroup')}>
+      <span className="label">{t('audience')}</span>
       {groups.length === 0 && lockedGroups.length === 0 && (
-        <span className="muted">У вас пока нет групп. Их назначает администратор организации.</span>
+        <span className="muted">{t('noGroups')}</span>
       )}
       {groups.map((g) => {
         const on = selected.has(g.id);
         return (
           <button key={g.id} type="button" aria-pressed={on} className={on ? 'cf-chip on' : 'cf-chip'}
-            title={on ? 'Закрыть курс для группы' : 'Открыть курс группе'}
+            title={on ? t('closeForGroup') : t('openForGroup')}
             onClick={() => onChange(groups.map((x) => x.id).filter((id) => (id === g.id ? !on : selected.has(id))))}>
             {on ? <IconCheck size={14} /> : <IconPlus size={14} />}{g.title}
           </button>
         );
       })}
       {lockedGroups.map((g) => (
-        <span key={g.id} className="cf-chip on locked" title="Эту группу открыл администратор организации.">
-          <IconLock size={13} />{g.title}<span className="visually-hidden"> — открыт администратором</span>
+        <span key={g.id} className="cf-chip on locked" title={t('lockedGroup')}>
+          <IconLock size={13} />{g.title}<span className="visually-hidden">{t('openedByAdmin')}</span>
         </span>
       ))}
     </div>
@@ -571,6 +581,7 @@ function TopicPane({ course, topics, activeTopicId, counts, act, ask, beforeLeav
   onAdded: (id: string) => void; onDeleted: (id: string) => void;
 }) {
   const router = useRouter();
+  const tr = useT(teachEditor);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [value, setValue] = useState('');
   const [adding, setAdding] = useState(false);
@@ -584,20 +595,20 @@ function TopicPane({ course, topics, activeTopicId, counts, act, ask, beforeLeav
 
   async function remove(t: Topic) {
     if (!(await ask({
-      title: `Удалить тему «${t.title}»?`,
-      text: 'Вместе с темой удалятся все её блоки, ответы учеников и оценки. Вернуть их будет нельзя.',
-      confirmLabel: 'Удалить тему', danger: true,
+      title: tr('deleteTopicQ', { title: t.title }),
+      text: tr('deleteTopicText'),
+      confirmLabel: tr('deleteTopic'), danger: true,
     }))) return;
     if (await act(`/api/teach/topics/${t.id}`, 'DELETE')) onDeleted(t.id);
   }
 
   return (
-    <aside className="cf-card cf-topics" aria-label="Темы курса">
+    <aside className="cf-card cf-topics" aria-label={tr('courseTopics')}>
       <div className="cf-topics-head">
-        <h2>Темы</h2>
+        <h2>{tr('topicsTitle')}</h2>
         <span className="cf-count">{topics.length}</span>
       </div>
-      {topics.length === 0 && <p className="muted">Тем пока нет. Курс состоит из тем, тема — из блоков.</p>}
+      {topics.length === 0 && <p className="muted">{tr('noTopics')}</p>}
       <ol className="cf-topic-list">
         {topics.map((t, i) => {
           const active = t.id === activeTopicId;
@@ -606,10 +617,10 @@ function TopicPane({ course, topics, activeTopicId, counts, act, ask, beforeLeav
             <li key={t.id} className={active ? 'cf-topic active' : 'cf-topic'}>
               {renaming === t.id ? (
                 <form className="cf-topic-rename" onSubmit={(e) => { e.preventDefault(); void rename(t); }}>
-                  <input className="input" value={value} maxLength={LIMITS.title} autoFocus aria-label="Новое название темы"
+                  <input className="input" value={value} maxLength={LIMITS.title} autoFocus aria-label={tr('newTopicName')}
                     onChange={(e) => setValue(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(null); }} />
-                  <button type="submit" className="icon-btn cf-icon-btn" aria-label="Сохранить название" title="Сохранить"><IconCheck size={16} /></button>
+                  <button type="submit" className="icon-btn cf-icon-btn" aria-label={tr('saveName')} title={tr('save')}><IconCheck size={16} /></button>
                 </form>
               ) : (
                 <>
@@ -622,16 +633,16 @@ function TopicPane({ course, topics, activeTopicId, counts, act, ask, beforeLeav
                     }}>
                     <span className="cf-topic-num">{i + 1}</span>
                     <span className="cf-topic-title">{t.title}</span>
-                    {count !== undefined && <span className="cf-topic-count" title={blocksLabel(count)}>{count}</span>}
+                    {count !== undefined && <span className="cf-topic-count" title={tr('blocks', { n: count })}>{count}</span>}
                   </Link>
                   <span className="cf-topic-tools">
-                    <button type="button" className="icon-btn cf-icon-btn" aria-label={`Поднять тему «${t.title}»`} title="Поднять"
+                    <button type="button" className="icon-btn cf-icon-btn" aria-label={tr('topicUp', { title: t.title })} title={tr('moveUp')}
                       disabled={i === 0} onClick={() => act(`/api/teach/topics/${t.id}`, 'PATCH', { move: 'up' })}><IconArrowUp size={15} /></button>
-                    <button type="button" className="icon-btn cf-icon-btn" aria-label={`Опустить тему «${t.title}»`} title="Опустить"
+                    <button type="button" className="icon-btn cf-icon-btn" aria-label={tr('topicDown', { title: t.title })} title={tr('moveDown')}
                       disabled={i === topics.length - 1} onClick={() => act(`/api/teach/topics/${t.id}`, 'PATCH', { move: 'down' })}><IconArrowDown size={15} /></button>
-                    <RowMenu label={`Действия с темой «${t.title}»`} items={[
-                      { key: 'rename', label: 'Переименовать', icon: <IconEdit size={16} />, onSelect: () => { setRenaming(t.id); setValue(t.title); } },
-                      { key: 'delete', label: 'Удалить тему', icon: <IconTrash size={16} />, danger: true, onSelect: () => void remove(t) },
+                    <RowMenu label={tr('topicActions', { title: t.title })} items={[
+                      { key: 'rename', label: tr('rename'), icon: <IconEdit size={16} />, onSelect: () => { setRenaming(t.id); setValue(t.title); } },
+                      { key: 'delete', label: tr('deleteTopic'), icon: <IconTrash size={16} />, danger: true, onSelect: () => void remove(t) },
                     ]} />
                   </span>
                 </>
@@ -647,19 +658,19 @@ function TopicPane({ course, topics, activeTopicId, counts, act, ask, beforeLeav
           const data = await act<{ topic: Topic }>(`/api/teach/courses/${course.id}/topics`, 'POST', { title });
           if (data) { setTitle(''); setAdding(false); onAdded(data.topic.id); }
         }}>
-          <input className="input" value={title} maxLength={LIMITS.title} autoFocus required aria-label="Название новой темы"
-            placeholder="Название темы" onChange={(e) => setTitle(e.target.value)}
+          <input className="input" value={title} maxLength={LIMITS.title} autoFocus required aria-label={tr('newTopicAria')}
+            placeholder={tr('topicName')} onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Escape') { setAdding(false); setTitle(''); } }} />
           <div className="cf-inline">
-            <button type="submit" className="btn btn-sm btn-primary">Добавить</button>
-            <button type="button" className="btn btn-sm" onClick={() => { setAdding(false); setTitle(''); }}>Отмена</button>
+            <button type="submit" className="btn btn-sm btn-primary">{tr('add')}</button>
+            <button type="button" className="btn btn-sm" onClick={() => { setAdding(false); setTitle(''); }}>{tr('cancel')}</button>
           </div>
         </form>
       ) : (
-        <button type="button" className="cf-add-line" onClick={() => setAdding(true)}><IconPlus size={16} />Добавить тему</button>
+        <button type="button" className="cf-add-line" onClick={() => setAdding(true)}><IconPlus size={16} />{tr('addTopic')}</button>
       ))}
       {topics.length > 0 && !adding && (
-        <LessonBuilderButton courseId={course.id} subject={course.subject} variant="line" label="Урок с помощником"
+        <LessonBuilderButton courseId={course.id} subject={course.subject} variant="line" label={tr('lessonWithAi')}
           onDone={(id) => onAdded(id)} />
       )}
     </aside>
@@ -669,6 +680,7 @@ function TopicPane({ course, topics, activeTopicId, counts, act, ask, beforeLeav
 function FirstTopic({ courseId, subject, onAdd, onBuilt }: {
   courseId: string; subject: string; onAdd: (title: string) => Promise<boolean>; onBuilt: (topicId: string) => void;
 }) {
+  const t = useT(teachEditor);
   const [title, setTitle] = useState('');
   // ?build=1 — курс создан с выбором «Первый урок с помощником»: студия открывается сама.
   const [autoBuild, setAutoBuild] = useState(false);
@@ -677,10 +689,9 @@ function FirstTopic({ courseId, subject, onAdd, onBuilt }: {
   return (
     <div className="cf-card cf-hero">
       <span className="cf-hero-icon" aria-hidden="true"><IconCourses size={28} /></span>
-      <h2>Начните с первой темы</h2>
+      <h2>{t('firstTopic')}</h2>
       <p className="muted">
-        Тема — это один урок: объяснение, тренажёр или лаборатория и задания к ним.
-        Назовите первую тему, блоки добавите на следующем шаге.
+        {t('firstTopicText')}
       </p>
       <form className="cf-hero-form" onSubmit={async (e) => {
         e.preventDefault();
@@ -689,12 +700,12 @@ function FirstTopic({ courseId, subject, onAdd, onBuilt }: {
         await onAdd(title);
         setBusy(false);
       }}>
-        <input className="input" value={title} maxLength={LIMITS.title} required autoFocus aria-label="Название первой темы"
-          placeholder="Например, «Колебания маятника»" onChange={(e) => setTitle(e.target.value)} />
-        <button type="submit" className="btn btn-primary" disabled={busy}><IconPlus size={16} />{busy ? 'Создаю…' : 'Создать тему'}</button>
+        <input className="input" value={title} maxLength={LIMITS.title} required autoFocus aria-label={t('firstTopicAria')}
+          placeholder={t('firstTopicPh')} onChange={(e) => setTitle(e.target.value)} />
+        <button type="submit" className="btn btn-primary" disabled={busy}><IconPlus size={16} />{busy ? t('creating') : t('createTopic')}</button>
       </form>
-      <div className="cf-hero-or"><span>или</span></div>
-      <LessonBuilderButton courseId={courseId} subject={subject} label="Собрать первый урок с помощником" autoOpen={autoBuild}
+      <div className="cf-hero-or"><span>{t('or')}</span></div>
+      <LessonBuilderButton courseId={courseId} subject={subject} label={t('firstLessonAi')} autoOpen={autoBuild}
         onDone={(id) => onBuilt(id)} />
     </div>
   );
@@ -706,22 +717,25 @@ function FirstTopic({ courseId, subject, onAdd, onBuilt }: {
 function InsertPalette({ busy, onPick, onClose, autoFocus = true }: {
   busy: boolean; onPick: (pick: InsertPick) => void; onClose?: () => void; autoFocus?: boolean;
 }) {
+  const tr = useT(teachEditor);
+  const locale = useLocale();
   const [q, setQ] = useState('');
   const [cursor, setCursor] = useState(0);
   const needle = q.trim().toLowerCase();
   const hit = (label: string, hint: string) => !needle || `${label} ${hint}`.toLowerCase().includes(needle);
   const groups = [
     ...BLOCK_GROUPS.map((g) => ({
-      title: g.title,
-      items: g.kinds.filter((k) => hit(BLOCK_META[k].label, BLOCK_META[k].hint))
-        .map((k) => ({ key: k as string, pick: { kind: k } as InsertPick, meta: BLOCK_META[k], badge: '' })),
+      title: tr(g.title),
+      items: g.kinds.filter((k) => hit(blockLabel(k, locale), blockHint(k, locale)))
+        .map((k) => ({ key: k as string, pick: { kind: k } as InsertPick, icon: BLOCK_META[k].icon, label: blockLabel(k, locale), hint: blockHint(k, locale), badge: '' })),
     })),
     {
-      title: 'Задание',
-      items: ASSIGNMENT_TYPES.filter((t) => hit(`${ASSIGNMENT_META[t].label} задание`, ASSIGNMENT_META[t].hint))
+      title: tr('groupAssignment'),
+      items: ASSIGNMENT_TYPES.filter((t) => hit(`${assignmentLabel(t, locale)} ${tr('assignmentWord')}`, assignmentHint(t, locale)))
         .map((t) => ({
-          key: `a-${t}`, pick: { kind: 'assignment', assignmentType: t } as InsertPick, meta: ASSIGNMENT_META[t],
-          badge: ASSIGNMENT_META[t].auto ? 'авто' : 'вручную',
+          key: `a-${t}`, pick: { kind: 'assignment', assignmentType: t } as InsertPick, icon: ASSIGNMENT_META[t].icon,
+          label: assignmentLabel(t, locale), hint: assignmentHint(t, locale),
+          badge: ASSIGNMENT_META[t].auto ? tr('auto') : tr('manual'),
         })),
     },
   ].filter((g) => g.items.length > 0);
@@ -729,7 +743,7 @@ function InsertPalette({ busy, onPick, onClose, autoFocus = true }: {
   const at = Math.min(cursor, Math.max(0, flatItems.length - 1));
 
   return (
-    <div className="cf-palette" role="dialog" aria-label="Добавить блок"
+    <div className="cf-palette" role="dialog" aria-label={tr('addBlock')}
       onKeyDown={(e) => {
         if (e.key === 'Escape') { e.stopPropagation(); onClose?.(); }
         if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((at + 1) % Math.max(1, flatItems.length)); }
@@ -738,11 +752,11 @@ function InsertPalette({ busy, onPick, onClose, autoFocus = true }: {
       }}>
       <label className="cf-palette-search">
         <IconSearch size={16} />
-        <input value={q} autoFocus={autoFocus} placeholder="Что добавить? Например: формула, видео, пропуски" aria-label="Поиск типа блока"
+        <input value={q} autoFocus={autoFocus} placeholder={tr('searchPh')} aria-label={tr('searchAria')}
           onChange={(e) => { setQ(e.target.value); setCursor(0); }} />
       </label>
       <div className="cf-palette-list">
-        {groups.length === 0 && <p className="muted cf-palette-empty">Такого блока нет. Попробуйте «текст», «картинка», «задание».</p>}
+        {groups.length === 0 && <p className="muted cf-palette-empty">{tr('noSuchBlock')}</p>}
         {groups.map((g) => (
           <div key={g.title} className="cf-palette-group">
             <span className="cf-palette-title">{g.title}</span>
@@ -752,9 +766,9 @@ function InsertPalette({ busy, onPick, onClose, autoFocus = true }: {
                   className={flatItems[at]?.key === it.key ? 'cf-palette-item active' : 'cf-palette-item'}
                   onMouseEnter={() => setCursor(flatItems.findIndex((x) => x.key === it.key))}
                   onClick={() => onPick(it.pick)}>
-                  <span className={`cf-kind cf-kind-${it.pick.kind}`} aria-hidden="true">{it.meta.icon(18)}</span>
-                  <span className="cf-palette-text"><strong>{it.meta.label}</strong><span className="muted">{it.meta.hint}</span></span>
-                  {it.badge && <span className={it.badge === 'авто' ? 'cf-type-badge auto' : 'cf-type-badge'}>{it.badge}</span>}
+                  <span className={`cf-kind cf-kind-${it.pick.kind}`} aria-hidden="true">{it.icon(18)}</span>
+                  <span className="cf-palette-text"><strong>{it.label}</strong><span className="muted">{it.hint}</span></span>
+                  {it.badge && <span className={it.badge === tr('auto') ? 'cf-type-badge auto' : 'cf-type-badge'}>{it.badge}</span>}
                 </button>
               ))}
             </div>
@@ -770,6 +784,7 @@ function InsertLine({ busy, active, onPick, onDragOver, onDrop }: {
   busy: boolean; active: boolean; onPick: (pick: InsertPick) => Promise<void>;
   onDragOver?: (e: React.DragEvent) => void; onDrop?: (e: React.DragEvent) => void;
 }) {
+  const t = useT(teachEditor);
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -781,7 +796,7 @@ function InsertLine({ busy, active, onPick, onDragOver, onDrop }: {
   return (
     <div ref={wrap} className={['cf-insert', open ? 'open' : '', active ? 'drop' : ''].filter(Boolean).join(' ')}
       onDragOver={onDragOver} onDrop={onDrop}>
-      <button type="button" className="cf-insert-btn" aria-expanded={open} aria-label="Вставить блок сюда" title="Вставить блок сюда"
+      <button type="button" className="cf-insert-btn" aria-expanded={open} aria-label={t('insertHere')} title={t('insertHere')}
         onClick={() => setOpen((v) => !v)}><IconPlus size={14} /></button>
       {open && <InsertPalette busy={busy} onClose={() => setOpen(false)} onPick={async (pick) => { setOpen(false); await onPick(pick); }} />}
     </div>
@@ -789,6 +804,7 @@ function InsertLine({ busy, active, onPick, onDragOver, onDrop }: {
 }
 
 function AddBlockMenu({ empty, busy, onAdd }: { empty: boolean; busy: boolean; onAdd: (pick: InsertPick) => Promise<void> }) {
+  const t = useT(teachEditor);
   const [open, setOpen] = useState(false);
   const shown = empty || open;
 
@@ -809,13 +825,13 @@ function AddBlockMenu({ empty, busy, onAdd }: { empty: boolean; busy: boolean; o
     <div className={empty ? 'cf-add cf-add-empty' : 'cf-add'}>
       {empty && (
         <div className="cf-add-lead">
-          <h3>В теме пока нет блоков</h3>
-          <p className="muted">Выберите, с чего начать. Блоки идут сверху вниз — так их увидит ученик.</p>
+          <h3>{t('emptyTopic')}</h3>
+          <p className="muted">{t('emptyTopicText')}</p>
         </div>
       )}
       {!empty && (
         <button type="button" className="cf-add-line" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          <IconPlus size={16} />Добавить блок<kbd>/</kbd>
+          <IconPlus size={16} />{t('addBlock')}<kbd>/</kbd>
         </button>
       )}
       {shown && <InsertPalette busy={busy} autoFocus={!empty} onClose={() => setOpen(false)}

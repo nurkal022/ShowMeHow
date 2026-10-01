@@ -5,7 +5,9 @@ import { staffBlock } from '@/lib/lms/access';
 import { listBlockAnswers } from '@/lib/lms/submissions';
 import { reviewQueue } from '@/lib/lms/teach-home';
 import { answersHref, courseEditorHref, withOrgParam } from '@/lib/lms/links';
-import { formatAgo, formatScore, ruPlural } from '@/lib/lms/format';
+import { formatAgo, formatScore } from '@/lib/lms/format';
+import { getLocale, getT } from '@/i18n/server';
+import { teachHome } from '@/i18n/messages/teach-home';
 import CabinetHeader from '@/components/cabinet/CabinetHeader';
 import EmptyState from '@/components/cabinet/EmptyState';
 import Markup from '@/components/lms/Markup';
@@ -25,8 +27,10 @@ export default async function ReviewPage({ searchParams }: { searchParams: Searc
   const m = ctx.cabinet.membership;
   const ownerId = m.role === 'org_admin' ? null : user.id;
   const sp = await searchParams;
+  const t = await getT(teachHome);
+  const locale = await getLocale();
   const courseFilter = firstParam(sp.course) ?? '';
-  const all = await reviewQueue(m.orgId, ownerId);
+  const all = await reviewQueue(m.orgId, ownerId, locale);
   const courses = [...new Map(all.map((i) => [i.courseId, i.course])).entries()];
   const queue = courseFilter ? all.filter((i) => i.courseId === courseFilter) : all;
   // Уже проверенная работа из адреса ушла из очереди — открываем первую оставшуюся.
@@ -52,23 +56,23 @@ export default async function ReviewPage({ searchParams }: { searchParams: Searc
 
   return (
     <>
-      <CabinetHeader title="Проверка работ"
+      <CabinetHeader title={t('reviewTitle')}
         subtitle={all.length
-          ? `${all.length} ${ruPlural(all.length, 'работа ждёт', 'работы ждут', 'работ ждут')} · самая давняя — ${formatAgo(oldest.submittedAt)}`
-          : 'Все работы проверены'} />
+          ? t('reviewSub', { n: all.length, ago: formatAgo(oldest.submittedAt, locale) })
+          : t('allReviewed')} />
 
       {all.length === 0 ? (
         <div className="cab-card review-done">
-          <EmptyState icon={<IconCheck size={28} />} text="Очередь пуста — все сданные работы проверены. Отличная работа!">
-            <Link className="btn" href={withOrgParam('/teach', m.orgSlug)}>На главную</Link>
+          <EmptyState icon={<IconCheck size={28} />} text={t('queueEmpty')}>
+            <Link className="btn" href={withOrgParam('/teach', m.orgSlug)}>{t('toHome')}</Link>
           </EmptyState>
         </div>
       ) : (
         <div className="review">
           <aside className="cab-card review-queue">
             {courses.length > 1 && (
-              <nav className="review-courses" aria-label="Курс">
-                <Link href={href(null, '')} className={courseFilter ? '' : 'active'}>Все<span>{all.length}</span></Link>
+              <nav className="review-courses" aria-label={t('courseNav')}>
+                <Link href={href(null, '')} className={courseFilter ? '' : 'active'}>{t('all')}<span>{all.length}</span></Link>
                 {courses.map(([id, title]) => (
                   <Link key={id} href={href(null, id)} className={courseFilter === id ? 'active' : ''}>
                     {title}<span>{all.filter((i) => i.courseId === id).length}</span>
@@ -85,7 +89,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Searc
                     <span className="review-item-text">
                       <b>{i.student}</b>
                       <span>{i.title}</span>
-                      <small className="muted">{i.course} · {formatAgo(i.submittedAt)}{i.late ? ' · после срока' : ''}</small>
+                      <small className="muted">{i.course} · {formatAgo(i.submittedAt, locale)}{i.late ? t('late') : ''}</small>
                     </span>
                   </Link>
                 </li>
@@ -100,22 +104,22 @@ export default async function ReviewPage({ searchParams }: { searchParams: Searc
                   <Avatar name={item.student} size={44} />
                   <div>
                     <h2>{item.student}</h2>
-                    <span className="muted">{item.course} · {item.topic} · сдано {formatAgo(item.submittedAt)}</span>
+                    <span className="muted">{item.course} · {item.topic} · {t('submittedAgo', { ago: formatAgo(item.submittedAt, locale) })}</span>
                   </div>
-                  <span className="review-pos">{at + 1} из {queue.length}</span>
+                  <span className="review-pos">{t('pos', { n: at + 1, total: queue.length })}</span>
                 </header>
-                {item.late && <p className="warn-banner">Работа сдана после срока.</p>}
+                {item.late && <p className="warn-banner">{t('lateBanner')}</p>}
                 <div className="review-prompt"><Markup text={payload.prompt} /></div>
                 <div className="review-answer"><AnswerView spec={payload.spec} answer={submission.answer} /></div>
                 {submission.autoScore !== null && (
-                  <p className="muted">{`Автопроверка: ${formatScore(submission.autoScore)} из ${payload.points}.`}</p>
+                  <p className="muted">{t('autoCheck', { score: formatScore(submission.autoScore, locale), points: payload.points })}</p>
                 )}
                 {staff && submission.blockRevision < staff.block.revision && (
-                  <p className="warn-banner">Ответ сдан до правки задания. Пересчитать можно в редакторе курса.</p>
+                  <p className="warn-banner">{t('staleBanner')}</p>
                 )}
                 {payload.reference && (
                   <details className="reference-box">
-                    <summary>Эталонный ответ</summary>
+                    <summary>{t('reference')}</summary>
                     <Markup text={payload.reference} />
                   </details>
                 )}
@@ -126,12 +130,12 @@ export default async function ReviewPage({ searchParams }: { searchParams: Searc
                   nextHref={next ? href(next.id) : null}
                   prevHref={prev ? href(prev.id) : null} nextAnyHref={next ? href(next.id) : null} />
                 <footer className="review-links">
-                  <Link className="btn btn-sm btn-ghost" href={withOrgParam(answersHref(item.courseId, item.blockId), m.orgSlug)}>Все ответы на задание</Link>
-                  {staff && <Link className="btn btn-sm btn-ghost" href={withOrgParam(courseEditorHref(item.courseId, staff.topic.id), m.orgSlug)}>Задание в редакторе</Link>}
+                  <Link className="btn btn-sm btn-ghost" href={withOrgParam(answersHref(item.courseId, item.blockId), m.orgSlug)}>{t('allAnswers')}</Link>
+                  {staff && <Link className="btn btn-sm btn-ghost" href={withOrgParam(courseEditorHref(item.courseId, staff.topic.id), m.orgSlug)}>{t('inEditor')}</Link>}
                 </footer>
               </>
             ) : (
-              <EmptyState icon={<IconCheck size={24} />} text="Выберите работу в очереди слева." />
+              <EmptyState icon={<IconCheck size={24} />} text={t('pickWork')} />
             )}
           </section>
         </div>

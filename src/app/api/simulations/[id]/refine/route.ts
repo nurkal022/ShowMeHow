@@ -10,6 +10,7 @@ import {
 import { readJsonObject } from '@/lib/jobs/request-body';
 import { activeProvider, NO_PROVIDER_MESSAGE } from '@/lib/settings';
 import { clarifyRefine } from '@/lib/pipeline/clarify';
+import { localeFromRequest } from '@/i18n/config';
 import { pastInstructions } from '@/lib/jobs/sessions';
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
@@ -71,6 +72,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       title: meta?.title ?? '',
       subject: meta?.subject ?? '',
       past: await pastInstructions(user.id, id),
+      lang: localeFromRequest(req),
     });
     if (clarify) return NextResponse.json({ clarify });
   }

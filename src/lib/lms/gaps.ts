@@ -1,4 +1,6 @@
 import { db } from '../db/client';
+import type { Locale } from '@/i18n/config';
+import { lmsText } from './texts';
 import { assignmentTitle } from './block-schema';
 import { VISIBLE_TO_STUDENT } from './courses';
 
@@ -44,7 +46,7 @@ interface GapRow {
   score: string | null; at: Date; topic_total: number;
 }
 
-export async function listGaps(userId: string): Promise<Gap[]> {
+export async function listGaps(userId: string, locale: Locale = 'ru'): Promise<Gap[]> {
   const { rows } = await db().query<GapRow>(
     `SELECT b.id AS block_id, b.payload, t.id AS topic_id, t.title AS topic,
        c.id AS course_id, c.title AS course, c.subject,
@@ -69,7 +71,7 @@ export async function listGaps(userId: string): Promise<Gap[]> {
     const score = r.score === null ? null : Number(r.score);
     return {
       blockId: r.block_id, topicId: r.topic_id, topicTitle: r.topic, courseId: r.course_id,
-      courseTitle: r.course, subject: r.subject, title: assignmentTitle(prompt) || 'Задание', prompt, points, score,
+      courseTitle: r.course, subject: r.subject, title: assignmentTitle(prompt) || lmsText(locale).task, prompt, points, score,
       percent: score !== null && points > 0 ? Math.round((score / points) * 100) : null,
       at: r.at.toISOString(), topicTotal: r.topic_total,
     };

@@ -1,6 +1,11 @@
 import { requirePageUser } from '@/lib/auth/page-guard';
+import { getT } from '@/i18n/server';
+import { teachHome } from '@/i18n/messages/teach-home';
 
-export const metadata = { title: 'Преподавание — Tesseract' };
+export async function generateMetadata() {
+  const t = await getT(teachHome);
+  return { title: t('metaTitle') };
+}
 
 export default async function TeachLayout({ children }: { children: React.ReactNode }) {
   const user = await requirePageUser('/teach');

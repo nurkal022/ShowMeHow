@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { guardUser } from '@/lib/http/guards';
 import { badRequest, INVALID_BODY_MESSAGE, readBody, withUserErrors } from '@/lib/http/route-kit';
 import { createRemedial } from '@/lib/lms/remedial';
+import { localeFromRequest } from '@/i18n/config';
 
 // Сборка разбора — это запрос к модели на несколько минут; жмут её кнопкой, поэтому ждать нормально.
 export const maxDuration = 300;
@@ -13,6 +14,6 @@ export async function POST(req: Request) {
   const body = await readBody(req);
   if (!body || typeof body.blockId !== 'string') return badRequest(INVALID_BODY_MESSAGE);
   return withUserErrors(async () => NextResponse.json({
-    remedial: await createRemedial(user.id, body.blockId as string),
+    remedial: await createRemedial(user.id, body.blockId as string, localeFromRequest(req)),
   }));
 }

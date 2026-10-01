@@ -137,6 +137,8 @@ export function normalizeSpec(raw: unknown, fallback: { level?: SimLevel } = {})
 
   const audience = str(o.audience, 80);
   if (audience) spec.audience = audience;
+  // Язык плана (kk/en) хранится в самой спецификации; русский — без поля, как у старых планов.
+  if (o.lang === 'kk' || o.lang === 'en') spec.lang = o.lang;
   const wow = str(o.wowMoment, 300);
   if (wow) spec.wowMoment = wow;
 

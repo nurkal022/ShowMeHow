@@ -1,4 +1,4 @@
-import type { PipelineEvent, PlanSpec, QualityMode, SimLevel } from '../types';
+import type { PipelineEvent, PlanSpec, QualityMode, SimLang, SimLevel } from '../types';
 import type { ReapDecision } from './policy';
 
 export type JobKind = 'generate' | 'refine';
@@ -10,6 +10,8 @@ export interface GenerateRequest {
   spec?: PlanSpec;
   level?: SimLevel;
   audience?: string;
+  /** Язык интерфейса автора: на нём пишутся план и подписи тренажёра. Нет — русский. */
+  lang?: SimLang;
 }
 export interface RefineRequest { instruction: string }
 export type JobRequest = GenerateRequest | RefineRequest;

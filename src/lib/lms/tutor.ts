@@ -4,6 +4,7 @@ import { askJson } from './ai';
 import { LmsError } from './types';
 import type { BlockBody } from './block-schema';
 import { assignmentTitle } from './block-schema';
+import type { Locale } from '@/i18n/config';
 
 /**
  * Наставник ученика. Он не решает за ученика: к заданиям даёт лестницу подсказок
@@ -70,6 +71,8 @@ export async function hintsUsed(userId: string, blockId: string): Promise<number
 export async function askTutor(input: {
   userId: string; topicId: string; blockId: string | null; mode: keyof typeof MODE_BRIEF; question: string;
   context: TutorContext; history: TutorMessage[];
+  /** Язык ответа наставника; по умолчанию русский. */
+  locale?: Locale;
 }): Promise<TutorAnswer> {
   const { context: c } = input;
   const nextHint = input.mode === 'hint' && input.blockId ? Math.min(3, (await hintsUsed(input.userId, input.blockId)) + 1) : null;
@@ -86,7 +89,7 @@ ${history ? `Предыдущий разговор:\n${history}` : ''}
 ${nextHint ? `Это подсказка №${nextHint} из 3. ${nextHint === 1 ? 'Самая общая: куда смотреть.' : nextHint === 2 ? 'Конкретнее: какой закон или шаг применить.' : 'Последняя: разбери первый шаг решения на похожем примере с другими числами, но ответ этой задачи не называй и посоветуй спросить учителя в обсуждении, если всё ещё трудно.'}` : ''}
 
 Верни {"text": "ответ ученику", "chips": ["короткая кнопка-продолжение", ...]} — 2–3 chips по 2–4 слова,
-например "Проверь мой ход", "Ещё пример", "Почему так?".`, SYSTEM) as Record<string, unknown>;
+например "Проверь мой ход", "Ещё пример", "Почему так?".`, SYSTEM, input.locale ?? 'ru') as Record<string, unknown>;
   const text = clip(raw.text, 2000);
   if (!text) throw new LmsError('Наставник задумался и не ответил. Попробуйте ещё раз.');
   const chips = (Array.isArray(raw.chips) ? raw.chips : []).map((x) => clip(x, 40)).filter(Boolean).slice(0, 3);

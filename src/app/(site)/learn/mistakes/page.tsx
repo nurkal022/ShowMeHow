@@ -4,16 +4,21 @@ import { listGaps, topicGaps } from '@/lib/lms/gaps';
 import { getInterests } from '@/lib/lms/interests-store';
 import { interestsFilled } from '@/lib/lms/interests';
 import { listRemedials, remedialsByBlock } from '@/lib/lms/remedial';
-import { formatDate, ruPlural } from '@/lib/lms/format';
+import { getLocale } from '@/i18n/server';
+import { translator } from '@/i18n/core';
+import { learn } from '@/i18n/messages/learn';
+import { learnMe } from '@/i18n/messages/learn-me';
+import { learnDate } from '@/components/learn/format';
 import GapList from '@/components/learn/GapList';
 import { IconBulb, IconCheck, IconSpark, IconTrophy, IconUser } from '@/components/icons';
-
-const STATUS_LABEL = { new: 'Не открыт', in_progress: 'В работе', done: 'Разобрано' } as const;
 
 /** Работа над ошибками: где ученик просел и какие персональные разборы у него уже есть. */
 export default async function MistakesPage() {
   const user = await requirePageUser('/learn/mistakes');
   if (!user) return null;
+  const locale = await getLocale();
+  const t = translator(learnMe, locale);
+  const tl = translator(learn, locale);
   const [gaps, remedials, interests] = await Promise.all([
     listGaps(user.id), listRemedials(user.id), getInterests(user.id),
   ]);
@@ -25,11 +30,8 @@ export default async function MistakesPage() {
     <div className="learn-page mk-page">
       <header className="learn-head">
         <div>
-          <h1>Работа над ошибками</h1>
-          <p className="muted">
-            Здесь собраны задания, которые не получились. По каждому помощник напишет персональный разбор:
-            объяснит, где была ошибка, и даст свои задачи на ту же идею — потренироваться без оценок.
-          </p>
+          <h1>{t('mistakesTitle')}</h1>
+          <p className="muted">{t('mistakesIntro')}</p>
         </div>
       </header>
 
@@ -37,47 +39,47 @@ export default async function MistakesPage() {
         <Link className="mk-invite" href="/learn/me">
           <span className="mk-invite-icon"><IconUser size={20} /></span>
           <span className="mk-invite-text">
-            <b>Расскажите о своих интересах</b>
+            <b>{t('tellInterests')}</b>
             <small>
               {filled === 0
-                ? 'Профиль пока пустой — разборы будут с обычными примерами. Пара минут, и задачи станут про то, что вам нравится.'
-                : `Профиль заполнен на ${filled}%. Чем больше знает помощник, тем ближе к вам будут примеры.`}
+                ? t('profileEmpty')
+                : t('profileFilled', { p: filled })}
             </small>
           </span>
         </Link>
       )}
 
       {topics.length > 0 && (
-        <section className="mk-topics" aria-label="Темы, где ошибок больше всего">
-          <h2 className="learn-section-title"><IconTrophy size={17} />Темы, к которым стоит вернуться</h2>
+        <section className="mk-topics" aria-label={t('topicsAria')}>
+          <h2 className="learn-section-title"><IconTrophy size={17} />{t('topicsTitle')}</h2>
           <ul>
-            {topics.map((t) => (
-              <li key={t.topicId}>
-                <b>{t.topicTitle}</b>
-                <small>{t.courseTitle}</small>
-                <span className="mk-topic-count">{`${t.failed} из ${t.total} ${ruPlural(t.total, 'задания', 'заданий', 'заданий')}`}</span>
+            {topics.map((tp) => (
+              <li key={tp.topicId}>
+                <b>{tp.topicTitle}</b>
+                <small>{tp.courseTitle}</small>
+                <span className="mk-topic-count">{tl('doneOfTasks', { done: tp.failed, n: tp.total })}</span>
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      <section aria-label="Слабые места">
-        <h2 className="learn-section-title"><IconSpark size={17} />Что не получилось</h2>
+      <section aria-label={t('weakAria')}>
+        <h2 className="learn-section-title"><IconSpark size={17} />{t('whatFailed')}</h2>
         {gaps.length === 0
           ? (
             <div className="learn-empty">
               <span className="learn-empty-icon"><IconCheck size={26} /></span>
-              <h2>Слабых мест не нашлось</h2>
-              <p>Все проверенные работы сданы хорошо. Если какое-то задание вернут на доработку или балл окажется низким, оно появится здесь.</p>
+              <h2>{t('noWeak')}</h2>
+              <p>{t('noWeakText')}</p>
             </div>
           )
           : <GapList gaps={gaps} existing={existing} />}
       </section>
 
       {remedials.length > 0 && (
-        <section aria-label="Мои разборы">
-          <h2 className="learn-section-title"><IconBulb size={17} />Мои разборы</h2>
+        <section aria-label={t('myBreakdowns')}>
+          <h2 className="learn-section-title"><IconBulb size={17} />{t('myBreakdowns')}</h2>
           <ul className="mk-remedials">
             {remedials.map((r) => (
               <li key={r.id}>
@@ -85,11 +87,11 @@ export default async function MistakesPage() {
                   <span className="mk-rm-text">
                     <b>{r.title}</b>
                     <small>
-                      {[r.topicTitle, r.courseTitle].filter(Boolean).join(' · ') || 'тема удалена'}
-                      {` · ${formatDate(r.createdAt)}`}
+                      {[r.topicTitle, r.courseTitle].filter(Boolean).join(' · ') || t('topicDeleted')}
+                      {` · ${learnDate(r.createdAt, locale)}`}
                     </small>
                   </span>
-                  <span className={`mk-rm-status ${r.status}`}>{STATUS_LABEL[r.status]}</span>
+                  <span className={`mk-rm-status ${r.status}`}>{t(`status_${r.status}`)}</span>
                 </Link>
               </li>
             ))}

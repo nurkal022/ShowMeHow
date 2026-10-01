@@ -1,5 +1,6 @@
 import { HARNESS_JS, UIKIT_CSS, UIKIT_JS } from './runtime';
 import { CDN_WHITELIST } from './cdn';
+import type { SimLang } from './types';
 
 const MARKER = '<!--showmehow-runtime-->';
 const END_MARKER = '<!--/showmehow-runtime-->';
@@ -104,7 +105,36 @@ export function findForbiddenUrls(html: string, allowed: string[]): string[] {
   return [...urls].filter((u) => !isAllowed(u));
 }
 
-export function instrument(html: string): string {
+const SIM_LANGS: SimLang[] = ['ru', 'kk', 'en'];
+
+export function isSimLang(v: unknown): v is SimLang {
+  return typeof v === 'string' && (SIM_LANGS as string[]).includes(v);
+}
+
+/** Язык тренажёра по флагу data-sim-lang на <html>. Нет флага — null (старые симуляции русские). */
+export function simLangOf(html: string): SimLang | null {
+  const tag = html.match(/<html\b[^>]*>/i)?.[0] ?? '';
+  const m = tag.match(/\sdata-sim-lang\s*=\s*["']?([a-z]{2})/i);
+  return m && isSimLang(m[1]) ? m[1] : null;
+}
+
+/**
+ * Ставит флаг языка на <html>: по нему кит выбирает свои подписи («Пауза», «Сброс»…).
+ * Флаг живёт вне блока рантайма, поэтому переживает stripRuntime/reinstrument. Русский
+ * без флага — как у всех старых симуляций, их HTML не меняется.
+ */
+export function setSimLang(html: string, lang: SimLang): string {
+  const tag = html.match(/<html\b[^>]*>/i)?.[0];
+  if (!tag) return html;
+  const cleaned = tag.replace(/\s(?:lang|data-sim-lang)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  const next = lang === 'ru' && !simLangOf(html)
+    ? tag
+    : cleaned.replace(/^<html\b/i, `<html lang="${lang}" data-sim-lang="${lang}"`);
+  return next === tag ? html : html.replace(tag, next);
+}
+
+export function instrument(html: string, lang?: SimLang): string {
+  if (lang) html = setSimLang(html, lang);
   if (html.includes(MARKER)) return html;
   // Свой importmap артефакта уважаем: два importmap'а в документе — ошибка браузера.
   const importMap = /type\s*=\s*["']importmap["']/i.test(html)

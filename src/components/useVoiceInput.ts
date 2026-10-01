@@ -1,5 +1,9 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocale } from '@/i18n/client';
+import { translator } from '@/i18n/core';
+import { INTL_LOCALE, type Locale } from '@/i18n/config';
+import { app } from '@/i18n/messages/app';
 
 /**
  * Голосовой ввод через встроенное в браузер распознавание речи (Web Speech API).
@@ -29,17 +33,20 @@ function recognitionCtor(): RecognitionCtor | null {
 }
 
 /** Человекочитаемая причина отказа: коды Web Speech API мало кому что говорят. */
-export function voiceErrorText(code: string): string {
-  if (code === 'not-allowed' || code === 'service-not-allowed') return 'Нет доступа к микрофону';
-  if (code === 'no-speech') return 'Не расслышал — попробуйте ещё раз';
-  if (code === 'audio-capture') return 'Микрофон не найден';
-  if (code === 'network') return 'Распознавание недоступно без сети';
-  return 'Не удалось распознать речь';
+export function voiceErrorText(code: string, locale: Locale = 'ru'): string {
+  const t = translator(app, locale);
+  if (code === 'not-allowed' || code === 'service-not-allowed') return t('vNoAccess');
+  if (code === 'no-speech') return t('vNoSpeech');
+  if (code === 'audio-capture') return t('vNoMic');
+  if (code === 'network') return t('vNetwork');
+  return t('vFailed');
 }
 
 export function useVoiceInput(onText: (text: string) => void) {
+  const locale = useLocale();
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
+  // Храним код ошибки, а текст строим при отрисовке — он следует за языком интерфейса.
   const [error, setError] = useState<string | null>(null);
   const recRef = useRef<Recognition | null>(null);
   // Колбэк держим в ref: пересоздавать распознаватель на каждый рендер нельзя,
@@ -52,7 +59,7 @@ export function useVoiceInput(onText: (text: string) => void) {
     if (!Ctor) return;
     setSupported(true);
     const rec = new Ctor();
-    rec.lang = 'ru-RU';
+    rec.lang = INTL_LOCALE[locale];
     rec.continuous = true;
     rec.interimResults = false;
     rec.onresult = (e) => {
@@ -62,11 +69,15 @@ export function useVoiceInput(onText: (text: string) => void) {
       }
       if (text.trim()) onTextRef.current(text.trim());
     };
-    rec.onerror = (e) => { setError(voiceErrorText(e.error)); setListening(false); };
+    rec.onerror = (e) => { setError(e.error); setListening(false); };
     rec.onend = () => setListening(false);
     recRef.current = rec;
     return () => { try { rec.stop(); } catch { /* уже остановлен */ } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Распознаём на языке интерфейса: казахскую речь русский распознаватель не поймёт.
+  useEffect(() => { if (recRef.current) recRef.current.lang = INTL_LOCALE[locale]; }, [locale]);
 
   const toggle = useCallback(() => {
     const rec = recRef.current;
@@ -77,5 +88,5 @@ export function useVoiceInput(onText: (text: string) => void) {
     catch { /* повторный start до onend — распознаватель уже слушает */ }
   }, [listening]);
 
-  return { supported, listening, error, toggle };
+  return { supported, listening, error: error === null ? null : voiceErrorText(error, locale), toggle };
 }

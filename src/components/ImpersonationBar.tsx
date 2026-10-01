@@ -1,8 +1,11 @@
 'use client';
 import { useState } from 'react';
+import { useT } from '@/i18n/client';
+import { app } from '@/i18n/messages/app';
 
 /** Полоса поверх любой страницы, пока админ платформы смотрит глазами другого человека. */
 export default function ImpersonationBar({ viewer }: { viewer: string }) {
+  const t = useT(app);
   const [busy, setBusy] = useState(false);
   async function back() {
     setBusy(true);
@@ -12,8 +15,8 @@ export default function ImpersonationBar({ viewer }: { viewer: string }) {
   }
   return (
     <div className="impersonation-bar no-print" role="status">
-      <span>Режим «Войти как»: вы в аккаунте <strong>{viewer}</strong></span>
-      <button type="button" className="btn" disabled={busy} onClick={back}>Вернуться в админку</button>
+      <span>{t('impersonating')} <strong>{viewer}</strong></span>
+      <button type="button" className="btn" disabled={busy} onClick={back}>{t('backToAdmin')}</button>
     </div>
   );
 }

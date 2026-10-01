@@ -1,5 +1,8 @@
 import type { CredentialCard } from '@/lib/org/credentials';
 import { IconScissors } from '@/components/icons';
+import type { Locale } from '@/i18n/config';
+import { translator } from '@/i18n/core';
+import { orgPeople } from '@/i18n/messages/org-people';
 
 export const CARDS_PER_PAGE = 8;
 
@@ -10,15 +13,16 @@ export function chunk<T>(items: T[], size: number): T[][] {
 }
 
 /** Карточки под печать: по восемь на лист A4, разрезаются по пунктиру и раздаются ученикам. */
-export default function CredentialSheet({ cards, site, groupTitle }: {
-  cards: CredentialCard[]; site: string; groupTitle: string;
+export default function CredentialSheet({ cards, site, groupTitle, locale = 'ru' }: {
+  cards: CredentialCard[]; site: string; groupTitle: string; locale?: Locale;
 }) {
+  const t = translator(orgPeople, locale);
   const pages = chunk(cards, CARDS_PER_PAGE);
   return (
     <div className="cred-sheet">
       <p className="cred-sheet-note no-print">
         <IconScissors size={16} />
-        {`Карточек: ${cards.length}, листов A4: ${pages.length}. Режьте по пунктиру. На печати останутся только карточки.`}
+        {t('cardsNote', { cards: cards.length, pages: pages.length })}
       </p>
       {pages.map((page, i) => (
         <div key={i} className="cred-page">
@@ -26,12 +30,12 @@ export default function CredentialSheet({ cards, site, groupTitle }: {
             <div key={c.userId} className="cred-card">
               <span className="cred-card-head">
                 <strong>{c.displayName}</strong>
-                <span className="muted">Группа {groupTitle}</span>
+                <span className="muted">{t('cardGroup', { title: groupTitle })}</span>
               </span>
-              <span className="cred-line"><span className="cred-key">Сайт</span><span className="num">{site}</span></span>
-              <span className="cred-line"><span className="cred-key">Логин</span><span className="num" data-field="login">{c.login}</span></span>
-              <span className="cred-line"><span className="cred-key">Пароль</span><span className="num cred-password" data-field="password">{c.password}</span></span>
-              <span className="muted cred-foot">При первом входе придумайте свой пароль и никому его не говорите.</span>
+              <span className="cred-line"><span className="cred-key">{t('cardSite')}</span><span className="num">{site}</span></span>
+              <span className="cred-line"><span className="cred-key">{t('cardLogin')}</span><span className="num" data-field="login">{c.login}</span></span>
+              <span className="cred-line"><span className="cred-key">{t('cardPassword')}</span><span className="num cred-password" data-field="password">{c.password}</span></span>
+              <span className="muted cred-foot">{t('cardFoot')}</span>
             </div>
           ))}
         </div>

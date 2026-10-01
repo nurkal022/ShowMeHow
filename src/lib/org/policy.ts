@@ -13,7 +13,7 @@ export const GENERATION_FORBIDDEN_MESSAGE = 'Генерация недоступ
 
 export type SessionKind = 'long' | 'short';
 
-export type NavSectionKey = 'learn' | 'catalog' | 'teach' | 'create' | 'library' | 'labs' | 'org' | 'admin';
+export type NavSectionKey = 'learn' | 'catalog' | 'teach' | 'create' | 'research' | 'library' | 'labs' | 'org' | 'admin';
 
 export interface NavSection {
   key: NavSectionKey;
@@ -27,6 +27,7 @@ export const ALL_NAV_SECTIONS: readonly NavSection[] = [
   { key: 'catalog', href: '/learn/catalog', label: 'Каталог курсов' },
   { key: 'teach', href: '/teach', label: 'Преподавание' },
   { key: 'create', href: '/', label: 'Создать' },
+  { key: 'research', href: '/research', label: 'Исследования' },
   { key: 'library', href: '/library', label: 'Библиотека' },
   { key: 'labs', href: '/labs', label: 'Лаборатории' },
   { key: 'org', href: '/org', label: 'Организация' },
@@ -84,6 +85,8 @@ export function navSections(user: PolicyUser, memberships: Membership[]): NavSec
     catalog: memberships.some((m) => m.role === 'student'),
     teach: hasStaffRole(memberships),
     create: canGenerate(user, memberships),
+    // Рабочее место учёного: графики, модели, проекты — тем же, кто может создавать.
+    research: canGenerate(user, memberships),
     library: true,
     labs: true,
     org: memberships.some((m) => m.role === 'org_admin'),

@@ -1,3 +1,4 @@
+import type { Locale } from '@/i18n/config';
 import { parseBridgeReply, type BridgeReply } from './sim-state';
 
 /**
@@ -29,12 +30,25 @@ export function requestSimState(frame: HTMLIFrameElement | null, timeoutMs = BRI
   });
 }
 
+const BRIDGE_PROBLEM: Record<Locale, { busy: string; mute: string }> = {
+  ru: {
+    busy: 'Симуляция ещё загружается или не отвечает. Подождите пару секунд и попробуйте снова.',
+    mute: 'Эта симуляция не сообщает значения своих параметров.',
+  },
+  kk: {
+    busy: 'Симуляция әлі жүктелуде немесе жауап бермей тұр. Бірнеше секунд күтіп, қайталап көріңіз.',
+    mute: 'Бұл симуляция өз параметрлерінің мәндерін хабарламайды.',
+  },
+  en: {
+    busy: 'The simulation is still loading or not responding. Wait a couple of seconds and try again.',
+    mute: 'This simulation does not report its parameter values.',
+  },
+};
+
 /** Почему состояние не снялось — словами для человека. */
-export function bridgeProblem(reply: BridgeReply): string {
-  if (reply.reason === 'no-frame' || reply.reason === 'timeout') {
-    return 'Симуляция ещё загружается или не отвечает. Подождите пару секунд и попробуйте снова.';
-  }
-  return 'Эта симуляция не сообщает значения своих параметров.';
+export function bridgeProblem(reply: BridgeReply, locale: Locale = 'ru'): string {
+  const t = BRIDGE_PROBLEM[locale] ?? BRIDGE_PROBLEM.ru;
+  return reply.reason === 'no-frame' || reply.reason === 'timeout' ? t.busy : t.mute;
 }
 
 function ask<T>(frame: HTMLIFrameElement | null, message: Record<string, unknown>, replyType: string, timeoutMs: number): Promise<T | null> {

@@ -1,4 +1,6 @@
 import { UIKIT_DOC } from '../runtime';
+import type { Role, SimLang } from '../types';
+import type { ChatMessage } from '../provider';
 import { CDN_WHITELIST } from '../cdn';
 
 export { CDN_WHITELIST };
@@ -456,3 +458,51 @@ ${SECTION_RULES}
 встречался ровно один раз. Весь файл присылать ЗАПРЕЩЕНО.
 Делай ровно то, о чём просят: попутные «улучшения» — в "next", каждое как готовая просьба к тебе.
 "summary" и списки — по-русски, коротко и по делу.`;
+
+/**
+ * Язык тренажёра. Промпты остаются русскими; для казахского и английского к системному
+ * промпту дописывается указание языка — оно сильнее упоминаний «русского языка» выше.
+ * Русский — без приписки: промпты и так требуют его.
+ */
+const LANG_NAME: Record<Exclude<SimLang, 'ru'>, string> = {
+  kk: 'на казахском языке (литературный казахский, кириллица, обращение на «Сіз»)',
+  en: 'на английском языке (простой ясный английский, sentence case)',
+};
+
+export function langRule(lang: SimLang | undefined, role: Role): string {
+  if (!lang || lang === 'ru') return '';
+  const name = LANG_NAME[lang];
+  const base = `\n\nЯЗЫК ТРЕНАЖЁРА — ВАЖНО: весь текст, который видит ученик, пиши ${name}. Это правило ` +
+    'важнее любых упоминаний «русского языка» и русских примеров выше. Сюда входит: название, подписи ' +
+    'слайдеров, переключателей и кнопок, варианты select, пресеты, легенды, заголовки и подписи осей ' +
+    'графиков, показания, пояснения к формулам, баннеры, цели, шаги урока, задания, подсказки, ' +
+    'объяснения, таблицы. Единицы измерения — принятые в этом языке обозначения СИ. Имена переменных, ' +
+    'name параметров, ключи JSON и код — латиницей, как обычно. Русских слов на экране быть не должно.';
+  switch (role) {
+    case 'planner':
+      return base + `\nВсе текстовые поля JSON-спецификации (title, subject, audience, learningGoals, physics, ` +
+        `visualPlan, wowMoment, label и unit параметров и величин, entities, views, invariants, scenario, ` +
+        `presets) — ${name}: человек видит их в карточке плана.`;
+    case 'refiner':
+      return base + `\nПоля отчёта "summary", "changed", "skipped", "next" — тоже ${name}. ` +
+        'Существующие подписи на этом языке сохраняй; новые пиши на нём же.';
+    case 'critic':
+      return base + '\nПроверь язык на скриншотах: подпись или кнопка на другом языке (кроме обозначений ' +
+        'величин и единиц) — замечание severity "major".';
+    case 'fixer':
+      return base + '\nЧиня код, не меняй язык подписей.';
+    case 'judge':
+      return '';
+    default:
+      return base;
+  }
+}
+
+/** Приписывает указание языка к системному сообщению (первому). Без языка — сообщения как есть. */
+export function withLangRule(messages: ChatMessage[], role: Role, lang: SimLang | undefined): ChatMessage[] {
+  const rule = langRule(lang, role);
+  if (!rule) return messages;
+  const i = messages.findIndex((m) => m.role === 'system' && typeof m.content === 'string');
+  if (i === -1) return [{ role: 'system', content: rule.trim() }, ...messages];
+  return messages.map((m, j) => (j === i ? { ...m, content: (m.content as string) + rule } : m));
+}

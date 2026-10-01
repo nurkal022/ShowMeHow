@@ -1,3 +1,6 @@
+import { formatDateTime } from '@/i18n/core';
+import type { Locale } from '@/i18n/config';
+
 /**
  * Человекочитаемая подпись для файла истории версий.
  * Имя файла формата `2026-07-07T03-49-12-345Z.html` (опционально с суффиксом
@@ -6,7 +9,7 @@
  * отображается как « (N)». Имена, не соответствующие ожидаемому формату,
  * возвращаются как есть.
  */
-export function historyLabel(name: string): string {
+export function historyLabel(name: string, locale: Locale = 'ru'): string {
   const base = name.replace(/\.html$/, '');
   const match = base.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z(?:-(\d+))?$/);
   if (!match) return name;
@@ -14,6 +17,6 @@ export function historyLabel(name: string): string {
   const iso = `${datePart}T${hh}:${mm}:${ss}.${ms}Z`;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return name;
-  const formatted = d.toLocaleString('ru-RU');
+  const formatted = formatDateTime(d, locale, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
   return suffix ? `${formatted} (${suffix})` : formatted;
 }

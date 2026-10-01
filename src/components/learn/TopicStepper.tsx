@@ -1,8 +1,10 @@
+'use client';
 import Link from 'next/link';
 import type { TopicProgress } from '@/lib/lms/learn-view';
-import { dueLabel, TOPIC_STATE_LABELS } from '@/lib/lms/learn-view';
 import { learnTopicHref } from '@/lib/lms/links';
-import { formatScore, ruPlural } from '@/lib/lms/format';
+import { useLocale, useT } from '@/i18n/client';
+import { learn } from '@/i18n/messages/learn';
+import { learnDue, learnScore } from './format';
 import { IconCheck, IconChevron } from '@/components/icons';
 
 /**
@@ -12,6 +14,8 @@ import { IconCheck, IconChevron } from '@/components/icons';
 export default function TopicStepper({ topics, currentId, preview }: {
   topics: TopicProgress[]; currentId: string | null; preview: boolean;
 }) {
+  const t0 = useT(learn);
+  const locale = useLocale();
   const currentIndex = currentId ? topics.findIndex((t) => t.topicId === currentId) : -1;
   return (
     <ol className="learn-steps">
@@ -29,14 +33,14 @@ export default function TopicStepper({ topics, currentId, preview }: {
                 <span className="learn-step-title">{t.title}</span>
                 {!preview && (
                   <span className="learn-step-meta">
-                    <span className={`learn-state ${t.state}`}>{TOPIC_STATE_LABELS[t.state]}</span>
+                    <span className={`learn-state ${t.state}`}>{t0(`state_${t.state}`)}</span>
                     {t.assignmentsTotal > 0 && (
-                      <span>{`${t.assignmentsDone} из ${t.assignmentsTotal} ${ruPlural(t.assignmentsTotal, 'задания', 'заданий', 'заданий')}`}</span>
+                      <span>{t0('doneOfTasks', { done: t.assignmentsDone, n: t.assignmentsTotal })}</span>
                     )}
-                    {t.dueAt && t.state !== 'done' && (() => { const d = dueLabel(t.dueAt); return <span className={`learn-due ${d.tone}`}>{d.text}</span>; })()}
-                    {t.assignmentsReturned > 0 && <span className="learn-state returned">возвращено на доработку</span>}
+                    {t.dueAt && t.state !== 'done' && (() => { const d = learnDue(t.dueAt, locale); return <span className={`learn-due ${d.tone}`}>{d.text}</span>; })()}
+                    {t.assignmentsReturned > 0 && <span className="learn-state returned">{t0('returnedForRevision')}</span>}
                     {t.pointsMax > 0 && (
-                      <span className="learn-step-points">{`${formatScore(t.pointsEarned)} / ${formatScore(t.pointsMax)} б.`}</span>
+                      <span className="learn-step-points">{t0('pointsShort', { a: learnScore(t.pointsEarned, locale), b: learnScore(t.pointsMax, locale) })}</span>
                     )}
                   </span>
                 )}

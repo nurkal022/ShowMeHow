@@ -1,7 +1,10 @@
+'use client';
 import Link from 'next/link';
 import type { StudentGrade } from '@/lib/lms/submissions';
-import { ANSWER_STATE_LABELS } from '@/lib/lms/types';
-import { formatScore, ruPlural } from '@/lib/lms/format';
+import { useLocale, useT } from '@/i18n/client';
+import { learn } from '@/i18n/messages/learn';
+import { learnMe } from '@/i18n/messages/learn-me';
+import { learnScore } from './format';
 import { coverStyle } from '@/lib/lms/covers';
 import { Ring } from '@/components/cabinet/viz';
 import { IconAlert, IconCheck, IconChevron } from '@/components/icons';
@@ -25,8 +28,12 @@ const STATE_CLASS: Record<string, string> = {
 
 /** Мои оценки: общий итог сверху, затем курсы — каждый со своей сводкой и списком работ. */
 export default function GradesTable({ grades }: { grades: StudentGrade[] }) {
+  const t = useT(learnMe);
+  const tl = useT(learn);
+  const locale = useLocale();
+  const formatScore = (n: number | null) => learnScore(n, locale);
   if (grades.length === 0) {
-    return <p className="empty-state">Оценок пока нет. Задания появятся в курсах, которые откроет учитель.</p>;
+    return <p className="empty-state">{t('noGrades')}</p>;
   }
   const courses = byCourse(grades);
   const gradedAll = grades.filter((g) => g.state === 'graded');
@@ -39,23 +46,23 @@ export default function GradesTable({ grades }: { grades: StudentGrade[] }) {
 
   return (
     <div className="gr">
-      <section className="gr-summary" aria-label="Итог по всем курсам">
+      <section className="gr-summary" aria-label={t('summaryAria')}>
         <div className="gr-sum-main">
-          <Ring value={percentAll} size={84} stroke={9} label={`Средний результат ${percentAll}%`} />
+          <Ring value={percentAll} size={84} stroke={9} label={t('avgResultLabel', { p: percentAll })} />
           <div>
             <b>{percentAll}%</b>
-            <span>средний результат за проверенные работы</span>
-            <small className="muted">{formatScore(earnedAll)} из {formatScore(gradedMaxAll)} возможных баллов</small>
+            <span>{t('avgChecked')}</span>
+            <small className="muted">{t('ofPossible', { a: formatScore(earnedAll), b: formatScore(gradedMaxAll) })}</small>
           </div>
         </div>
         <div className="gr-sum-tiles">
-          <div><b>{doneAll} / {grades.length}</b><span>{ruPlural(grades.length, 'работа сдана', 'работы сдано', 'работ сдано')}</span></div>
-          <div><b>{formatScore(earnedAll)}</b><span>из {formatScore(maxAll)} баллов за курс целиком</span></div>
+          <div><b>{doneAll} / {grades.length}</b><span>{t('worksSubmitted', { n: grades.length })}</span></div>
+          <div><b>{formatScore(earnedAll)}</b><span>{t('ofCourseTotal', { b: formatScore(maxAll) })}</span></div>
           <div className={returned > 0 ? 'warn' : undefined}>
             <b>{returned}</b>
             <span>{returned > 0
-              ? `${ruPlural(returned, 'работу вернули', 'работы вернули', 'работ вернули')} на доработку`
-              : 'ничего не вернули'}</span>
+              ? t('worksReturned', { n: returned })
+              : t('nothingReturned')}</span>
           </div>
         </div>
       </section>
@@ -73,7 +80,7 @@ export default function GradesTable({ grades }: { grades: StudentGrade[] }) {
               <span className="gr-cover" style={coverStyle(c.title)} aria-hidden="true">{c.title.slice(0, 1).toUpperCase()}</span>
               <div className="gr-course-title">
                 <h2><Link href={`/learn/courses/${c.courseId}`}>{c.title}<IconChevron size={15} /></Link></h2>
-                <span className="muted">{done} из {c.rows.length} сдано · {formatScore(earned)} из {formatScore(max)} баллов</span>
+                <span className="muted">{t('courseLine', { done, n: c.rows.length, a: formatScore(earned), b: formatScore(max) })}</span>
                 <span className="lv-bar sm"><i style={{ width: `${c.rows.length ? (done / c.rows.length) * 100 : 0}%` }} /></span>
               </div>
               {gradedMax > 0 && <span className={`gr-pct ${percent >= 85 ? 'high' : percent >= 60 ? 'mid' : 'low'}`}>{percent}%</span>}
@@ -89,7 +96,7 @@ export default function GradesTable({ grades }: { grades: StudentGrade[] }) {
                     <span className={`gr-state ${STATE_CLASS[g.state] ?? 'none'}`}>
                       {g.state === 'graded' && <IconCheck size={13} />}
                       {g.state === 'returned' && <IconAlert size={13} />}
-                      {ANSWER_STATE_LABELS[g.state]}
+                      {tl(`answer_${g.state}`)}
                     </span>
                     <span className="gr-score">
                       {g.score === null ? <span className="muted">— / {g.points}</span> : <><b>{formatScore(g.score)}</b> / {g.points}</>}

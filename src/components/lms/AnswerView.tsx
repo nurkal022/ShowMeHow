@@ -1,3 +1,4 @@
+'use client';
 import type { Answer } from '@/lib/lms/answers';
 import type { AssignmentSpec, StudentAssignmentSpec } from '@/lib/lms/block-schema';
 import { formatScore } from '@/lib/lms/format';
@@ -5,17 +6,23 @@ import { checkTargets } from '@/lib/lms/sim-state';
 import { normalizeWord, parseGaps } from '@/lib/lms/block-schema';
 import MeasureChart from './MeasureChart';
 import { IconCheck, IconClose } from '@/components/icons';
+import { useLocale, useT } from '@/i18n/client';
+import { lms } from '@/i18n/messages/lms';
 
 /**
  * Ответ ученика. Учительская схема несёт правильные варианты и число — тогда
  * они видны; студенческая их не содержит, и показать их нечем.
+ * Клиентский компонент — ради подписей на языке интерфейса; HTML по-прежнему рисуется на сервере.
  */
 export default function AnswerView({ spec, answer, keyed = true }: {
   spec: AssignmentSpec | StudentAssignmentSpec; answer: Answer | null;
   /** «Порядок» у учительской и студенческой схем выглядит одинаково: false — шаги перемешаны, сверять не с чем. */
   keyed?: boolean;
 }) {
-  if (!answer) return <p className="muted">Ответа нет.</p>;
+  const tr = useT(lms);
+  const locale = useLocale();
+  const num = (n: number) => formatScore(n, locale);
+  if (!answer) return <p className="muted">{tr('noAnswer')}</p>;
   if (spec.type === 'choice' && answer.type === 'choice') {
     // У учительской схемы у варианта есть correct, у студенческой — нет.
     const options = spec.options as { id: string; text: string; correct?: boolean }[];
@@ -31,8 +38,8 @@ export default function AnswerView({ spec, answer, keyed = true }: {
               <span className="cf-answer-mark" aria-hidden="true">
                 {picked ? (graded && !right ? <IconClose size={13} /> : <IconCheck size={13} />) : null}
               </span>
-              <span className="cf-answer-option-text">{`${picked ? '●' : '○'} ${o.text}${right ? ' — правильный' : ''}`}</span>
-              {picked && <span className="cf-answer-tag">выбор ученика</span>}
+              <span className="cf-answer-option-text">{`${picked ? '●' : '○'} ${right ? tr('optionCorrect', { text: o.text }) : o.text}`}</span>
+              {picked && <span className="cf-answer-tag">{tr('studentChoice')}</span>}
             </li>
           );
         })}
@@ -41,7 +48,7 @@ export default function AnswerView({ spec, answer, keyed = true }: {
   }
   if (spec.type === 'number' && answer.type === 'number') {
     const unit = spec.unit ? ` ${spec.unit}` : '';
-    const key = 'answer' in spec ? ` (правильный ответ: ${formatScore(spec.answer)} ± ${formatScore(spec.tolerance)})` : '';
+    const key = 'answer' in spec ? tr('correctAnswer', { value: num(spec.answer), tolerance: num(spec.tolerance) }) : '';
     return <p className="cf-answer-number">{`${answer.value || '—'}${unit}${key}`}</p>;
   }
   if (spec.type === 'short' && answer.type === 'short') {
@@ -49,7 +56,7 @@ export default function AnswerView({ spec, answer, keyed = true }: {
     const ok = accepted ? accepted.some((a) => normalizeWord(a) === normalizeWord(answer.text)) : undefined;
     return (
       <p className={`cf-answer-number ${ok === undefined ? '' : ok ? 'good' : 'bad'}`.trim()}>
-        {answer.text || '—'}{accepted && !ok ? ` (правильно: ${accepted.join(' или ')})` : ''}
+        {answer.text || '—'}{accepted && !ok ? tr('correctIs', { answer: accepted.join(tr('or')) }) : ''}
       </p>
     );
   }
@@ -85,7 +92,7 @@ export default function AnswerView({ spec, answer, keyed = true }: {
           return (
             <li key={r.id} className={`cf-answer-option ${ok === undefined ? '' : ok ? 'good' : 'bad'}`.trim()}>
               <span className="cf-answer-mark" aria-hidden="true">{ok === undefined ? null : ok ? <IconCheck size={13} /> : <IconClose size={13} />}</span>
-              <span className="cf-answer-option-text">{`${r.left} → ${r.given ?? '—'}${ok === false ? ` (правильно: ${r.want})` : ''}`}</span>
+              <span className="cf-answer-option-text">{`${r.left} → ${r.given ?? '—'}${ok === false ? tr('correctIs', { answer: r.want }) : ''}`}</span>
             </li>
           );
         })}
@@ -104,7 +111,7 @@ export default function AnswerView({ spec, answer, keyed = true }: {
           return (
             <li key={id} className={`cf-answer-option ${ok === undefined ? '' : ok ? 'good' : 'bad'}`.trim()}>
               <span className="cf-answer-mark" aria-hidden="true">{ok === undefined ? null : ok ? <IconCheck size={13} /> : <IconClose size={13} />}</span>
-              <span className="cf-answer-option-text">{`${i + 1}. ${text.get(id) ?? '—'}${ok === false ? ` (здесь: ${spec.items[i]?.text ?? '—'})` : ''}`}</span>
+              <span className="cf-answer-option-text">{`${i + 1}. ${text.get(id) ?? '—'}${ok === false ? tr('orderHere', { text: spec.items[i]?.text ?? '—' }) : ''}`}</span>
             </li>
           );
         })}
@@ -125,7 +132,7 @@ export default function AnswerView({ spec, answer, keyed = true }: {
   if (spec.type === 'sim_state' && answer.type === 'sim_state') {
     // Учительская схема несёт цель и допуск; студенческая — только подписи (и то с подсказками).
     const rows = (spec.targets ?? []) as { name: string; label: string; value?: number; tolerance?: number }[];
-    if (rows.length === 0) return <p className="muted">Состояние симуляции сдано.</p>;
+    if (rows.length === 0) return <p className="muted">{tr('simStateSubmitted')}</p>;
     const hinted = new Map((answer.hints ?? []).map((h) => [h.name, h.matched]));
     return (
       <ul className="cf-answer-options">
@@ -134,13 +141,13 @@ export default function AnswerView({ spec, answer, keyed = true }: {
           const matched = t.value !== undefined
             ? checkTargets([{ name: t.name, label: t.label, value: t.value, tolerance: t.tolerance ?? 0 }], answer.controls)[0].matched
             : hinted.get(t.name);
-          const key = t.value !== undefined ? ` (цель: ${formatScore(t.value)} ± ${formatScore(t.tolerance ?? 0)})` : '';
+          const key = t.value !== undefined ? tr('target', { value: num(t.value), tolerance: num(t.tolerance ?? 0) }) : '';
           return (
             <li key={t.name} className={`cf-answer-option ${matched === undefined ? '' : matched ? 'good' : 'bad'}`.trim()}>
               <span className="cf-answer-mark" aria-hidden="true">
                 {matched === undefined ? null : matched ? <IconCheck size={13} /> : <IconClose size={13} />}
               </span>
-              <span className="cf-answer-option-text">{`${t.label}: ${got === undefined ? '—' : formatScore(got)}${key}`}</span>
+              <span className="cf-answer-option-text">{`${t.label}: ${got === undefined ? '—' : num(got)}${key}`}</span>
             </li>
           );
         })}
@@ -148,5 +155,5 @@ export default function AnswerView({ spec, answer, keyed = true }: {
     );
   }
   if (answer.type === 'text') return <p className="answer-text cf-answer-text">{answer.text || '—'}</p>;
-  return <p className="muted">Ответ дан к прежней версии задания.</p>;
+  return <p className="muted">{tr('oldVersion')}</p>;
 }

@@ -1,7 +1,9 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Instrument, Level, Style } from '../data';
-import { sectionByKey } from '../data';
+import { localizeSection, sectionByKey } from '../data';
+import { useLocale, useT } from '@/i18n/client';
+import { workbenchStand } from '@/i18n/messages/workbench-stand';
 import { MOTIFS } from './motifs';
 import { IdleCore, STAGE_W, VIEW_H } from './primitives';
 import { kitPreviewDoc } from './kitPreviewDoc';
@@ -27,6 +29,8 @@ export interface StageConfig {
  * чего в результате не будет.
  */
 export default function Stage({ config }: { config: StageConfig }) {
+  const tr = useT(workbenchStand);
+  const locale = useLocale();
   const [t, setT] = useState(0);
   const [knob, setKnob] = useState(0.4);
   // Сколько места по краям заняли приборы (в px кадра). Кадр сообщает это сам,
@@ -35,7 +39,8 @@ export default function Stage({ config }: { config: StageConfig }) {
   const [edges, setEdges] = useState({ left: 0, right: 0 });
   const frameRef = useRef<HTMLIFrameElement>(null);
   const doc = useMemo(() => kitPreviewDoc(), []);
-  const section = sectionByKey(config.section);
+  const baseSection = sectionByKey(config.section);
+  const section = baseSection ? localizeSection(baseSection, locale) : undefined;
   const Motif = section ? MOTIFS[section.motif] : IdleCore;
 
   // Часы стенда. Движение считается от времени, поэтому один тикер обслуживает
@@ -60,6 +65,8 @@ export default function Stage({ config }: { config: StageConfig }) {
   // набор приборов, каким он был при монтировании.
   const configRef = useRef(config);
   configRef.current = config;
+  const localeRef = useRef({ locale, tr });
+  localeRef.current = { locale, tr };
 
   // Ползунок в панели приборов крутит образ: прибор настоящий, отклик настоящий.
   useEffect(() => {
@@ -80,11 +87,13 @@ export default function Stage({ config }: { config: StageConfig }) {
 
   function sync() {
     const config = configRef.current;
-    const section = sectionByKey(config.section);
+    const { locale, tr } = localeRef.current;
+    const base = sectionByKey(config.section);
+    const section = base ? localizeSection(base, locale) : undefined;
     frameRef.current?.contentWindow?.postMessage({
       type: 'sync',
       config: {
-        title: config.phenomenon || section?.label || 'Симуляция',
+        title: config.phenomenon || section?.label || tr('kitSim'),
         instruments: config.instruments,
         // Ничего не выбрано — показываем то, что генератор выбрал бы сам:
         // панель обязана быть правдоподобной, а не заглушкой со словом «параметр».
@@ -92,16 +101,25 @@ export default function Stage({ config }: { config: StageConfig }) {
         // взгляда должен увидеть, что такое прибор, а не пустую панель.
         parameters: (config.parameters.length
           ? config.parameters
-          : section?.parameters ?? ['параметр']).slice(0, 4),
-        readoutLabel: section?.quantity ?? 'Величина',
-        chartTitle: section?.quantity ?? 'График',
+          : section?.parameters ?? [tr('kitParam')]).slice(0, 4),
+        readoutLabel: section?.quantity ?? tr('kitQuantity'),
+        chartTitle: section?.quantity ?? tr('kitChart'),
         tex: section?.tex,
+        labels: {
+          sim: tr('kitSim'), quantity: tr('kitQuantity'), chart: tr('kitChart'), value: tr('kitValue'),
+          slow: tr('kitSlow'), normal: tr('kitNormal'), fast: tr('kitFast'), nextStep: tr('kitNextStep'),
+          time: tr('kitTime'), sec: tr('kitSec'), howItWorks: tr('kitHowItWorks'),
+          observe: tr('kitObserve'), observeText: tr('kitObserveText'),
+          change: tr('kitChange'), changeText: tr('kitChangeText'),
+          measure: tr('kitMeasure'), measureText: tr('kitMeasureText'),
+          task: tr('kitTask'), opt1: tr('kitOpt1'), opt2: tr('kitOpt2'), opt3: tr('kitOpt3'), table: tr('kitTable'),
+        },
       },
     }, '*');
   }
 
   useEffect(sync, [
-    config.section, config.phenomenon, config.instruments.join(), config.parameters.join(),
+    config.section, config.phenomenon, config.instruments.join(), config.parameters.join(), locale,
   ]);
 
   return (
@@ -110,11 +128,11 @@ export default function Stage({ config }: { config: StageConfig }) {
         <svg className="stage-art" viewBox={`0 0 ${STAGE_W} ${VIEW_H}`}
           style={{ left: edges.left + 12, right: edges.right + 12 }}
           preserveAspectRatio="xMidYMid meet" role="img"
-          aria-label={`Образ: ${config.phenomenon || section?.label || 'симуляция'}`}>
+          aria-label={tr('stageAria', { name: config.phenomenon || section?.label || tr('stageSim') })}>
           <Motif t={t} mode={config.mode} style={config.style} knob={knob} />
         </svg>
         <iframe ref={frameRef} className="stage-kit" srcDoc={doc}
-          sandbox="allow-scripts" title="Панель приборов" />
+          sandbox="allow-scripts" title={tr('kitTitle')} />
         {/* Свои слова и подсказка набираются в HTML, а не в SVG: внутри сцены
             текст масштабируется вместе с образом и вырастает вдвое против
             остального интерфейса. Здесь у него настоящий кегль. */}
@@ -125,10 +143,10 @@ export default function Stage({ config }: { config: StageConfig }) {
             ))}
           </div>
         )}
-        {!section && <p className="stage-hint">выберите тему — предмет превратится в неё</p>}
+        {!section && <p className="stage-hint">{tr('stageHint')}</p>}
       </div>
       <p className="stage-note">
-        Приборы настоящие — такими они и будут. Образ — набросок: сцену соберёт генератор.
+        {tr('stageNote')}
       </p>
     </div>
   );

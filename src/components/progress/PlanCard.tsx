@@ -1,9 +1,12 @@
 'use client';
 import { useState } from 'react';
 import type { PlanSummary } from '@/lib/types';
+import { useT } from '@/i18n/client';
+import { workbenchProgress } from '@/i18n/messages/workbench-progress';
 
 export default function PlanCard({ plan }: { plan: PlanSummary }) {
   const [expanded, setExpanded] = useState(false);
+  const t = useT(workbenchProgress);
   return (
     <div className="plan-card">
       <div className="plan-card-head">
@@ -12,13 +15,13 @@ export default function PlanCard({ plan }: { plan: PlanSummary }) {
       </div>
       <div className="plan-card-subject">
         {plan.subject}
-        {plan.level && plan.level !== 'demo' && <> · {plan.level === 'lab' ? 'лаборатория' : 'исследование'}</>}
+        {plan.level && plan.level !== 'demo' && <> · {plan.level === 'lab' ? t('levelLab') : t('levelResearch')}</>}
       </div>
       {plan.physics && (
         <p
           className={`plan-card-physics ${expanded ? 'expanded' : 'clamped'}`}
           onClick={() => setExpanded((v) => !v)}
-          title={expanded ? 'Свернуть' : 'Развернуть'}
+          title={expanded ? t('collapse') : t('expand')}
         >
           {plan.physics}
         </p>

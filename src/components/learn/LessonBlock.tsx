@@ -1,10 +1,12 @@
 import type { StudentBlockBody } from '@/lib/lms/block-schema';
 import type { StudentSubmission } from '@/lib/lms/answers';
-import { ruPlural } from '@/lib/lms/format';
+import { useLocale, useT } from '@/i18n/client';
+import { learn } from '@/i18n/messages/learn';
+import { learnLesson } from '@/i18n/messages/learn-lesson';
+import { learnScore } from './format';
 import Markup from '@/components/lms/Markup';
 import SimulationEmbed from '@/components/lms/SimulationEmbed';
 import { CalloutBlock, CodeBlock, FormulaBlock, ImageBlock, SpoilerBlock, VideoBlock } from '@/components/lms/ContentBlocks';
-import { ASSIGNMENT_TYPE_LABELS } from '@/lib/lms/block-schema';
 import { IconTask } from '@/components/icons';
 import LabCard from './LabCard';
 import AnswerForm from './AnswerForm';
@@ -13,6 +15,9 @@ import AnswerForm from './AnswerForm';
 export default function LessonBlock({ blockId, body, missing, submission, preview }: {
   blockId: string; body: StudentBlockBody; missing: boolean; submission: StudentSubmission | null; preview: boolean;
 }) {
+  const t = useT(learnLesson);
+  const tl = useT(learn);
+  const locale = useLocale();
   switch (body.kind) {
     case 'text':
       // Пустой текстовый блок (учитель добавил и не заполнил) ученику не показываем.
@@ -63,15 +68,15 @@ export default function LessonBlock({ blockId, body, missing, submission, previe
         <article className={`learn-block learn-task state-${state}`} id={`block-${blockId}`}>
           <header className="learn-task-head">
             <span className="learn-task-icon"><IconTask size={16} /></span>
-            <h2>{ASSIGNMENT_TYPE_LABELS[p.spec.type]}</h2>
+            <h2>{tl(`type_${p.spec.type}`)}</h2>
             <span className="spacer" />
-            <span className="learn-task-chip">{p.allowRetry ? 'можно пересдать' : 'одна попытка'}</span>
-            <span className="learn-task-points">{`${p.points} ${ruPlural(p.points, 'балл', 'балла', 'баллов')}`}</span>
+            <span className="learn-task-chip">{p.allowRetry ? t('retryAllowed') : t('oneAttempt')}</span>
+            <span className="learn-task-points">{tl('pointsN', { n: p.points })}</span>
           </header>
           <Markup text={p.prompt} />
           {p.rubric.length > 0 && (
-            <ul className="learn-rubric" aria-label="Критерии оценивания">
-              {p.rubric.map((r) => <li key={r.id}><span>{r.label}</span><strong>{`${String(r.points).replace('.', ',')} б.`}</strong></li>)}
+            <ul className="learn-rubric" aria-label={t('rubricAria')}>
+              {p.rubric.map((r) => <li key={r.id}><span>{r.label}</span><strong>{t('pointsAbbr', { n: learnScore(r.points, locale) })}</strong></li>)}
             </ul>
           )}
           {p.stand?.kind === 'simulation' && (

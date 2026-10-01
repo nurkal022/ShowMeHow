@@ -20,18 +20,21 @@ import NotificationsBell from '@/components/NotificationsBell';
 import { PaletteButton } from '@/components/CommandPalette';
 import { useImpersonate } from '@/components/admin/useImpersonate';
 import type { SwitchTarget } from '@/lib/admin/switch';
-import { ORG_ROLE_LABELS } from '@/lib/org/types';
 import { useThemeChoice } from './useThemeChoice';
+import { useT } from '@/i18n/client';
+import { common } from '@/i18n/messages/common';
+import { cabinet, hasCabinetKey } from '@/i18n/messages/cabinet';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 const ICONS: Record<CabinetIcon, typeof IconPlus> = {
   dashboard: IconDashboard, orgs: IconOrg, users: IconPeople, catalog: IconCatalog, log: IconList,
   teachers: IconTeach, groups: IconGroup, settings: IconSettings, courses: IconCourses, plus: IconPlus, review: IconInbox, report: IconChart, risk: IconAlert, ask: IconSpark,
 };
 
-const THEME_OPTIONS: { value: Theme; label: string; Icon: typeof IconSun }[] = [
-  { value: 'light', label: 'Светлая', Icon: IconSun },
-  { value: 'dark', label: 'Тёмная', Icon: IconMoon },
-  { value: 'system', label: 'Как в системе', Icon: IconMonitor },
+const THEME_OPTIONS: { value: Theme; label: 'themeLight' | 'themeDark' | 'themeSystem'; Icon: typeof IconSun }[] = [
+  { value: 'light', label: 'themeLight', Icon: IconSun },
+  { value: 'dark', label: 'themeDark', Icon: IconMoon },
+  { value: 'system', label: 'themeSystem', Icon: IconMonitor },
 ];
 
 const SECTION_OF: Record<string, CabinetGroupKey> = { admin: 'platform', org: 'org', teach: 'teach' };
@@ -42,6 +45,7 @@ export default function ShellFrame({ menu, user, switchTargets = [], children }:
   menu: CabinetMenu; user: ShellUser; switchTargets?: SwitchTarget[]; children: React.ReactNode;
 }) {
   const pathname = usePathname() ?? '/';
+  const t = useT(cabinet);
   const [collapsed, setCollapsed] = useState(false);
   const [drawer, setDrawer] = useState(false);
 
@@ -79,24 +83,24 @@ export default function ShellFrame({ menu, user, switchTargets = [], children }:
 
   return (
     <div className={drawer ? 'cab cab-drawer-open' : 'cab'}>
-      <aside className="cab-sidebar no-print" aria-label="Меню кабинета">
+      <aside className="cab-sidebar no-print" aria-label={t('sidebar')}>
         {/* useSearchParams требует границы Suspense — но только вокруг меню, не вокруг страницы:
             иначе ответ начал бы уходить до того, как страница решит, что она 404. */}
         <Suspense fallback={<SidebarBrand href="/" />}>
           <SidebarMenu menu={menu} pathname={pathname} onNavigate={() => setDrawer(false)} />
         </Suspense>
 
-        <Link href="/" className="cab-nav-item cab-back" title="На сайт">
-          <IconBack size={18} /><span>На сайт</span>
+        <Link href="/" className="cab-nav-item cab-back" title={t('toSite')}>
+          <IconBack size={18} /><span>{t('toSite')}</span>
         </Link>
       </aside>
-      <button type="button" className="cab-scrim no-print" aria-label="Закрыть меню" tabIndex={drawer ? 0 : -1}
+      <button type="button" className="cab-scrim no-print" aria-label={t('closeMenu')} tabIndex={drawer ? 0 : -1}
         onClick={() => setDrawer(false)} />
 
       <div className="cab-main">
         <header className="cab-topbar no-print">
           <button type="button" className="cab-icon-btn" onClick={toggleSidebar}
-            aria-label="Меню" aria-expanded={drawer || !collapsed}>
+            aria-label={t('menu')} aria-expanded={drawer || !collapsed}>
             <IconMenu size={20} />
           </button>
           <Suspense fallback={<div className="cab-crumbs" />}>
@@ -114,10 +118,11 @@ export default function ShellFrame({ menu, user, switchTargets = [], children }:
 }
 
 function SidebarBrand({ href }: { href: string }) {
+  const t = useT(cabinet);
   return (
     <Link href={href} className="cab-brand" title="Tesseract">
       <span className="brand-mark"><IconLogo size={15} /></span>
-      <span className="cab-brand-text">Tesseract<small>кабинет</small></span>
+      <span className="cab-brand-text">Tesseract<small>{t('brandSub')}</small></span>
     </Link>
   );
 }
@@ -133,6 +138,7 @@ function useMenuState(menu: CabinetMenu, pathname: string) {
 
 function SidebarMenu({ menu, pathname, onNavigate }: { menu: CabinetMenu; pathname: string; onNavigate: () => void }) {
   const router = useRouter();
+  const t = useT(cabinet);
   const { org, section, groups, roleOfOrg } = useMenuState(menu, pathname);
 
   // Смена организации — тоже переход: выдвижная панель на телефоне закрывается.
@@ -159,15 +165,16 @@ function SidebarMenu({ menu, pathname, onNavigate }: { menu: CabinetMenu; pathna
       <nav className="cab-nav">
         {groups.map((group) => (
           <div className="cab-nav-group" key={group.key}>
-            <div className="cab-nav-title">{group.title}</div>
+            <div className="cab-nav-title">{t(`group_${group.key}`)}</div>
             {group.items.map((item) => {
               const Icon = ICONS[item.icon];
               const active = !item.action && isCabinetItemActive(item, pathname);
+              const label = t(`item_${item.key}`);
               return (
-                <Link key={item.href} href={hrefOf(group, item)} title={item.label}
+                <Link key={item.href} href={hrefOf(group, item)} title={label}
                   aria-current={active ? 'page' : undefined}
                   className={`cab-nav-item${active ? ' active' : ''}${item.action ? ' action' : ''}`}>
-                  <Icon size={18} /><span>{item.label}</span>
+                  <Icon size={18} /><span>{label}</span>
                 </Link>
               );
             })}
@@ -179,13 +186,14 @@ function SidebarMenu({ menu, pathname, onNavigate }: { menu: CabinetMenu; pathna
 }
 
 function Crumbs({ menu, pathname }: { menu: CabinetMenu; pathname: string }) {
+  const t = useT(cabinet);
   const { org, section, groups } = useMenuState(menu, pathname);
-  const crumbs = breadcrumbs(pathname);
+  const crumbs = breadcrumbs(pathname).map((c) => ({ ...c, label: hasCabinetKey(c.key) ? t(c.key) : c.label }));
   // Ссылками крошки становятся, только если раздел есть в меню человека:
   // учителю группы «Организация» недоступна, и вести его туда незачем.
   const linked = !!section && groups.some((g) => g.key === section);
   return (
-    <nav className="cab-crumbs" aria-label="Хлебные крошки">
+    <nav className="cab-crumbs" aria-label={t('crumbs')}>
       <ol>
         {crumbs.map((c, i) => {
           const last = i === crumbs.length - 1;
@@ -208,6 +216,7 @@ function SidebarOrg({ menu, org, section, onPick }: {
   menu: CabinetMenu; org: string | null; section: CabinetGroupKey | undefined;
   onPick: (slug: string, role: CabinetMenu['orgs'][number]['role']) => void;
 }) {
+  const t = useT(cabinet);
   // В «Организации» выбирать можно только там, где человек админ.
   const choices = section === 'org' ? menu.orgs.filter((o) => o.role === 'org_admin') : menu.orgs;
   const known = org ? choices.find((o) => o.slug === org) : undefined;
@@ -228,7 +237,7 @@ function SidebarOrg({ menu, org, section, onPick }: {
   return (
     <label className="cab-org cab-org-select" title={current.name}>
       <IconOrg size={16} />
-      <span className="visually-hidden">Организация</span>
+      <span className="visually-hidden">{t('org')}</span>
       <select value={current.slug}
         onChange={(e) => {
           const picked = choices.find((o) => o.slug === e.target.value);
@@ -242,6 +251,8 @@ function SidebarOrg({ menu, org, section, onPick }: {
 
 function ThemeButton() {
   const [theme, pick] = useThemeChoice();
+  const t = useT(cabinet);
+  const tc = useT(common);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(open, ref, () => setOpen(false));
@@ -249,7 +260,7 @@ function ThemeButton() {
   return (
     <div className="cab-pop" ref={ref}>
       <button type="button" className="cab-icon-btn" aria-haspopup="menu" aria-expanded={open}
-        aria-label="Тема оформления" onClick={() => setOpen((v) => !v)}>
+        aria-label={t('themeGroup')} onClick={() => setOpen((v) => !v)}>
         <Current size={19} />
       </button>
       {open && (
@@ -258,7 +269,7 @@ function ThemeButton() {
             <button key={value} type="button" role="menuitemradio" aria-checked={theme === value}
               className={theme === value ? 'menu-item active' : 'menu-item'}
               onClick={() => { pick(value); setOpen(false); }}>
-              <Icon size={18} />{label}
+              <Icon size={18} />{tc(label)}
             </button>
           ))}
         </div>
@@ -269,6 +280,7 @@ function ThemeButton() {
 
 function AccountMenu({ user, switchTargets }: { user: ShellUser; switchTargets: SwitchTarget[] }) {
   const router = useRouter();
+  const t = useT(cabinet);
   const [impersonate, switching, switchError] = useImpersonate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -283,26 +295,30 @@ function AccountMenu({ user, switchTargets }: { user: ShellUser; switchTargets: 
   return (
     <div className="cab-pop" ref={ref}>
       <button type="button" className="avatar" aria-haspopup="menu" aria-expanded={open}
-        aria-label="Меню аккаунта" onClick={() => setOpen((v) => !v)}>
+        aria-label={t('accountMenu')} onClick={() => setOpen((v) => !v)}>
         {(user.name || user.contact).slice(0, 1)}
       </button>
       {open && (
         <div className="menu" role="menu">
           <div className="menu-head">
             <strong>{user.name || user.contact}</strong>
-            <span>{user.platformAdmin ? 'Администратор платформы' : user.contact}</span>
+            <span>{user.platformAdmin ? t('platformAdmin') : user.contact}</span>
           </div>
           <Link href="/account" className="menu-item" role="menuitem" onClick={() => setOpen(false)}>
-            <IconUser size={18} />Профиль и настройки
+            <IconUser size={18} />{t('profileSettings')}
           </Link>
           <Link href="/" className="menu-item" role="menuitem" onClick={() => setOpen(false)}>
-            <IconBack size={18} />На сайт
+            <IconBack size={18} />{t('toSite')}
           </Link>
           {user.platformAdmin && <SwitchSection targets={switchTargets} busy={switching} error={switchError}
             onPick={(t) => impersonate(t.userId, t.orgSlug)} onOther={() => setOpen(false)} />}
           <div className="menu-sep" />
+          <div className="menu-theme" role="group" aria-label={t('languageGroup')}>
+            <LanguageSwitcher label={t('languageGroup')} />
+          </div>
+          <div className="menu-sep" />
           <button type="button" className="menu-item" role="menuitem" onClick={logout}>
-            <IconLogout size={18} />Выйти
+            <IconLogout size={18} />{t('logout')}
           </button>
         </div>
       )}
@@ -315,24 +331,25 @@ function SwitchSection({ targets, busy, error, onPick, onOther }: {
   targets: SwitchTarget[]; busy: boolean; error: string;
   onPick: (t: SwitchTarget) => void; onOther: () => void;
 }) {
+  const tr = useT(cabinet);
   const orgs = [...new Set(targets.map((t) => t.orgName))];
   return (
     <>
       <div className="menu-sep" />
-      <div className="menu-sub">Войти как</div>
+      <div className="menu-sub">{tr('loginAs')}</div>
       {orgs.map((org) => (
         <div key={org}>
           {orgs.length > 1 && <div className="menu-sub">{org}</div>}
           {targets.filter((t) => t.orgName === org).map((t) => (
             <button key={t.userId + t.role} type="button" className="menu-item" role="menuitem" disabled={busy}
-              title={`${ORG_ROLE_LABELS[t.role]}: ${t.label}`} onClick={() => onPick(t)}>
-              <IconUser size={18} />{ORG_ROLE_LABELS[t.role]} · {t.label}
+              title={`${tr(`role_${t.role}`)}: ${t.label}`} onClick={() => onPick(t)}>
+              <IconUser size={18} />{tr(`role_${t.role}`)} · {t.label}
             </button>
           ))}
         </div>
       ))}
       <Link href="/admin/users" className="menu-item" role="menuitem" onClick={onOther}>
-        <IconPeople size={18} />Другой человек…
+        <IconPeople size={18} />{tr('otherPerson')}
       </Link>
       {error && <div className="menu-sub" role="alert">{error}</div>}
     </>

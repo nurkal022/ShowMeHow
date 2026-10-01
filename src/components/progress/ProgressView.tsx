@@ -9,6 +9,9 @@ import CandidateCard from './CandidateCard';
 import RefinePanel from './RefinePanel';
 import BuildCard from './BuildCard';
 import { queuedCopy } from './stepCopy';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { workbenchProgress } from '@/i18n/messages/workbench-progress';
+
 
 /**
  * Единственный источник состояния — events[]: всё, что показывается, вычисляется
@@ -21,6 +24,9 @@ export default function ProgressView(
   { events, kind = 'generate' }: { events: PipelineEvent[]; kind?: JobKind },
 ) {
   const state = useMemo(() => deriveProgress(events), [events]);
+  const t = useT(workbenchProgress);
+  const f = useFormat();
+  const locale = useLocale();
   const [now, setNow] = useState(() => Date.now());
   const hasActiveStage = state.stages.some((s) => s.status === 'active');
 
@@ -35,7 +41,7 @@ export default function ProgressView(
   return (
     <div className="progress-view">
       {state.queuePosition > 0
-        ? <div className="queue-banner">{queuedCopy(state.queuePosition)}</div>
+        ? <div className="queue-banner">{queuedCopy(state.queuePosition, locale)}</div>
         : <StageTimeline stages={state.stages} now={now} />}
       {state.plan && <PlanCard plan={state.plan} />}
       <BuildCard physics={state.physicsCheck} layers={state.layers} />
@@ -47,13 +53,13 @@ export default function ProgressView(
       {state.refineRounds.length > 0 && (
         <RefinePanel rounds={state.refineRounds} feedback={state.judgeFeedback} />
       )}
-      {state.warnings.map((w, i) => <div className="warn-banner" key={i}>{w}</div>)}
+      {state.warnings.map((w, i) => <div className="warn-banner" key={i}>{f.message(w)}</div>)}
       {state.terminal?.type === 'error' && (
-        <div className="error-box">{state.terminal.message}</div>
+        <div className="error-box">{f.message(state.terminal.message)}</div>
       )}
       {state.terminal?.type === 'cancelled' && (
         <div className="cancel-banner">
-          {kind === 'refine' ? 'Доработка отменена' : 'Генерация отменена'}
+          {kind === 'refine' ? t('refineCancelled') : t('genCancelled')}
         </div>
       )}
     </div>

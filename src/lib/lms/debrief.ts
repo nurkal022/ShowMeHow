@@ -5,6 +5,7 @@ import { assignmentTitle, bodyFromRow, ASSIGNMENT_TYPE_LABELS, type AssignmentPa
 import { courseStudents } from './courses';
 import { LmsError } from './types';
 import type { Answer } from './answers';
+import type { Locale } from '@/i18n/config';
 
 /**
  * Разбор урока: по каждому заданию темы — сколько сдали, средний балл, какие неверные
@@ -43,6 +44,7 @@ export interface Debrief {
 }
 
 const MAX_SAMPLES = 8;
+const DEBRIEF_READY: Record<Locale, string> = { ru: 'Разбор готов.', kk: 'Талдау дайын.', en: 'The review is ready.' };
 
 /** Ответ ученика человеческим текстом: варианты и пары разворачиваются в слова. */
 export function answerText(p: AssignmentPayload, a: Answer): string {
@@ -115,7 +117,10 @@ const list = (v: unknown, n: number, max = 400) => (Array.isArray(v) ? v.map((x)
 
 export async function createDebrief(input: {
   orgId: string; courseId: string; topicId: string; topicTitle: string; courseTitle: string; subject: string; authorId: string;
+  /** Язык выводов помощника; по умолчанию русский. */
+  locale?: Locale;
 }): Promise<Debrief> {
+  const locale = input.locale ?? 'ru';
   const stats = await topicDebriefStats(input.courseId, input.topicId);
   const answered = stats.tasks.reduce((a, t) => a + t.answered, 0);
   if (stats.tasks.length === 0) throw new LmsError('В этой теме нет заданий — разбирать нечего.');
@@ -138,7 +143,7 @@ ${JSON.stringify(tasksForModel).slice(0, 14000)}
  "misconceptions": [{"title": "короткое название заблуждения", "detail": "в чём ошибка и как она проявилась", "share": доля_класса_в_процентах, "tasks": ["название задания", ...]}] (0–5, по убыванию доли),
  "nextSteps": ["конкретное действие учителя на следующем уроке", ...] (2–4),
  "remedial": "что и как объяснить заново в мини-уроке «Работа над ошибками», 2–4 предложения"}`,
-  'Ты — опытный методист, который помогает учителю понять результаты класса. Пишешь по-русски, конкретно и доброжелательно. Отвечай только JSON.') as Record<string, unknown>;
+  'Ты — опытный методист, который помогает учителю понять результаты класса. Пишешь по-русски, конкретно и доброжелательно. Отвечай только JSON.', locale) as Record<string, unknown>;
   const misconceptions = (Array.isArray(raw.misconceptions) ? raw.misconceptions : []).slice(0, 5).flatMap((m): Misconception[] => {
     const o = (typeof m === 'object' && m !== null ? m : {}) as Record<string, unknown>;
     const title = clip(o.title, 200);
@@ -146,7 +151,7 @@ ${JSON.stringify(tasksForModel).slice(0, 14000)}
     return title ? [{ title, detail: clip(o.detail, 800), share: Number.isFinite(share) ? Math.max(0, Math.min(100, Math.round(share))) : 0, tasks: list(o.tasks, 5, 120) }] : [];
   });
   const summary: DebriefSummary = {
-    headline: clip(raw.headline, 400) || 'Разбор готов.',
+    headline: clip(raw.headline, 400) || DEBRIEF_READY[locale] || DEBRIEF_READY.ru,
     understood: list(raw.understood, 4), misconceptions, nextSteps: list(raw.nextSteps, 4), remedial: clip(raw.remedial, 1500),
   };
   const id = crypto.randomUUID();

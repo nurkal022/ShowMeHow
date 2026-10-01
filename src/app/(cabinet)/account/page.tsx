@@ -5,8 +5,13 @@ import { listMemberships } from '@/lib/org/access';
 import { teacherScorecard } from '@/lib/org/reports';
 import { ORG_ROLE_LABELS } from '@/lib/org/types';
 import AccountView, { type AccountOrg } from '@/components/cabinet/AccountView';
+import { getT } from '@/i18n/server';
+import { cabinetAccount } from '@/i18n/messages/cabinet-account';
 
-export const metadata = { title: 'Профиль — Tesseract' };
+export async function generateMetadata() {
+  const t = await getT(cabinetAccount);
+  return { title: `${t('title')} — Tesseract` };
+}
 
 /** Профиль учителя и администрации — внутри кабинета, со своей работой и настройками помощника. */
 export default async function AccountPage() {

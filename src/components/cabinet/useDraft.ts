@@ -1,5 +1,8 @@
 'use client';
+import { formatDateTime, formatTime } from '@/i18n/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { currentLocale } from '@/i18n/client';
+import type { Locale } from '@/i18n/config';
 
 /**
  * Черновик формы: всё, что человек ввёл, сразу лежит в браузере и переживает закрытие
@@ -66,10 +69,8 @@ export function useDraft<T extends object>(key: string, saved: T) {
   return { value, set, dirty, draftAt, restoredAt, markSaved, discard, dismissRestored: () => setRestoredAt(null) };
 }
 
-export function formatClock(at: number): string {
+export function formatClock(at: number, locale: Locale = currentLocale()): string {
   const d = new Date(at);
   const today = new Date().toDateString() === d.toDateString();
-  return today
-    ? d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return today ? formatTime(d, locale) : formatDateTime(d, locale);
 }

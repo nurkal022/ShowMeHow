@@ -6,6 +6,7 @@ import { staffCourse, studentCourse } from '@/lib/lms/access';
 import { listBlocks } from '@/lib/lms/blocks';
 import { askTutor, listTutorMessages, stepTextOf } from '@/lib/lms/tutor';
 import { ASSIGNMENT_TYPE_LABELS } from '@/lib/lms/block-schema';
+import { localeFromRequest } from '@/i18n/config';
 
 const MODES = new Set(['hint', 'explain', 'check', 'ask']);
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -45,6 +46,7 @@ export async function POST(req: Request) {
     userId: ctx.user.id, topicId: ctx.topic.id, blockId: task?.id ?? null,
     mode: mode as 'hint', question: str(body.question, 1000),
     history: await listTutorMessages(ctx.user.id, ctx.topic.id),
+    locale: localeFromRequest(req),
     context: {
       courseTitle: ctx.course.title, topicTitle: ctx.topic.title, grade: ctx.course.grade, subject: ctx.course.subject,
       stepText: stepTextOf(step.map((b) => b.body)),

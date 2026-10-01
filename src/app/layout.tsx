@@ -12,11 +12,14 @@ import ImpersonationBar from '@/components/ImpersonationBar';
 import { currentUserAllowingPasswordChangeFromCookies, impersonatorFromCookies } from '@/lib/auth/session';
 import { userLabel } from '@/lib/auth/identifier';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
+import { getLocale } from '@/i18n/server';
+import { LocaleProvider } from '@/i18n/client';
 
-export const metadata = {
-  title: 'Tesseract',
-  description: 'Интерактивные симуляции по описанию',
-};
+export async function generateMetadata() {
+  const locale = await getLocale();
+  const description = { ru: 'Интерактивные симуляции по описанию', kk: 'Сипаттама бойынша интерактивті симуляциялар', en: 'Interactive simulations from a description' }[locale];
+  return { title: 'Tesseract', description };
+}
 
 /**
  * Корень держит только общее: html/body, тему, шрифты и подмену страницы формой
@@ -26,13 +29,14 @@ export const metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Разрешающий вариант: только layout узнаёт о временном пароле и подменяет страницу.
   const user = await currentUserAllowingPasswordChangeFromCookies();
+  const locale = await getLocale();
   const mustChangePassword = !!user?.mustChangePassword;
   const impersonator = user ? await impersonatorFromCookies() : null;
-  const actions = user && !mustChangePassword ? paletteActions(user, await listMemberships(user.id)) : null;
+  const actions = user && !mustChangePassword ? paletteActions(user, await listMemberships(user.id), locale) : null;
   return (
     // data-theme проставляет скрипт ниже до отрисовки, поэтому значение на сервере
     // и на клиенте расходится намеренно — предупреждение о гидрации здесь ложное.
-    <html lang="ru" data-theme="light" suppressHydrationWarning>
+    <html lang={locale} data-theme="light" suppressHydrationWarning>
       <head>
         {/* Тема применяется до первой отрисовки — иначе тёмная тема моргает белым. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
@@ -42,6 +46,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" />
       </head>
       <body>
+        <LocaleProvider locale={locale}>
         {user && impersonator && <ImpersonationBar viewer={userLabel(user)} />}
         {user && mustChangePassword ? (
           // С временным паролем нет ни разделов, ни кабинета: только марка и форма.
@@ -52,6 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         ) : children}
         <RevealOnScroll />
         {actions && <CommandPalette actions={actions} />}
+        </LocaleProvider>
       </body>
     </html>
   );

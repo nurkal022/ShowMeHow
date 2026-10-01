@@ -13,6 +13,7 @@ import { makeCtx } from '@/lib/pipeline/run';
 import { plan, replan } from '@/lib/pipeline/stages';
 import { isLevel, normalizeSpec } from '@/lib/pipeline/spec';
 import { throttled } from '@/lib/http/throttle';
+import { localeFromRequest, type Locale } from '@/i18n/config';
 
 export const maxDuration = 120;
 
@@ -35,11 +36,11 @@ export async function POST(req: Request) {
   if (!body) return NextResponse.json({ error: INVALID_REQUEST_MESSAGE }, { status: 400 });
   if (!activeProvider()) return NextResponse.json({ error: NO_PROVIDER_MESSAGE }, { status: 400 });
   // Квоту план не тратит, поэтому его сдерживает предохранитель: один запрос за раз и не чаще лимита.
-  return throttled(user.id, 'plan', () => runPlan(body));
+  return throttled(user.id, 'plan', () => runPlan(body, localeFromRequest(req)));
 }
 
-async function runPlan(body: Record<string, unknown>): Promise<NextResponse> {
-  const ctx = makeCtx(() => {});
+async function runPlan(body: Record<string, unknown>, lang: Locale): Promise<NextResponse> {
+  const ctx = makeCtx(() => {}, lang);
   try {
     if (body.spec && typeof body.correction === 'string') {
       const correction = body.correction.trim().slice(0, 2000);

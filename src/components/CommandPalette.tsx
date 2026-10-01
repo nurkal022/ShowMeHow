@@ -7,6 +7,8 @@ import {
 } from '@/components/icons';
 
 import type { PaletteAction } from '@/lib/palette-actions';
+import { useT } from '@/i18n/client';
+import { app } from '@/i18n/messages/app';
 
 const KIND_ICON: Record<SearchHit['kind'] | 'action', (p: { size?: number }) => React.ReactNode> = {
   course: IconCourses, topic: IconBook, simulation: IconPlay, group: IconOrg, student: IconUser, user: IconUsers, action: IconPlus,
@@ -18,6 +20,7 @@ const KIND_ICON: Record<SearchHit['kind'] | 'action', (p: { size?: number }) => 
  */
 export default function CommandPalette({ actions }: { actions: PaletteAction[] }) {
   const router = useRouter();
+  const t = useT(app);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -74,7 +77,7 @@ export default function CommandPalette({ actions }: { actions: PaletteAction[] }
   if (!open) return null;
   return (
     <div className="pal-layer" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
-      <div className="pal" role="dialog" aria-label="Поиск и действия"
+      <div className="pal" role="dialog" aria-label={t('palAria')}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((at + 1) % Math.max(1, items.length)); }
           if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((at - 1 + items.length) % Math.max(1, items.length)); }
@@ -82,18 +85,18 @@ export default function CommandPalette({ actions }: { actions: PaletteAction[] }
         }}>
         <label className="pal-search">
           <IconSearch size={18} />
-          <input ref={input} value={q} placeholder="Курс, тема, ученик, симуляция или действие…" aria-label="Поиск"
+          <input ref={input} value={q} placeholder={t('palPh')} aria-label={t('searchAria')}
             onChange={(e) => { setQ(e.target.value); setCursor(0); }} />
           {loading ? <span className="pal-spin" aria-hidden="true" /> : <kbd>Esc</kbd>}
         </label>
         <div className="pal-list">
           {items.length === 0 && (
-            <p className="pal-empty">{needle.length >= 2 && !loading ? 'Ничего не нашлось.' : 'Начните печатать — ищу по курсам, темам, ученикам и симуляциям.'}</p>
+            <p className="pal-empty">{needle.length >= 2 && !loading ? t('palNothing') : t('palHint')}</p>
           )}
-          {shownActions.length > 0 && <span className="pal-title">{needle ? 'Действия' : 'Быстрые действия'}</span>}
+          {shownActions.length > 0 && <span className="pal-title">{needle ? t('palActions') : t('palQuick')}</span>}
           {items.map((it, i) => (
             <div key={it.key}>
-              {i === shownActions.length && hits.length > 0 && <span className="pal-title">Найдено</span>}
+              {i === shownActions.length && hits.length > 0 && <span className="pal-title">{t('palFound')}</span>}
               <button type="button" className={i === at ? 'pal-item on' : 'pal-item'} onMouseEnter={() => setCursor(i)} onClick={() => go(it.href)}>
                 <span className={`pal-icon k-${it.kind}`}>{KIND_ICON[it.kind]({ size: 17 })}</span>
                 <span className="pal-text"><strong>{it.title}</strong><small>{it.subtitle}</small></span>
@@ -102,16 +105,17 @@ export default function CommandPalette({ actions }: { actions: PaletteAction[] }
             </div>
           ))}
         </div>
-        <footer className="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> выбрать</span><span><kbd>↵</kbd> открыть</span><span><kbd>⌘</kbd><kbd>K</kbd> открыть отовсюду</span></footer>
+        <footer className="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> {t('palSelect')}</span><span><kbd>↵</kbd> {t('palOpen')}</span><span><kbd>⌘</kbd><kbd>K</kbd> {t('palAnywhere')}</span></footer>
       </div>
     </div>
   );
 }
 
 export function PaletteButton() {
+  const t = useT(app);
   return (
-    <button type="button" className="pal-btn" onClick={() => window.dispatchEvent(new Event('open-palette'))} aria-label="Поиск (Ctrl+K)">
-      <IconSearch size={16} /><span>Поиск</span><kbd>⌘K</kbd>
+    <button type="button" className="pal-btn" onClick={() => window.dispatchEvent(new Event('open-palette'))} aria-label={t('palButtonAria')}>
+      <IconSearch size={16} /><span>{t('palButton')}</span><kbd>⌘K</kbd>
     </button>
   );
 }

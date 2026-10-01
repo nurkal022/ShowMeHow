@@ -3,17 +3,20 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { callApi } from '@/components/cabinet/api';
 import { useConfirm } from '@/components/lms/ui/useConfirm';
+import { useT } from '@/i18n/client';
+import { admin } from '@/i18n/messages/admin';
 
 export default function OrgArchiveButton({ orgId, archived }: { orgId: string; archived: boolean }) {
   const router = useRouter();
+  const t = useT(admin);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [ask, confirmDialog] = useConfirm();
   async function toggle() {
     if (!archived && !(await ask({
-      title: 'Отправить организацию в архив?',
-      text: 'Её участники потеряют разделы и права, данные сохранятся. Организацию можно будет вернуть.',
-      confirmLabel: 'В архив', danger: true,
+      title: t('archiveQ'),
+      text: t('archiveText'),
+      confirmLabel: t('toArchive'), danger: true,
     }))) return;
     setBusy(true);
     setError('');
@@ -25,7 +28,7 @@ export default function OrgArchiveButton({ orgId, archived }: { orgId: string; a
   return (
     <>
       <button type="button" className={archived ? 'btn' : 'btn btn-danger'} disabled={busy} onClick={toggle}>
-        {archived ? 'Вернуть из архива' : 'В архив'}
+        {archived ? t('restore') : t('toArchive')}
       </button>
       {error && <p className="error-box cf-full" role="alert">{error}</p>}
       {confirmDialog}

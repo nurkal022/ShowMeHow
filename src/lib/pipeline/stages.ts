@@ -1,4 +1,4 @@
-import type { CandidateResult, CriticIssue, PipelineEvent, PlanSpec, RenderReport, Role, SimLevel } from '../types';
+import type { CandidateResult, CriticIssue, PipelineEvent, PlanSpec, RenderReport, Role, SimLang, SimLevel } from '../types';
 import type { ChatCallOpts, ChatMessage } from '../provider';
 import { textPart, imagePart } from '../provider';
 import type { RenderFn } from '../renderer';
@@ -32,10 +32,21 @@ export interface Ctx {
     load: () => Checkpoint | null;
     save: (patch: Checkpoint) => void;
   };
+  /**
+   * Язык тренажёра: makeCtx приписывает его указание к системным промптам, instrument
+   * ставит флаг языка кита. Нет — русский. Для генерации его выставляет runPipeline из плана.
+   */
+  lang?: SimLang;
 }
 
 /** Что человек сказал о тренажёре до плана: уровень и аудитория. Пустое — решает планировщик. */
 export interface Brief { level?: SimLevel; audience?: string }
+
+/** План помнит свой язык: доработка и генерация по карточке идут на нём же. Русский не пишем — как раньше. */
+function withLang(spec: PlanSpec, lang: SimLang | undefined): PlanSpec {
+  if (lang && lang !== 'ru') spec.lang = lang;
+  return spec;
+}
 
 function briefText(brief?: Brief): string {
   if (!brief) return '';
@@ -62,6 +73,7 @@ export async function plan(
   const out = await ctx.chat('planner', messages);
   const first = normalizeSpec(extractJson<unknown>(out), { level: brief?.level });
   if (brief?.level) first.spec.level = brief.level;
+  withLang(first.spec, ctx.lang);
   if (first.problems.length === 0) return first.spec;
   try {
     const again = await ctx.chat('planner', [
@@ -71,6 +83,7 @@ export async function plan(
     ]);
     const second = normalizeSpec(extractJson<unknown>(again), { level: first.spec.level });
     if (brief?.level) second.spec.level = brief.level;
+    withLang(second.spec, ctx.lang);
     return second.problems.length <= first.problems.length ? second.spec : first.spec;
   } catch {
     return first.spec;
@@ -79,11 +92,13 @@ export async function plan(
 
 /** Поправка к плану: человек посмотрел карточку и попросил изменить. Секунды вместо минут генерации. */
 export async function replan(ctx: Ctx, spec: PlanSpec, correction: string): Promise<PlanSpec> {
+  // Поправка не меняет язык плана: он уже написан на своём языке.
+  if (spec.lang) ctx.lang = spec.lang;
   const out = await ctx.chat('planner', [
     { role: 'system', content: REPLANNER_SYSTEM },
     { role: 'user', content: `Спецификация:\n${JSON.stringify(spec, null, 2)}\n\nПоправка: ${correction}` },
   ]);
-  return normalizeSpec(extractJson<unknown>(out), { level: levelOf(spec) }).spec;
+  return withLang(normalizeSpec(extractJson<unknown>(out), { level: levelOf(spec) }).spec, spec.lang ?? ctx.lang);
 }
 
 /**
@@ -133,7 +148,7 @@ export async function generateCandidate(
   let html = extractHtml(out);
   // Проверенное ядро возвращаем на место дословно: модель любит «чуть поправить» физику.
   if (core && getSection(html, 'physics') !== null) html = putSection(html, 'physics', core) ?? html;
-  return instrument(html);
+  return instrument(html, ctx.lang);
 }
 
 export interface Layer { name: string; title: string; task: string }
@@ -181,7 +196,7 @@ export async function addLayer(ctx: Ctx, spec: PlanSpec, html: string, layer: La
     next = putSection(next, name, body);
     if (next === null) return null;
   }
-  return instrument(next);
+  return instrument(next, ctx.lang);
 }
 
 /** Лента «модель пишет код»: не чаще раза в две секунды, с хвостом последних строк. */
@@ -212,8 +227,8 @@ export async function fixArtifact(ctx: Ctx, html: string, errors: string[]): Pro
     ], { onDelta: codeTicker(ctx, 'fixer') });
     const edits = parseEdits(out);
     const patched = edits ? applyEdits(base, edits) : null;
-    if (patched) return instrument(patched);
-    if (!edits && looksLikeHtml(out) && keepsSections(base, extractHtml(out))) return instrument(extractHtml(out));
+    if (patched) return instrument(patched, ctx.lang);
+    if (!edits && looksLikeHtml(out) && keepsSections(base, extractHtml(out))) return instrument(extractHtml(out), ctx.lang);
   } catch { /* точечная починка не удалась — ниже полный файл */ }
   const out = await ctx.chat('fixer', [
     { role: 'system', content: FIXER_SYSTEM },
@@ -223,7 +238,7 @@ export async function fixArtifact(ctx: Ctx, html: string, errors: string[]): Pro
   const lost = lostSections(base, whole);
   // Починка, выбросившая слои, хуже поломки: вызывающий оставит лучшую из виденных версий.
   if (lost.length) throw new Error('починка потеряла секции: ' + lost.join(', '));
-  return instrument(whole);
+  return instrument(whole, ctx.lang);
 }
 
 function toDataUrl(png: Buffer): string {
@@ -396,7 +411,7 @@ export async function verifyCandidate(
       const whole = rewritten && keepsSections(base, rewritten) ? rewritten : null;
       // Правки не легли — целевая починка пропускается: кандидат уже рабочий.
       if (!patched && !whole) throw new Error('правки рецензента не применились');
-      const fixed = instrument(patched ?? whole!);
+      const fixed = instrument(patched ?? whole!, ctx.lang);
       const fixedReport = withCoverage(spec, await ctx.render(fixed, { probes: true }));
       if (rank(fixed, fixedReport) >= rank(current, report)) {
         current = fixed;

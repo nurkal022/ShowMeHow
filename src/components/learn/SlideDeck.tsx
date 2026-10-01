@@ -1,6 +1,8 @@
 'use client';
 import { Children, useEffect, useRef, useState } from 'react';
 import { IconExpand } from '@/components/icons';
+import { useT } from '@/i18n/client';
+import { learnLesson } from '@/i18n/messages/learn-lesson';
 
 /**
  * Формат «Слайды»: один блок на экран. Стрелки, пробел и PageUp/PageDown листают,
@@ -8,6 +10,7 @@ import { IconExpand } from '@/components/icons';
  * не сбрасываются, когда учитель листает туда-обратно.
  */
 export default function SlideDeck({ children }: { children: React.ReactNode }) {
+  const t = useT(learnLesson);
   const slides = Children.toArray(children).filter(Boolean);
   const [at, setAt] = useState(0);
   const deck = useRef<HTMLDivElement>(null);
@@ -42,16 +45,16 @@ export default function SlideDeck({ children }: { children: React.ReactNode }) {
         ))}
       </div>
       <div className="learn-deck-bar">
-        <button type="button" className="btn btn-sm" disabled={at === 0} onClick={() => go(at - 1)}>← Назад</button>
-        <div className="learn-deck-dots" role="tablist" aria-label="Слайды">
+        <button type="button" className="btn btn-sm" disabled={at === 0} onClick={() => go(at - 1)}>{t('backArrow')}</button>
+        <div className="learn-deck-dots" role="tablist" aria-label={t('slidesAria')}>
           {slides.map((_, i) => (
-            <button key={i} type="button" role="tab" aria-selected={i === at} aria-label={`Слайд ${i + 1}`}
+            <button key={i} type="button" role="tab" aria-selected={i === at} aria-label={t('slideN', { n: i + 1 })}
               className={i === at ? 'on' : i < at ? 'seen' : undefined} onClick={() => go(i)} />
           ))}
         </div>
         <span className="learn-deck-count">{`${at + 1} / ${slides.length}`}</span>
-        <button type="button" className="icon-btn" aria-label="На весь экран (F)" title="На весь экран (F)" onClick={toggleFull}><IconExpand size={16} /></button>
-        <button type="button" className="btn btn-sm btn-primary" disabled={at === last} onClick={() => go(at + 1)}>Дальше →</button>
+        <button type="button" className="icon-btn" aria-label={t('fullscreen')} title={t('fullscreen')} onClick={toggleFull}><IconExpand size={16} /></button>
+        <button type="button" className="btn btn-sm btn-primary" disabled={at === last} onClick={() => go(at + 1)}>{t('nextArrow')}</button>
       </div>
     </div>
   );

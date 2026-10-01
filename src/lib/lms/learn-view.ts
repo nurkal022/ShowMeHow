@@ -1,14 +1,21 @@
+import { formatDate, formatTime } from '@/i18n/core';
+import type { Locale } from '@/i18n/config';
+
 /**
  * Чистая часть кабинета ученика: состояния тем, сроки и подписи. Модуль без базы —
  * его импортируют и серверные страницы, и клиентские компоненты урока.
  */
 
 export type TopicState = 'none' | 'progress' | 'done';
-export const TOPIC_STATE_LABELS: Record<TopicState, string> = {
-  none: 'не начато',
-  progress: 'в процессе',
-  done: 'пройдено',
+const TOPIC_STATE_LABELS_BY_LOCALE: Record<Locale, Record<TopicState, string>> = {
+  ru: { none: 'не начато', progress: 'в процессе', done: 'пройдено' },
+  kk: { none: 'басталмаған', progress: 'орындалуда', done: 'өтілді' },
+  en: { none: 'not started', progress: 'in progress', done: 'completed' },
 };
+export const TOPIC_STATE_LABELS: Record<TopicState, string> = TOPIC_STATE_LABELS_BY_LOCALE.ru;
+export function topicStateLabels(locale: Locale = 'ru'): Record<TopicState, string> {
+  return TOPIC_STATE_LABELS_BY_LOCALE[locale] ?? TOPIC_STATE_LABELS_BY_LOCALE.ru;
+}
 
 export interface TopicProgress {
   topicId: string;
@@ -27,16 +34,25 @@ export interface TopicProgress {
 
 export type DueTone = 'late' | 'soon' | 'later';
 
-export function dueLabel(dueAt: string, now = new Date()): { text: string; tone: DueTone } {
+const DUE_TEXT: Record<Locale, { late: (d: string) => string; today: (t: string) => string; tomorrow: (t: string) => string; by: (d: string) => string }> = {
+  ru: { late: (d) => `срок прошёл ${d}`, today: (t) => `сдать сегодня до ${t}`, tomorrow: (t) => `сдать завтра до ${t}`, by: (d) => `сдать до ${d}` },
+  kk: { late: (d) => `мерзімі өтті: ${d}`, today: (t) => `бүгін ${t} дейін тапсыру`, tomorrow: (t) => `ертең ${t} дейін тапсыру`, by: (d) => `${d} дейін тапсыру` },
+  en: { late: (d) => `overdue since ${d}`, today: (t) => `due today by ${t}`, tomorrow: (t) => `due tomorrow by ${t}`, by: (d) => `due ${d}` },
+};
+
+/** Подпись срока. Язык — необязательный третий параметр (по умолчанию русский). */
+export function dueLabel(dueAt: string, now = new Date(), locale: Locale = 'ru'): { text: string; tone: DueTone } {
   const due = new Date(dueAt);
   const ms = due.getTime() - now.getTime();
   const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const days = Math.round((day(due) - day(now)) / 86_400_000);
-  const time = due.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  if (ms < 0) return { text: `срок прошёл ${due.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`, tone: 'late' };
-  if (days === 0) return { text: `сдать сегодня до ${time}`, tone: 'soon' };
-  if (days === 1) return { text: `сдать завтра до ${time}`, tone: 'soon' };
-  return { text: `сдать до ${due.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`, tone: days <= 3 ? 'soon' : 'later' };
+  const w = DUE_TEXT[locale] ?? DUE_TEXT.ru;
+  const time = formatTime(due, locale);
+  const date = formatDate(due, locale, { day: 'numeric', month: 'short' });
+  if (ms < 0) return { text: w.late(date), tone: 'late' };
+  if (days === 0) return { text: w.today(time), tone: 'soon' };
+  if (days === 1) return { text: w.tomorrow(time), tone: 'soon' };
+  return { text: w.by(date), tone: days <= 3 ? 'soon' : 'later' };
 }
 
 /** Первая незавершённая тема — куда ведёт «Продолжить». null — курс пройден или пуст. */

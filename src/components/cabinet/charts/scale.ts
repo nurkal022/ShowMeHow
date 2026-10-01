@@ -2,12 +2,18 @@
 
 export interface Point { x: number; y: number }
 
-const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+type DayLocale = 'ru' | 'kk' | 'en';
+
+const MONTHS: Record<DayLocale, string[]> = {
+  ru: ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'],
+  kk: ['қаң', 'ақп', 'нау', 'сәу', 'мам', 'мау', 'шіл', 'там', 'қыр', 'қаз', 'қар', 'жел'],
+  en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+};
 
 /** '2026-09-12' → '12 сен'. Без Intl: сервер и клиент обязаны дать одну строку. */
-export function formatDay(iso: string): string {
+export function formatDay(iso: string, locale: DayLocale = 'ru'): string {
   const [, m, d] = iso.split('-').map(Number);
-  return m && d ? `${d} ${MONTHS[m - 1]}` : iso;
+  return m && d ? `${d} ${(MONTHS[locale] ?? MONTHS.ru)[m - 1]}` : iso;
 }
 
 /** Ровные целые деления оси от нуля: 0, 5, 10, 15… Верхнее — не ниже максимума. */

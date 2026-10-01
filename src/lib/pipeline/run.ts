@@ -1,16 +1,16 @@
 import type {
   PipelineEvent, PipelineStage, PlanSpec, PlanSummary, QualityMode, SimulationMeta,
-  CandidateResult, RubricScores, Role, RenderReport,
+  CandidateResult, RubricScores, Role, RenderReport, SimLang,
 } from '../types';
 import { minScore } from '../types';
 import { activeProvider, NO_PROVIDER_MESSAGE } from '../settings';
 import { bindChat, type ChatFn, type UsageInfo } from '../provider';
 import { renderArtifact } from '../renderer';
 import { createSimulation, saveThumbnail, getArtifact, updateArtifact, saveSpec, getSpec, listExemplars } from '../storage';
-import { extractHtml, findForbiddenUrls, instrument, reinstrument, stripRuntime } from '../artifact';
+import { extractHtml, findForbiddenUrls, instrument, reinstrument, stripRuntime, simLangOf } from '../artifact';
 import { pickExemplar, pickOwnExemplar } from '../exemplars';
 import { listBundledDemos } from '../demos';
-import { REFINER_SYSTEM, REFINER_EDITS_SYSTEM, REFINER_SECTIONS_SYSTEM, CDN_WHITELIST } from './prompts';
+import { REFINER_SYSTEM, REFINER_EDITS_SYSTEM, REFINER_SECTIONS_SYSTEM, CDN_WHITELIST, withLangRule } from './prompts';
 import { getSection, listSections, lostSections, keepsSections, putSection, sectionMap } from './sections';
 import { readConfig, writeConfig, mergeConfig, type SimConfig } from './config';
 import {
@@ -78,23 +78,29 @@ export class CancelledError extends Error {
   }
 }
 
-export function makeCtx(emit: (e: PipelineEvent) => void): Ctx {
+/**
+ * lang — язык интерфейса автора (kk/en/ru): на нём пишутся план и все подписи тренажёра.
+ * Позже его можно поменять через ctx.lang (runPipeline берёт язык из плана).
+ */
+export function makeCtx(emit: (e: PipelineEvent) => void, lang?: SimLang): Ctx {
   const p = activeProvider();
   if (!p) throw new Error(NO_PROVIDER_MESSAGE);
   const onUsage = (u: UsageInfo & { role: Role; model: string }) =>
     emit({ type: 'usage', role: u.role, model: u.model,
       promptTokens: u.promptTokens, completionTokens: u.completionTokens, ms: u.ms });
   const chats = new Map<Role, ChatFn>();
-  return {
+  const ctx: Ctx = {
     chat: (role, messages, opts) => {
       if (!chats.has(role)) chats.set(role, bindChat(p, role, onUsage));
-      return chats.get(role)!(messages, opts);
+      return chats.get(role)!(withLangRule(messages, role, ctx.lang), opts);
     },
     hasVision: !!p.visionModel,
     render: (html, opts) => renderArtifact(html, opts),
     emit,
     checkCore: (code, spec) => checkCore(code, spec),
   };
+  if (lang && lang !== 'ru') ctx.lang = lang;
+  return ctx;
 }
 
 function emitStage(ctx: Ctx, stage: PipelineStage, status: 'start' | 'end'): void {
@@ -124,6 +130,8 @@ export async function runPipeline(
     spec?: PlanSpec;
     /** Уровень и аудитория, названные до плана. */
     brief?: Brief;
+    /** Язык интерфейса автора: на нём план и все подписи тренажёра. План из карточки несёт свой. */
+    lang?: SimLang;
     /**
      * Вызывается сразу после сохранения, до превью и события done. Воркер записывает
      * id в задание: повторная попытка после потери воркера не создаст вторую симуляцию.
@@ -152,7 +160,11 @@ export async function runPipeline(
 
   checkCancelled();
   emitStage(ctx, 'planning', 'start');
+  // Язык плана важнее: карточку человек видел на нём, и тренажёр должен совпасть с ней.
+  const planLang = input.spec?.lang ?? resumed?.spec?.lang ?? input.lang;
+  if (planLang && planLang !== 'ru') ctx.lang = planLang;
   const spec = input.spec ?? resumed?.spec ?? await plan(ctx, input.prompt, input.imageDataUrl, input.brief);
+  if (ctx.lang && !spec.lang) spec.lang = ctx.lang;
   ctx.checkpoint?.save({ spec });
   emitStage(ctx, 'planning', 'end');
   ctx.emit({ type: 'plan-ready', spec: planSummary(spec) });
@@ -432,9 +444,9 @@ async function refineHtml(
     ], { onDelta: codeTicker(ctx, 'refiner') });
     const edits = parseEdits(out);
     const patched = edits ? applyEdits(base, edits) : null;
-    if (patched) return { html: instrument(patched), report: parseRefineReport(out) };
+    if (patched) return { html: instrument(patched, ctx.lang), report: parseRefineReport(out) };
     if (!edits && looksLikeHtml(out) && keepsSections(base, extractHtml(out))) {
-      return { html: instrument(extractHtml(out)), report: null };
+      return { html: instrument(extractHtml(out), ctx.lang), report: null };
     }
   } catch { /* ниже — полный файл */ }
   const out = await ctx.chat('refiner', [
@@ -444,7 +456,7 @@ async function refineHtml(
   const whole = extractHtml(out);
   const lost = lostSections(base, whole);
   if (lost.length) throw new Error('Правка выбросила части тренажёра (' + lost.join(', ') + ') — оставил прежнюю версию.');
-  return { html: instrument(whole), report: null };
+  return { html: instrument(whole, ctx.lang), report: null };
 }
 
 /**
@@ -482,7 +494,7 @@ async function refineSections(
     html = next;
   }
   if (html === base || !keepsSections(base, html)) return null;
-  return { html: instrument(html), report: parseRefineReport(out) };
+  return { html: instrument(html, ctx.lang), report: parseRefineReport(out) };
 }
 
 async function recheckCore(ctx: Ctx, spec: PlanSpec | null, before: string, after: string): Promise<string[]> {
@@ -516,6 +528,10 @@ export async function refineExisting(
   const html = await getArtifact(ownerId, id);
   if (html === null) throw new Error('Симуляция не найдена');
   const spec = await getSpec(ownerId, id);
+  // Доработка сохраняет язык тренажёра: из плана, иначе из флага в HTML; нет ни того, ни другого — русский.
+  const simLang = spec?.lang ?? simLangOf(html);
+  if (simLang && simLang !== 'ru') ctx.lang = simLang;
+  else delete ctx.lang;
   checkCancelled();
   emitStage(ctx, 'refining', 'start');
   try {

@@ -2,6 +2,9 @@ import { db, hasDb } from './db/client';
 import { escapeLike } from './admin/users';
 import type { AuthUser } from './auth/users';
 import { VISIBLE_TO_STUDENT } from './lms/courses';
+import { translator } from '@/i18n/core';
+import type { Locale } from '@/i18n/config';
+import { app } from '@/i18n/messages/app';
 
 /**
  * Поиск для ⌘K. Каждая группа ищет только в том, что человеку и так доступно:
@@ -18,7 +21,8 @@ export interface SearchHit {
 
 const LIMIT = 5;
 
-export async function searchEverything(user: AuthUser, raw: string): Promise<SearchHit[]> {
+export async function searchEverything(user: AuthUser, raw: string, locale: Locale = 'ru'): Promise<SearchHit[]> {
+  const t = translator(app, locale);
   const q = raw.trim().slice(0, 80);
   if (!hasDb() || q.length < 2) return [];
   const like = `%${escapeLike(q.toLowerCase())}%`;
@@ -61,20 +65,20 @@ export async function searchEverything(user: AuthUser, raw: string): Promise<Sea
   const staffIds = new Set(staffCourses.rows.map((c) => c.id));
   return [
     ...staffCourses.rows.map((c): SearchHit => ({
-      kind: 'course', title: c.title, subtitle: c.status === 'published' ? 'курс · опубликован' : 'курс · черновик',
+      kind: 'course', title: c.title, subtitle: c.status === 'published' ? t('sCoursePublished') : t('sCourseDraft'),
       href: `/teach/courses/${c.id}`,
     })),
     ...learnCourses.rows.filter((c) => !staffIds.has(c.id))
-      .map((c): SearchHit => ({ kind: 'course', title: c.title, subtitle: 'мой курс', href: `/learn/courses/${c.id}` })),
-    ...topics.rows.map((t): SearchHit => ({
-      kind: 'topic', title: t.title, subtitle: `тема · ${t.course}`,
-      href: t.staff ? `/teach/courses/${t.course_id}?topic=${t.id}` : `/learn/topics/${t.id}`,
+      .map((c): SearchHit => ({ kind: 'course', title: c.title, subtitle: t('sMyCourse'), href: `/learn/courses/${c.id}` })),
+    ...topics.rows.map((tp): SearchHit => ({
+      kind: 'topic', title: tp.title, subtitle: t('sTopic', { course: tp.course }),
+      href: tp.staff ? `/teach/courses/${tp.course_id}?topic=${tp.id}` : `/learn/topics/${tp.id}`,
     })),
     ...students.rows.map((s): SearchHit => ({
-      kind: 'student', title: s.name, subtitle: `ученик · ${s.group_title}${s.login ? ` · ${s.login}` : ''}`, href: `/org/groups/${s.group_id}`,
+      kind: 'student', title: s.name, subtitle: s.login ? t('sStudentLogin', { group: s.group_title, login: s.login }) : t('sStudent', { group: s.group_title }), href: `/org/groups/${s.group_id}`,
     })),
-    ...groups.rows.map((g): SearchHit => ({ kind: 'group', title: `Группа ${g.title}`, subtitle: g.org, href: `/org/groups/${g.id}` })),
-    ...sims.rows.map((s): SearchHit => ({ kind: 'simulation', title: s.title, subtitle: `симуляция · ${s.subject}`, href: `/?id=${s.id}` })),
-    ...users.rows.map((u): SearchHit => ({ kind: 'user', title: u.name, subtitle: `пользователь · ${u.contact}`, href: `/admin/users/${u.id}` })),
+    ...groups.rows.map((g): SearchHit => ({ kind: 'group', title: t('sGroup', { title: g.title }), subtitle: g.org, href: `/org/groups/${g.id}` })),
+    ...sims.rows.map((s): SearchHit => ({ kind: 'simulation', title: s.title, subtitle: t('sSimulation', { subject: s.subject }), href: `/?id=${s.id}` })),
+    ...users.rows.map((u): SearchHit => ({ kind: 'user', title: u.name, subtitle: t('sUser', { contact: u.contact }), href: `/admin/users/${u.id}` })),
   ];
 }

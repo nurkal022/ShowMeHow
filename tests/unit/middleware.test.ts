@@ -9,6 +9,11 @@ describe('публичные пути middleware', () => {
     expect(isPublicPath('/labs/chemistry')).toBe(true);
     expect(isPublicPath('/lab/chemistry')).toBe(true);
   });
+  it('опубликованные исследователем материалы открыты, само рабочее место — нет', () => {
+    expect(isPublicPath('/r/sqamsxEjs-82NR1C')).toBe(true);
+    expect(isPublicPath('/research')).toBe(false);
+    expect(isPublicPath('/api/research/items')).toBe(false);
+  });
   it('похожий, но чужой путь не открывается по случайному совпадению префикса', () => {
     expect(isPublicPath('/labsomething')).toBe(false);
     expect(isPublicPath('/labs-secret')).toBe(false);

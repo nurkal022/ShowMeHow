@@ -13,6 +13,8 @@ import EmptyState from '@/components/cabinet/EmptyState';
 import DebriefActions from '@/components/teach/DebriefActions';
 import { Bar, Ring } from '@/components/cabinet/viz';
 import { IconAlert, IconBulb, IconCheck, IconSpark, IconTask } from '@/components/icons';
+import { getLocale, getT } from '@/i18n/server';
+import { teachReview } from '@/i18n/messages/teach-review';
 
 /** Разбор урока: по какой теме класс справился, какие ошибки массовые и что делать дальше. */
 export default async function DebriefPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
@@ -37,23 +39,25 @@ export default async function DebriefPage({ params, searchParams }: { params: Pr
     ?? withTasks[0];
   const debrief = topic ? saved.get(topic.id) ?? null : null;
   const stats = topic ? debrief?.stats ?? await topicDebriefStats(id, topic.id) : null;
+  const tr = await getT(teachReview);
+  const locale = await getLocale();
   const href = (t: string) => `/teach/courses/${id}/debrief?topic=${t}`;
 
   return (
     <>
-      <CabinetHeader title={`Разбор: ${staff.course.title}`} subtitle="Помощник читает ответы класса и объясняет, что понято, а где массовые ошибки" />
+      <CabinetHeader title={tr('debriefTitle', { title: staff.course.title })} subtitle={tr('debriefSub')} />
       {withTasks.length === 0 ? (
-        <div className="cab-card"><EmptyState icon={<IconTask size={24} />} text="В курсе пока нет тем с заданиями — разбирать нечего." /></div>
+        <div className="cab-card"><EmptyState icon={<IconTask size={24} />} text={tr('debriefEmpty')} /></div>
       ) : (
         <div className="debrief">
-          <nav className="cab-card debrief-topics" aria-label="Темы">
+          <nav className="cab-card debrief-topics" aria-label={tr('topics')}>
             {withTasks.map((t) => {
               const c = count.get(t.id);
               const d = saved.get(t.id);
               return (
                 <Link key={t.id} href={href(t.id)} className={t.id === topic?.id ? 'active' : ''} aria-current={t.id === topic?.id ? 'page' : undefined} scroll={false}>
                   <span className={d ? 'debrief-dot done' : c?.answers ? 'debrief-dot ready' : 'debrief-dot'} aria-hidden="true" />
-                  <span><b>{t.title}</b><small className="muted">{d ? `разбор ${formatAgo(d.createdAt)}` : c?.answers ? `${c.answers} ответов · можно разобрать` : 'ответов пока нет'}</small></span>
+                  <span><b>{t.title}</b><small className="muted">{d ? tr('debriefAgo', { ago: formatAgo(d.createdAt, locale) }) : c?.answers ? tr('answersReady', { n: c.answers }) : tr('noAnswersYet')}</small></span>
                 </Link>
               );
             })}
@@ -62,10 +66,10 @@ export default async function DebriefPage({ params, searchParams }: { params: Pr
           {topic && stats && (
             <section className="debrief-main" key={topic.id}>
               <div className="cab-card debrief-head">
-                <Ring value={stats.avgPercent} size={76} stroke={7} label={`Средний результат ${stats.avgPercent ?? 0}%`} />
+                <Ring value={stats.avgPercent} size={76} stroke={7} label={tr('avgResult', { n: stats.avgPercent ?? 0 })} />
                 <div>
                   <h2>{topic.title}</h2>
-                  <span className="muted">{stats.students} учеников · открыли {stats.opened} · сдали всё {stats.finished}</span>
+                  <span className="muted">{tr('debriefStats', { n: stats.students, opened: stats.opened, finished: stats.finished })}</span>
                   {debrief && <p className="debrief-headline"><IconSpark size={16} />{debrief.summary.headline}</p>}
                 </div>
                 <DebriefActions topicId={topic.id} hasDebrief={!!debrief} canRun={stats.tasks.some((t) => t.answered > 0)} />
@@ -74,45 +78,45 @@ export default async function DebriefPage({ params, searchParams }: { params: Pr
               {debrief && (
                 <div className="debrief-grid">
                   <section className="cab-card debrief-block tone-green">
-                    <h3><IconCheck size={17} />Что класс понял</h3>
-                    {debrief.summary.understood.length ? <ul>{debrief.summary.understood.map((x) => <li key={x}>{x}</li>)}</ul> : <p className="muted">Помощник не выделил сильных сторон.</p>}
+                    <h3><IconCheck size={17} />{tr('understood')}</h3>
+                    {debrief.summary.understood.length ? <ul>{debrief.summary.understood.map((x) => <li key={x}>{x}</li>)}</ul> : <p className="muted">{tr('noStrengths')}</p>}
                   </section>
                   <section className="cab-card debrief-block tone-blue">
-                    <h3><IconBulb size={17} />Что сделать дальше</h3>
+                    <h3><IconBulb size={17} />{tr('nextSteps')}</h3>
                     <ol>{debrief.summary.nextSteps.map((x) => <li key={x}>{x}</li>)}</ol>
                   </section>
                   <section className="cab-card debrief-block tone-rose debrief-wide">
-                    <h3><IconAlert size={17} />Массовые ошибки</h3>
-                    {debrief.summary.misconceptions.length === 0 ? <p className="muted">Массовых ошибок нет — ошибки единичные.</p> : (
+                    <h3><IconAlert size={17} />{tr('misconceptions')}</h3>
+                    {debrief.summary.misconceptions.length === 0 ? <p className="muted">{tr('noMisconceptions')}</p> : (
                       <ul className="misconceptions">
                         {debrief.summary.misconceptions.map((m) => (
                           <li key={m.title}>
-                            <div className="misc-head"><b>{m.title}</b><span className="misc-share">{m.share}% класса</span></div>
-                            <Bar value={m.share} tone="var(--cab-rose)" label={`${m.share}% класса`} />
+                            <div className="misc-head"><b>{m.title}</b><span className="misc-share">{tr('ofClass', { n: m.share })}</span></div>
+                            <Bar value={m.share} tone="var(--cab-rose)" label={tr('ofClass', { n: m.share })} />
                             <p>{m.detail}</p>
                             {m.tasks.length > 0 && <div className="chip-row">{m.tasks.map((t) => <span key={t} className="chip-sm">{t}</span>)}</div>}
                           </li>
                         ))}
                       </ul>
                     )}
-                    {debrief.summary.remedial && <p className="debrief-remedial"><b>Мини-урок:</b> {debrief.summary.remedial}</p>}
+                    {debrief.summary.remedial && <p className="debrief-remedial"><b>{tr('miniLesson')}</b> {debrief.summary.remedial}</p>}
                   </section>
                 </div>
               )}
 
               <section className="cab-card">
-                <header className="cab-card-head"><div><h2>Задания темы</h2><span className="muted">Частые неверные ответы — то, на чём спотыкается класс</span></div></header>
+                <header className="cab-card-head"><div><h2>{tr('topicTasks')}</h2><span className="muted">{tr('topicTasksSub')}</span></div></header>
                 <div className="table-wrap">
                   <table className="data-table debrief-table">
-                    <thead><tr><th>Задание</th><th className="center">Сдали</th><th>Результат</th><th>Частые неверные ответы</th></tr></thead>
+                    <thead><tr><th>{tr('assignment')}</th><th className="center">{tr('handed')}</th><th>{tr('result')}</th><th>{tr('wrongAnswers')}</th></tr></thead>
                     <tbody>
                       {stats.tasks.map((t) => (
                         <tr key={t.blockId}>
-                          <td data-label="Задание"><Link href={answersHref(id, t.blockId)}>{t.title}</Link><small className="muted"> · {t.type}</small></td>
-                          <td data-label="Сдали" className="center num">{t.answered}/{stats.students}</td>
-                          <td data-label="Результат">{t.avgPercent === null ? <span className="muted">{t.pending ? 'ждёт проверки' : '—'}</span>
+                          <td data-label={tr('assignment')}><Link href={answersHref(id, t.blockId)}>{t.title}</Link><small className="muted"> · {t.type}</small></td>
+                          <td data-label={tr('handed')} className="center num">{t.answered}/{stats.students}</td>
+                          <td data-label={tr('result')}>{t.avgPercent === null ? <span className="muted">{t.pending ? tr('awaitingOne') : '—'}</span>
                             : <span className="inline-meter"><span className="meter"><i style={{ width: `${t.avgPercent}%`, background: t.avgPercent < 55 ? 'var(--cab-rose)' : t.avgPercent < 80 ? 'var(--cab-amber)' : 'var(--success)' }} /></span><span className="num">{t.avgPercent}%</span></span>}</td>
-                          <td data-label="Неверные ответы">
+                          <td data-label={tr('wrongShort')}>
                             {t.wrong.length === 0 ? <span className="muted">—</span> : (
                               <ul className="wrong-list">{t.wrong.slice(0, 3).map((w) => <li key={w.answer}><span>{w.answer.length > 90 ? `${w.answer.slice(0, 88)}…` : w.answer}</span><b>×{w.count}</b></li>)}</ul>
                             )}

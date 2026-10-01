@@ -97,7 +97,14 @@ export async function teacherActivity(orgId: string): Promise<TeacherActivity[]>
 /* ------------------------------ лента событий ----------------------------- */
 
 export type OrgEventKind = 'student' | 'teacher' | 'group' | 'course' | 'submitted' | 'graded';
-export interface OrgEvent { kind: OrgEventKind; at: string; who: string; what: string; href: string | null }
+/**
+ * what — готовая русская подпись (для скриптов и логов); groups/course/task — её части,
+ * из которых интерфейс собирает подпись на языке пользователя.
+ */
+export interface OrgEvent {
+  kind: OrgEventKind; at: string; who: string; what: string; href: string | null;
+  groups: string | null; course: string | null; task: string | null;
+}
 
 export async function orgFeed(orgId: string, limit = 10): Promise<OrgEvent[]> {
   const { rows } = await db().query<{ kind: OrgEventKind; at: Date; who: string; what: string | null; prompt: string | null; ref: string | null }>(
@@ -135,6 +142,11 @@ export async function orgFeed(orgId: string, limit = 10): Promise<OrgEvent[]> {
     }[r.kind];
     const href = r.kind === 'group' && r.ref ? `/org/groups/${r.ref}`
       : r.ref && r.kind !== 'student' && r.kind !== 'teacher' ? `/teach/courses/${r.ref}` : null;
-    return { kind: r.kind, at: r.at.toISOString(), who: r.who, what, href };
+    const isStaff = r.kind === 'student' || r.kind === 'teacher';
+    return {
+      kind: r.kind, at: r.at.toISOString(), who: r.who, what, href,
+      groups: isStaff ? r.what : null, course: isStaff || r.kind === 'group' ? null : r.what,
+      task: r.prompt !== null ? assignmentTitle(r.prompt) || null : null,
+    };
   });
 }

@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { PlanTopic } from '@/lib/lms/ai';
-import { COURSE_STATUS_LABELS, LIMITS, type Course, type TopicFormat } from '@/lib/lms/types';
+import { courseStatusLabels, LIMITS, type Course, type TopicFormat } from '@/lib/lms/types';
 import { courseEditorHref, learnCourseHref, withOrgParam } from '@/lib/lms/links';
 import { coverStyle } from '@/lib/lms/covers';
-import { ruPlural } from '@/lib/lms/format';
 import { callApi } from '@/components/cabinet/api';
-import { SUBJECTS } from '@/components/cabinet/NewCourseDialog';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { COURSE_GRADES, COURSE_SUBJECTS, teachCourse } from '@/i18n/messages/teach-course';
 import { Ring } from '@/components/cabinet/viz';
 import { LessonBuilderButton } from './LessonBuilder';
 import { useConfirm, type ConfirmOptions } from '@/components/lms/ui/useConfirm';
@@ -25,7 +25,6 @@ interface CourseDraft { title: string; subject: string; grade: string; descripti
 interface Suggestion extends PlanTopic { key: string; on: boolean }
 type Fill = 'wait' | 'work' | 'done' | 'error';
 
-const GRADES = ['5 класс', '6 класс', '7 класс', '8 класс', '9 класс', '10 класс', '11 класс', 'колледж'];
 let seq = 0;
 
 /**
@@ -38,6 +37,11 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
   groups: SetupGroup[]; lockedGroups: SetupGroup[]; selectedGroupIds: string[];
 }) {
   const router = useRouter();
+  const t = useT(teachCourse);
+  const fmt = useFormat();
+  const locale = useLocale();
+  const SUBJECTS = COURSE_SUBJECTS[locale];
+  const GRADES = COURSE_GRADES[locale];
   const [course, setCourse] = useState(initial);
   const draft = useDraft<CourseDraft>(`tesseract.course-draft.${initial.id}`, {
     title: initial.title, subject: initial.subject, grade: initial.grade, description: initial.description, groupIds: selectedGroupIds,
@@ -62,7 +66,7 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
   }
 
   async function save(): Promise<boolean> {
-    if (!title.trim()) { setError('У курса должно быть название.'); return false; }
+    if (!title.trim()) { setError(t('needTitle')); return false; }
     setSaving(true);
     const next = await patch({ title, subject, grade, description, groupIds: picked });
     setSaving(false);
@@ -106,9 +110,9 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
 
   async function removeCourse() {
     if (!(await ask({
-      title: `Удалить курс «${course.title}»?`,
-      text: 'Удалятся все темы, уроки и задания курса. Вернуть их будет нельзя. Если по курсу уже есть ответы учеников, удалить его не получится — только в архив.',
-      confirmLabel: 'Удалить курс', danger: true,
+      title: t('deleteCourseQ', { title: course.title }),
+      text: t('deleteCourseText2'),
+      confirmLabel: t('deleteCourse'), danger: true,
     }))) return;
     const res = await callApi(`/api/teach/courses/${course.id}`, 'DELETE');
     if (!res.ok) return setError(res.error);
@@ -116,15 +120,15 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
     router.push(link('/teach/courses'));
   }
 
-  const allFilled = topics.length > 0 && topics.every((t) => t.blocks > 0);
+  const allFilled = topics.length > 0 && topics.every((x) => x.blocks > 0);
   const checks = [
-    { ok: !!course.title.trim(), label: 'Название' },
-    { ok: !!course.subject && !!course.grade, label: 'Предмет и класс' },
-    { ok: !!course.description.trim(), label: 'Описание для учеников' },
-    { ok: topics.length > 0, label: 'План тем' },
-    { ok: allFilled, label: 'Уроки наполнены' },
-    { ok: selectedGroupIds.length + lockedGroups.length > 0, label: 'Открыт группам' },
-    { ok: course.status === 'published', label: 'Опубликован' },
+    { ok: !!course.title.trim(), label: t('chkTitle') },
+    { ok: !!course.subject && !!course.grade, label: t('chkSubject') },
+    { ok: !!course.description.trim(), label: t('chkDesc') },
+    { ok: topics.length > 0, label: t('chkPlan') },
+    { ok: allFilled, label: t('chkFilled') },
+    { ok: selectedGroupIds.length + lockedGroups.length > 0, label: t('chkGroups') },
+    { ok: course.status === 'published', label: t('chkPublished') },
   ];
   const ready = Math.round((checks.filter((c) => c.ok).length / checks.length) * 100);
   const audience = [...groups.filter((g) => picked.includes(g.id)), ...lockedGroups];
@@ -135,44 +139,44 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
       {draft.restoredAt && (
         <div className="cs-restored" role="status">
           <IconHistory size={18} />
-          <span><b>Восстановлен черновик от {formatClock(draft.restoredAt)}.</b> Эти правки ещё не сохранены в курсе.</span>
-          <button type="button" className="btn btn-sm btn-primary" onClick={() => void save()}>Сохранить</button>
-          <button type="button" className="btn btn-sm btn-ghost" onClick={draft.discard}>Отбросить черновик</button>
+          <span><b>{t('restoredDraft', { time: formatClock(draft.restoredAt) })}</b> {t('restoredNote')}</span>
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => void save()}>{t('save')}</button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={draft.discard}>{t('discardDraft')}</button>
         </div>
       )}
       {fresh && !draft.restoredAt && (
         <section className="cs-welcome">
           <div>
-            <span className="cs-welcome-kicker"><IconCheck size={15} />Курс создан</span>
-            <h2>Осталось наполнить «{course.title}»</h2>
-            <p>Не спешите: курс остаётся черновиком, пока вы его не опубликуете, а всё, что вы вводите, сохраняется в черновике — можно вернуться завтра.</p>
+            <span className="cs-welcome-kicker"><IconCheck size={15} />{t('created')}</span>
+            <h2>{t('fillTitle', { title: course.title })}</h2>
+            <p>{t('fillText')}</p>
           </div>
-          <button type="button" className="btn btn-light" onClick={fillAll}><IconSpark size={16} />Заполнить с помощником</button>
+          <button type="button" className="btn btn-light" onClick={fillAll}><IconSpark size={16} />{t('fillWithAi')}</button>
         </section>
       )}
 
       <div className="cs-grid">
         <div className="cs-main">
           <section className="cab-card cs-card">
-            <header className="cs-card-head"><span className="cs-num">1</span><div><h2>Основное</h2><span className="muted">Название, предмет и класс — по ним помощник пишет уроки нужного уровня</span></div></header>
-            <label className="nx-field"><span>Название курса</span>
+            <header className="cs-card-head"><span className="cs-num">1</span><div><h2>{t('basics')}</h2><span className="muted">{t('basicsSub')}</span></div></header>
+            <label className="nx-field"><span>{t('courseName')}</span>
               <input className="input nc-title" value={title} maxLength={LIMITS.title} onChange={(e) => draft.set({ title: e.target.value })} />
             </label>
-            <div className="nx-field"><span>Предмет</span>
+            <div className="nx-field"><span>{t('subject')}</span>
               <div className="nc-subjects">
                 {SUBJECTS.map((s) => (
                   <button key={s} type="button" aria-pressed={subject === s} className={subject === s ? 'nc-subject on' : 'nc-subject'}
                     style={coverStyle(s)} onClick={() => draft.set({ subject: subject === s ? '' : s })}>{s}</button>
                 ))}
                 <input className="input nc-subject-own" value={SUBJECTS.includes(subject) ? '' : subject} maxLength={LIMITS.subject}
-                  placeholder="другой…" aria-label="Другой предмет" onChange={(e) => draft.set({ subject: e.target.value })} />
+                  placeholder={t('otherPh')} aria-label={t('otherSubject')} onChange={(e) => draft.set({ subject: e.target.value })} />
               </div>
             </div>
-            <div className="nx-field"><span>Класс</span>
+            <div className="nx-field"><span>{t('grade')}</span>
               <div className="nq-grades">
                 {GRADES.map((g) => (
-                  <button key={g} type="button" aria-pressed={grade === g} className={grade === g ? 'nq-grade on' : 'nq-grade'}
-                    onClick={() => draft.set({ grade: grade === g ? '' : g })}>{g.replace(' класс', '')}</button>
+                  <button key={g.value} type="button" aria-pressed={grade === g.value} className={grade === g.value ? 'nq-grade on' : 'nq-grade'}
+                    onClick={() => draft.set({ grade: grade === g.value ? '' : g.value })}>{g.short}</button>
                 ))}
               </div>
             </div>
@@ -181,14 +185,14 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
           <section className="cab-card cs-card">
             <header className="cs-card-head">
               <span className="cs-num">2</span>
-              <div><h2>Описание</h2><span className="muted">Его видят ученики и родители на странице курса</span></div>
+              <div><h2>{t('description')}</h2><span className="muted">{t('descriptionSub')}</span></div>
               <button type="button" className="btn btn-sm ai-btn" disabled={describing} onClick={describe}>
-                <IconSpark size={15} />{describing ? 'Пишу…' : description.trim() ? 'Другой вариант' : 'Написать с помощником'}
+                <IconSpark size={15} />{describing ? t('writing') : description.trim() ? t('anotherVariant') : t('writeWithAi')}
               </button>
             </header>
             <div className={describing ? 'cs-desc writing' : 'cs-desc'}>
               <textarea className="input" rows={5} value={description} maxLength={LIMITS.description}
-                placeholder="О чём курс, что ученик будет понимать и уметь в конце, как устроены уроки"
+                placeholder={t('descriptionPh')}
                 onChange={(e) => draft.set({ description: e.target.value })} />
               <span className="cs-counter">{description.length} / {LIMITS.description}</span>
             </div>
@@ -197,8 +201,8 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
           <section className="cab-card cs-card" ref={planRef}>
             <header className="cs-card-head">
               <span className="cs-num">3</span>
-              <div><h2>План курса</h2><span className="muted">{topics.length ? `${topics.length} ${ruPlural(topics.length, 'тема', 'темы', 'тем')} · ${topics.filter((t) => t.blocks > 0).length} наполнено · темы сохраняются сразу` : 'Тем пока нет'}</span></div>
-              {!planOpen && <button type="button" className="btn btn-sm ai-btn" onClick={() => setPlanOpen(true)}><IconSpark size={15} />Предложить план</button>}
+              <div><h2>{t('plan')}</h2><span className="muted">{topics.length ? t('planSub', { n: topics.length, filled: topics.filter((x) => x.blocks > 0).length }) : t('noTopics')}</span></div>
+              {!planOpen && <button type="button" className="btn btn-sm ai-btn" onClick={() => setPlanOpen(true)}><IconSpark size={15} />{t('suggestPlan')}</button>}
             </header>
             {planOpen && (
               <PlanAssistant courseId={course.id} auto={autoPlan} hasTopics={topics.length > 0}
@@ -206,22 +210,22 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
             )}
             {topics.length > 0 && (
               <ol className="cs-topics">
-                {topics.map((t, i) => (
-                  <TopicRow key={t.id} topic={t} index={i} total={topics.length} course={course} org={org} ask={ask}
+                {topics.map((x, i) => (
+                  <TopicRow key={x.id} topic={x} index={i} total={topics.length} course={course} org={org} ask={ask}
                     onChanged={() => router.refresh()} onError={setError} />
                 ))}
               </ol>
             )}
             <div className="cs-topic-actions">
               <AddTopic courseId={course.id} onAdded={() => router.refresh()} />
-              <LessonBuilderButton courseId={course.id} subject={course.subject} variant="small" label="Урок с помощником" onDone={() => router.refresh()} />
+              <LessonBuilderButton courseId={course.id} subject={course.subject} variant="small" label={t('lessonWithAi')} onDone={() => router.refresh()} />
             </div>
           </section>
 
           <section className="cab-card cs-card">
-            <header className="cs-card-head"><span className="cs-num">4</span><div><h2>Кому открыт</h2><span className="muted">Ученики увидят курс, когда он будет опубликован</span></div></header>
+            <header className="cs-card-head"><span className="cs-num">4</span><div><h2>{t('audience')}</h2><span className="muted">{t('audienceSub')}</span></div></header>
             {groups.length === 0 && lockedGroups.length === 0 ? (
-              <p className="muted">У вас пока нет групп — их назначает администратор организации.</p>
+              <p className="muted">{t('noGroups')}</p>
             ) : (
               <div className="cs-groups">
                 {groups.map((g) => {
@@ -230,14 +234,14 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
                     <button key={g.id} type="button" aria-pressed={on} className={on ? 'cs-group on' : 'cs-group'}
                       onClick={() => draft.set({ groupIds: on ? picked.filter((x) => x !== g.id) : [...picked, g.id] })}>
                       <span className="cs-group-badge"><IconGroup size={16} /></span>
-                      <b>{g.title}</b><small>{g.students} {ruPlural(g.students, 'ученик', 'ученика', 'учеников')}</small>
+                      <b>{g.title}</b><small>{t('students', { n: g.students })}</small>
                       <span className="cs-group-check">{on ? <IconCheck size={14} /> : <IconPlus size={14} />}</span>
                     </button>
                   );
                 })}
                 {lockedGroups.map((g) => (
-                  <span key={g.id} className="cs-group on locked" title="Эту группу открыл администратор организации">
-                    <span className="cs-group-badge"><IconLock size={15} /></span><b>{g.title}</b><small>открыл администратор</small>
+                  <span key={g.id} className="cs-group on locked" title={t('lockedGroup')}>
+                    <span className="cs-group-badge"><IconLock size={15} /></span><b>{g.title}</b><small>{t('openedByAdmin')}</small>
                   </span>
                 ))}
               </div>
@@ -245,12 +249,12 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
           </section>
 
           <section className="cab-card cs-card cs-danger">
-            <header className="cs-card-head"><span className="cs-num">5</span><div><h2>Управление курсом</h2><span className="muted">Архив прячет курс от учеников, но сохраняет ответы и оценки</span></div></header>
+            <header className="cs-card-head"><span className="cs-num">5</span><div><h2>{t('manage')}</h2><span className="muted">{t('manageSub')}</span></div></header>
             <div className="cs-danger-row">
               {course.status === 'archived'
-                ? <button type="button" className="btn" onClick={() => setStatus('draft')}><IconUndo size={16} />Вернуть из архива</button>
-                : <button type="button" className="btn" onClick={() => setStatus('archived')}><IconFold size={16} />Отправить в архив</button>}
-              <button type="button" className="btn cs-delete" onClick={removeCourse}><IconTrash size={16} />Удалить курс</button>
+                ? <button type="button" className="btn" onClick={() => setStatus('draft')}><IconUndo size={16} />{t('restore')}</button>
+                : <button type="button" className="btn" onClick={() => setStatus('archived')}><IconFold size={16} />{t('sendArchive')}</button>}
+              <button type="button" className="btn cs-delete" onClick={removeCourse}><IconTrash size={16} />{t('deleteCourse')}</button>
             </div>
           </section>
         </div>
@@ -258,16 +262,16 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
         <aside className="cs-side">
           <div className="nc-card">
             <div className="course-tile-cover" style={coverStyle(subject || title || 'курс')}>
-              <span className="course-tile-glyph">{(subject || title || 'К').slice(0, 1).toUpperCase()}</span>
-              <span className="course-tile-subject">{subject || 'Предмет'}{grade ? ` · ${grade}` : ''}</span>
+              <span className="course-tile-glyph">{(subject || title || t('colCourse')).slice(0, 1).toUpperCase()}</span>
+              <span className="course-tile-subject">{subject || t('subjectPh')}{grade ? ` · ${grade}` : ''}</span>
             </div>
             <div className="nc-card-body">
-              <span className={course.status === 'published' ? 'status-pill ok' : 'status-pill'}>{COURSE_STATUS_LABELS[course.status]}</span>
-              <h3>{title.trim() || 'Название курса'}</h3>
-              <p className="muted">{description.trim() || 'Описание появится здесь.'}</p>
+              <span className={course.status === 'published' ? 'status-pill ok' : 'status-pill'}>{courseStatusLabels(locale)[course.status]}</span>
+              <h3>{title.trim() || t('namePlaceholder')}</h3>
+              <p className="muted">{description.trim() || t('descAppears')}</p>
               <div className="chip-row">
-                <span className="chip-sm">{topics.length} {ruPlural(topics.length, 'тема', 'темы', 'тем')}</span>
-                {audience.length ? audience.map((g) => <span key={g.id} className="chip-sm">{g.title}</span>) : <span className="chip-sm warn">никому не открыт</span>}
+                <span className="chip-sm">{t('topics', { n: topics.length })}</span>
+                {audience.length ? audience.map((g) => <span key={g.id} className="chip-sm">{g.title}</span>) : <span className="chip-sm warn">{t('notOpened')}</span>}
               </div>
             </div>
           </div>
@@ -275,46 +279,46 @@ export default function CourseSetup({ course: initial, fresh, org, topics, group
           <div className={draft.dirty ? 'cab-card cs-savecard dirty' : 'cab-card cs-savecard'}>
             {draft.dirty ? (
               <>
-                <div className="cs-savecard-state"><span className="cs-pulse" /><div><b>Есть несохранённые правки</b>
-                  <span className="muted">{draft.draftAt ? `Черновик на этом устройстве · ${formatClock(draft.draftAt)}` : 'Черновик сохраняется…'}</span></div></div>
+                <div className="cs-savecard-state"><span className="cs-pulse" /><div><b>{t('unsaved')}</b>
+                  <span className="muted">{draft.draftAt ? t('draftOnDevice', { time: formatClock(draft.draftAt) }) : t('draftSaving')}</span></div></div>
                 <div className="cs-savecard-actions">
-                  <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}><IconCheck size={16} />{saving ? 'Сохраняю…' : 'Сохранить'}</button>
-                  <button type="button" className="btn btn-ghost" disabled={saving} onClick={draft.discard}>Отменить</button>
+                  <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void save()}><IconCheck size={16} />{saving ? t('saving') : t('save')}</button>
+                  <button type="button" className="btn btn-ghost" disabled={saving} onClick={draft.discard}>{t('undo')}</button>
                 </div>
-                <small className="muted">Cmd/Ctrl + S — сохранить</small>
+                <small className="muted">{t('saveKeys')}</small>
               </>
             ) : (
-              <div className="cs-savecard-state ok"><IconCheck size={18} /><div><b>Всё сохранено</b>
-                <span className="muted">{savedAt ? `в ${formatClock(savedAt)}` : 'Можно закрыть вкладку и вернуться позже'}</span></div></div>
+              <div className="cs-savecard-state ok"><IconCheck size={18} /><div><b>{t('allSaved')}</b>
+                <span className="muted">{savedAt ? t('savedAt', { time: formatClock(savedAt) }) : t('canClose')}</span></div></div>
             )}
           </div>
 
           <div className="cab-card cs-ready">
             <div className="cs-ready-head">
-              <Ring value={ready} size={58} stroke={6} tone={ready === 100 ? 'var(--success)' : 'var(--accent)'} label={`Готовность курса ${ready}%`} />
-              <div><b>Готовность курса</b><span className="muted">{ready === 100 ? 'Всё готово' : `${checks.filter((c) => !c.ok).length} ${ruPlural(checks.filter((c) => !c.ok).length, 'шаг', 'шага', 'шагов')} до запуска`}</span></div>
+              <Ring value={ready} size={58} stroke={6} tone={ready === 100 ? 'var(--success)' : 'var(--accent)'} label={t('readyRing', { n: ready })} />
+              <div><b>{t('readiness')}</b><span className="muted">{ready === 100 ? t('allReady') : t('stepsLeft', { n: checks.filter((c) => !c.ok).length })}</span></div>
             </div>
             <ul className="cs-checks">
               {checks.map((c) => <li key={c.label} className={c.ok ? 'ok' : ''}><span>{c.ok ? <IconCheck size={12} /> : ''}</span>{c.label}</li>)}
             </ul>
-            {error && <p className="error-box" role="alert">{error}</p>}
+            {error && <p className="error-box" role="alert">{fmt.message(error)}</p>}
             <div className="cs-ready-actions">
               {course.status === 'published'
-                ? <button type="button" className="btn" onClick={() => setStatus('draft')}>Снять с публикации</button>
-                : <button type="button" className="btn btn-primary" disabled={topics.length === 0 || course.status === 'archived'} onClick={() => setStatus('published')}>Опубликовать</button>}
-              <Link className="btn" href={link(courseEditorHref(course.id))}><IconText size={16} />Редактор уроков</Link>
-              <a className="btn btn-ghost" href={learnCourseHref(course.id, true)} target="_blank" rel="noopener noreferrer"><IconEye size={16} />Глазами ученика</a>
+                ? <button type="button" className="btn" onClick={() => setStatus('draft')}>{t('unpublish')}</button>
+                : <button type="button" className="btn btn-primary" disabled={topics.length === 0 || course.status === 'archived'} onClick={() => setStatus('published')}>{t('publish')}</button>}
+              <Link className="btn" href={link(courseEditorHref(course.id))}><IconText size={16} />{t('lessonEditor')}</Link>
+              <a className="btn btn-ghost" href={learnCourseHref(course.id, true)} target="_blank" rel="noopener noreferrer"><IconEye size={16} />{t('studentView')}</a>
             </div>
-            {students > 0 && <p className="muted cs-audience">Увидят {students} {ruPlural(students, 'ученик', 'ученика', 'учеников')}</p>}
+            {students > 0 && <p className="muted cs-audience">{t('willSee', { n: students })}</p>}
           </div>
         </aside>
       </div>
       {draft.dirty && (
         <div className="cs-savebar" role="status">
           <span className="cs-pulse" />
-          <span>Несохранённые правки{draft.draftAt ? ` · черновик ${formatClock(draft.draftAt)}` : ''}</span>
-          <button type="button" className="btn btn-sm btn-ghost" onClick={draft.discard}>Отменить</button>
-          <button type="button" className="btn btn-sm btn-primary" disabled={saving} onClick={() => void save()}>{saving ? 'Сохраняю…' : 'Сохранить'}</button>
+          <span>{draft.draftAt ? t('unsavedBarDraft', { time: formatClock(draft.draftAt) }) : t('unsavedBar')}</span>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={draft.discard}>{t('undo')}</button>
+          <button type="button" className="btn btn-sm btn-primary" disabled={saving} onClick={() => void save()}>{saving ? t('saving') : t('save')}</button>
         </div>
       )}
       {confirmDialog}
@@ -327,6 +331,7 @@ function TopicRow({ topic: t, index: i, total, course, org, ask, onChanged, onEr
   topic: SetupTopic; index: number; total: number; course: Course; org: string;
   ask: (o: ConfirmOptions) => Promise<boolean>; onChanged: () => void; onError: (e: string) => void;
 }) {
+  const tr = useT(teachCourse);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(t.title);
   const [busy, setBusy] = useState(false);
@@ -340,9 +345,9 @@ function TopicRow({ topic: t, index: i, total, course, org, ask, onChanged, onEr
   }
   async function remove() {
     if (!(await ask({
-      title: `Удалить тему «${t.title}»?`,
-      text: t.blocks ? `Вместе с темой удалятся ${t.blocks} ${ruPlural(t.blocks, 'блок', 'блока', 'блоков')}, ответы учеников и оценки по ней. Вернуть их будет нельзя.` : 'Тема пустая — удалится только название.',
-      confirmLabel: 'Удалить тему', danger: true,
+      title: tr('deleteTopicQ', { title: t.title }),
+      text: t.blocks ? tr('deleteTopicText', { n: t.blocks }) : tr('deleteTopicEmpty'),
+      confirmLabel: tr('deleteTopic'), danger: true,
     }))) return;
     await act('DELETE');
   }
@@ -355,31 +360,31 @@ function TopicRow({ topic: t, index: i, total, course, org, ask, onChanged, onEr
           if (!value.trim() || value.trim() === t.title) return setEditing(false);
           if (await act('PATCH', { title: value })) setEditing(false);
         }}>
-          <input className="input" value={value} autoFocus maxLength={LIMITS.title} aria-label="Новое название темы"
+          <input className="input" value={value} autoFocus maxLength={LIMITS.title} aria-label={tr('newTopicName')}
             onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setValue(t.title); setEditing(false); } }} />
-          <button type="submit" className="btn btn-sm btn-primary">Сохранить</button>
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setValue(t.title); setEditing(false); }}>Отмена</button>
+          <button type="submit" className="btn btn-sm btn-primary">{tr('save')}</button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setValue(t.title); setEditing(false); }}>{tr('cancel')}</button>
         </form>
       ) : (
         <div>
           <Link href={withOrgParam(courseEditorHref(course.id, t.id), org)}>{t.title}</Link>
-          <small className="muted">{t.blocks ? `${t.blocks} ${ruPlural(t.blocks, 'блок', 'блока', 'блоков')} · ${t.tasks} ${ruPlural(t.tasks, 'задание', 'задания', 'заданий')}` : 'пустая тема'}</small>
+          <small className="muted">{t.blocks ? tr('topicStats', { b: t.blocks, t: t.tasks }) : tr('emptyTopic')}</small>
         </div>
       )}
       {!editing && (
         <span className="cs-topic-tools">
-          <button type="button" className={t.format === 'exam' ? 'chip-sm cs-format exam' : 'chip-sm cs-format'} title="Переключить: урок или контрольная"
+          <button type="button" className={t.format === 'exam' ? 'chip-sm cs-format exam' : 'chip-sm cs-format'} title={tr('toggleFormat')}
             onClick={() => act('PATCH', t.format === 'exam' ? { format: 'lesson', timeLimitMin: null } : { format: 'exam', timeLimitMin: 40 })}>
-            {t.format === 'exam' ? 'контрольная' : t.format === 'slides' ? 'слайды' : 'урок'}
+            {t.format === 'exam' ? tr('exam') : t.format === 'slides' ? tr('slides') : tr('lesson')}
           </button>
           {t.blocks === 0
-            ? <LessonBuilderButton courseId={course.id} subject={course.subject} topicId={t.id} topicTitle={t.title} variant="small" label="Собрать урок" onDone={onChanged} />
-            : <span className="cs-topic-ok" title="Урок наполнен"><IconCheck size={14} /></span>}
+            ? <LessonBuilderButton courseId={course.id} subject={course.subject} topicId={t.id} topicTitle={t.title} variant="small" label={tr('buildLesson')} onDone={onChanged} />
+            : <span className="cs-topic-ok" title={tr('lessonFilled')}><IconCheck size={14} /></span>}
           <span className="cs-topic-icons">
-            <button type="button" className="cab-icon-btn" aria-label={`Переименовать «${t.title}»`} title="Переименовать" onClick={() => setEditing(true)}><IconEdit size={15} /></button>
-            <button type="button" className="cab-icon-btn" aria-label="Выше" title="Выше" disabled={i === 0} onClick={() => act('PATCH', { move: 'up' })}><IconArrowUp size={15} /></button>
-            <button type="button" className="cab-icon-btn" aria-label="Ниже" title="Ниже" disabled={i === total - 1} onClick={() => act('PATCH', { move: 'down' })}><IconArrowDown size={15} /></button>
-            <button type="button" className="cab-icon-btn cs-del" aria-label={`Удалить «${t.title}»`} title="Удалить" onClick={remove}><IconTrash size={15} /></button>
+            <button type="button" className="cab-icon-btn" aria-label={tr('renameQ', { title: t.title })} title={tr('rename')} onClick={() => setEditing(true)}><IconEdit size={15} /></button>
+            <button type="button" className="cab-icon-btn" aria-label={tr('up')} title={tr('up')} disabled={i === 0} onClick={() => act('PATCH', { move: 'up' })}><IconArrowUp size={15} /></button>
+            <button type="button" className="cab-icon-btn" aria-label={tr('down')} title={tr('down')} disabled={i === total - 1} onClick={() => act('PATCH', { move: 'down' })}><IconArrowDown size={15} /></button>
+            <button type="button" className="cab-icon-btn cs-del" aria-label={tr('deleteQ', { title: t.title })} title={tr('delete')} onClick={remove}><IconTrash size={15} /></button>
           </span>
         </span>
       )}
@@ -388,10 +393,11 @@ function TopicRow({ topic: t, index: i, total, course, org, ask, onChanged, onEr
 }
 
 function AddTopic({ courseId, onAdded }: { courseId: string; onAdded: () => void }) {
+  const t = useT(teachCourse);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
-  if (!open) return <button type="button" className="btn btn-sm" onClick={() => setOpen(true)}><IconPlus size={15} />Тема</button>;
+  if (!open) return <button type="button" className="btn btn-sm" onClick={() => setOpen(true)}><IconPlus size={15} />{t('topic')}</button>;
   return (
     <form className="cs-add" onSubmit={async (e) => {
       e.preventDefault();
@@ -401,9 +407,9 @@ function AddTopic({ courseId, onAdded }: { courseId: string; onAdded: () => void
       setBusy(false);
       if (res.ok) { setTitle(''); setOpen(false); onAdded(); }
     }}>
-      <input className="input" autoFocus value={title} maxLength={LIMITS.title} placeholder="Название темы" onChange={(e) => setTitle(e.target.value)}
+      <input className="input" autoFocus value={title} maxLength={LIMITS.title} placeholder={t('topicName')} onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }} />
-      <button type="submit" className="btn btn-sm btn-primary" disabled={busy}>Добавить</button>
+      <button type="submit" className="btn btn-sm btn-primary" disabled={busy}>{t('add')}</button>
     </form>
   );
 }
@@ -412,6 +418,8 @@ function AddTopic({ courseId, onAdded }: { courseId: string; onAdded: () => void
 function PlanAssistant({ courseId, auto, hasTopics, onClose, onAdded }: {
   courseId: string; auto: boolean; hasTopics: boolean; onClose: () => void; onAdded: () => void;
 }) {
+  const tr = useT(teachCourse);
+  const fmt = useFormat();
   const [lessons, setLessons] = useState(8);
   const [wishes, setWishes] = useState('');
   const [busy, setBusy] = useState(false);
@@ -442,7 +450,7 @@ function PlanAssistant({ courseId, auto, hasTopics, onClose, onAdded }: {
 
   async function add() {
     const chosen = (items ?? []).filter((x) => x.on && x.title.trim());
-    if (!chosen.length) return setError('Отметьте хотя бы одну тему.');
+    if (!chosen.length) return setError(tr('pickOne'));
     setError('');
     const list = chosen.map((c) => ({ title: c.title, state: 'wait' as Fill }));
     setProgress(list);
@@ -473,19 +481,19 @@ function PlanAssistant({ courseId, auto, hasTopics, onClose, onAdded }: {
     const pct = Math.round((done / progress.length) * 100);
     return (
       <div className="cs-plan">
-        <div className="cfp-build-head"><div><b>{pct === 100 ? 'Уроки готовы' : 'Помощник пишет уроки'}</b><span className="muted"> · {done} из {progress.length}</span></div><b className="cfp-percent">{pct}%</b></div>
+        <div className="cfp-build-head"><div><b>{pct === 100 ? tr('lessonsReady') : tr('aiWritesLessons')}</b><span className="muted"> · {tr('doneOf', { done, total: progress.length })}</span></div><b className="cfp-percent">{pct}%</b></div>
         <div className="cfp-bar"><i style={{ width: `${pct}%` }} /></div>
         <ol className="cfp-build">
           {progress.map((p) => (
             <li key={p.title} className={`s-${p.state}`}>
               <span className="cfp-state" aria-hidden="true">{p.state === 'done' ? <IconCheck size={14} /> : p.state === 'error' ? '!' : ''}</span>
               <span className="cfp-build-title">{p.title}</span>
-              <span className="muted">{p.state === 'wait' ? 'в очереди' : p.state === 'work' ? 'пишется…' : p.state === 'done' ? 'готово' : 'не получилось'}</span>
+              <span className="muted">{p.state === 'wait' ? tr('sWait') : p.state === 'work' ? tr('sWork') : p.state === 'done' ? tr('sDone') : tr('sError')}</span>
               <span />
             </li>
           ))}
         </ol>
-        {pct === 100 && <button type="button" className="btn btn-sm" onClick={() => { setProgress(null); setItems(null); onClose(); }}>Готово</button>}
+        {pct === 100 && <button type="button" className="btn btn-sm" onClick={() => { setProgress(null); setItems(null); onClose(); }}>{tr('done')}</button>}
       </div>
     );
   }
@@ -493,28 +501,28 @@ function PlanAssistant({ courseId, auto, hasTopics, onClose, onAdded }: {
   return (
     <div className="cs-plan">
       <div className="cs-plan-form">
-        <div className="nx-field"><span>Сколько уроков</span>
+        <div className="nx-field"><span>{tr('howMany')}</span>
           <span className="lb-stepper">
-            <button type="button" aria-label="Меньше" disabled={lessons <= 2} onClick={() => setLessons((n) => n - 1)}>−</button>
+            <button type="button" aria-label={tr('fewer')} disabled={lessons <= 2} onClick={() => setLessons((n) => n - 1)}>−</button>
             <span>{lessons}</span>
-            <button type="button" aria-label="Больше" disabled={lessons >= 40} onClick={() => setLessons((n) => n + 1)}>+</button>
+            <button type="button" aria-label={tr('more')} disabled={lessons >= 40} onClick={() => setLessons((n) => n + 1)}>+</button>
           </span>
         </div>
-        <label className="nx-field cs-grow"><span>Пожелания</span>
-          <input className="input" value={wishes} maxLength={800} placeholder={hasTopics ? 'Продолжить после имеющихся тем, добавить контрольную' : 'Первая четверть, больше лабораторных'}
+        <label className="nx-field cs-grow"><span>{tr('wishes')}</span>
+          <input className="input" value={wishes} maxLength={800} placeholder={hasTopics ? tr('wishesPhMore') : tr('wishesPh')}
             onChange={(e) => setWishes(e.target.value)} />
         </label>
-        <button type="button" className="btn btn-primary ai-btn" disabled={busy} onClick={suggest}><IconSpark size={15} />{busy ? 'Составляю…' : items ? 'Ещё вариант' : 'Предложить'}</button>
-        <button type="button" className="btn btn-ghost" onClick={onClose}>Скрыть</button>
+        <button type="button" className="btn btn-primary ai-btn" disabled={busy} onClick={suggest}><IconSpark size={15} />{busy ? tr('composing') : items ? tr('anotherOption') : tr('suggest')}</button>
+        <button type="button" className="btn btn-ghost" onClick={onClose}>{tr('hide')}</button>
       </div>
       {busy && <div className="cs-plan-skeleton">{[0, 1, 2, 3].map((i) => <i key={i} className="skeleton" />)}</div>}
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <p className="error-box" role="alert">{fmt.message(error)}</p>}
       {items && !busy && (
         <>
           <ol className="cs-suggest">
             {items.map((t, i) => (
               <li key={t.key} className={`${t.on ? '' : 'off'}${t.format === 'exam' ? ' exam' : ''}`}>
-                <input type="checkbox" checked={t.on} aria-label={`Взять тему «${t.title}»`}
+                <input type="checkbox" checked={t.on} aria-label={tr('takeTopic', { title: t.title })}
                   onChange={(e) => setItems((xs) => xs && xs.map((x) => (x.key === t.key ? { ...x, on: e.target.checked } : x)))} />
                 <div>
                   <input className="cs-suggest-title" value={t.title} maxLength={200}
@@ -523,21 +531,21 @@ function PlanAssistant({ courseId, auto, hasTopics, onClose, onAdded }: {
                 </div>
                 <button type="button" className={t.format === 'exam' ? 'chip-sm cs-format exam' : 'chip-sm cs-format'}
                   onClick={() => setItems((xs) => xs && xs.map((x) => (x.key === t.key ? { ...x, format: x.format === 'exam' ? 'lesson' : 'exam' } : x)))}>
-                  {t.format === 'exam' ? 'контрольная' : 'урок'}
+                  {t.format === 'exam' ? tr('exam') : tr('lesson')}
                 </button>
                 <span className="cfp-icon-row">
-                  <button type="button" className="cab-icon-btn" aria-label="Выше" disabled={i === 0} onClick={() => move(i, -1)}><IconArrowUp size={14} /></button>
-                  <button type="button" className="cab-icon-btn" aria-label="Ниже" disabled={i === items.length - 1} onClick={() => move(i, 1)}><IconArrowDown size={14} /></button>
-                  <button type="button" className="cab-icon-btn" aria-label="Убрать" onClick={() => setItems((xs) => xs && xs.filter((x) => x.key !== t.key))}><IconTrash size={14} /></button>
+                  <button type="button" className="cab-icon-btn" aria-label={tr('up')} disabled={i === 0} onClick={() => move(i, -1)}><IconArrowUp size={14} /></button>
+                  <button type="button" className="cab-icon-btn" aria-label={tr('down')} disabled={i === items.length - 1} onClick={() => move(i, 1)}><IconArrowDown size={14} /></button>
+                  <button type="button" className="cab-icon-btn" aria-label={tr('remove')} onClick={() => setItems((xs) => xs && xs.filter((x) => x.key !== t.key))}><IconTrash size={14} /></button>
                 </span>
               </li>
             ))}
           </ol>
           <div className="cs-plan-foot">
             <label className="cs-fill"><input type="checkbox" checked={fill} onChange={(e) => setFill(e.target.checked)} />
-              <span><IconBook size={15} />Сразу написать уроки для выбранных тем</span></label>
+              <span><IconBook size={15} />{tr('writeLessonsNow')}</span></label>
             <button type="button" className="btn btn-primary" onClick={add}>
-              <IconPlus size={16} />Добавить {items.filter((x) => x.on).length} {ruPlural(items.filter((x) => x.on).length, 'тему', 'темы', 'тем')}
+              <IconPlus size={16} />{tr('addTopics', { n: items.filter((x) => x.on).length })}
             </button>
           </div>
         </>

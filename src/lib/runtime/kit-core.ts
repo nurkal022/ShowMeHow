@@ -41,7 +41,7 @@ window.SimUI = (function () {
       var close = document.createElement('button');
       close.type = 'button';
       close.className = 'sim-panel-close';
-      close.setAttribute('aria-label', 'Закрыть параметры');
+      close.setAttribute('aria-label', __simT('closeParams'));
       close.textContent = '✕';
       close.onclick = function () { setOpen(false); };
       ctrlPanel.appendChild(close);
@@ -52,7 +52,7 @@ window.SimUI = (function () {
       toggle = document.createElement('button');
       toggle.type = 'button';
       toggle.className = 'sim-panel-toggle';
-      toggle.textContent = '⚙ Параметры';
+      toggle.textContent = __simT('params');
       toggle.onclick = function () { setOpen(!open); };
       document.body.appendChild(toggle);
     }
@@ -88,13 +88,13 @@ window.SimUI = (function () {
     ensurePanel();
     var box = document.createElement('div'); box.className = 'sim-btns';
     var playing = true;
-    var b1 = document.createElement('button'); b1.textContent = '⏸ Пауза';
-    var b2 = document.createElement('button'); b2.textContent = '↺ Сброс';
+    var b1 = document.createElement('button'); b1.textContent = __simT('pause');
+    var b2 = document.createElement('button'); b2.textContent = __simT('reset');
     b1.setAttribute('data-smh-btn', 'playpause');
     b2.setAttribute('data-smh-btn', 'reset');
     b1.onclick = function () {
       playing = !playing;
-      b1.textContent = playing ? '⏸ Пауза' : '▶ Пуск';
+      b1.textContent = playing ? __simT('pause') : __simT('play');
       (playing ? o.onPlay : o.onPause)();
     };
     b2.onclick = function () {
@@ -149,7 +149,7 @@ window.SimUI = (function () {
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'smh-collapse-btn';
-    btn.setAttribute('aria-label', 'Свернуть или развернуть панель');
+    btn.setAttribute('aria-label', __simT('collapse'));
     function sync() { btn.textContent = panel.classList.contains('smh-collapsed') ? '▸' : '▾'; }
     btn.onclick = function () { panel.classList.toggle('smh-collapsed'); sync(); };
     panel.insertBefore(btn, panel.firstChild);

@@ -2,7 +2,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Block } from '@/lib/lms/blocks';
 import {
-  CALLOUT_TONES, CALLOUT_TONE_LABELS, MEDIA_LIMITS, newOptionId, parseGaps, videoEmbed,
+  CALLOUT_TONES, calloutToneLabels, MEDIA_LIMITS, assignmentTypeLabels, newOptionId, parseGaps, videoEmbed,
   type AssignmentPayload, type AssignmentType, type CalloutPayload, type CodePayload, type FormulaPayload,
   type ImagePayload, type LabPayload, type SimulationPayload, type SpoilerPayload, type TextPayload, type VideoPayload,
 } from '@/lib/lms/block-schema';
@@ -13,7 +13,10 @@ import Markup, { Tex } from '@/components/lms/Markup';
 import { CalloutBlock, VideoBlock } from '@/components/lms/ContentBlocks';
 import { IconArrowDown, IconArrowUp, IconCheck, IconLibrary, IconPlus, IconSpark, IconTrash, IconUpload, IconWand } from '@/components/icons';
 import { callApi } from '@/components/cabinet/api';
-import { ASSIGNMENT_META, ASSIGNMENT_TYPES } from './block-meta';
+import { ASSIGNMENT_META, ASSIGNMENT_TYPES, assignmentHint } from './block-meta';
+import type { TFn } from '@/i18n/core';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { teachBlocks } from '@/i18n/messages/teach-blocks';
 import SimulationPicker from './SimulationPicker';
 import SimStateEditor from './SimStateEditor';
 import SimStateFrame, { type CaptureSimState } from '@/components/lms/SimStateFrame';
@@ -41,6 +44,7 @@ interface Props {
 interface Shared { onSave: Save; onCancel: () => void; onDirtyChange?: (dirty: boolean) => void; error?: string }
 
 export default function BlockEditor({ block, simulationTitle, initialType, ...shared }: Props) {
+  const t = useT(teachBlocks);
   const body = block.body;
   switch (body.kind) {
     case 'text':
@@ -58,7 +62,7 @@ export default function BlockEditor({ block, simulationTitle, initialType, ...sh
     case 'code':
       return <CodeEditor payload={body.payload} {...shared} />;
     case 'divider':
-      return <p className="muted">У разделителя нет настроек — это просто черта между частями урока.</p>;
+      return <p className="muted">{t('dividerNoSettings')}</p>;
     case 'simulation':
       return <SimulationEditor blockId={block.id} payload={body.payload} title={simulationTitle} {...shared} />;
     case 'lab':
@@ -125,21 +129,23 @@ function useAutosave(value: unknown, onSave: Save, onDirtyChange?: (dirty: boole
 function AutoForm({ auto, onCancel, error, children }: {
   auto: ReturnType<typeof useAutosave>; onCancel: () => void; error?: string; children: React.ReactNode;
 }) {
+  const t = useT(teachBlocks);
+  const fmt = useFormat();
   return (
     <form className="cf-block-form" noValidate
       onSubmit={async (e) => { e.preventDefault(); if (await auto.flush(false)) onCancel(); }}
       onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.currentTarget.requestSubmit(); } }}>
       {children}
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <p className="error-box" role="alert">{fmt.message(error)}</p>}
       <div className="cf-form-foot">
-        <button type="submit" className="btn btn-primary" disabled={auto.state === 'saving'}>Готово</button>
+        <button type="submit" className="btn btn-primary" disabled={auto.state === 'saving'}>{t('done')}</button>
         <span className={`cf-autosave ${auto.state}`} role="status" aria-live="polite">
-          {auto.state === 'saving' && 'Сохраняю…'}
-          {auto.state === 'saved' && !auto.dirty && <><IconCheck size={14} />Сохранено</>}
-          {auto.state === 'error' && 'Не сохранилось — проверьте поля'}
-          {auto.state !== 'saving' && auto.dirty && auto.state !== 'error' && 'Есть правки…'}
+          {auto.state === 'saving' && t('saving')}
+          {auto.state === 'saved' && !auto.dirty && <><IconCheck size={14} />{t('saved')}</>}
+          {auto.state === 'error' && t('autoError')}
+          {auto.state !== 'saving' && auto.dirty && auto.state !== 'error' && t('hasEdits')}
         </span>
-        <span className="muted cf-form-hint">Сохраняется само · Ctrl + Enter — готово</span>
+        <span className="muted cf-form-hint">{t('autoHint')}</span>
       </div>
     </form>
   );
@@ -154,6 +160,8 @@ function EditorForm({ dirty, validate, onSubmit, onCancel, error, children }: {
   error?: string;
   children: React.ReactNode;
 }) {
+  const t = useT(teachBlocks);
+  const fmt = useFormat();
   const [busy, setBusy] = useState(false);
   const form = useRef<HTMLFormElement>(null);
 
@@ -174,13 +182,13 @@ function EditorForm({ dirty, validate, onSubmit, onCancel, error, children }: {
       onSubmit={(e) => { e.preventDefault(); void submit(); }}
       onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submit(); } }}>
       {children}
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <p className="error-box" role="alert">{fmt.message(error)}</p>}
       <div className="cf-form-foot">
         <button type="submit" className="btn btn-primary" disabled={busy}>
-          {busy ? 'Сохраняю…' : 'Сохранить блок'}
+          {busy ? t('saving') : t('saveBlock')}
         </button>
-        <button type="button" className="btn" onClick={onCancel}>{dirty ? 'Отменить правки' : 'Свернуть'}</button>
-        <span className="muted cf-form-hint">Ctrl + Enter — сохранить</span>
+        <button type="button" className="btn" onClick={onCancel}>{dirty ? t('discard') : t('collapse')}</button>
+        <span className="muted cf-form-hint">{t('saveHint')}</span>
       </div>
     </form>
   );
@@ -194,13 +202,13 @@ function FieldError({ id, text }: { id: string; text?: string }) {
 /* --------------------------------- текст -------------------------------- */
 
 type Wrap = { before: string; after: string; placeholder: string } | { linePrefix: string };
-const MARKS: { key: string; label: string; title: string; hot?: string; wrap: Wrap }[] = [
-  { key: 'b', label: 'Ж', title: 'Жирный (Ctrl+B)', hot: 'b', wrap: { before: '**', after: '**', placeholder: 'важное' } },
-  { key: 'i', label: 'К', title: 'Курсив (Ctrl+I)', hot: 'i', wrap: { before: '*', after: '*', placeholder: 'термин' } },
-  { key: 'h', label: 'Заголовок', title: 'Заголовок раздела', wrap: { linePrefix: '## ' } },
-  { key: 'l', label: 'Список', title: 'Пункт списка', wrap: { linePrefix: '- ' } },
-  { key: 'a', label: 'Ссылка', title: 'Ссылка (Ctrl+K)', hot: 'k', wrap: { before: '[', after: '](https://)', placeholder: 'текст ссылки' } },
-  { key: 'f', label: 'ƒ(x)', title: 'Формула в строке (Ctrl+M)', hot: 'm', wrap: { before: '$', after: '$', placeholder: 'T = 2\\pi\\sqrt{L/g}' } },
+const marksFor = (t: TFn<typeof teachBlocks.ru>): { key: string; label: string; title: string; hot?: string; wrap: Wrap }[] => [
+  { key: 'b', label: t('markB'), title: t('markBTitle'), hot: 'b', wrap: { before: '**', after: '**', placeholder: t('markBPh') } },
+  { key: 'i', label: t('markI'), title: t('markITitle'), hot: 'i', wrap: { before: '*', after: '*', placeholder: t('markIPh') } },
+  { key: 'h', label: t('markH'), title: t('markHTitle'), wrap: { linePrefix: '## ' } },
+  { key: 'l', label: t('markL'), title: t('markLTitle'), wrap: { linePrefix: '- ' } },
+  { key: 'a', label: t('markA'), title: t('markATitle'), hot: 'k', wrap: { before: '[', after: '](https://)', placeholder: t('markAPh') } },
+  { key: 'f', label: 'ƒ(x)', title: t('markFTitle'), hot: 'm', wrap: { before: '$', after: '$', placeholder: 'T = 2\\pi\\sqrt{L/g}' } },
 ];
 
 /** Поле с разметкой и живым предпросмотром рядом: учитель сразу видит то, что увидит ученик. */
@@ -208,6 +216,8 @@ function RichField({ label, value, onChange, rows = 10, placeholder, max = LIMIT
   label: string; value: string; onChange: (v: string) => void; rows?: number; placeholder?: string; max?: number;
   preview?: (text: string) => React.ReactNode;
 }) {
+  const t = useT(teachBlocks);
+  const MARKS = marksFor(t);
   const area = useRef<HTMLTextAreaElement>(null);
 
   function applyMark(wrap: Wrap) {
@@ -233,7 +243,7 @@ function RichField({ label, value, onChange, rows = 10, placeholder, max = LIMIT
     <div className="cf-rich">
       <div className="cf-rich-head">
         <span className="label">{label}</span>
-        <div className="cf-marks" role="toolbar" aria-label="Разметка текста">
+        <div className="cf-marks" role="toolbar" aria-label={t('toolbar')}>
           {MARKS.map((m) => (
             <button key={m.key} type="button" className={`cf-mark cf-mark-${m.key}`} title={m.title} aria-label={m.title}
               onClick={() => applyMark(m.wrap)}>{m.label}</button>
@@ -242,16 +252,16 @@ function RichField({ label, value, onChange, rows = 10, placeholder, max = LIMIT
       </div>
       <div className="cf-rich-panes">
         <textarea ref={area} className="input cf-textarea" rows={rows} value={value} maxLength={max} aria-label={label}
-          placeholder={placeholder ?? 'Пустая строка начинает новый абзац. Формула в строке — $E = mc^2$, отдельной строкой — $$…$$'}
+          placeholder={placeholder ?? t('richPh')}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
             if (!(e.metaKey || e.ctrlKey) || e.key === 'Enter') return;
             const mark = MARKS.find((m) => m.hot === e.key.toLowerCase());
             if (mark) { e.preventDefault(); applyMark(mark.wrap); }
           }} />
-        <div className="cf-preview" aria-label="Как увидит ученик">
-          <span className="cf-preview-tag">как увидит ученик</span>
-          {value.trim() ? (preview ? preview(value) : <Markup text={value} />) : <p className="muted">Здесь появится текст.</p>}
+        <div className="cf-preview" aria-label={t('asStudent')}>
+          <span className="cf-preview-tag">{t('asStudentTag')}</span>
+          {value.trim() ? (preview ? preview(value) : <Markup text={value} />) : <p className="muted">{t('textAppears')}</p>}
         </div>
       </div>
     </div>
@@ -259,16 +269,17 @@ function RichField({ label, value, onChange, rows = 10, placeholder, max = LIMIT
 }
 
 function TextEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payload: TextPayload } & Shared) {
+  const t = useT(teachBlocks);
   const [title, setTitle] = useState(payload.title);
   const [body, setBody] = useState(payload.body);
   const auto = useAutosave({ title, body }, onSave, onDirtyChange);
   return (
     <AutoForm auto={auto} error={error} onCancel={onCancel}>
-      <label className="field"><span>Заголовок (необязательно)</span>
-        <input value={title} maxLength={LIMITS.title} placeholder="Например, «Что такое период колебаний»"
+      <label className="field"><span>{t('titleOptional')}</span>
+        <input value={title} maxLength={LIMITS.title} placeholder={t('textTitlePh')}
           onChange={(e) => setTitle(e.target.value)} />
       </label>
-      <RichField label="Текст" value={body} onChange={setBody} />
+      <RichField label={t('text')} value={body} onChange={setBody} />
     </AutoForm>
   );
 }
@@ -276,11 +287,13 @@ function TextEditor({ payload, onSave, onCancel, onDirtyChange, error }: { paylo
 /* --------------------------- блоки-материалы ---------------------------- */
 
 function CalloutEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payload: CalloutPayload } & Shared) {
+  const t = useT(teachBlocks);
+  const CALLOUT_TONE_LABELS = calloutToneLabels(useLocale());
   const [v, setV] = useState(payload);
   const auto = useAutosave(v, onSave, onDirtyChange);
   return (
     <AutoForm auto={auto} error={error} onCancel={onCancel}>
-      <div className="cf-tone-row" role="radiogroup" aria-label="Вид врезки">
+      <div className="cf-tone-row" role="radiogroup" aria-label={t('calloutKind')}>
         {CALLOUT_TONES.map((tone) => (
           <button key={tone} type="button" role="radio" aria-checked={v.tone === tone}
             className={`cf-tone tone-${tone}${v.tone === tone ? ' active' : ''}`} onClick={() => setV({ ...v, tone })}>
@@ -288,11 +301,11 @@ function CalloutEditor({ payload, onSave, onCancel, onDirtyChange, error }: { pa
           </button>
         ))}
       </div>
-      <label className="field"><span>Заголовок (необязательно)</span>
+      <label className="field"><span>{t('titleOptional')}</span>
         <input value={v.title} maxLength={LIMITS.title} placeholder={CALLOUT_TONE_LABELS[v.tone]}
           onChange={(e) => setV({ ...v, title: e.target.value })} />
       </label>
-      <RichField label="Текст врезки" rows={5} value={v.body} onChange={(body) => setV({ ...v, body })}
+      <RichField label={t('calloutText')} rows={5} value={v.body} onChange={(body) => setV({ ...v, body })}
         preview={(body) => <CalloutBlock payload={{ ...v, body }} />} />
     </AutoForm>
   );
@@ -305,6 +318,7 @@ const TEX_SNIPPETS: [string, string][] = [
 ];
 
 function FormulaEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payload: FormulaPayload } & Shared) {
+  const t = useT(teachBlocks);
   const [v, setV] = useState(payload);
   const area = useRef<HTMLTextAreaElement>(null);
   const auto = useAutosave(v, onSave, onDirtyChange);
@@ -317,20 +331,20 @@ function FormulaEditor({ payload, onSave, onCancel, onDirtyChange, error }: { pa
   }
   return (
     <AutoForm auto={auto} error={error} onCancel={onCancel}>
-      <div className="cf-formula-preview" aria-label="Как увидит ученик">
-        {v.latex.trim() ? <Tex tex={v.latex} /> : <span className="muted">Формула появится здесь</span>}
+      <div className="cf-formula-preview" aria-label={t('asStudent')}>
+        {v.latex.trim() ? <Tex tex={v.latex} /> : <span className="muted">{t('formulaAppears')}</span>}
       </div>
-      <div className="cf-snippets" role="toolbar" aria-label="Вставить обозначение">
+      <div className="cf-snippets" role="toolbar" aria-label={t('insertSymbol')}>
         {TEX_SNIPPETS.map(([label, tex]) => (
-          <button key={tex} type="button" className="cf-mark" title={tex} onClick={() => insert(tex)}>{label}</button>
+          <button key={tex} type="button" className="cf-mark" title={tex} onClick={() => insert(tex)}>{tex === '\\vec{F}' ? t('vector') : label}</button>
         ))}
       </div>
-      <label className="field"><span>Формула в LaTeX</span>
+      <label className="field"><span>{t('formulaLatex')}</span>
         <textarea ref={area} className="input cf-textarea cf-mono" rows={3} value={v.latex} maxLength={MEDIA_LIMITS.latex}
           placeholder="T = 2\\pi\\sqrt{\\frac{L}{g}}" spellCheck={false} onChange={(e) => setV({ ...v, latex: e.target.value })} />
       </label>
-      <label className="field"><span>Подпись (необязательно)</span>
-        <input value={v.caption} maxLength={LIMITS.caption} placeholder="Период малых колебаний маятника"
+      <label className="field"><span>{t('captionOptional')}</span>
+        <input value={v.caption} maxLength={LIMITS.caption} placeholder={t('formulaCaptionPh')}
           onChange={(e) => setV({ ...v, caption: e.target.value })} />
       </label>
     </AutoForm>
@@ -338,6 +352,8 @@ function FormulaEditor({ payload, onSave, onCancel, onDirtyChange, error }: { pa
 }
 
 function ImageEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payload: ImagePayload } & Shared) {
+  const t = useT(teachBlocks);
+  const fmt = useFormat();
   const [v, setV] = useState(payload);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
@@ -348,16 +364,16 @@ function ImageEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payl
 
   async function upload(f: File | null | undefined) {
     if (!f) return;
-    if (!f.type.startsWith('image/')) return setProblem('Это не картинка. Подходят PNG, JPEG, WebP и GIF.');
+    if (!f.type.startsWith('image/')) return setProblem(t('notImage'));
     setBusy(true);
     setProblem('');
     try {
       const res = await fetch('/api/lms/assets', { method: 'POST', body: f, headers: { 'Content-Type': 'application/octet-stream' } });
       const data = await res.json().catch(() => null) as { src?: string; error?: string } | null;
-      if (!res.ok || !data?.src) setProblem(data?.error ?? 'Не получилось загрузить картинку.');
+      if (!res.ok || !data?.src) setProblem(data?.error ?? t('uploadFailed'));
       else setV((prev) => ({ ...prev, src: data.src as string }));
     } catch {
-      setProblem('Сеть недоступна. Попробуйте ещё раз.');
+      setProblem(t('network'));
     }
     setBusy(false);
   }
@@ -369,94 +385,97 @@ function ImageEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payl
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={v.src} alt="" />
           <div className="cf-inline">
-            <button type="button" className="btn btn-sm" onClick={() => file.current?.click()}>Заменить</button>
-            <button type="button" className="btn btn-sm btn-danger" onClick={() => setV({ ...v, src: '' })}>Убрать</button>
+            <button type="button" className="btn btn-sm" onClick={() => file.current?.click()}>{t('replace')}</button>
+            <button type="button" className="btn btn-sm btn-danger" onClick={() => setV({ ...v, src: '' })}>{t('remove')}</button>
           </div>
         </div>
       ) : (
-        <div className={over ? 'cf-drop over' : 'cf-drop'} tabIndex={0} role="button" aria-label="Загрузить картинку"
+        <div className={over ? 'cf-drop over' : 'cf-drop'} tabIndex={0} role="button" aria-label={t('uploadImage')}
           onClick={() => file.current?.click()}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.current?.click(); } }}
           onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
           onDrop={(e) => { e.preventDefault(); setOver(false); void upload(e.dataTransfer.files[0]); }}
           onPaste={(e) => { const f = [...e.clipboardData.files][0]; if (f) { e.preventDefault(); void upload(f); } }}>
           <IconUpload size={22} />
-          <strong>{busy ? 'Загружаю…' : 'Перетащите картинку сюда'}</strong>
-          <span className="muted">или нажмите, чтобы выбрать файл · Ctrl+V вставит из буфера · до 4 МБ</span>
+          <strong>{busy ? t('uploading') : t('dropHere')}</strong>
+          <span className="muted">{t('dropHint')}</span>
         </div>
       )}
       <input ref={file} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden
         onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = ''; }} />
       {!v.src && (
         <div className="cf-inline cf-link-row">
-          <input className="input" value={link} placeholder="…или ссылка https://" aria-label="Ссылка на картинку"
+          <input className="input" value={link} placeholder={t('linkPh')} aria-label={t('imageLink')}
             onChange={(e) => setLink(e.target.value)} />
           <button type="button" className="btn btn-sm" disabled={!/^https:\/\/\S+$/.test(link.trim())}
-            onClick={() => { setV({ ...v, src: link.trim() }); setLink(''); }}>Вставить</button>
+            onClick={() => { setV({ ...v, src: link.trim() }); setLink(''); }}>{t('insert')}</button>
         </div>
       )}
-      {problem && <p className="error-box" role="alert">{problem}</p>}
+      {problem && <p className="error-box" role="alert">{fmt.message(problem)}</p>}
       <div className="form-grid cf-grid-top">
-        <label className="field"><span>Подпись под картинкой</span>
+        <label className="field"><span>{t('imageCaption')}</span>
           <input value={v.caption} maxLength={LIMITS.caption} onChange={(e) => setV({ ...v, caption: e.target.value })} />
         </label>
-        <label className="field"><span>Описание для незрячих</span>
-          <input value={v.alt} maxLength={LIMITS.caption} placeholder="Что изображено" onChange={(e) => setV({ ...v, alt: e.target.value })} />
+        <label className="field"><span>{t('alt')}</span>
+          <input value={v.alt} maxLength={LIMITS.caption} placeholder={t('altPh')} onChange={(e) => setV({ ...v, alt: e.target.value })} />
         </label>
       </div>
       <label className="check-row">
         <input type="checkbox" checked={v.wide} onChange={(e) => setV({ ...v, wide: e.target.checked })} />
-        Во всю ширину урока
+        {t('wide')}
       </label>
     </AutoForm>
   );
 }
 
 function VideoEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payload: VideoPayload } & Shared) {
+  const t = useT(teachBlocks);
   const [v, setV] = useState(payload);
   const ok = !v.url.trim() || videoEmbed(v.url) !== null;
   // Неподдерживаемую ссылку на сервер не шлём: он ответит отказом на каждое нажатие клавиши.
   const auto = useAutosave(ok ? v : { ...v, url: payload.url }, onSave, onDirtyChange);
   return (
     <AutoForm auto={auto} error={error} onCancel={onCancel}>
-      <label className="field"><span>Ссылка на видео</span>
+      <label className="field"><span>{t('videoLink')}</span>
         <input value={v.url} maxLength={MEDIA_LIMITS.url} placeholder="https://youtu.be/…" inputMode="url"
           aria-invalid={ok ? undefined : true} onChange={(e) => setV({ ...v, url: e.target.value.trim() })} />
-        {!ok && <span className="cf-field-error" role="alert">Поддерживаются YouTube, Vimeo, Rutube и прямые ссылки на .mp4 / .webm.</span>}
+        {!ok && <span className="cf-field-error" role="alert">{t('videoUnsupported')}</span>}
       </label>
       {ok && v.url && <VideoBlock payload={{ url: v.url, caption: '' }} />}
-      <label className="field"><span>Подпись (необязательно)</span>
-        <input value={v.caption} maxLength={LIMITS.caption} placeholder="На что обратить внимание"
+      <label className="field"><span>{t('captionOptional')}</span>
+        <input value={v.caption} maxLength={LIMITS.caption} placeholder={t('videoCaptionPh')}
           onChange={(e) => setV({ ...v, caption: e.target.value })} />
       </label>
-      <p className="muted">Чтобы начать не с начала, добавьте к ссылке YouTube «?t=90» — секунды.</p>
+      <p className="muted">{t('videoStart')}</p>
     </AutoForm>
   );
 }
 
 function SpoilerEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payload: SpoilerPayload } & Shared) {
+  const t = useT(teachBlocks);
   const [v, setV] = useState(payload);
   const auto = useAutosave(v, onSave, onDirtyChange);
   return (
     <AutoForm auto={auto} error={error} onCancel={onCancel}>
-      <label className="field"><span>Надпись на кнопке</span>
-        <input value={v.title} maxLength={LIMITS.title} placeholder="Показать решение" onChange={(e) => setV({ ...v, title: e.target.value })} />
+      <label className="field"><span>{t('buttonLabel')}</span>
+        <input value={v.title} maxLength={LIMITS.title} placeholder={t('showSolution')} onChange={(e) => setV({ ...v, title: e.target.value })} />
       </label>
-      <RichField label="Что скрыто" rows={6} value={v.body} onChange={(body) => setV({ ...v, body })} />
+      <RichField label={t('hidden')} rows={6} value={v.body} onChange={(body) => setV({ ...v, body })} />
     </AutoForm>
   );
 }
 
 function CodeEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payload: CodePayload } & Shared) {
+  const t = useT(teachBlocks);
   const [v, setV] = useState(payload);
   const auto = useAutosave(v, onSave, onDirtyChange);
   return (
     <AutoForm auto={auto} error={error} onCancel={onCancel}>
-      <label className="field cf-narrow"><span>Язык (подпись)</span>
+      <label className="field cf-narrow"><span>{t('language')}</span>
         <input value={v.language} maxLength={30} placeholder="Python" list="cf-languages" onChange={(e) => setV({ ...v, language: e.target.value })} />
-        <datalist id="cf-languages">{['Python', 'JavaScript', 'C++', 'Pascal', 'Java', 'SQL', 'Псевдокод'].map((l) => <option key={l} value={l} />)}</datalist>
+        <datalist id="cf-languages">{['Python', 'JavaScript', 'C++', 'Pascal', 'Java', 'SQL', t('pseudocode')].map((l) => <option key={l} value={l} />)}</datalist>
       </label>
-      <label className="field"><span>Код</span>
+      <label className="field"><span>{t('code')}</span>
         <textarea className="input cf-textarea cf-mono" rows={10} value={v.code} maxLength={LIMITS.text} spellCheck={false}
           onChange={(e) => setV({ ...v, code: e.target.value })}
           onKeyDown={(e) => {
@@ -482,6 +501,8 @@ function SimulationChooser({ blockId, simulationId, title, onChange, invalid, pi
   /** Текст задания: помощник опишет тренажёр под него, мастерская откроется с готовым описанием. */
   prompt?: string;
 }) {
+  const t = useT(teachBlocks);
+  const fmt = useFormat();
   const [picking, setPicking] = useState(false);
   const [briefing, setBriefing] = useState(false);
   const [briefError, setBriefError] = useState('');
@@ -501,11 +522,11 @@ function SimulationChooser({ blockId, simulationId, title, onChange, invalid, pi
           <img src={`/api/simulations/${simulationId}/thumbnail`} alt=""
             onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
           <div className="cf-sim-chosen-text">
-            <span className="label">Выбран тренажёр</span>
-            <strong>{title ?? 'Без названия'}</strong>
+            <span className="label">{t('chosenSim')}</span>
+            <strong>{title ?? t('untitled')}</strong>
             <div className="cf-sim-chosen-actions">
-              <button type="button" className="btn btn-sm" onClick={() => setPicking(true)}>Заменить</button>
-              <a className="btn btn-sm btn-ghost" href={`/present/${simulationId}`} target="_blank" rel="noopener noreferrer">Открыть</a>
+              <button type="button" className="btn btn-sm" onClick={() => setPicking(true)}>{t('replace')}</button>
+              <a className="btn btn-sm btn-ghost" href={`/present/${simulationId}`} target="_blank" rel="noopener noreferrer">{t('open')}</a>
             </div>
           </div>
         </div>
@@ -513,28 +534,27 @@ function SimulationChooser({ blockId, simulationId, title, onChange, invalid, pi
         <div className={invalid ? 'cf-choice-tiles invalid' : 'cf-choice-tiles'}>
           <button type="button" className="cf-choice-tile" aria-invalid={invalid ? true : undefined} onClick={() => setPicking(true)}>
             <span className="cf-kind cf-kind-simulation" aria-hidden="true"><IconLibrary size={18} /></span>
-            <span><strong>Выбрать готовый</strong>
-              <span className="muted">Из вашей библиотеки или общего каталога — с поиском и превью.</span></span>
+            <span><strong>{t('pickReady')}</strong>
+              <span className="muted">{t('pickReadyHint')}</span></span>
           </button>
           {!pickOnly && prompt !== undefined && (
             <button type="button" className="cf-choice-tile cf-choice-ai" disabled={briefing || !prompt.trim()} onClick={generateForTask}>
               <span className="cf-kind cf-kind-assignment" aria-hidden="true"><IconSpark size={18} /></span>
-              <span><strong>{briefing ? 'Помощник описывает тренажёр…' : 'Сгенерировать под это задание'}</strong>
-                <span className="muted">Помощник прочитает задание и опишет тренажёр, на котором ученик найдёт ответ. Сохраните задание перед переходом.</span></span>
+              <span><strong>{briefing ? t('briefing') : t('generateForTask')}</strong>
+                <span className="muted">{t('generateForTaskHint')}</span></span>
             </button>
           )}
           {!pickOnly && <a className="cf-choice-tile" href={generateForBlockHref(blockId)}>
             <span className="cf-kind cf-kind-assignment" aria-hidden="true"><IconWand size={18} /></span>
-            <span><strong>Сгенерировать новый</strong>
-              <span className="muted">Откроется мастерская. Когда симуляция будет готова, нажмите там «Вставить в урок».</span></span>
+            <span><strong>{t('generateNew')}</strong>
+              <span className="muted">{t('generateNewHint')}</span></span>
           </a>}
         </div>
       )}
-      {briefError && <p className="error-box" role="alert">{briefError}</p>}
+      {briefError && <p className="error-box" role="alert">{fmt.message(briefError)}</p>}
       {simulationId && !pickOnly && (
         <p className="muted">
-          Нужен другой тренажёр? <a href={generateForBlockHref(blockId)}>Сгенерировать новый</a> — генерация тратит вашу квоту;
-          сохраните блок перед переходом.
+          {t('needOther')} <a href={generateForBlockHref(blockId)}>{t('generateNew')}</a> {t('needOtherTail')}
         </p>
       )}
       {picking && (
@@ -548,6 +568,7 @@ function SimulationChooser({ blockId, simulationId, title, onChange, invalid, pi
 function SimulationEditor({ blockId, payload, title, onSave, onCancel, onDirtyChange, error }: {
   blockId: string; payload: SimulationPayload; title: string | null;
 } & Shared) {
+  const t = useT(teachBlocks);
   const [simulationId, setSimulationId] = useState(payload.simulationId);
   const [simTitle, setSimTitle] = useState(title);
   const [caption, setCaption] = useState(payload.caption);
@@ -565,7 +586,7 @@ function SimulationEditor({ blockId, payload, title, onSave, onCancel, onDirtyCh
     const reply = captureRef.current ? await captureRef.current() : null;
     if (!reply || !reply.ok) {
       return setNote(!reply || reply.reason === 'timeout' || reply.reason === 'no-frame'
-        ? 'Симуляция ещё загружается — подождите пару секунд.' : 'Эта симуляция не сообщает свои параметры, пресет для неё не задать.');
+        ? t('simLoading') : t('simNoParams'));
     }
     const controls = reply.controls.filter((c) => c.kind !== 'speed');
     setPreset(Object.fromEntries(controls.map((c) => [c.name, c.value])));
@@ -576,16 +597,16 @@ function SimulationEditor({ blockId, payload, title, onSave, onCancel, onDirtyCh
   return (
     <EditorForm dirty={dirty} error={error} onCancel={onCancel} onSubmit={() => onSave({ simulationId, caption, preset, locked })}>
       <SimulationChooser blockId={blockId} simulationId={simulationId} title={simTitle}
-        onChange={(id, t) => { if (id !== simulationId) { setPreset({}); setLocked([]); } setSimulationId(id); setSimTitle(t); }} />
-      <label className="field"><span>Подпись под тренажёром</span>
-        <input value={caption} maxLength={LIMITS.caption} placeholder="Что сделать: «Меняйте длину нити и следите за периодом»"
+        onChange={(id, title) => { if (id !== simulationId) { setPreset({}); setLocked([]); } setSimulationId(id); setSimTitle(title); }} />
+      <label className="field"><span>{t('simCaption')}</span>
+        <input value={caption} maxLength={LIMITS.caption} placeholder={t('simCaptionPh')}
           onChange={(e) => setCaption(e.target.value)} />
       </label>
       {simulationId && (
         <fieldset className="cf-fieldset">
-          <legend>С чего начинает ученик</legend>
+          <legend>{t('studentStart')}</legend>
           {names.length === 0 && !tuning && (
-            <p className="muted">Сейчас тренажёр откроется как есть. Можно задать стартовые значения ползунков и закрыть лишние от ученика.</p>
+            <p className="muted">{t('startAsIs')}</p>
           )}
           {names.length > 0 && (
             <ul className="cf-preset-list">
@@ -596,7 +617,7 @@ function SimulationEditor({ blockId, payload, title, onSave, onCancel, onDirtyCh
                   <label className="check-row">
                     <input type="checkbox" checked={locked.includes(n)}
                       onChange={(e) => setLocked(e.target.checked ? [...locked, n] : locked.filter((x) => x !== n))} />
-                    закрыть от ученика
+                    {t('lockFromStudent')}
                   </label>
                 </li>
               ))}
@@ -605,10 +626,10 @@ function SimulationEditor({ blockId, payload, title, onSave, onCancel, onDirtyCh
           {tuning && <SimStateFrame simulationId={simulationId} captureRef={captureRef} />}
           <div className="cf-inline">
             {!tuning
-              ? <button type="button" className="btn btn-sm" onClick={() => setTuning(true)}>{names.length ? 'Изменить стартовые значения' : 'Задать стартовые значения'}</button>
-              : <button type="button" className="btn btn-sm btn-primary" onClick={capture}>Запомнить текущее положение</button>}
-            {names.length > 0 && <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setPreset({}); setLocked([]); }}>Сбросить пресет</button>}
-            {tuning && <span className="muted">Выставьте ползунки так, как должен увидеть ученик.</span>}
+              ? <button type="button" className="btn btn-sm" onClick={() => setTuning(true)}>{names.length ? t('changeStart') : t('setStart')}</button>
+              : <button type="button" className="btn btn-sm btn-primary" onClick={capture}>{t('rememberPos')}</button>}
+            {names.length > 0 && <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setPreset({}); setLocked([]); }}>{t('resetPreset')}</button>}
+            {tuning && <span className="muted">{t('setSliders')}</span>}
           </div>
           {note && <p className="warn-banner">{note}</p>}
         </fieldset>
@@ -620,8 +641,9 @@ function SimulationEditor({ blockId, payload, title, onSave, onCancel, onDirtyCh
 /* ------------------------------ лаборатория ----------------------------- */
 
 function LabCards({ name, value, onChange }: { name: string; value: string; onChange: (slug: string) => void }) {
+  const t = useT(teachBlocks);
   return (
-    <div className="cf-lab-grid" role="radiogroup" aria-label="Лаборатория">
+    <div className="cf-lab-grid" role="radiogroup" aria-label={t('lab')}>
       {LABS.map((l) => (
         <label key={l.slug} className={l.slug === value ? 'cf-lab-option active' : 'cf-lab-option'}>
           <input type="radio" className="visually-hidden" name={name} value={l.slug} checked={l.slug === value}
@@ -640,6 +662,7 @@ function LabCards({ name, value, onChange }: { name: string; value: string; onCh
 }
 
 function LabEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payload: LabPayload } & Shared) {
+  const t = useT(teachBlocks);
   const [slug, setSlug] = useState(payload.slug);
   const [caption, setCaption] = useState(payload.caption);
   const name = useId();
@@ -650,11 +673,11 @@ function LabEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payloa
       <LabCards name={name} value={slug} onChange={setSlug} />
       {lab && (
         <p className="muted">
-          {lab.blurb} <a href={labUrl(lab.slug)} target="_blank" rel="noopener noreferrer">Открыть сцену</a>
+          {lab.blurb} <a href={labUrl(lab.slug)} target="_blank" rel="noopener noreferrer">{t('openScene')}</a>
         </p>
       )}
-      <label className="field"><span>Подпись под лабораторией</span>
-        <input value={caption} maxLength={LIMITS.caption} placeholder="Что сделать в сцене"
+      <label className="field"><span>{t('labCaption')}</span>
+        <input value={caption} maxLength={LIMITS.caption} placeholder={t('labCaptionPh')}
           onChange={(e) => setCaption(e.target.value)} />
       </label>
     </EditorForm>
@@ -666,6 +689,8 @@ function LabEditor({ payload, onSave, onCancel, onDirtyChange, error }: { payloa
 function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, onCancel, onDirtyChange, error }: {
   blockId: string; payload: AssignmentPayload; standTitle: string | null; initialType?: AssignmentType;
 } & Shared) {
+  const t = useT(teachBlocks);
+  const locale = useLocale();
   const fresh = payload.prompt === 'Новое задание';
   const [f, setF] = useState<AssignmentForm>(() => {
     const form = toAssignmentForm(payload, standTitle);
@@ -692,51 +717,51 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
   return (
     <EditorForm dirty={dirty} error={error} onCancel={onCancel} onSubmit={() => onSave(fromAssignmentForm(f))}
       validate={() => {
-        const found = validateAssignmentForm(f);
+        const found = validateAssignmentForm(f, locale);
         setErrors(found);
         return Object.keys(found).length === 0;
       }}>
-      <label className="field"><span>Текст задания</span>
+      <label className="field"><span>{t('prompt')}</span>
         <textarea className="input cf-textarea" rows={4} value={f.prompt} maxLength={LIMITS.text} {...err('prompt')}
-          placeholder="Например: «Во сколько раз изменится период, если длину нити увеличить в четыре раза?»"
+          placeholder={t('promptPh')}
           onChange={(e) => set({ prompt: e.target.value })} />
         <FieldError id={`${uid}-prompt`} text={errors.prompt} />
       </label>
 
       <fieldset className="cf-fieldset">
-        <legend>Как отвечает ученик</legend>
+        <legend>{t('howAnswers')}</legend>
         <div className="cf-type-tiles">
           {ASSIGNMENT_TYPES.map((type) => (
             <button key={type} type="button" aria-pressed={f.type === type}
               className={f.type === type ? 'cf-type-tile active' : 'cf-type-tile'} onClick={() => set({ type })}>
               <span className="cf-type-icon" aria-hidden="true">{ASSIGNMENT_META[type].icon(18)}</span>
-              <strong>{ASSIGNMENT_META[type].label}</strong>
-              <span className="muted">{ASSIGNMENT_META[type].hint}</span>
+              <strong>{assignmentTypeLabels(locale)[type]}</strong>
+              <span className="muted">{assignmentHint(type, locale)}</span>
               <span className={ASSIGNMENT_META[type].auto ? 'cf-type-badge auto' : 'cf-type-badge'}>
-                {ASSIGNMENT_META[type].auto ? 'проверяется само' : 'проверяете вы'}
+                {ASSIGNMENT_META[type].auto ? t('autoChecked') : t('youCheck')}
               </span>
             </button>
           ))}
         </div>
         {f.type !== payload.spec.type && !fresh && (
-          <p className="warn-banner">Тип ответа изменён: уже сданные ответы можно будет пересчитать после сохранения.</p>
+          <p className="warn-banner">{t('typeChanged')}</p>
         )}
       </fieldset>
 
       {f.type === 'choice' && (
         <fieldset className="cf-fieldset">
-          <legend>Варианты ответа</legend>
-          <p className="muted">Отметьте слева правильные. Балл ставится автоматически: полный — при точном совпадении, иначе 0.</p>
+          <legend>{t('options')}</legend>
+          <p className="muted">{t('optionsHint')}</p>
           {f.options.map((o, i) => (
             <div key={o.id} className={o.correct ? 'option-row cf-option correct' : 'option-row cf-option'}>
               <input type={f.multiple ? 'checkbox' : 'radio'} name={`correct-${blockId}`} checked={o.correct}
-                aria-label={`Вариант ${i + 1} — правильный`}
+                aria-label={t('optionCorrect', { n: i + 1 })}
                 onChange={() => set({ options: markCorrect(f.options, o.id, f.multiple) })} />
-              <input className="input" value={o.text} maxLength={LIMITS.option} placeholder={`Вариант ${i + 1}`}
-                aria-label={`Текст варианта ${i + 1}`}
+              <input className="input" value={o.text} maxLength={LIMITS.option} placeholder={t('optionN', { n: i + 1 })}
+                aria-label={t('optionText', { n: i + 1 })}
                 aria-invalid={errors.options && !o.text.trim() ? true : undefined}
                 onChange={(e) => setOption(o.id, e.target.value)} />
-              <button type="button" className="icon-btn cf-icon-btn" aria-label={`Удалить вариант ${i + 1}`} title="Удалить вариант"
+              <button type="button" className="icon-btn cf-icon-btn" aria-label={t('optionDelete', { n: i + 1 })} title={t('deleteOption')}
                 disabled={f.options.length <= LIMITS.minOptions}
                 onClick={() => set({ options: f.options.filter((x) => x.id !== o.id) })}>
                 <IconTrash size={16} />
@@ -748,17 +773,17 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
           <div className="cf-inline">
             <button type="button" className="btn btn-sm" disabled={f.options.length >= LIMITS.maxOptions}
               onClick={() => set({ options: [...f.options, { id: newOptionId(), text: '', correct: false }] })}>
-              <IconPlus size={15} />Добавить вариант
+              <IconPlus size={15} />{t('addOption')}
             </button>
             <label className="check-row">
               <input type="checkbox" checked={f.multiple}
                 onChange={(e) => set({ multiple: e.target.checked,
                   options: e.target.checked ? f.options : markCorrect(f.options, f.options.find((o) => o.correct)?.id ?? '', false) })} />
-              Правильных ответов несколько
+              {t('multiple')}
             </label>
             <label className="check-row">
               <input type="checkbox" checked={f.shuffle} onChange={(e) => set({ shuffle: e.target.checked })} />
-              Перемешивать варианты
+              {t('shuffle')}
             </label>
           </div>
         </fieldset>
@@ -766,14 +791,14 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
 
       {f.type === 'short' && (
         <fieldset className="cf-fieldset">
-          <legend>Правильный ответ</legend>
-          <p className="muted">Регистр, «ё» и точка в конце не учитываются. Добавьте другие написания, если они тоже верны.</p>
+          <legend>{t('correctAnswer')}</legend>
+          <p className="muted">{t('shortHint')}</p>
           {f.accepted.map((a, i) => (
             <div key={i} className="option-row cf-option">
-              <input className="input" value={a} maxLength={100} placeholder={i === 0 ? 'Например: дифракция' : 'Ещё одно написание'}
-                aria-label={`Правильный ответ ${i + 1}`} aria-invalid={errors.accepted && i === 0 ? true : undefined}
+              <input className="input" value={a} maxLength={100} placeholder={i === 0 ? t('shortPh') : t('shortMorePh')}
+                aria-label={t('acceptedN', { n: i + 1 })} aria-invalid={errors.accepted && i === 0 ? true : undefined}
                 onChange={(e) => set({ accepted: f.accepted.map((x, k) => (k === i ? e.target.value : x)) })} />
-              <button type="button" className="icon-btn cf-icon-btn" aria-label={`Удалить написание ${i + 1}`} title="Удалить"
+              <button type="button" className="icon-btn cf-icon-btn" aria-label={t('acceptedDelete', { n: i + 1 })} title={t('delete')}
                 disabled={f.accepted.length <= 1} onClick={() => set({ accepted: f.accepted.filter((_, k) => k !== i) })}>
                 <IconTrash size={16} />
               </button>
@@ -782,15 +807,15 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
           <FieldError id={`${uid}-accepted`} text={errors.accepted} />
           <div className="cf-inline">
             <button type="button" className="btn btn-sm" disabled={f.accepted.length >= LIMITS.maxOptions}
-              onClick={() => set({ accepted: [...f.accepted, ''] })}><IconPlus size={15} />Ещё написание</button>
+              onClick={() => set({ accepted: [...f.accepted, ''] })}><IconPlus size={15} />{t('moreSpelling')}</button>
           </div>
         </fieldset>
       )}
 
       {f.type === 'gaps' && (
         <fieldset className="cf-fieldset">
-          <legend>Текст с пропусками</legend>
-          <p className="muted">Напишите текст целиком, выделите слово и нажмите «Сделать пропуском». Несколько верных слов — через черту: {'{{растёт|увеличивается}}'}.</p>
+          <legend>{t('gapsLegend')}</legend>
+          <p className="muted">{t('gapsHint', { example: `{{${t('gapsExample')}}}` })}</p>
           <div className="cf-inline">
             <button type="button" className="btn btn-sm" onClick={() => {
               const el = gapsArea.current;
@@ -800,15 +825,15 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
               if (!word || /[{}]/.test(word)) return;
               set({ gapsText: `${f.gapsText.slice(0, from)}{{${word}}}${f.gapsText.slice(to)}` });
               requestAnimationFrame(() => el.focus());
-            }}>Сделать пропуском</button>
-            <span className="muted">{`пропусков: ${parseGaps(f.gapsText).answers.length}`}</span>
+            }}>{t('makeGap')}</button>
+            <span className="muted">{t('gapsCount', { n: parseGaps(f.gapsText).answers.length })}</span>
           </div>
           <textarea ref={gapsArea} className="input cf-textarea" rows={5} value={f.gapsText} maxLength={LIMITS.text} {...err('gaps')}
-            placeholder="Период маятника {{растёт}}, когда длина нити увеличивается, и не зависит от {{массы}} груза."
+            placeholder={t('gapsPh', { g1: `{{${t('gapsPhW1')}}}`, g2: `{{${t('gapsPhW2')}}}` })}
             onChange={(e) => set({ gapsText: e.target.value })} />
           <FieldError id={`${uid}-gaps`} text={errors.gaps} />
           {parseGaps(f.gapsText).answers.length > 0 && (
-            <p className="cf-gaps-preview" aria-label="Как увидит ученик">
+            <p className="cf-gaps-preview" aria-label={t('asStudent')}>
               {parseGaps(f.gapsText).parts.map((part, i, all) => (
                 <span key={i}>{part}{i < all.length - 1 && <span className="cf-gap-slot" />}</span>
               ))}
@@ -819,18 +844,18 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
 
       {f.type === 'match' && (
         <fieldset className="cf-fieldset">
-          <legend>Пары</legend>
-          <p className="muted">Пишите пары как есть — ученику правая колонка придёт перемешанной. Балл — по доле верных пар.</p>
+          <legend>{t('pairs')}</legend>
+          <p className="muted">{t('pairsHint')}</p>
           {f.pairs.map((pair, i) => (
             <div key={pair.id} className="cf-pair-row">
-              <input className="input" value={pair.left} maxLength={LIMITS.option} placeholder={`Слева ${i + 1}: термин`}
-                aria-label={`Пара ${i + 1}, слева`} aria-invalid={errors.pairs && !pair.left.trim() ? true : undefined}
+              <input className="input" value={pair.left} maxLength={LIMITS.option} placeholder={t('pairLeftPh', { n: i + 1 })}
+                aria-label={t('pairLeft', { n: i + 1 })} aria-invalid={errors.pairs && !pair.left.trim() ? true : undefined}
                 onChange={(e) => set({ pairs: f.pairs.map((x) => (x.id === pair.id ? { ...x, left: e.target.value } : x)) })} />
               <span className="cf-pair-arrow" aria-hidden="true">→</span>
-              <input className="input" value={pair.right} maxLength={LIMITS.option} placeholder="Справа: определение"
-                aria-label={`Пара ${i + 1}, справа`} aria-invalid={errors.pairs && !pair.right.trim() ? true : undefined}
+              <input className="input" value={pair.right} maxLength={LIMITS.option} placeholder={t('pairRightPh')}
+                aria-label={t('pairRight', { n: i + 1 })} aria-invalid={errors.pairs && !pair.right.trim() ? true : undefined}
                 onChange={(e) => set({ pairs: f.pairs.map((x) => (x.id === pair.id ? { ...x, right: e.target.value } : x)) })} />
-              <button type="button" className="icon-btn cf-icon-btn" aria-label={`Удалить пару ${i + 1}`} title="Удалить пару"
+              <button type="button" className="icon-btn cf-icon-btn" aria-label={t('pairDelete', { n: i + 1 })} title={t('deletePair')}
                 disabled={f.pairs.length <= LIMITS.minOptions} onClick={() => set({ pairs: f.pairs.filter((x) => x.id !== pair.id) })}>
                 <IconTrash size={16} />
               </button>
@@ -840,7 +865,7 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
           <div className="cf-inline">
             <button type="button" className="btn btn-sm" disabled={f.pairs.length >= LIMITS.maxOptions}
               onClick={() => set({ pairs: [...f.pairs, { id: newOptionId(), left: '', rightId: newOptionId(), right: '' }] })}>
-              <IconPlus size={15} />Добавить пару
+              <IconPlus size={15} />{t('addPair')}
             </button>
           </div>
         </fieldset>
@@ -848,49 +873,49 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
 
       {f.type === 'table' && (
         <fieldset className="cf-fieldset">
-          <legend>Столбцы таблицы</legend>
-          <p className="muted">Первый столбец — то, что ученик меняет, второй — то, что измеряет: по ним строится график. Работу проверяете вы.</p>
+          <legend>{t('columns')}</legend>
+          <p className="muted">{t('columnsHint')}</p>
           {f.columns.map((c, i) => (
             <div key={c.id} className="cf-pair-row cf-col-row">
-              <input className="input" value={c.label} maxLength={60} placeholder={i === 0 ? 'Длина нити' : i === 1 ? 'Период' : `Столбец ${i + 1}`}
-                aria-label={`Название столбца ${i + 1}`} aria-invalid={errors.columns && !c.label.trim() ? true : undefined}
+              <input className="input" value={c.label} maxLength={60} placeholder={i === 0 ? t('col1Ph') : i === 1 ? t('col2Ph') : t('colNPh', { n: i + 1 })}
+                aria-label={t('colName', { n: i + 1 })} aria-invalid={errors.columns && !c.label.trim() ? true : undefined}
                 onChange={(e) => set({ columns: f.columns.map((x) => (x.id === c.id ? { ...x, label: e.target.value } : x)) })} />
               <span className="cf-pair-arrow" aria-hidden="true">,</span>
-              <input className="input" value={c.unit} maxLength={LIMITS.unit} placeholder="единицы: м" aria-label={`Единицы столбца ${i + 1}`}
+              <input className="input" value={c.unit} maxLength={LIMITS.unit} placeholder={t('unitPh')} aria-label={t('colUnit', { n: i + 1 })}
                 onChange={(e) => set({ columns: f.columns.map((x) => (x.id === c.id ? { ...x, unit: e.target.value } : x)) })} />
-              <button type="button" className="icon-btn cf-icon-btn" aria-label={`Удалить столбец ${i + 1}`} title="Удалить столбец"
+              <button type="button" className="icon-btn cf-icon-btn" aria-label={t('colDelete', { n: i + 1 })} title={t('deleteCol')}
                 disabled={f.columns.length <= 2} onClick={() => set({ columns: f.columns.filter((x) => x.id !== c.id) })}><IconTrash size={16} /></button>
             </div>
           ))}
           <FieldError id={`${uid}-columns`} text={errors.columns} />
           <div className="cf-inline">
             <button type="button" className="btn btn-sm" disabled={f.columns.length >= 5}
-              onClick={() => set({ columns: [...f.columns, { id: newOptionId(), label: '', unit: '' }] })}><IconPlus size={15} />Добавить столбец</button>
-            <label className="field cf-inline-field"><span>Строк не меньше</span>
+              onClick={() => set({ columns: [...f.columns, { id: newOptionId(), label: '', unit: '' }] })}><IconPlus size={15} />{t('addCol')}</button>
+            <label className="field cf-inline-field"><span>{t('minRows')}</span>
               <input type="number" min={1} max={20} value={f.minRows} onChange={(e) => set({ minRows: e.target.value })} />
             </label>
           </div>
-          {f.standKind !== 'simulation' && <p className="cf-note">Совет: добавьте ниже стенд-тренажёр — тогда ученик сможет подставлять значения пипеткой.</p>}
+          {f.standKind !== 'simulation' && <p className="cf-note">{t('tableTip')}</p>}
         </fieldset>
       )}
 
       {f.type === 'order' && (
         <fieldset className="cf-fieldset">
-          <legend>Шаги в правильном порядке</legend>
-          <p className="muted">Запишите сверху вниз так, как должно быть, — ученик получит их перемешанными.</p>
+          <legend>{t('order')}</legend>
+          <p className="muted">{t('orderHint')}</p>
           {f.items.map((it, i) => (
             <div key={it.id} className="option-row cf-option">
               <span className="cf-step-num" aria-hidden="true">{i + 1}</span>
-              <input className="input" value={it.text} maxLength={LIMITS.option} placeholder={`Шаг ${i + 1}`} aria-label={`Шаг ${i + 1}`}
+              <input className="input" value={it.text} maxLength={LIMITS.option} placeholder={t('stepN', { n: i + 1 })} aria-label={t('stepN', { n: i + 1 })}
                 aria-invalid={errors.items && !it.text.trim() ? true : undefined}
                 onChange={(e) => set({ items: f.items.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)) })} />
-              <button type="button" className="icon-btn cf-icon-btn" aria-label={`Поднять шаг ${i + 1}`} title="Выше" disabled={i === 0}
+              <button type="button" className="icon-btn cf-icon-btn" aria-label={t('stepUp', { n: i + 1 })} title={t('up')} disabled={i === 0}
                 onClick={() => { const next = [...f.items]; [next[i - 1], next[i]] = [next[i], next[i - 1]]; set({ items: next }); }}>
                 <IconArrowUp size={15} /></button>
-              <button type="button" className="icon-btn cf-icon-btn" aria-label={`Опустить шаг ${i + 1}`} title="Ниже" disabled={i === f.items.length - 1}
+              <button type="button" className="icon-btn cf-icon-btn" aria-label={t('stepDown', { n: i + 1 })} title={t('down')} disabled={i === f.items.length - 1}
                 onClick={() => { const next = [...f.items]; [next[i + 1], next[i]] = [next[i], next[i + 1]]; set({ items: next }); }}>
                 <IconArrowDown size={15} /></button>
-              <button type="button" className="icon-btn cf-icon-btn" aria-label={`Удалить шаг ${i + 1}`} title="Удалить"
+              <button type="button" className="icon-btn cf-icon-btn" aria-label={t('stepDelete', { n: i + 1 })} title={t('delete')}
                 disabled={f.items.length <= LIMITS.minOptions} onClick={() => set({ items: f.items.filter((x) => x.id !== it.id) })}>
                 <IconTrash size={16} /></button>
             </div>
@@ -898,40 +923,40 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
           <FieldError id={`${uid}-items`} text={errors.items} />
           <div className="cf-inline">
             <button type="button" className="btn btn-sm" disabled={f.items.length >= LIMITS.maxOptions}
-              onClick={() => set({ items: [...f.items, { id: newOptionId(), text: '' }] })}><IconPlus size={15} />Добавить шаг</button>
+              onClick={() => set({ items: [...f.items, { id: newOptionId(), text: '' }] })}><IconPlus size={15} />{t('addStep')}</button>
           </div>
         </fieldset>
       )}
 
       {f.type === 'number' && (
         <fieldset className="cf-fieldset">
-          <legend>Правильный ответ</legend>
+          <legend>{t('correctAnswer')}</legend>
           <div className="form-grid cf-grid-top">
-            <label className="field"><span>Число</span>
+            <label className="field"><span>{t('number')}</span>
               <input value={f.answer} inputMode="decimal" placeholder="9,8" {...err('answer')}
                 onChange={(e) => set({ answer: e.target.value })} />
               <FieldError id={`${uid}-answer`} text={errors.answer} />
             </label>
-            <label className="field"><span>Допуск (±)</span>
+            <label className="field"><span>{t('tolerance')}</span>
               <input value={f.tolerance} inputMode="decimal" placeholder="0" {...err('tolerance')}
                 onChange={(e) => set({ tolerance: e.target.value })} />
               <FieldError id={`${uid}-tolerance`} text={errors.tolerance} />
             </label>
-            <label className="field"><span>Единицы (необязательно)</span>
-              <input value={f.unit} maxLength={LIMITS.unit} placeholder="м/с²" onChange={(e) => set({ unit: e.target.value })} />
+            <label className="field"><span>{t('unitOptional')}</span>
+              <input value={f.unit} maxLength={LIMITS.unit} placeholder={t('unitPlaceholder')} onChange={(e) => set({ unit: e.target.value })} />
             </label>
           </div>
-          <p className="muted">Ответ ученика засчитается, если отличается от числа не больше чем на допуск.</p>
+          <p className="muted">{t('numberHint')}</p>
         </fieldset>
       )}
 
       {f.type === 'sim_state' && (
         <fieldset className="cf-fieldset">
-          <legend>Симуляция и цель</legend>
+          <legend>{t('simGoal')}</legend>
           <SimulationChooser blockId={blockId} simulationId={f.standSimulationId} title={f.standTitle} pickOnly
             invalid={Boolean(errors.stand)}
-            onChange={(id, t) => set(id === f.standSimulationId
-              ? { standTitle: t } : { standSimulationId: id, standTitle: t, simTargets: [] })} />
+            onChange={(id, title) => set(id === f.standSimulationId
+              ? { standTitle: title } : { standSimulationId: id, standTitle: title, simTargets: [] })} />
           <FieldError id={`${uid}-stand`} text={errors.stand} />
           {f.standSimulationId && (
             <SimStateEditor simulationId={f.standSimulationId} rows={f.simTargets} showHints={f.showHints}
@@ -943,14 +968,14 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
       )}
 
       {f.type === 'text' && (
-        <p className="cf-note">Развёрнутый ответ проверяете вы: он появится в «Ответах» со статусом «сдано».</p>
+        <p className="cf-note">{t('textNote')}</p>
       )}
 
       {(f.type === 'text' || f.type === 'table') && (
         <fieldset className="cf-fieldset">
-          <legend>Критерии оценивания и эталон (необязательно)</legend>
+          <legend>{t('rubricLegend')}</legend>
           <div className="cf-inline cf-rubric-ai">
-            <p className="muted">Ученик увидит критерии в задании, а вы при проверке отметите каждый — балл сложится сам.</p>
+            <p className="muted">{t('rubricHint')}</p>
             <RubricAssist blockId={blockId} prompt={f.prompt} points={f.points} type={f.type}
               onDone={(rubric, reference) => set({
                 rubric: rubric.length ? rubric.map((r) => ({ id: newOptionId(), label: r.label, points: String(r.points).replace('.', ',') })) : f.rubric,
@@ -959,75 +984,75 @@ function AssignmentEditor({ blockId, payload, standTitle, initialType, onSave, o
           </div>
           {f.rubric.map((r, i) => (
             <div key={r.id} className="cf-rubric-row">
-              <input className="input" value={r.label} maxLength={LIMITS.caption} placeholder={`Критерий ${i + 1}: например, «Сделан вывод»`}
-                aria-label={`Критерий ${i + 1}`} onChange={(e) => set({ rubric: f.rubric.map((x) => (x.id === r.id ? { ...x, label: e.target.value } : x)) })} />
-              <input className="input cf-rubric-points" value={r.points} inputMode="decimal" aria-label={`Баллы за критерий ${i + 1}`}
+              <input className="input" value={r.label} maxLength={LIMITS.caption} placeholder={t('criterionPh', { n: i + 1 })}
+                aria-label={t('criterionN', { n: i + 1 })} onChange={(e) => set({ rubric: f.rubric.map((x) => (x.id === r.id ? { ...x, label: e.target.value } : x)) })} />
+              <input className="input cf-rubric-points" value={r.points} inputMode="decimal" aria-label={t('criterionPoints', { n: i + 1 })}
                 onChange={(e) => set({ rubric: f.rubric.map((x) => (x.id === r.id ? { ...x, points: e.target.value } : x)) })} />
-              <span className="muted">б.</span>
-              <button type="button" className="icon-btn cf-icon-btn" aria-label={`Удалить критерий ${i + 1}`} title="Удалить"
+              <span className="muted">{t('pointsShort')}</span>
+              <button type="button" className="icon-btn cf-icon-btn" aria-label={t('criterionDelete', { n: i + 1 })} title={t('delete')}
                 onClick={() => set({ rubric: f.rubric.filter((x) => x.id !== r.id) })}><IconTrash size={16} /></button>
             </div>
           ))}
           <div className="cf-inline">
             <button type="button" className="btn btn-sm" disabled={f.rubric.length >= 8}
-              onClick={() => set({ rubric: [...f.rubric, { id: newOptionId(), label: '', points: '2' }] })}><IconPlus size={15} />Добавить критерий</button>
+              onClick={() => set({ rubric: [...f.rubric, { id: newOptionId(), label: '', points: '2' }] })}><IconPlus size={15} />{t('addCriterion')}</button>
             {f.rubric.length > 0 && (() => {
               const sum = f.rubric.reduce((a, r) => a + (Number(r.points.replace(',', '.')) || 0), 0);
               return sum !== Number(f.points) && (
                 <button type="button" className="btn btn-sm btn-ghost" onClick={() => set({ points: String(Math.round(sum)) })}>
-                  {`Сумма критериев — ${String(sum).replace('.', ',')}: сделать баллом задания`}
+                  {t('rubricSum', { sum: String(sum).replace('.', ',') })}
                 </button>
               );
             })()}
           </div>
-          <label className="field cf-reference"><span>Эталонный ответ — видите только вы и помощник при проверке</span>
+          <label className="field cf-reference"><span>{t('reference')}</span>
             <textarea className="input cf-textarea" rows={f.reference ? 6 : 2} value={f.reference} maxLength={LIMITS.textAnswer}
-              placeholder="Ответ на отлично, каким бывает ответ на удовлетворительно, типичные ошибки"
+              placeholder={t('referencePh')}
               onChange={(e) => set({ reference: e.target.value })} />
           </label>
         </fieldset>
       )}
 
       <fieldset className="cf-fieldset">
-        <legend>Оценивание</legend>
+        <legend>{t('grading')}</legend>
         <div className="form-grid cf-grid-top">
-          <label className="field"><span>Баллы за задание</span>
+          <label className="field"><span>{t('points')}</span>
             <input type="number" min={0} max={LIMITS.maxPoints} step={1} value={f.points} {...err('points')}
               onChange={(e) => set({ points: e.target.value })} />
             <FieldError id={`${uid}-points`} text={errors.points} />
           </label>
-          <div className="field"><span>Попытки</span>
-            <div className="segmented" role="group" aria-label="Попытки">
+          <div className="field"><span>{t('attempts')}</span>
+            <div className="segmented" role="group" aria-label={t('attempts')}>
               <button type="button" aria-pressed={!f.allowRetry}
-                className={!f.allowRetry ? 'segmented-item active' : 'segmented-item'} onClick={() => set({ allowRetry: false })}>Одна</button>
+                className={!f.allowRetry ? 'segmented-item active' : 'segmented-item'} onClick={() => set({ allowRetry: false })}>{t('one')}</button>
               <button type="button" aria-pressed={f.allowRetry}
-                className={f.allowRetry ? 'segmented-item active' : 'segmented-item'} onClick={() => set({ allowRetry: true })}>Можно пересдавать</button>
+                className={f.allowRetry ? 'segmented-item active' : 'segmented-item'} onClick={() => set({ allowRetry: true })}>{t('retry')}</button>
             </div>
           </div>
         </div>
       </fieldset>
 
-      <label className="field"><span>Пояснение к правильному ответу — ученик увидит его после проверки</span>
+      <label className="field"><span>{t('explanation')}</span>
         <textarea className="input cf-textarea" rows={2} value={f.explanation} maxLength={LIMITS.comment}
-          placeholder="Например: «Период зависит только от длины нити и g — масса в формулу не входит»"
+          placeholder={t('explanationPh')}
           onChange={(e) => set({ explanation: e.target.value })} />
       </label>
 
       {f.type !== 'sim_state' && <fieldset className="cf-fieldset">
-        <legend>Стенд рядом с вопросом</legend>
-        <div className="segmented cf-segmented-wrap" role="group" aria-label="Стенд рядом с вопросом">
-          {([['none', 'Без стенда'], ['simulation', 'Тренажёр'], ['lab', 'Лаборатория']] as const).map(([kind, label]) => (
+        <legend>{t('stand')}</legend>
+        <div className="segmented cf-segmented-wrap" role="group" aria-label={t('stand')}>
+          {([['none', t('noStand')], ['simulation', t('simulator')], ['lab', t('lab')]] as const).map(([kind, label]) => (
             <button key={kind} type="button" aria-pressed={f.standKind === kind}
               className={f.standKind === kind ? 'segmented-item active' : 'segmented-item'}
               onClick={() => set({ standKind: kind })}>{label}</button>
           ))}
         </div>
-        {f.standKind === 'none' && <p className="muted">Стенд — тренажёр или лаборатория, на которых ученик находит ответ.</p>}
+        {f.standKind === 'none' && <p className="muted">{t('standHint')}</p>}
         {f.standKind === 'lab' && <LabCards name={`${uid}-lab`} value={f.standLab} onChange={(slug) => set({ standLab: slug })} />}
         {f.standKind === 'simulation' && (
           <>
             <SimulationChooser blockId={blockId} simulationId={f.standSimulationId} title={f.standTitle} prompt={f.prompt}
-              invalid={Boolean(errors.stand)} onChange={(id, t) => set({ standSimulationId: id, standTitle: t })} />
+              invalid={Boolean(errors.stand)} onChange={(id, title) => set({ standSimulationId: id, standTitle: title })} />
             <FieldError id={`${uid}-stand`} text={errors.stand} />
           </>
         )}
@@ -1041,6 +1066,8 @@ function RubricAssist({ blockId, prompt, points, type, onDone }: {
   blockId: string; prompt: string; points: string; type: string;
   onDone: (rubric: { label: string; points: number }[], reference: string) => void;
 }) {
+  const t = useT(teachBlocks);
+  const fmt = useFormat();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function run() {
@@ -1055,9 +1082,9 @@ function RubricAssist({ blockId, prompt, points, type, onDone }: {
   return (
     <span className="cf-rubric-assist">
       <button type="button" className="btn btn-sm ai-btn" disabled={busy || !prompt.trim()} onClick={run}>
-        <IconSpark size={15} />{busy ? 'Помощник составляет…' : 'Критерии и эталон с помощником'}
+        <IconSpark size={15} />{busy ? t('rubricBusy') : t('rubricAi')}
       </button>
-      {error && <span className="cf-field-error" role="alert">{error}</span>}
+      {error && <span className="cf-field-error" role="alert">{fmt.message(error)}</span>}
     </span>
   );
 }

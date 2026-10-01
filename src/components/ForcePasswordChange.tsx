@@ -1,5 +1,8 @@
 'use client';
 import { useState } from 'react';
+import { useFormat, useT } from '@/i18n/client';
+import { auth } from '@/i18n/messages/auth';
+import LanguageSwitcher from './LanguageSwitcher';
 
 /**
  * Серверный порог — MIN_PASSWORD_LENGTH в src/lib/auth/cookie.ts. Импортировать его
@@ -21,6 +24,8 @@ export function newPasswordError(next: string, repeat: string): string | null {
  * Текущий пароль не спрашивается: человек только что вошёл с временным.
  */
 export default function ForcePasswordChange({ label }: { label: string }) {
+  const t = useT(auth);
+  const f = useFormat();
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
   const [error, setError] = useState('');
@@ -42,9 +47,9 @@ export default function ForcePasswordChange({ label }: { label: string }) {
         return;
       }
       const body = await res.json().catch(() => ({}));
-      setError(body.error ?? 'Не удалось сохранить пароль. Попробуйте ещё раз.');
+      setError(body.error ?? t('saveFailed'));
     } catch {
-      setError('Сеть недоступна. Проверьте соединение и попробуйте снова.');
+      setError(t('network'));
     } finally {
       setBusy(false);
     }
@@ -58,24 +63,27 @@ export default function ForcePasswordChange({ label }: { label: string }) {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={submit}>
-        <h1>Придумайте свой пароль</h1>
+        <h1>{t('choosePassword')}</h1>
         <p className="muted">
-          {label ? `${label}, вы вошли с временным паролем.` : 'Вы вошли с временным паролем.'}{' '}
-          Чтобы продолжить, задайте пароль, который знаете только вы.
+          {label ? t('tempPasswordNamed', { name: label }) : t('tempPassword')}{' '}
+          {t('setOwn')}
         </p>
-        <label>Новый пароль
+        <label>{t('newPassword')}
           <input className="input" type="password" value={next} required minLength={MIN_NEW_PASSWORD_LENGTH}
             autoComplete="new-password" onChange={(e) => setNext(e.target.value)} />
         </label>
-        <label>Повторите пароль
+        <label>{t('repeatPassword')}
           <input className="input" type="password" value={repeat} required minLength={MIN_NEW_PASSWORD_LENGTH}
             autoComplete="new-password" onChange={(e) => setRepeat(e.target.value)} />
         </label>
-        {error && <p className="error-box">{error}</p>}
+        {error && <p className="error-box">{f.message(error)}</p>}
         <button className="btn btn-primary" type="submit" disabled={busy}>
-          {busy ? 'Минуту…' : 'Сохранить пароль'}
+          {busy ? t('wait') : t('savePassword')}
         </button>
-        <button className="btn force-password-logout" type="button" onClick={logout}>Выйти</button>
+        <button className="btn force-password-logout" type="button" onClick={logout}>{t('logout')}</button>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <LanguageSwitcher compact label={t('languageAria')} />
+        </div>
       </form>
     </div>
   );

@@ -2,6 +2,9 @@
 import { useState } from 'react';
 import type { LayerInfo, ProgressState } from './deriveProgress';
 import { IconCheck, IconMinus } from '../icons';
+import { useFormat, useT } from '@/i18n/client';
+import { workbenchProgress } from '@/i18n/messages/workbench-progress';
+
 
 /**
  * Как собирается тренажёр: ядро физики с числовыми проверками и слои поверх основы.
@@ -13,6 +16,8 @@ export default function BuildCard({ physics, layers }: {
   layers: LayerInfo[];
 }) {
   const [open, setOpen] = useState(false);
+  const t = useT(workbenchProgress);
+  const f = useFormat();
   if (!physics && layers.length === 0) return null;
   const passed = physics ? physics.results.filter((r) => r.ok).length : 0;
   // Мягкий провал (параметр — настройка опыта, а не физика) не красит всё ядро в предупреждение.
@@ -23,7 +28,7 @@ export default function BuildCard({ physics, layers }: {
         <div className={`build-row ${hardOk ? 'ok' : 'warn'}`}>
           <span className="build-dot" aria-hidden>{hardOk ? <IconCheck size={13} /> : '!'}</span>
           <button type="button" className="build-title" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-            Ядро физики: {passed} из {physics.results.length} проверок
+            {t('physicsChecks', { passed, total: physics.results.length })}
           </button>
         </div>
       )}
@@ -32,7 +37,7 @@ export default function BuildCard({ physics, layers }: {
           {physics.results.map((r, i) => (
             <li key={i} className={r.ok ? 'ok' : r.soft ? 'soft' : 'fail'}>
               {r.ok ? <IconCheck size={12} /> : <IconMinus size={12} />}
-              <span>{r.label}{!r.ok && r.detail ? ` — ${r.detail}` : ''}</span>
+              <span>{f.message(r.label)}{!r.ok && r.detail ? ` — ${f.message(r.detail)}` : ''}</span>
             </li>
           ))}
         </ul>
@@ -43,7 +48,7 @@ export default function BuildCard({ physics, layers }: {
             {l.status === 'ok' ? <IconCheck size={13} /> : l.status === 'skipped' ? <IconMinus size={13} /> : ''}
           </span>
           <span className="build-title">
-            {l.title}{l.status === 'start' ? ' — достраиваю…' : l.status === 'skipped' ? ' — пропущен' : ''}
+            {l.status === 'start' ? t('layerBuilding', { title: f.message(l.title) }) : l.status === 'skipped' ? t('layerSkipped', { title: f.message(l.title) }) : f.message(l.title)}
           </span>
         </div>
       ))}

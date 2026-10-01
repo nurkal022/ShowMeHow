@@ -2,7 +2,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requirePageUser } from '@/lib/auth/page-guard';
 import { getRemedial, markRemedialOpened } from '@/lib/lms/remedial';
-import { formatDate } from '@/lib/lms/format';
+import { getLocale } from '@/i18n/server';
+import { translator } from '@/i18n/core';
+import { learnMe } from '@/i18n/messages/learn-me';
+import { learnDate } from '@/components/learn/format';
 import Markup from '@/components/lms/Markup';
 import RemedialTasks from '@/components/learn/RemedialTasks';
 import { IconAlert, IconBack, IconUser } from '@/components/icons';
@@ -16,17 +19,19 @@ export default async function RemedialPage({ params }: { params: Promise<{ id: s
   const remedial = await getRemedial(user.id, id);
   if (!remedial) notFound();
   await markRemedialOpened(user.id, remedial.id);
+  const locale = await getLocale();
+  const t = translator(learnMe, locale);
 
   return (
     <div className="learn-page rm-page">
-      <Link className="btn btn-sm btn-ghost rm-back" href="/learn/mistakes"><IconBack size={15} />Работа над ошибками</Link>
+      <Link className="btn btn-sm btn-ghost rm-back" href="/learn/mistakes"><IconBack size={15} />{t('mistakesTitle')}</Link>
       <header className="learn-head">
         <div>
           <h1>{remedial.title}</h1>
           <p className="muted">
             {[remedial.topicTitle, remedial.courseTitle].filter(Boolean).join(' · ')}
             {remedial.topicTitle ? ' · ' : ''}
-            {formatDate(remedial.createdAt)}
+            {learnDate(remedial.createdAt, locale)}
           </p>
         </div>
       </header>
@@ -34,7 +39,7 @@ export default async function RemedialPage({ params }: { params: Promise<{ id: s
       {remedial.reason && (
         <div className="rm-why">
           <span className="rm-why-icon"><IconAlert size={18} /></span>
-          <div><b>В чём была ошибка</b><p>{remedial.reason}</p></div>
+          <div><b>{t('whyWrong')}</b><p>{remedial.reason}</p></div>
         </div>
       )}
 
@@ -51,8 +56,8 @@ export default async function RemedialPage({ params }: { params: Promise<{ id: s
         <Link className="mk-invite" href="/learn/me">
           <span className="mk-invite-icon"><IconUser size={20} /></span>
           <span className="mk-invite-text">
-            <b>Хотите примеры про себя?</b>
-            <small>Этот разбор собран без ваших интересов. Заполните профиль — следующий будет про футбол, музыку или что вам ближе.</small>
+            <b>{t('wantPersonal')}</b>
+            <small>{t('wantPersonalText')}</small>
           </span>
         </Link>
       )}

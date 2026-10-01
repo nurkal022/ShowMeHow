@@ -2,6 +2,8 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { withOrgParam } from '@/lib/lms/links';
+import { useT } from '@/i18n/client';
+import { cabinet } from '@/i18n/messages/cabinet';
 
 export interface CabinetNavItem { href: string; label: string; exact?: boolean }
 
@@ -14,8 +16,9 @@ export function isCabinetItemActive(item: CabinetNavItem, pathname: string): boo
 export default function CabinetNav({ items }: { items: CabinetNavItem[] }) {
   const pathname = usePathname() ?? '';
   const org = useSearchParams().get('org');
+  const t = useT(cabinet);
   return (
-    <nav className="subnav no-print" aria-label="Разделы кабинета">
+    <nav className="subnav no-print" aria-label={t('sections')}>
       {items.map((item) => (
         <Link key={item.href} href={withOrgParam(item.href, org)}
           className={isCabinetItemActive(item, pathname) ? 'active' : ''}>

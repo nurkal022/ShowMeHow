@@ -1,4 +1,7 @@
-import { INSTRUMENTS, sectionByKey, type Instrument, type Level, type Style } from './data';
+import { localizeSection, sectionByKey, type Instrument, type Level, type Style } from './data';
+import { translator } from '@/i18n/core';
+import type { Locale } from '@/i18n/config';
+import { workbenchStand } from '@/i18n/messages/workbench-stand';
 
 export interface ConstructorDraft {
   section: string;
@@ -13,30 +16,6 @@ export interface ConstructorDraft {
   notes: string;
   level: Level;
 }
-
-const STYLE_TEXT: Record<Style, string> = {
-  schematic: 'в схематичной подаче: векторы, оси, подписанные обозначения, минимум декора, как в учебнике',
-  realistic: 'реалистично: объекты похожи на настоящие, с материалами, тенями и правильными пропорциями',
-  data: 'с упором на данные: главное — живые графики и числовые показания, сама картинка второстепенна',
-};
-
-const LEVEL_TEXT: Record<Level, string> = {
-  grade7to9: 'для 7-9 класса: простые формулы, бытовые аналогии, без интегралов и векторной записи',
-  grade10to11: 'для 10-11 класса: формулы в общем виде, обозначения из школьного курса, можно векторы',
-  students: 'для студентов: строгие формулировки, уравнения движения, допускается математический аппарат вуза',
-};
-
-const INSTRUMENT_TEXT: Record<Instrument, string> = {
-  slider: 'ползунки для параметров',
-  readout: 'числовые показания величин',
-  chart: 'живой график',
-  formula: 'формулу закона с подстановкой значений',
-  presets: 'пресеты — готовые состояния',
-  steps: 'пошаговый режим: кнопка «следующий шаг» вместо непрерывного потока',
-  lesson: 'шаги урока: наблюдай, измени, измерь',
-  task: 'задания с проверкой ответа ученика',
-  table: 'таблицу измерений, куда ученик записывает точки опыта',
-};
 
 /**
  * Приборы урока подсказывают уровень тренажёра: задание — это исследование, шаги
@@ -59,7 +38,7 @@ export function isComplete(d: Partial<ConstructorDraft>): boolean {
 }
 
 /**
- * Собирает связный русский текст, а не список полей: планировщик получает его
+ * Собирает связный текст на языке интерфейса, а не список полей: планировщик получает его
  * наравне с тем, что человек набрал бы руками.
  *
  * В конец добавляется короткий структурный блок. Планировщик всё равно строит
@@ -68,44 +47,46 @@ export function isComplete(d: Partial<ConstructorDraft>): boolean {
  * блока и последними: то, что человек дописал сам, весит больше любого выбора
  * из списка.
  */
-export function buildPrompt(d: ConstructorDraft): string {
-  const section = sectionByKey(d.section);
+export function buildPrompt(d: ConstructorDraft, locale: Locale = 'ru'): string {
+  const t = translator(workbenchStand, locale);
+  const base = sectionByKey(d.section);
+  const section = base ? localizeSection(base, locale) : undefined;
   const what = d.phenomenon.trim();
   // Явление не выбрано — раздел всё равно задаёт тему, а выбор показательного
   // явления внутри неё остаётся за моделью.
   const topic = section
     ? (what
-      ? `${section.label.toLowerCase()}: ${what}`
-      : `${section.label.toLowerCase()} — выбери сам показательное явление раздела`)
-    : what || 'выбери сам тему, которую интереснее всего показать в движении';
-  const modeText = d.mode === '3d' ? 'трёхмерная (3D)' : 'плоская (2D)';
+      ? t('pTopicWhat', { section: section.label.toLowerCase(), what })
+      : t('pTopicSection', { section: section.label.toLowerCase() }))
+    : what || t('pTopicNone');
+  const modeText = d.mode === '3d' ? t('pMode3d') : t('pMode2d');
   const params = d.parameters.length
-    ? `Управляемые параметры на ползунках: ${d.parameters.join(', ')}.`
-    : 'Подбери сам два-четыре параметра, которые лучше всего показывают суть явления, и вынеси их на ползунки.';
+    ? t('pParams', { list: d.parameters.join(', ') })
+    : t('pParamsAuto');
   const tools = d.instruments.length
-    ? `Приборы: ${d.instruments.map((i) => INSTRUMENT_TEXT[i]).join(', ')}.`
+    ? t('pTools', { list: d.instruments.map((i) => t(`pInst_${i}`)).join(', ') })
     : '';
 
   const prose = [
-    `Сделай интерактивную симуляцию, ${topic}.`,
-    `Сцена ${modeText}, ${STYLE_TEXT[d.style]}.`,
+    t('pMake', { topic }),
+    t('pScene', { mode: modeText, style: t(`pStyle_${d.style}`) }),
     params,
     tools,
-    `Уровень объяснения — ${LEVEL_TEXT[d.level]}.`,
+    t('pLevel', { level: t(`pLevel_${d.level}`) }),
   ].filter(Boolean).join(' ');
 
   const hint = levelHint(d.instruments);
   const spec = [
-    'Выбор в конструкторе:',
-    `- режим: ${d.mode}`,
-    ...(hint ? [`- уровень тренажёра: ${hint}`] : []),
-    `- параметры: ${d.parameters.length ? d.parameters.join(', ') : 'на твоё усмотрение'}`,
-    `- приборы: ${d.instruments.length
-      ? d.instruments.map((i) => INSTRUMENTS.find((x) => x.value === i)?.label ?? i).join(', ')
-      : 'на твоё усмотрение'}`,
+    t('pSpecHead'),
+    t('pSpecMode', { mode: d.mode }),
+    ...(hint ? [t('pSpecLevel', { hint })] : []),
+    t('pSpecParams', { list: d.parameters.length ? d.parameters.join(', ') : t('pYourChoice') }),
+    t('pSpecTools', { list: d.instruments.length
+      ? d.instruments.map((i) => t(`inst_${i}`)).join(', ')
+      : t('pYourChoice') }),
   ].join('\n');
 
-  const extra = d.notes.trim() ? `\n\nОтдельно важно: ${d.notes.trim()}` : '';
+  const extra = d.notes.trim() ? `\n\n${t('pExtra', { notes: d.notes.trim() })}` : '';
   return `${prose}\n\n${spec}${extra}`;
 }
 

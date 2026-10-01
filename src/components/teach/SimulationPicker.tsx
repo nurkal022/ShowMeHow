@@ -4,11 +4,13 @@ import type { PickerItem } from '@/app/api/teach/simulations/route';
 import { callApi } from '@/components/cabinet/api';
 import { IconSearch, IconWand } from '@/components/icons';
 import Dialog from '@/components/lms/ui/Dialog';
+import { useFormat, useT } from '@/i18n/client';
+import { teachLesson } from '@/i18n/messages/teach-lesson';
 
 type Source = 'mine' | 'catalog';
-const SOURCES: { key: Source; label: string }[] = [
-  { key: 'mine', label: 'Моя библиотека' },
-  { key: 'catalog', label: 'Общий каталог' },
+const SOURCES: { key: Source; label: 'mine' | 'catalog' }[] = [
+  { key: 'mine', label: 'mine' },
+  { key: 'catalog', label: 'catalog' },
 ];
 
 /** Диалог «Выбрать тренажёр»: своя библиотека или общий каталог, поиск и превью. */
@@ -17,6 +19,8 @@ export default function SimulationPicker({ onPick, onClose, generateHref }: {
   /** Ссылка «Сгенерировать новый» для блока, в который выбирают тренажёр. */
   generateHref?: string;
 }) {
+  const t = useT(teachLesson);
+  const fmt = useFormat();
   const [source, setSource] = useState<Source>('mine');
   const [q, setQ] = useState('');
   const [items, setItems] = useState<PickerItem[] | null>(null);
@@ -34,29 +38,29 @@ export default function SimulationPicker({ onPick, onClose, generateHref }: {
   }, [source, q]);
 
   const generate = generateHref && (
-    <a className="btn btn-ghost" href={generateHref}><IconWand size={16} />Сгенерировать новый</a>
+    <a className="btn btn-ghost" href={generateHref}><IconWand size={16} />{t('generateNew')}</a>
   );
 
   return (
-    <Dialog wide title="Выбрать тренажёр" subtitle="Нажмите на карточку — тренажёр встанет в блок." onClose={onClose}
-      footer={<>{generate}<span className="cf-grow" /><button type="button" className="btn" onClick={onClose}>Закрыть</button></>}>
+    <Dialog wide title={t('pickTitle')} subtitle={t('pickSub')} onClose={onClose}
+      footer={<>{generate}<span className="cf-grow" /><button type="button" className="btn" onClick={onClose}>{t('close')}</button></>}>
       <div className="cf-picker-bar">
-        <div className="segmented" role="group" aria-label="Откуда выбрать">
+        <div className="segmented" role="group" aria-label={t('from')}>
           {SOURCES.map((s) => (
             <button key={s.key} type="button" aria-pressed={source === s.key}
               className={source === s.key ? 'segmented-item active' : 'segmented-item'}
               onClick={() => { if (s.key !== source) { setSource(s.key); setItems(null); } }}>
-              {s.label}
+              {t(s.label)}
             </button>
           ))}
         </div>
         <label className="cf-search">
           <IconSearch size={17} />
-          <input value={q} data-autofocus placeholder="Поиск по названию или предмету" aria-label="Поиск тренажёра"
+          <input value={q} data-autofocus placeholder={t('searchPh')} aria-label={t('searchAria')}
             onChange={(e) => setQ(e.target.value)} />
         </label>
       </div>
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <p className="error-box" role="alert">{fmt.message(error)}</p>}
       <div aria-live="polite" className="cf-picker-results">
         {items === null && !error && (
           <div className="picker-grid" aria-hidden="true">
@@ -65,14 +69,14 @@ export default function SimulationPicker({ onPick, onClose, generateHref }: {
         )}
         {items?.length === 0 && (
           <div className="cf-empty">
-            <strong>{q ? 'Ничего не нашлось.' : source === 'mine' ? 'В вашей библиотеке пока пусто.' : 'В общем каталоге пока пусто.'}</strong>
+            <strong>{q ? t('nothing') : source === 'mine' ? t('mineEmpty') : t('catalogEmpty')}</strong>
             <p className="muted">
-              {q ? 'Попробуйте другое слово или второй источник.'
-                : source === 'mine' ? 'Сгенерируйте тренажёр в мастерской или загляните в общий каталог.'
-                : 'Тренажёры в каталог добавляет администратор платформы.'}
+              {q ? t('tryOther')
+                : source === 'mine' ? t('mineEmptyHint')
+                : t('catalogEmptyHint')}
             </p>
             {source === 'mine' && !q && (
-              <button type="button" className="btn btn-sm" onClick={() => { setSource('catalog'); setItems(null); }}>Открыть общий каталог</button>
+              <button type="button" className="btn btn-sm" onClick={() => { setSource('catalog'); setItems(null); }}>{t('openCatalog')}</button>
             )}
           </div>
         )}

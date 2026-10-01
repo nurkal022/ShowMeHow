@@ -2,6 +2,8 @@
 import type { MutableRefObject } from 'react';
 import type { Answer } from '@/lib/lms/answers';
 import type { StudentAssignmentSpec } from '@/lib/lms/block-schema';
+import { useT } from '@/i18n/client';
+import { learnLesson } from '@/i18n/messages/learn-lesson';
 import SimStateFrame, { type CaptureSimState } from '@/components/lms/SimStateFrame';
 
 /**
@@ -12,26 +14,27 @@ export default function SimStateAnswer({ spec, answer, captureRef }: {
   spec: Extract<StudentAssignmentSpec, { type: 'sim_state' }>; answer: Answer;
   captureRef: MutableRefObject<CaptureSimState | null>;
 }) {
+  const t = useT(learnLesson);
   const hints = answer.type === 'sim_state' ? answer.hints : undefined;
   const taken = answer.type === 'sim_state' && answer.capturedAt !== '';
   return (
     <div className="sim-state-answer">
       <SimStateFrame simulationId={spec.simulationId} captureRef={captureRef} />
       <p className="muted">
-        Добейтесь нужного состояния симуляции и нажмите «Сдать состояние» — проверка автоматическая.
-        {spec.targets && spec.targets.length > 0 && ` Проверяются параметры: ${spec.targets.map((t) => t.label).join(', ')}.`}
+        {t('simStateHelp')}
+        {spec.targets && spec.targets.length > 0 && t('simTargets', { list: spec.targets.map((x) => x.label).join(', ') })}
       </p>
       {hints && hints.length > 0 && (
-        <ul className="sim-state-hints" aria-label="Что совпало с целью">
+        <ul className="sim-state-hints" aria-label={t('hintsAria')}>
           {hints.map((h) => (
             <li key={h.name} className={h.matched ? 'ok' : 'miss'}>
               <span aria-hidden="true">{h.matched ? '✓' : '✗'}</span>
-              {`${h.label} — ${h.matched ? 'совпало' : 'не совпало'}`}
+              {t(h.matched ? 'matched' : 'missed', { label: h.label })}
             </li>
           ))}
         </ul>
       )}
-      {taken && !hints && <p className="muted">Учитель отключил подсказки: видно только итоговый балл.</p>}
+      {taken && !hints && <p className="muted">{t('hintsOff')}</p>}
     </div>
   );
 }

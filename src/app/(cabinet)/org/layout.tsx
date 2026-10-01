@@ -1,6 +1,11 @@
 import { requirePageUser } from '@/lib/auth/page-guard';
+import { getT } from '@/i18n/server';
+import { org } from '@/i18n/messages/org';
 
-export const metadata = { title: 'Организация — Tesseract' };
+export async function generateMetadata() {
+  const t = await getT(org);
+  return { title: `${t('metaTitle')} — Tesseract` };
+}
 
 /**
  * Права проверяет каждая страница. Учитель группы заходит только в карточку

@@ -3,6 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import { historyLabel } from '@/lib/history-label';
 import { callApi } from '../cabinet/api';
 import { IconClose } from '../icons';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { workbench } from '@/i18n/messages/workbench';
+import { common } from '@/i18n/messages/common';
+
 
 /** Размер «ноутбука», в котором отрисовывается каждая версия: иначе кит в узкой колонке включит мобильную раскладку. */
 const W = 1280;
@@ -13,6 +17,7 @@ const H = 800;
  * по ширине колонки, панели кита остаются развёрнутыми, как у ученика на ноутбуке.
  */
 function ScaledFrame({ html, title }: { html: string | null; title: string }) {
+  const t = useT(workbench);
   const box = useRef<HTMLDivElement>(null);
   const [k, setK] = useState(0.4);
   useEffect(() => {
@@ -29,7 +34,7 @@ function ScaledFrame({ html, title }: { html: string | null; title: string }) {
       {html
         ? <iframe title={title} sandbox="allow-scripts" srcDoc={html}
             style={{ width: W, height: H, transform: `scale(${k})` }} />
-        : <div className="preview-empty">Загружаю…</div>}
+        : <div className="preview-empty">{t('loadingDots')}</div>}
     </div>
   );
 }
@@ -50,6 +55,10 @@ export default function CompareVersions({ simId, current, history, initial, busy
   const [name, setName] = useState(initial ?? history[0] ?? '');
   const [html, setHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const t = useT(workbench);
+  const f = useFormat();
+  const locale = useLocale();
+  const tc = useT(common);
 
   useEffect(() => {
     if (!name) return;
@@ -66,25 +75,25 @@ export default function CompareVersions({ simId, current, history, initial, busy
 
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <div className="modal compare-modal" role="dialog" aria-label="Сравнение версий" onClick={(e) => e.stopPropagation()}>
+      <div className="modal compare-modal" role="dialog" aria-label={t('compareTitle')} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>Сравнение версий</h2>
-          <button type="button" className="icon-btn" aria-label="Закрыть" onClick={onClose}><IconClose size={18} /></button>
+          <h2>{t('compareTitle')}</h2>
+          <button type="button" className="icon-btn" aria-label={tc('close')} onClick={onClose}><IconClose size={18} /></button>
         </div>
         <div className="compare-grid">
           <div className="compare-col">
             <div className="compare-bar">
-              <select value={name} onChange={(e) => setName(e.target.value)} aria-label="Версия из истории">
-                {history.map((h) => <option key={h} value={h}>{historyLabel(h)}</option>)}
+              <select value={name} onChange={(e) => setName(e.target.value)} aria-label={t('historyVersion')}>
+                {history.map((h) => <option key={h} value={h}>{historyLabel(h, locale)}</option>)}
               </select>
               <button type="button" className="btn btn-sm btn-secondary" disabled={busy || !name}
-                onClick={() => { onRestore(name); onClose(); }}>Вернуть эту</button>
+                onClick={() => { onRestore(name); onClose(); }}>{t('restoreThis')}</button>
             </div>
-            {error ? <div className="error-box">{error}</div> : <ScaledFrame html={html} title="Версия из истории" />}
+            {error ? <div className="error-box">{f.message(error)}</div> : <ScaledFrame html={html} title={t('historyVersion')} />}
           </div>
           <div className="compare-col">
-            <div className="compare-bar"><b>Сейчас</b></div>
-            <ScaledFrame html={current} title="Текущая версия" />
+            <div className="compare-bar"><b>{t('now')}</b></div>
+            <ScaledFrame html={current} title={t('currentVersion')} />
           </div>
         </div>
       </div>

@@ -63,6 +63,7 @@ async function runJob(job: ClaimedJob, io: JobIO, deps: ExecuteDeps): Promise<Jo
       mode: req.mode,
       spec: req.spec,
       brief: req.level || req.audience ? { level: req.level, audience: req.audience } : undefined,
+      lang: req.lang,
       imageDataUrl: job.imageDataUrl ?? undefined,
       onSaved: io.markSaved,
     }, io.cancelled);

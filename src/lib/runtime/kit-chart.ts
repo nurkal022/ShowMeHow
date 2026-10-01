@@ -22,7 +22,7 @@ export const KIT_CHART_JS = `
     var W = o.width || 300, H = o.height || 170;
     var PL = 42, PR = 10, PT = 10, PB = 26;
 
-    var body = K.panel({ title: o.title || 'График', corner: o.corner || 'br' });
+    var body = K.panel({ title: o.title || __simT('chart'), corner: o.corner || 'br' });
     var cv = document.createElement('canvas');
     cv.className = 'sim-chart';
     cv.style.width = W + 'px';
@@ -37,7 +37,7 @@ export const KIT_CHART_JS = `
         var sw = document.createElement('i');
         sw.style.background = series[li].color || '#4f8ff7';
         sp.appendChild(sw);
-        sp.appendChild(document.createTextNode(series[li].name || ('ряд ' + (li + 1))));
+        sp.appendChild(document.createTextNode(series[li].name || __simT('series', { n: li + 1 })));
         leg.appendChild(sp);
       }
       body.appendChild(leg);

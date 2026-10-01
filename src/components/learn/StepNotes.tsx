@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { callApi } from '@/components/cabinet/api';
 import { IconCheck, IconEdit } from '@/components/icons';
 import { IconStar } from '@/components/cabinet/icons';
+import { useT } from '@/i18n/client';
+import { learnLesson } from '@/i18n/messages/learn-lesson';
 
 /**
  * Заметка и закладка к шагу урока. Сохраняется сама — при уходе из поля и через
@@ -14,6 +16,7 @@ export default function StepNotes({ blockId, body, bookmarked, onChange }: {
   bookmarked: boolean;
   onChange: (note: { body: string; bookmarked: boolean }) => void;
 }) {
+  const tr = useT(learnLesson);
   const [open, setOpen] = useState(body.length > 0);
   const [text, setText] = useState(body);
   const [saved, setSaved] = useState(false);
@@ -43,18 +46,18 @@ export default function StepNotes({ blockId, body, bookmarked, onChange }: {
       <div className="sn-tools">
         <button type="button" className={bookmarked ? 'sn-btn on' : 'sn-btn'} aria-pressed={bookmarked}
           onClick={() => void save({ bookmarked: !bookmarked })}>
-          <IconStar size={15} />{bookmarked ? 'В закладках' : 'В закладки'}
+          <IconStar size={15} />{bookmarked ? tr('inBookmarks') : tr('toBookmarks')}
         </button>
         <button type="button" className={open ? 'sn-btn on' : 'sn-btn'} aria-expanded={open}
           onClick={() => setOpen((v) => !v)}>
-          <IconEdit size={15} />{text.trim() ? 'Моя заметка' : 'Заметка'}
+          <IconEdit size={15} />{text.trim() ? tr('myNote') : tr('note')}
         </button>
-        {saved && <span className="sn-saved"><IconCheck size={13} />сохранено</span>}
-        <span className="muted sn-hint">Заметки видны только вам — они соберутся на странице «Заметки»</span>
+        {saved && <span className="sn-saved"><IconCheck size={13} />{tr('savedLower')}</span>}
+        <span className="muted sn-hint">{tr('notesHint')}</span>
       </div>
       {open && (
         <textarea className="input sn-area" value={text} rows={3} maxLength={4000}
-          placeholder="Что здесь важно запомнить? Формула, пример, вопрос учителю…"
+          placeholder={tr('notePlaceholder')}
           onChange={(e) => { dirty.current = true; setText(e.target.value); }}
           onBlur={() => { if (dirty.current) void save({ body: text }); }} />
       )}

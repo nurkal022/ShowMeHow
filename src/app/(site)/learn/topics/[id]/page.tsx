@@ -13,7 +13,10 @@ import { listComments, viewedBlockIds } from '@/lib/lms/discussion';
 import { listTutorMessages } from '@/lib/lms/tutor';
 import { notesOfTopic } from '@/lib/lms/notes';
 import { learnTopicHref } from '@/lib/lms/links';
-import { ruPlural } from '@/lib/lms/format';
+import { getLocale } from '@/i18n/server';
+import { translator } from '@/i18n/core';
+import { learn } from '@/i18n/messages/learn';
+import { learnLesson } from '@/i18n/messages/learn-lesson';
 import LessonView, { type LessonBlockData } from '@/components/learn/LessonView';
 
 /** Урок ученика: шаги, оглавление курса, обсуждение и наставник. Ключей к заданиям здесь нет. */
@@ -67,16 +70,19 @@ export default async function LearnTopicPage({ params, searchParams }: {
 
   if (waiting) {
     const tasks = blocks.filter((b) => b.body.kind === 'assignment').length;
+    const locale = await getLocale();
+    const t = translator(learnLesson, locale);
+    const tl = translator(learn, locale);
     return (
       <div className="learn-page learn-narrow">
         <section className="learn-exam-start">
-          <span className="learn-eyebrow">Контрольная</span>
-          <h2>{`${tasks} ${ruPlural(tasks, 'задание', 'задания', 'заданий')}${topic.timeLimitMin ? ` · ${topic.timeLimitMin} ${ruPlural(topic.timeLimitMin, 'минута', 'минуты', 'минут')}` : ''}`}</h2>
+          <span className="learn-eyebrow">{t('exam')}</span>
+          <h2>{`${tl('tasksN', { n: tasks })}${topic.timeLimitMin ? ` · ${t('minutesN', { n: topic.timeLimitMin })}` : ''}`}</h2>
           <p className="muted">
-            {topic.timeLimitMin ? 'Время пойдёт сразу после нажатия и не остановится, даже если закрыть вкладку. ' : ''}
-            Баллы и правильные ответы откроются, когда вы сдадите все задания{topic.timeLimitMin ? ' или выйдет время' : ''}.
+            {topic.timeLimitMin ? `${t('examTimeNote')} ` : ''}
+            {t(topic.timeLimitMin ? 'examRevealTimed' : 'examReveal')}
           </p>
-          <Link className="btn btn-primary learn-exam-go" href={`${learnTopicHref(topic.id, false)}?start=1`}>Начать контрольную</Link>
+          <Link className="btn btn-primary learn-exam-go" href={`${learnTopicHref(topic.id, false)}?start=1`}>{t('examStart')}</Link>
         </section>
       </div>
     );

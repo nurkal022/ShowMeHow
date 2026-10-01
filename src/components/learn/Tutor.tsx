@@ -4,19 +4,24 @@ import type { TutorMessage } from '@/lib/lms/tutor';
 import { callApi } from '@/components/cabinet/api';
 import Markup from '@/components/lms/Markup';
 import { IconChevron, IconClose, IconSend, IconSpark } from '@/components/icons';
+import { useFormat, useT } from '@/i18n/client';
+import { learnLesson } from '@/i18n/messages/learn-lesson';
+import type { TFn } from '@/i18n/core';
 
 type Mode = 'hint' | 'explain' | 'check' | 'ask';
 interface Seed { mode: Mode; question: string; at: number }
 
-const THEORY_CHIPS: { mode: Mode; text: string; label: string }[] = [
-  { mode: 'explain', text: 'Объясни этот шаг проще', label: 'Объясни проще' },
-  { mode: 'ask', text: 'Где это встречается в жизни?', label: 'Где это в жизни?' },
-  { mode: 'check', text: 'Проверь, правильно ли я понял: ', label: 'Проверь, правильно ли я понял' },
+type Chip = { mode: Mode; text: string; label: string };
+// Текст кнопки уходит в чат от имени ученика; «: » в конце — значит, ученик допишет сам.
+const THEORY_CHIPS = (t: TFn<typeof learnLesson.ru>): Chip[] => [
+  { mode: 'explain', text: t('askExplain'), label: t('explainSimple') },
+  { mode: 'ask', text: t('askWhere'), label: t('whereInLife') },
+  { mode: 'check', text: t('askUnderstood'), label: t('chipUnderstood') },
 ];
-const TASK_CHIPS: { mode: Mode; text: string; label: string }[] = [
-  { mode: 'hint', text: '', label: 'Подсказку, не ответ' },
-  { mode: 'ask', text: 'С чего начать решение?', label: 'С чего начать?' },
-  { mode: 'check', text: 'Проверь мой ход мысли: ', label: 'Проверь мой ход мысли' },
+const TASK_CHIPS = (t: TFn<typeof learnLesson.ru>): Chip[] => [
+  { mode: 'hint', text: '', label: t('chipHint') },
+  { mode: 'ask', text: t('askStart'), label: t('chipStart') },
+  { mode: 'check', text: t('askCheck'), label: t('helpCheck') },
 ];
 
 /**
@@ -29,6 +34,8 @@ export default function Tutor({ topicId, open, initial, seed, stepTitle, stepBlo
   stepTitle: string; stepBlockIds: string[]; hasTask: boolean; timer?: boolean;
   onToggle: (open: boolean) => void;
 }) {
+  const t = useT(learnLesson);
+  const f = useFormat();
   const [messages, setMessages] = useState<TutorMessage[]>(initial);
   const [chips, setChips] = useState<string[]>([]);
   const [text, setText] = useState('');
@@ -67,40 +74,40 @@ export default function Tutor({ topicId, open, initial, seed, stepTitle, stepBlo
 
   if (!open) {
     return (
-      <button type="button" className="tutor-tab" onClick={() => onToggle(true)} aria-label="Открыть наставника">
+      <button type="button" className="tutor-tab" onClick={() => onToggle(true)} aria-label={t('openTutor')}>
         <span className="tutor-orb sm"><IconSpark size={16} /></span>
-        <span className="tutor-tab-text">Наставник</span>
+        <span className="tutor-tab-text">{t('tutor')}</span>
       </button>
     );
   }
 
-  const suggestions = hasTask ? TASK_CHIPS : THEORY_CHIPS;
+  const suggestions = hasTask ? TASK_CHIPS(t) : THEORY_CHIPS(t);
   return (
-    <aside className="tutor" aria-label="Наставник">
+    <aside className="tutor" aria-label={t('tutor')}>
       <header className="tutor-head">
         <span className="tutor-orb"><IconSpark size={18} /></span>
         <div>
-          <b>Наставник</b>
-          <span className="muted">видит шаг «{stepTitle}»</span>
+          <b>{t('tutor')}</b>
+          <span className="muted">{t('seesStep', { title: stepTitle })}</span>
         </div>
-        <button type="button" className="icon-btn" aria-label="Свернуть наставника" onClick={() => onToggle(false)}><IconClose size={16} /></button>
+        <button type="button" className="icon-btn" aria-label={t('collapseTutor')} onClick={() => onToggle(false)}><IconClose size={16} /></button>
       </header>
 
       <div className="tutor-feed" ref={feed}>
         {messages.length === 0 && (
           <div className="tutor-intro">
-            <p><b>Я не дам готовый ответ</b> — но помогу дойти до него самому: разберём по шагам, подскажу, куда смотреть.</p>
-            <p className="muted">Спросите своими словами или начните с кнопки ниже.</p>
+            <p><b>{t('introBold')}</b>{t('introRest')}</p>
+            <p className="muted">{t('introMuted')}</p>
           </div>
         )}
         {messages.map((m) => (
           <div key={m.id} className={m.role === 'student' ? 'tutor-msg me' : 'tutor-msg'}>
-            {m.role === 'tutor' && m.hintLevel !== null && <span className="tutor-hint-badge">Подсказка {m.hintLevel} из 3</span>}
+            {m.role === 'tutor' && m.hintLevel !== null && <span className="tutor-hint-badge">{t('hintBadge', { n: m.hintLevel })}</span>}
             {m.role === 'tutor' ? <Markup text={m.text} /> : <p>{m.text}</p>}
           </div>
         ))}
         {busy && <div className="tutor-msg typing"><span /><span /><span /></div>}
-        {error && <p className="error-box" role="alert">{error}</p>}
+        {error && <p className="error-box" role="alert">{f.message(error)}</p>}
       </div>
 
       <div className="tutor-chips">
@@ -115,14 +122,14 @@ export default function Tutor({ topicId, open, initial, seed, stepTitle, stepBlo
       </div>
 
       <form className="tutor-form" onSubmit={(e) => { e.preventDefault(); if (text.trim()) void send('ask', text); }}>
-        <textarea ref={input} rows={1} value={text} maxLength={1000} placeholder="Спросите о шаге своими словами"
-          aria-label="Вопрос наставнику" onChange={(e) => setText(e.target.value)}
+        <textarea ref={input} rows={1} value={text} maxLength={1000} placeholder={t('tutorPlaceholder')}
+          aria-label={t('tutorAria')} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (text.trim()) void send('ask', text); } }} />
-        <button type="submit" className="tutor-send" disabled={busy || !text.trim()} aria-label="Спросить"><IconSend size={16} /></button>
+        <button type="submit" className="tutor-send" disabled={busy || !text.trim()} aria-label={t('ask')}><IconSend size={16} /></button>
       </form>
       <p className="tutor-foot">
-        {hasTask && <span className={hints >= 3 ? 'tutor-hints out' : 'tutor-hints'}>Подсказки: {hints} из 3</span>}
-        <span className="muted">Не поможет — спросите учителя в обсуждении под уроком<IconChevron size={12} /></span>
+        {hasTask && <span className={hints >= 3 ? 'tutor-hints out' : 'tutor-hints'}>{t('hintsUsed', { n: hints })}</span>}
+        <span className="muted">{t('tutorFoot')}<IconChevron size={12} /></span>
       </p>
     </aside>
   );

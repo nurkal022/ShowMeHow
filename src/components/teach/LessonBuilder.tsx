@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
-  LEVEL_LABELS, SLOT_META, TASK_TYPE_LABELS, TEMPLATES, lessonMinutes, newSlot, slotsOf,
+  levelLabels, slotMeta, taskTypeLabels, TEMPLATES, templates, lessonMinutes, newSlot, slotsOf,
   type LessonLevel, type LessonTemplate, type Slot, type SlotKind, type TaskType,
 } from '@/lib/lms/lesson-builder';
 import { LABS } from '@/lib/labs';
@@ -13,6 +13,8 @@ import {
 import { IconList } from '@/components/cabinet/icons';
 import Layer from '@/components/cabinet/Layer';
 import { formatClock } from '@/components/cabinet/useDraft';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { teachLesson } from '@/i18n/messages/teach-lesson';
 
 const ICONS: Record<SlotKind, (size: number) => React.ReactNode> = {
   hook: (n) => <IconBulb size={n} />, explain: (n) => <IconText size={n} />, definition: (n) => <IconBook size={n} />,
@@ -22,8 +24,8 @@ const ICONS: Record<SlotKind, (size: number) => React.ReactNode> = {
   video: (n) => <IconVideo size={n} />, lab: (n) => <IconVr size={n} />,
 };
 
-const GROUPS: { key: 'material' | 'practice' | 'interactive'; label: string }[] = [
-  { key: 'material', label: 'Материал' }, { key: 'practice', label: 'Практика' }, { key: 'interactive', label: 'Интерактив' },
+const GROUPS: { key: 'material' | 'practice' | 'interactive'; label: 'groupMaterial' | 'groupPractice' | 'groupInteractive' }[] = [
+  { key: 'material', label: 'groupMaterial' }, { key: 'practice', label: 'groupPractice' }, { key: 'interactive', label: 'groupInteractive' },
 ];
 const MINUTES = [20, 40, 45, 80];
 const MEMORY_KEY = 'tesseract.lesson-builder';
@@ -41,16 +43,17 @@ export function LessonBuilderButton({ courseId, subject, topicId, topicTitle, va
   autoOpen?: boolean;
   onDone: (topicId: string, firstId: string | undefined) => void;
 }) {
+  const t = useT(teachLesson);
   const [open, setOpen] = useState(false);
   useEffect(() => { if (autoOpen) setOpen(true); }, [autoOpen]);
   const cls = variant === 'primary' ? 'btn btn-primary ai-btn' : variant === 'small' ? 'btn btn-sm ai-btn' : 'cf-add-line lb-add-line';
   return (
     <>
       <button type="button" className={cls} onClick={() => setOpen(true)}>
-        <IconSpark size={16} />{label ?? (topicId ? 'Дополнить с помощником' : 'Урок с помощником')}
+        <IconSpark size={16} />{label ?? (topicId ? t('extendAi') : t('lessonAi'))}
       </button>
       {open && <Layer><LessonStudio courseId={courseId} subject={subject} topicId={topicId} topicTitle={topicTitle}
-        onClose={() => setOpen(false)} onDone={(t, f) => { setOpen(false); onDone(t, f); }} /></Layer>}
+        onClose={() => setOpen(false)} onDone={(tid, f) => { setOpen(false); onDone(tid, f); }} /></Layer>}
     </>
   );
 }
@@ -60,6 +63,12 @@ function LessonStudio({ courseId, subject, topicId, topicTitle, onClose, onDone 
   onClose: () => void; onDone: (topicId: string, firstId: string | undefined) => void;
 }) {
   const uid = useId();
+  const tr = useT(teachLesson);
+  const fmt = useFormat();
+  const locale = useLocale();
+  const SM = slotMeta(locale);
+  const LEVEL_LABELS = levelLabels(locale);
+  const TASK_TYPE_LABELS = taskTypeLabels(locale);
   const [template, setTemplate] = useState<LessonTemplate>(TEMPLATES[0]);
   const [slots, setSlots] = useState<Slot[]>(() => slotsOf(TEMPLATES[0]));
   const [title, setTitle] = useState(topicTitle ?? '');
@@ -161,8 +170,8 @@ function LessonStudio({ courseId, subject, topicId, topicTitle, onClose, onDone 
   const needsLab = slots.some((s) => s.kind === 'lab');
 
   async function build() {
-    if (!title.trim()) { setError('Напишите, о чём урок.'); titleRef.current?.focus(); return; }
-    if (slots.length === 0) return setError('Добавьте в урок хотя бы один блок.');
+    if (!title.trim()) { setError(tr('needTitle')); titleRef.current?.focus(); return; }
+    if (slots.length === 0) return setError(tr('needSlots'));
     setBusy(true);
     setError('');
     try { localStorage.setItem(MEMORY_KEY, JSON.stringify({ grade, level, minutes })); } catch { /* не беда */ }
@@ -183,41 +192,41 @@ function LessonStudio({ courseId, subject, topicId, topicTitle, onClose, onDone 
         <header className="lb-head">
           <span className="lb-head-orb" aria-hidden="true"><IconSpark size={20} /></span>
           <div>
-            <h2 id={`${uid}-t`}>{topicId ? `Дополнить тему «${topicTitle}»` : 'Урок с помощником'}</h2>
-            <p className="muted">Выберите шаблон, опишите урок и соберите его из блоков — помощник напишет всё по вашему плану</p>
+            <h2 id={`${uid}-t`}>{topicId ? tr('extendTopic', { title: topicTitle }) : tr('lessonAi')}</h2>
+            <p className="muted">{tr('studioSub')}</p>
             {restored
-              ? <p className="lb-draft">Восстановлен черновик от {formatClock(restored)} · <button type="button" onClick={startOver}>начать заново</button></p>
-              : <p className="lb-draft quiet">Черновик сохраняется сам — можно закрыть и вернуться позже</p>}
+              ? <p className="lb-draft">{tr('restored', { time: formatClock(restored) })} · <button type="button" onClick={startOver}>{tr('startOver')}</button></p>
+              : <p className="lb-draft quiet">{tr('draftQuiet')}</p>}
           </div>
-          <button type="button" className="cab-icon-btn" aria-label="Закрыть" disabled={busy} onClick={onClose}><IconClose size={20} /></button>
+          <button type="button" className="cab-icon-btn" aria-label={tr('close')} disabled={busy} onClick={onClose}><IconClose size={20} /></button>
         </header>
 
         {busy ? (
           <div className="lb-building">
             <div className="lb-building-orb" aria-hidden="true"><span /><span /><span /><IconSpark size={30} /></div>
-            <h3>Помощник собирает урок «{title}»</h3>
-            <p className="muted">Обычно 30–90 секунд. Блоки появятся в теме — их можно будет править и переставлять.</p>
+            <h3>{tr('building', { title })}</h3>
+            <p className="muted">{tr('buildingHint')}</p>
             <ol className="lb-building-list">
               {slots.map((s, i) => (
                 <li key={s.id} className={i < step ? 'done' : i === step ? 'work' : ''}>
-                  <span className={`lb-slot-icon g-${SLOT_META[s.kind].group}`}>{i < step ? <IconCheck size={14} /> : ICONS[s.kind](15)}</span>
-                  {SLOT_META[s.kind].label}{SLOT_META[s.kind].counted && s.count > 1 ? ` × ${s.count}` : ''}
+                  <span className={`lb-slot-icon g-${SM[s.kind].group}`}>{i < step ? <IconCheck size={14} /> : ICONS[s.kind](15)}</span>
+                  {SM[s.kind].label}{SM[s.kind].counted && s.count > 1 ? ` × ${s.count}` : ''}
                 </li>
               ))}
             </ol>
           </div>
         ) : (
           <div className="lb-body">
-            <nav className="lb-templates" aria-label="Шаблоны">
-              <span className="lb-label">Шаблон</span>
-              {TEMPLATES.map((t) => (
+            <nav className="lb-templates" aria-label={tr('templates')}>
+              <span className="lb-label">{tr('template')}</span>
+              {templates(locale).map((t) => (
                 <button key={t.key} type="button" aria-pressed={template.key === t.key}
                   className={`lb-template tone-${t.tone}${template.key === t.key ? ' active' : ''}`} onClick={() => pickTemplate(t)}>
                   <strong>{t.title}</strong>
                   <span>{t.about}</span>
                   {t.slots.length > 0 && (
                     <span className="lb-template-dots" aria-hidden="true">
-                      {t.slots.map((s, i) => <i key={i} className={`g-${SLOT_META[s.kind].group}`} />)}
+                      {t.slots.map((s, i) => <i key={i} className={`g-${SM[s.kind].group}`} />)}
                     </span>
                   )}
                 </button>
@@ -226,52 +235,52 @@ function LessonStudio({ courseId, subject, topicId, topicTitle, onClose, onDone 
 
             <div className="lb-main">
               <label className="lb-title">
-                <span className="visually-hidden">О чём урок</span>
-                <input ref={titleRef} value={title} maxLength={200} placeholder="О чём урок? Например: «Закон Гука»"
+                <span className="visually-hidden">{tr('about')}</span>
+                <input ref={titleRef} value={title} maxLength={200} placeholder={tr('titlePh')}
                   onChange={(e) => { setTitle(e.target.value); setError(''); }} />
               </label>
               <div className="lb-params">
-                <label className="lb-param"><span>Класс</span>
-                  <input className="input" value={grade} maxLength={40} placeholder="8 класс" onChange={(e) => setGrade(e.target.value)} />
+                <label className="lb-param"><span>{tr('grade')}</span>
+                  <input className="input" value={grade} maxLength={40} placeholder={tr('gradePh')} onChange={(e) => setGrade(e.target.value)} />
                 </label>
-                <div className="lb-param"><span>Уровень</span>
-                  <div className="segmented" role="group" aria-label="Уровень">
+                <div className="lb-param"><span>{tr('level')}</span>
+                  <div className="segmented" role="group" aria-label={tr('level')}>
                     {(Object.keys(LEVEL_LABELS) as LessonLevel[]).map((l) => (
                       <button key={l} type="button" aria-pressed={level === l} className={level === l ? 'segmented-item active' : 'segmented-item'} onClick={() => setLevel(l)}>{LEVEL_LABELS[l]}</button>
                     ))}
                   </div>
                 </div>
-                <div className="lb-param"><span>Длительность</span>
-                  <div className="segmented" role="group" aria-label="Длительность">
+                <div className="lb-param"><span>{tr('duration')}</span>
+                  <div className="segmented" role="group" aria-label={tr('duration')}>
                     {MINUTES.map((m) => (
-                      <button key={m} type="button" aria-pressed={minutes === m} className={minutes === m ? 'segmented-item active' : 'segmented-item'} onClick={() => setMinutes(m)}>{m} мин</button>
+                      <button key={m} type="button" aria-pressed={minutes === m} className={minutes === m ? 'segmented-item active' : 'segmented-item'} onClick={() => setMinutes(m)}>{tr('min', { n: m })}</button>
                     ))}
                   </div>
                 </div>
               </div>
-              <label className="field"><span>Цели и пожелания</span>
+              <label className="field"><span>{tr('goals')}</span>
                 <textarea className="input" rows={2} value={goals} maxLength={1500}
-                  placeholder="Что ученик должен понять и уметь. Например: вывести зависимость силы упругости от удлинения, решать задачи на жёсткость"
+                  placeholder={tr('goalsPh')}
                   onChange={(e) => setGoals(e.target.value)} />
               </label>
 
               <div className={showMaterials ? 'lb-materials open' : 'lb-materials'}>
                 <button type="button" className="lb-materials-toggle" aria-expanded={showMaterials} onClick={() => setShowMaterials((v) => !v)}>
-                  <IconBook size={16} /><b>Материалы</b>
-                  <span className="muted">{materials || videoUrl ? 'добавлены' : 'конспект, параграф, ссылка на видео — помощник опирается на них'}</span>
+                  <IconBook size={16} /><b>{tr('materials')}</b>
+                  <span className="muted">{materials || videoUrl ? tr('materialsAdded') : tr('materialsHint')}</span>
                   <IconArrowDown size={15} />
                 </button>
                 {showMaterials && (
                   <div className="lb-materials-body">
                     <textarea className="input lb-materials-text" rows={5} value={materials} maxLength={12000}
-                      placeholder="Вставьте свой конспект, параграф учебника или задачи — помощник возьмёт факты и примеры отсюда"
+                      placeholder={tr('materialsPh')}
                       onChange={(e) => setMaterials(e.target.value)} />
                     <div className="lb-params">
-                      <label className="lb-param lb-grow"><span>Ссылка на видео{needsVideo ? '' : ' (для блока «Видео»)'}</span>
+                      <label className="lb-param lb-grow"><span>{needsVideo ? tr('videoLink') : tr('videoLinkFor')}</span>
                         <input className="input" value={videoUrl} maxLength={500} placeholder="https://youtu.be/…" onChange={(e) => setVideoUrl(e.target.value)} />
                       </label>
                       {needsLab && (
-                        <label className="lb-param"><span>VR-лаборатория</span>
+                        <label className="lb-param"><span>{tr('vrLab')}</span>
                           <select className="select" value={labSlug} onChange={(e) => setLabSlug(e.target.value)}>
                             {LABS.map((l) => <option key={l.slug} value={l.slug}>{l.title} · {l.subject}</option>)}
                           </select>
@@ -283,15 +292,15 @@ function LessonStudio({ courseId, subject, topicId, topicTitle, onClose, onDone 
               </div>
 
               <div className="lb-structure-head">
-                <h3>Структура урока</h3>
-                <span className="muted">Перетаскивайте блоки, уточняйте каждый — помощник напишет их по порядку</span>
+                <h3>{tr('structure')}</h3>
+                <span className="muted">{tr('structureHint')}</span>
               </div>
               {slots.length === 0 ? (
-                <div className="lb-empty">Урок пуст — добавьте блоки из палитры ниже.</div>
+                <div className="lb-empty">{tr('empty')}</div>
               ) : (
                 <ol className="lb-slots">
                   {slots.map((s, i) => {
-                    const m = SLOT_META[s.kind];
+                    const m = SM[s.kind];
                     return (
                       <li key={s.id} draggable className={`lb-slot g-${m.group}${dragId === s.id ? ' dragging' : ''}${fresh === s.id ? ' fresh' : ''}`}
                         onDragStart={(e) => { setDragId(s.id); e.dataTransfer.effectAllowed = 'move'; }}
@@ -303,27 +312,27 @@ function LessonStudio({ courseId, subject, topicId, topicTitle, onClose, onDone 
                           <div className="lb-slot-top">
                             <b>{m.label}</b>
                             {m.counted && (
-                              <span className="lb-stepper" role="group" aria-label="Сколько">
-                                <button type="button" aria-label="Меньше" disabled={s.count <= 1} onClick={() => patch(s.id, { count: s.count - 1 })}>−</button>
+                              <span className="lb-stepper" role="group" aria-label={tr('howMany')}>
+                                <button type="button" aria-label={tr('fewer')} disabled={s.count <= 1} onClick={() => patch(s.id, { count: s.count - 1 })}>−</button>
                                 <span>{s.count}</span>
-                                <button type="button" aria-label="Больше" disabled={s.count >= 10} onClick={() => patch(s.id, { count: s.count + 1 })}>+</button>
+                                <button type="button" aria-label={tr('more')} disabled={s.count >= 10} onClick={() => patch(s.id, { count: s.count + 1 })}>+</button>
                               </span>
                             )}
                             {s.kind === 'tasks' && (
-                              <select className="select lb-task-type" value={s.taskType} aria-label="Тип заданий"
+                              <select className="select lb-task-type" value={s.taskType} aria-label={tr('taskType')}
                                 onChange={(e) => patch(s.id, { taskType: e.target.value as TaskType })}>
                                 {(Object.keys(TASK_TYPE_LABELS) as TaskType[]).map((t) => <option key={t} value={t}>{TASK_TYPE_LABELS[t]}</option>)}
                               </select>
                             )}
-                            {!m.llm && <span className="chip-sm">{s.kind === 'simulation' ? 'подберём из каталога' : 'вставим сами'}</span>}
+                            {!m.llm && <span className="chip-sm">{s.kind === 'simulation' ? tr('fromCatalog') : tr('insertSelf')}</span>}
                           </div>
-                          <input className="lb-note" value={s.note} maxLength={400} placeholder={m.hint} aria-label={`Уточнение: ${m.label}`}
+                          <input className="lb-note" value={s.note} maxLength={400} placeholder={m.hint} aria-label={tr('clarify', { label: m.label })}
                             onChange={(e) => patch(s.id, { note: e.target.value })} />
                         </div>
                         <span className="lb-slot-tools">
-                          <button type="button" className="cab-icon-btn" aria-label="Выше" disabled={i === 0} onClick={() => move(i, i - 1)}><IconArrowUp size={15} /></button>
-                          <button type="button" className="cab-icon-btn" aria-label="Ниже" disabled={i === slots.length - 1} onClick={() => move(i, i + 1)}><IconArrowDown size={15} /></button>
-                          <button type="button" className="cab-icon-btn" aria-label="Убрать блок" onClick={() => setSlots((ss) => ss.filter((x) => x.id !== s.id))}><IconTrash size={15} /></button>
+                          <button type="button" className="cab-icon-btn" aria-label={tr('up')} disabled={i === 0} onClick={() => move(i, i - 1)}><IconArrowUp size={15} /></button>
+                          <button type="button" className="cab-icon-btn" aria-label={tr('down')} disabled={i === slots.length - 1} onClick={() => move(i, i + 1)}><IconArrowDown size={15} /></button>
+                          <button type="button" className="cab-icon-btn" aria-label={tr('removeSlot')} onClick={() => setSlots((ss) => ss.filter((x) => x.id !== s.id))}><IconTrash size={15} /></button>
                         </span>
                       </li>
                     );
@@ -333,11 +342,11 @@ function LessonStudio({ courseId, subject, topicId, topicTitle, onClose, onDone 
               <div className="lb-palette">
                 {GROUPS.map((g) => (
                   <div key={g.key} className="lb-palette-group">
-                    <span className="lb-label">{g.label}</span>
+                    <span className="lb-label">{tr(g.label)}</span>
                     <div>
-                      {(Object.keys(SLOT_META) as SlotKind[]).filter((k) => SLOT_META[k].group === g.key).map((k) => (
-                        <button key={k} type="button" className={`lb-chip g-${g.key}`} title={SLOT_META[k].hint} onClick={() => add(k)}>
-                          {ICONS[k](15)}{SLOT_META[k].label}<IconPlus size={13} />
+                      {(Object.keys(SM) as SlotKind[]).filter((k) => SM[k].group === g.key).map((k) => (
+                        <button key={k} type="button" className={`lb-chip g-${g.key}`} title={SM[k].hint} onClick={() => add(k)}>
+                          {ICONS[k](15)}{SM[k].label}<IconPlus size={13} />
                         </button>
                       ))}
                     </div>
@@ -347,39 +356,39 @@ function LessonStudio({ courseId, subject, topicId, topicTitle, onClose, onDone 
             </div>
 
             <aside className="lb-side">
-              <span className="lb-label">Предпросмотр</span>
+              <span className="lb-label">{tr('preview')}</span>
               <div className="lb-time">
-                <b>~{total} мин</b>
+                <b>{tr('totalMin', { n: total })}</b>
                 <span className={total > minutes * 1.25 ? 'lb-time-note warn' : 'lb-time-note'}>
-                  {total > minutes * 1.25 ? `дольше урока на ${total - minutes} мин` : `урок ${minutes} мин`}
+                  {total > minutes * 1.25 ? tr('overBy', { n: total - minutes }) : tr('lessonMin', { n: minutes })}
                 </span>
               </div>
               <div className="lb-timeline" aria-hidden="true">
                 {slots.map((s) => {
-                  const m = SLOT_META[s.kind];
+                  const m = SM[s.kind];
                   return <i key={s.id} className={`g-${m.group}`} style={{ flexGrow: m.minutes * (m.counted ? s.count : 1) }} title={m.label} />;
                 })}
               </div>
               <ul className="lb-legend">
-                {GROUPS.map((g) => <li key={g.key}><i className={`g-${g.key}`} />{g.label}</li>)}
+                {GROUPS.map((g) => <li key={g.key}><i className={`g-${g.key}`} />{tr(g.label)}</li>)}
               </ul>
               <dl className="lb-facts">
-                <div><dt>блоков</dt><dd>{slots.length}</dd></div>
-                <div><dt>заданий</dt><dd>{taskCount}</dd></div>
-                <div><dt>интерактив</dt><dd>{slots.filter((s) => SLOT_META[s.kind].group === 'interactive').length}</dd></div>
+                <div><dt>{tr('factBlocks')}</dt><dd>{slots.length}</dd></div>
+                <div><dt>{tr('factTasks')}</dt><dd>{taskCount}</dd></div>
+                <div><dt>{tr('factInteractive')}</dt><dd>{slots.filter((s) => SM[s.kind].group === 'interactive').length}</dd></div>
               </dl>
               <ol className="lb-outline">
                 {slots.map((s) => (
-                  <li key={s.id}><span className={`lb-dot g-${SLOT_META[s.kind].group}`} />{SLOT_META[s.kind].label}{SLOT_META[s.kind].counted && s.count > 1 ? ` × ${s.count}` : ''}</li>
+                  <li key={s.id}><span className={`lb-dot g-${SM[s.kind].group}`} />{SM[s.kind].label}{SM[s.kind].counted && s.count > 1 ? ` × ${s.count}` : ''}</li>
                 ))}
               </ol>
               <p className="muted lb-side-note">
-                {topicId ? 'Блоки добавятся в конец темы.' : template.exam ? 'Создастся новая тема-контрольная с таймером.' : 'Создастся новая тема в конце курса.'}
-                {subject ? ` Предмет: ${subject}.` : ''}
+                {topicId ? tr('appendNote') : template.exam ? tr('examNote') : tr('newTopicNote')}
+                {subject ? tr('subjectNote', { subject }) : ''}
               </p>
-              {error && <p className="error-box" role="alert">{error}</p>}
+              {error && <p className="error-box" role="alert">{fmt.message(error)}</p>}
               <button type="button" className="btn btn-primary ai-btn lb-go" onClick={build}>
-                <IconSpark size={17} />{topicId ? 'Дополнить тему' : 'Собрать урок'}
+                <IconSpark size={17} />{topicId ? tr('extendBtn') : tr('buildBtn')}
               </button>
             </aside>
           </div>

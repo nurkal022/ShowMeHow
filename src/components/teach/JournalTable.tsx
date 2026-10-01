@@ -1,6 +1,9 @@
 import type { Journal, JournalCell } from '@/lib/lms/journal';
-import { cellText } from '@/lib/lms/journal';
+import { cellTextIn } from '@/lib/lms/journal';
 import { formatScore } from '@/lib/lms/format';
+import type { Locale } from '@/i18n/config';
+import { translator } from '@/i18n/core';
+import { teachReview } from '@/i18n/messages/teach-review';
 
 function cellTone(c: JournalCell, points: number): string {
   if (c.state === 'graded' && c.score !== null) {
@@ -14,11 +17,12 @@ function cellTone(c: JournalCell, points: number): string {
 }
 
 /** Журнал: имя ученика и шапка остаются на месте, прокручиваются только оценки — внутри карточки. */
-export default function JournalTable({ journal, studentHref }: { journal: Journal; studentHref?: (id: string) => string }) {
+export default function JournalTable({ journal, studentHref, locale = 'ru' }: { journal: Journal; studentHref?: (id: string) => string; locale?: Locale }) {
+  const t = translator(teachReview, locale);
   if (journal.rows.length === 0 || journal.assignments.length === 0) {
     return (
       <p className="empty-state">
-        В журнале пока пусто: нужны задания в курсе и группа с учениками, которой курс открыт.
+        {t('journalEmpty')}
       </p>
     );
   }
@@ -26,27 +30,27 @@ export default function JournalTable({ journal, studentHref }: { journal: Journa
   return (
     <div className="cf-card cf-grid-card">
       <div className="cf-legend" aria-hidden="true">
-        <span><i className="cf-dot good" />80% и выше</span>
+        <span><i className="cf-dot good" />{t('legendGood')}</span>
         <span><i className="cf-dot mid" />50–79%</span>
-        <span><i className="cf-dot low" />ниже 50%</span>
-        <span><i className="cf-dot wait" />ждёт проверки</span>
+        <span><i className="cf-dot low" />{t('legendLow')}</span>
+        <span><i className="cf-dot wait" />{t('legendWait')}</span>
       </div>
-      <div className="cf-grid-scroll" tabIndex={0} role="region" aria-label="Журнал оценок: таблица прокручивается">
+      <div className="cf-grid-scroll" tabIndex={0} role="region" aria-label={t('journalRegion')}>
         <table className="cf-grid-table">
           <thead>
             <tr>
-              <th scope="col" className="cf-sticky-col">Ученик</th>
+              <th scope="col" className="cf-sticky-col">{t('student')}</th>
               {journal.assignments.map((a, i) => (
                 <th key={a.blockId} scope="col" title={headers[i]}>
                   <span className="visually-hidden">{headers[i]}</span>
                   <span className="cf-col-head" aria-hidden="true">
                     <span className="muted">{a.topicTitle}</span>
                     <span>{a.title}</span>
-                    <span className="muted">{`макс. ${a.points}`}</span>
+                    <span className="muted">{t('maxPoints', { n: a.points })}</span>
                   </span>
                 </th>
               ))}
-              <th scope="col" className="cf-total">Итого</th>
+              <th scope="col" className="cf-total">{t('total')}</th>
             </tr>
           </thead>
           <tbody>
@@ -60,10 +64,10 @@ export default function JournalTable({ journal, studentHref }: { journal: Journa
                 </th>
                 {r.cells.map((c, i) => (
                   <td key={c.blockId}>
-                    <span className={`cf-cell ${cellTone(c, journal.assignments[i].points)}`}>{cellText(c)}</span>
+                    <span className={`cf-cell ${cellTone(c, journal.assignments[i].points)}`}>{cellTextIn(c, locale)}</span>
                   </td>
                 ))}
-                <td className="cf-total"><strong>{`${formatScore(r.total)} из ${formatScore(r.max)}`}</strong></td>
+                <td className="cf-total"><strong>{t('ofMax', { a: formatScore(r.total, locale), b: formatScore(r.max, locale) })}</strong></td>
               </tr>
             ))}
           </tbody>

@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { SimulationMeta } from '@/lib/types';
 import type { Section } from '../data';
 import { IconPlay } from '../../icons';
+import { useT } from '@/i18n/client';
+import { workbenchStand } from '@/i18n/messages/workbench-stand';
 
 /**
  * Готовые симуляции того же раздела под сценой.
@@ -53,6 +55,7 @@ export function matchScore(sim: SimulationMeta, section: Section): number {
 }
 
 export default function Examples({ section }: { section?: Section }) {
+  const t = useT(workbenchStand);
   const [sims, setSims] = useState<SimulationMeta[]>([]);
 
   useEffect(() => {
@@ -79,7 +82,7 @@ export default function Examples({ section }: { section?: Section }) {
 
   return (
     <div className="stage-examples">
-      <span className="label">Так это выглядит вживую</span>
+      <span className="label">{t('liveExamples')}</span>
       <div className="stage-examples-row">
         {found.map((s) => (
           <a key={s.id} className="stage-example" href={`/present/${s.id}`}

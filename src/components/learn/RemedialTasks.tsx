@@ -3,7 +3,10 @@ import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { autoScore, emptyAnswer, isAnswerComplete, type Answer } from '@/lib/lms/answers';
 import { toStudentBody, type AssignmentPayload } from '@/lib/lms/block-schema';
-import { formatScore, ruPlural } from '@/lib/lms/format';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { learn } from '@/i18n/messages/learn';
+import { learnLesson } from '@/i18n/messages/learn-lesson';
+import { learnScore } from './format';
 import type { RemedialStatus } from '@/lib/lms/remedial';
 import { callApi } from '@/components/cabinet/api';
 import type { CaptureSimState } from '@/components/lms/SimStateFrame';
@@ -20,6 +23,9 @@ import { scoreTone } from './SubmissionStatus';
  */
 
 function TaskCard({ payload, index }: { payload: AssignmentPayload; index: number }) {
+  const t = useT(learnLesson);
+  const tl = useT(learn);
+  const locale = useLocale();
   const [answer, setAnswer] = useState<Answer>(emptyAnswer(payload.spec));
   const [score, setScore] = useState<number | null>(null);
   const [hint, setHint] = useState('');
@@ -34,7 +40,7 @@ function TaskCard({ payload, index }: { payload: AssignmentPayload; index: numbe
 
   function check() {
     if (!isAnswerComplete(answer)) {
-      setHint(payload.spec.type === 'gaps' ? 'Заполните все пропуски.' : 'Сначала дайте ответ.');
+      setHint(payload.spec.type === 'gaps' ? t('fillGaps') : t('answerFirst'));
       return;
     }
     setHint('');
@@ -57,13 +63,13 @@ function TaskCard({ payload, index }: { payload: AssignmentPayload; index: numbe
         )}
       <div className="row rm-task-foot">
         <button type="button" className="btn btn-sm btn-primary" onClick={check}>
-          {score === null ? 'Проверить' : 'Проверить снова'}
+          {score === null ? t('check') : t('checkAgain')}
         </button>
         {tone && (
           <span className={`rm-verdict ${tone}`} role="status">
-            {tone === 'full' ? <><IconCheck size={14} />Верно</> : tone === 'part'
-              ? `Почти: ${formatScore(score)} из ${payload.points} ${ruPlural(payload.points, 'балл', 'балла', 'баллов')}`
-              : 'Пока неверно — попробуйте ещё раз'}
+            {tone === 'full' ? <><IconCheck size={14} />{t('correct')}</> : tone === 'part'
+              ? t('almost', { score: learnScore(score, locale), points: tl('pointsN', { n: payload.points }) })
+              : t('notYet')}
           </span>
         )}
         {hint && <span className="rm-verdict zero" role="status">{hint}</span>}
@@ -78,6 +84,8 @@ function TaskCard({ payload, index }: { payload: AssignmentPayload; index: numbe
 export default function RemedialTasks({ id, tasks, status }: {
   id: string; tasks: AssignmentPayload[]; status: RemedialStatus;
 }) {
+  const t = useT(learnLesson);
+  const f = useFormat();
   const router = useRouter();
   const [done, setDone] = useState(status === 'done');
   const [busy, setBusy] = useState(false);
@@ -95,19 +103,19 @@ export default function RemedialTasks({ id, tasks, status }: {
   }
 
   return (
-    <section className="rm-tasks" aria-label="Мини-задания разбора">
-      <h2 className="learn-section-title"><IconTask size={17} />Попробуйте сами</h2>
+    <section className="rm-tasks" aria-label={t('tasksAria')}>
+      <h2 className="learn-section-title"><IconTask size={17} />{t('trySelf')}</h2>
       {tasks.map((t, i) => <TaskCard key={i} payload={t} index={i} />)}
       <div className="row rm-finish">
         {done
-          ? <span className="rm-verdict full"><IconCheck size={15} />Разбор закрыт</span>
+          ? <span className="rm-verdict full"><IconCheck size={15} />{t('closed')}</span>
           : (
             <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void finish()}>
-              {busy ? 'Отмечаю…' : 'Я разобрался'}
+              {busy ? t('marking') : t('understood')}
             </button>
           )}
       </div>
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <p className="error-box" role="alert">{f.message(error)}</p>}
     </section>
   );
 }

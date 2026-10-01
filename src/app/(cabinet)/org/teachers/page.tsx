@@ -13,25 +13,30 @@ import MemberActions from '@/components/org/MemberActions';
 import Drawer from '@/components/cabinet/Drawer';
 import { IconPlus } from '@/components/icons';
 import { firstParam } from '@/lib/http/params';
+import { getLocale } from '@/i18n/server';
+import { translator } from '@/i18n/core';
+import { orgPeople } from '@/i18n/messages/org-people';
 
 export default async function OrgTeachersPage({ searchParams }: { searchParams: SearchParams }) {
   const ctx = await requireCabinet('/org/teachers', ['org_admin'], searchParams);
   if (!ctx) return null;
   const m = ctx.cabinet.membership;
+  const locale = await getLocale();
+  const t = translator(orgPeople, locale);
   const [people, activity, scores] = await Promise.all([
     listOrgPeople(m.orgId, ['org_admin', 'teacher']), teacherActivity(m.orgId), teacherScorecard(m.orgId, 30),
   ]);
   return (
     <>
-      <CabinetHeader title="Учителя" subtitle={m.orgName} org={m.orgSlug} choices={ctx.cabinet.choices}>
-        <Drawer label="Добавить учителя" title="Добавить учителя" subtitle="Временный пароль будет показан один раз"
+      <CabinetHeader title={t('teachersTitle')} subtitle={m.orgName} org={m.orgSlug} choices={ctx.cabinet.choices}>
+        <Drawer label={t('addTeacher')} title={t('addTeacher')} subtitle={t('addTeacherHint')}
           icon={<IconPlus size={16} />} openInitially={firstParam((await searchParams).add) === '1' || people.length <= 1}>
           <AddTeacherForm slug={m.orgSlug} />
         </Drawer>
       </CabinetHeader>
-      {activity.length > 0 && <TeacherCards teachers={activity} />}
-      {scores.length > 0 && <TeacherScoreTable teachers={scores} />}
-      <PeopleTable people={people} actions={(p) => (p.role === 'teacher'
+      {activity.length > 0 && <TeacherCards teachers={activity} locale={locale} />}
+      {scores.length > 0 && <TeacherScoreTable teachers={scores} locale={locale} />}
+      <PeopleTable people={people} locale={locale} actions={(p) => (p.role === 'teacher'
         ? <MemberActions slug={m.orgSlug} userId={p.userId} label={userLabel(p)} disabled={p.disabled} canBlock canRemove />
         : null)} />
     </>

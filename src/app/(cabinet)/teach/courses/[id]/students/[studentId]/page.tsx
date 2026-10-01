@@ -4,8 +4,11 @@ import { requirePageUser } from '@/lib/auth/page-guard';
 import { staffCourse } from '@/lib/lms/access';
 import { studentCard } from '@/lib/lms/analytics';
 import { answersHref } from '@/lib/lms/links';
-import { formatDate, formatScore } from '@/lib/lms/format';
-import { ANSWER_STATE_LABELS } from '@/lib/lms/types';
+import { formatScore } from '@/lib/lms/format';
+import { formatDate } from '@/i18n/core';
+import { getLocale, getT } from '@/i18n/server';
+import { teachReview } from '@/i18n/messages/teach-review';
+import { answerStateLabels } from '@/lib/lms/types';
 import CabinetHeader from '@/components/cabinet/CabinetHeader';
 import StatusPill from '@/components/cabinet/StatusPill';
 import { stateTone } from '@/components/teach/AnswersTable';
@@ -15,8 +18,10 @@ export default async function StudentCardPage({ params }: { params: Promise<{ id
   const user = await requirePageUser(`/teach/courses/${id}/students/${studentId}`);
   if (!user) return null;
   const staff = await staffCourse(user, id);
-  const card = staff ? await studentCard(id, studentId) : null;
+  const locale = await getLocale();
+  const card = staff ? await studentCard(id, studentId, locale) : null;
   if (!staff || !card) notFound();
+  const t = await getT(teachReview);
   const topics = [...new Set(card.answers.map((a) => a.topicId))];
   const pct = card.total ? Math.round((card.done / card.total) * 100) : 0;
   return (
@@ -24,12 +29,12 @@ export default async function StudentCardPage({ params }: { params: Promise<{ id
       <CabinetHeader title={card.name} subtitle={`${card.groups.join(', ')}${card.login ? ` · ${card.login}` : ''} · ${staff.course.title}`} />
       <div className="st-summary">
         <div className="st-ring" style={{ ['--p' as string]: `${card.avgPercent ?? 0}%` }}>
-          <strong>{card.avgPercent === null ? '—' : `${card.avgPercent}%`}</strong><span>средний балл</span>
+          <strong>{card.avgPercent === null ? '—' : `${card.avgPercent}%`}</strong><span>{t('avgScore')}</span>
         </div>
         <dl className="st-facts">
-          <div><dt>Сдано заданий</dt><dd>{`${card.done} из ${card.total}`}<span className="meter"><i style={{ width: `${pct}%` }} /></span></dd></div>
-          <div><dt>Набрано баллов</dt><dd>{`${formatScore(card.earned)} из ${card.max}`}</dd></div>
-          <div><dt>Последний раз в курсе</dt><dd>{card.lastActive ? formatDate(card.lastActive) : 'не заходил'}</dd></div>
+          <div><dt>{t('doneTasks')}</dt><dd>{t('ofMax', { a: card.done, b: card.total })}<span className="meter"><i style={{ width: `${pct}%` }} /></span></dd></div>
+          <div><dt>{t('earned')}</dt><dd>{t('ofMax', { a: formatScore(card.earned, locale), b: card.max })}</dd></div>
+          <div><dt>{t('lastInCourse')}</dt><dd>{card.lastActive ? formatDate(card.lastActive, locale, { day: '2-digit', month: '2-digit', year: 'numeric' }) : t('never')}</dd></div>
         </dl>
       </div>
       {topics.map((tid) => {
@@ -46,8 +51,8 @@ export default async function StudentCardPage({ params }: { params: Promise<{ id
                   </div>
                   <span className="st-cell">
                     {r.status === 'graded'
-                      ? <strong className="num">{`${formatScore(r.score)} / ${r.points}`}</strong>
-                      : <StatusPill tone={stateTone(r.status)}>{ANSWER_STATE_LABELS[r.status]}</StatusPill>}
+                      ? <strong className="num">{`${formatScore(r.score, locale)} / ${r.points}`}</strong>
+                      : <StatusPill tone={stateTone(r.status)}>{answerStateLabels(locale)[r.status]}</StatusPill>}
                   </span>
                 </li>
               ))}

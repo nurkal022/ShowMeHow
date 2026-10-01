@@ -4,10 +4,14 @@ import { useRouter } from 'next/navigation';
 import { callApi } from '@/components/cabinet/api';
 import { IconSpark } from '@/components/icons';
 import { AiBusy } from './AiAssist';
+import { useFormat, useT } from '@/i18n/client';
+import { teachReview } from '@/i18n/messages/teach-review';
 
 /** Кнопки разбора: сделать или обновить разбор; по нему — тема «Работа над ошибками». */
 export default function DebriefActions({ topicId, hasDebrief, canRun }: { topicId: string; hasDebrief: boolean; canRun: boolean }) {
   const router = useRouter();
+  const t = useT(teachReview);
+  const f = useFormat();
   const [busy, setBusy] = useState<'' | 'debrief' | 'remedial'>('');
   const [error, setError] = useState('');
 
@@ -23,17 +27,17 @@ export default function DebriefActions({ topicId, hasDebrief, canRun }: { topicI
     router.refresh();
   }
 
-  if (busy) return <div className="debrief-busy"><AiBusy text={busy === 'debrief' ? 'Помощник читает ответы класса…' : 'Помощник пишет урок по ошибкам…'} /></div>;
+  if (busy) return <div className="debrief-busy"><AiBusy text={busy === 'debrief' ? t('busyDebrief') : t('busyRemedial')} /></div>;
   return (
     <div className="debrief-actions">
       <button type="button" className={hasDebrief ? 'btn btn-sm ai-btn' : 'btn btn-primary ai-btn'} disabled={!canRun} onClick={() => run('create')}>
-        <IconSpark size={16} />{hasDebrief ? 'Обновить разбор' : 'Сделать разбор'}
+        <IconSpark size={16} />{hasDebrief ? t('refreshDebrief') : t('makeDebrief')}
       </button>
       {hasDebrief && (
-        <button type="button" className="btn btn-sm" onClick={() => run('remedial')}>Урок «Работа над ошибками»</button>
+        <button type="button" className="btn btn-sm" onClick={() => run('remedial')}>{t('remedialLesson')}</button>
       )}
-      {!canRun && <span className="muted">Нужны сданные ответы</span>}
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {!canRun && <span className="muted">{t('needAnswers')}</span>}
+      {error && <p className="error-box" role="alert">{f.message(error)}</p>}
     </div>
   );
 }

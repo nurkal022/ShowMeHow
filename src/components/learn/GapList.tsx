@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation';
 import type { Gap } from '@/lib/lms/gaps';
 import type { Remedial } from '@/lib/lms/remedial';
 import { coverStyle } from '@/lib/lms/covers';
-import { formatDate, formatScore } from '@/lib/lms/format';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { learnMe } from '@/i18n/messages/learn-me';
+import { learnDate, learnScore } from './format';
 import { callApi } from '@/components/cabinet/api';
 import { IconBulb, IconChevron, IconSpark } from '@/components/icons';
 
@@ -15,6 +17,9 @@ import { IconBulb, IconChevron, IconSpark } from '@/components/icons';
  * второй такой же разбор ученику не нужен. Если разбор уже есть — ведём в него.
  */
 export default function GapList({ gaps, existing }: { gaps: Gap[]; existing: Record<string, string> }) {
+  const t = useT(learnMe);
+  const f = useFormat();
+  const locale = useLocale();
   const router = useRouter();
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -29,7 +34,7 @@ export default function GapList({ gaps, existing }: { gaps: Gap[]; existing: Rec
 
   return (
     <>
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <p className="error-box" role="alert">{f.message(error)}</p>}
       <ul className="gap-list">
         {gaps.map((g, i) => {
           const done = existing[g.blockId];
@@ -43,28 +48,28 @@ export default function GapList({ gaps, existing }: { gaps: Gap[]; existing: Rec
                 <small>{g.topicTitle} · {g.courseTitle}</small>
                 <span className="gap-meta">
                   {g.score === null
-                    ? 'Возвращено на доработку'
-                    : `${formatScore(g.score)} из ${g.points} баллов · ${g.percent}%`}
-                  {` · ${formatDate(g.at)}`}
+                    ? t('returnedGap')
+                    : t('gapScore', { a: learnScore(g.score, locale), b: g.points, p: g.percent })}
+                  {` · ${learnDate(g.at, locale)}`}
                 </span>
               </div>
               {done
                 ? (
                   <Link className="btn btn-sm" href={`/learn/mistakes/${done}`}>
-                    <IconBulb size={15} />Открыть разбор<IconChevron size={15} />
+                    <IconBulb size={15} />{t('openBreakdown')}<IconChevron size={15} />
                   </Link>
                 )
                 : (
                   <button type="button" className="btn btn-sm btn-primary" disabled={busy !== ''}
                     onClick={() => void explain(g.blockId)}>
-                    <IconSpark size={15} />{busy === g.blockId ? 'Собираю разбор…' : 'Разобрать'}
+                    <IconSpark size={15} />{busy === g.blockId ? t('building') : t('explain')}
                   </button>
                 )}
             </li>
           );
         })}
       </ul>
-      {busy && <p className="muted gap-wait">Помощник пишет объяснение и придумывает задания — это занимает до двух минут. Не закрывайте страницу.</p>}
+      {busy && <p className="muted gap-wait">{t('gapWait')}</p>}
     </>
   );
 }

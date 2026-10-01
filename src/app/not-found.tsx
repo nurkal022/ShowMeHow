@@ -1,17 +1,22 @@
 import Link from 'next/link';
 import SiteChrome from '@/components/SiteChrome';
+import { getT } from '@/i18n/server';
+import { app } from '@/i18n/messages/app';
 
-export const metadata = { title: 'Страница не найдена — Tesseract' };
+export async function generateMetadata() {
+  return { title: (await getT(app))('nfMeta') };
+}
 
 /** Общий 404: чужой кабинет и несуществующий адрес выглядят одинаково. */
-export default function NotFound() {
+export default async function NotFound() {
+  const t = await getT(app);
   return (
     <SiteChrome>
       <div className="not-found">
         <strong>404</strong>
-        <h1>Страница не найдена</h1>
-        <p className="muted">Адрес неверный, или у вас нет доступа к этой странице.</p>
-        <Link href="/" className="btn btn-primary">На главную</Link>
+        <h1>{t('nfTitle')}</h1>
+        <p className="muted">{t('nfText')}</p>
+        <Link href="/" className="btn btn-primary">{t('nfHome')}</Link>
       </div>
     </SiteChrome>
   );

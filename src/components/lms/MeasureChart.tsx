@@ -1,5 +1,8 @@
+'use client';
 import { parseNumber } from '@/lib/lms/answers';
 import type { TableColumn } from '@/lib/lms/block-schema';
+import { useLocale, useT } from '@/i18n/client';
+import { lms } from '@/i18n/messages/lms';
 
 const W = 520; const H = 260; const PAD = { l: 52, r: 16, t: 14, b: 40 };
 
@@ -11,14 +14,19 @@ function ticks(min: number, max: number): number[] {
   for (let v = Math.ceil(min / nice) * nice; v <= max + 1e-9; v += nice) out.push(Number(v.toPrecision(10)));
   return out;
 }
-const fmt = (v: number) => String(Number(v.toPrecision(4))).replace('.', ',');
+const fmt = (v: number, comma: boolean) => (comma ? String(Number(v.toPrecision(4))).replace('.', ',') : String(Number(v.toPrecision(4))));
 
-/** График по таблице измерений: первый столбец — по горизонтали, второй — по вертикали. Чистый SVG, рисуется и на сервере. */
+/**
+ * График по таблице измерений: первый столбец — по горизонтали, второй — по вертикали.
+ * Чистый SVG; клиентский компонент только ради подписей на языке интерфейса, HTML рисуется и на сервере.
+ */
 export default function MeasureChart({ columns, rows }: { columns: TableColumn[]; rows: string[][] }) {
+  const tr = useT(lms);
+  const comma = useLocale() !== 'en';
   const pts = rows.map((r) => [parseNumber(r[0] ?? ''), parseNumber(r[1] ?? '')] as const)
     .filter((p): p is readonly [number, number] => p[0] !== null && p[1] !== null)
     .sort((a, b) => a[0] - b[0]);
-  if (pts.length < 2) return <p className="muted measure-chart-empty">График появится, когда будут заполнены хотя бы две строки.</p>;
+  if (pts.length < 2) return <p className="muted measure-chart-empty">{tr('chartEmpty')}</p>;
   const xs = pts.map((p) => p[0]); const ys = pts.map((p) => p[1]);
   const pad = (a: number, b: number) => (a === b ? [a - 1, b + 1] : [a - (b - a) * 0.08, b + (b - a) * 0.08]);
   const [x0, x1] = pad(Math.min(...xs), Math.max(...xs)); const [y0, y1] = pad(Math.min(...ys), Math.max(...ys));
@@ -27,13 +35,13 @@ export default function MeasureChart({ columns, rows }: { columns: TableColumn[]
   const label = (c: TableColumn) => (c.unit ? `${c.label}, ${c.unit}` : c.label);
   return (
     <figure className="measure-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`График: ${label(columns[1])} от ${label(columns[0])}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={tr('chartLabel', { y: label(columns[1]), x: label(columns[0]) })}>
         {ticks(y0, y1).map((t) => (
           <g key={`y${t}`}><line x1={PAD.l} x2={W - PAD.r} y1={py(t)} y2={py(t)} className="chart-grid" />
-            <text x={PAD.l - 8} y={py(t) + 4} textAnchor="end" className="chart-tick">{fmt(t)}</text></g>
+            <text x={PAD.l - 8} y={py(t) + 4} textAnchor="end" className="chart-tick">{fmt(t, comma)}</text></g>
         ))}
         {ticks(x0, x1).map((t) => (
-          <text key={`x${t}`} x={px(t)} y={H - PAD.b + 16} textAnchor="middle" className="chart-tick">{fmt(t)}</text>
+          <text key={`x${t}`} x={px(t)} y={H - PAD.b + 16} textAnchor="middle" className="chart-tick">{fmt(t, comma)}</text>
         ))}
         <polyline className="chart-line-draw" pathLength={1} points={pts.map((p) => `${px(p[0])},${py(p[1])}`).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" />
         {pts.map((p, i) => <circle key={i} className="chart-dot-in" style={{ animationDelay: `${300 + i * 90}ms` }} cx={px(p[0])} cy={py(p[1])} r="4.5" fill="var(--surface)" stroke="var(--accent)" strokeWidth="2.5" />)}

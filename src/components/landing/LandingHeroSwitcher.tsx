@@ -1,8 +1,11 @@
 'use client';
 import { useState } from 'react';
+import { useT } from '@/i18n/client';
+import { landing } from '@/i18n/messages/landing';
 
 /** Живой тренажёр в первом экране: гость сразу двигает ползунки, а не читает про них. */
 export default function LandingHeroSwitcher({ demos }: { demos: { slug: string; title: string; subject: string }[] }) {
+  const t = useT(landing);
   const [at, setAt] = useState(0);
   const current = demos[at];
   if (!current) return null;
@@ -13,7 +16,7 @@ export default function LandingHeroSwitcher({ demos }: { demos: { slug: string; 
         <iframe key={current.slug} src={`/api/public/demos/${current.slug}`} title={current.title}
           sandbox="allow-scripts" loading="eager" />
       </div>
-      <div className="land-stage-tabs" role="tablist" aria-label="Примеры тренажёров">
+      <div className="land-stage-tabs" role="tablist" aria-label={t('examplesAria')}>
         {demos.map((d, i) => (
           <button key={d.slug} type="button" role="tab" aria-selected={i === at} className={i === at ? 'on' : undefined}
             onClick={() => setAt(i)}><small>{d.subject}</small>{d.title}</button>

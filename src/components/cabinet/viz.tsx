@@ -1,5 +1,8 @@
 import Link from 'next/link';
 import { formatAgo } from '@/lib/lms/format';
+import { formatDate, formatDateTime, translator } from '@/i18n/core';
+import type { Locale } from '@/i18n/config';
+import { cabinet } from '@/i18n/messages/cabinet';
 
 /**
  * Мелкие наглядные элементы кабинетов: кольцо прогресса, тепловая карта дней,
@@ -44,7 +47,8 @@ export function Avatar({ name, size = 32 }: { name: string; size?: number }) {
 }
 
 /** Квадратики по дням, неделя — столбец (пн сверху). Цвет — доля от максимума. */
-export function Heatmap({ days, values, label }: { days: string[]; values: number[]; label: string }) {
+export function Heatmap({ days, values, label, locale = 'ru' }: { days: string[]; values: number[]; label: string; locale?: Locale }) {
+  const t = translator(cabinet, locale);
   const max = Math.max(...values, 1);
   const first = new Date(`${days[0]}T00:00:00`);
   const pad = (first.getDay() + 6) % 7;
@@ -54,19 +58,19 @@ export function Heatmap({ days, values, label }: { days: string[]; values: numbe
   const level = (n: number) => (n === 0 ? 0 : Math.min(4, Math.ceil((n / max) * 4)));
   return (
     <div className="heatmap" role="img" aria-label={label}>
-      <div className="heatmap-days" aria-hidden="true"><span>пн</span><span /><span>ср</span><span /><span>пт</span><span /><span /></div>
+      <div className="heatmap-days" aria-hidden="true"><span>{t('mon')}</span><span /><span>{t('wed')}</span><span /><span>{t('fri')}</span><span /><span /></div>
       <div className="heatmap-grid">
         {weeks.map((w, wi) => (
           <div key={wi} className="heatmap-week">
             {w.map((c, di) => c
               ? <i key={di} className={`hm-${level(c.n)}`} style={{ animationDelay: `${wi * 18 + di * 6}ms` }}
-                  title={`${new Date(`${c.day}T00:00:00`).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}: ${c.n}`} />
+                  title={`${formatDate(`${c.day}T00:00:00`, locale, { day: 'numeric', month: 'long' })}: ${c.n}`} />
               : <i key={di} className="hm-none" />)}
           </div>
         ))}
       </div>
       <div className="heatmap-legend" aria-hidden="true">
-        меньше <i className="hm-0" /><i className="hm-1" /><i className="hm-2" /><i className="hm-3" /><i className="hm-4" /> больше
+        {t('hmLess')} <i className="hm-0" /><i className="hm-1" /><i className="hm-2" /><i className="hm-3" /><i className="hm-4" /> {t('hmMore')}
       </div>
     </div>
   );
@@ -77,7 +81,7 @@ export interface TimelineItem {
   who: string; text: React.ReactNode; at: string; href?: string | null;
 }
 
-export function Timeline({ items }: { items: TimelineItem[] }) {
+export function Timeline({ items, locale = 'ru' }: { items: TimelineItem[]; locale?: Locale }) {
   return (
     <ol className="timeline">
       {items.map((it) => {
@@ -86,7 +90,7 @@ export function Timeline({ items }: { items: TimelineItem[] }) {
             <span className={`timeline-dot t-${it.tone}`}>{it.icon}</span>
             <span className="timeline-body">
               <span><b>{it.who}</b> {it.text}</span>
-              <time dateTime={it.at} title={new Date(it.at).toLocaleString('ru-RU')}>{formatAgo(it.at)}</time>
+              <time dateTime={it.at} title={formatDateTime(it.at, locale, { dateStyle: 'medium', timeStyle: 'short' })}>{formatAgo(it.at, locale)}</time>
             </span>
           </>
         );

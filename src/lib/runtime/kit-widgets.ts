@@ -15,7 +15,7 @@ export const KIT_WIDGETS_JS = `
     o = o || {};
     var corner = o.corner || 'bl';
     if (!readoutBodies[corner]) {
-      readoutBodies[corner] = K.panel({ title: o.panelTitle || 'Величины', corner: corner });
+      readoutBodies[corner] = K.panel({ title: o.panelTitle || __simT('readouts'), corner: corner });
     }
     var row = document.createElement('div');
     row.className = 'sim-readout';
@@ -39,7 +39,7 @@ export const KIT_WIDGETS_JS = `
   // ---------- Легенда цветов ----------
   function legend(o) {
     o = o || {};
-    var body = K.panel({ title: o.title || 'Легенда', corner: o.corner || 'bl' });
+    var body = K.panel({ title: o.title || __simT('legend'), corner: o.corner || 'bl' });
     var wrap = document.createElement('div');
     wrap.className = 'sim-legend';
     var items = o.items || [];
@@ -106,7 +106,7 @@ export const KIT_WIDGETS_JS = `
 
   function formula(o) {
     o = o || {};
-    var body = K.panel({ title: o.title || 'Как это работает', corner: o.corner || 'bl' });
+    var body = K.panel({ title: o.title || __simT('formula'), corner: o.corner || 'bl' });
     var tex = document.createElement('div');
     tex.className = 'sim-formula-tex';
     tex.textContent = o.tex || '';
@@ -189,7 +189,7 @@ export const KIT_WIDGETS_JS = `
     btn.className = 'sim-toggle';
     var on = !!o.value;
     function sync() {
-      btn.textContent = on ? 'вкл' : 'выкл';
+      btn.textContent = on ? __simT('on') : __simT('off');
       btn.className = on ? 'sim-toggle sim-toggle-on' : 'sim-toggle';
     }
     btn.onclick = function () { on = !on; sync(); o.onChange(on); };
@@ -255,7 +255,7 @@ export const KIT_WIDGETS_JS = `
     var lab = document.createElement('label');
     var val = document.createElement('span');
     val.className = 'sim-value';
-    lab.textContent = 'Скорость времени';
+    lab.textContent = __simT('speed');
     lab.appendChild(val);
     var box = document.createElement('div');
     box.className = 'sim-btns';
@@ -288,7 +288,7 @@ export const KIT_WIDGETS_JS = `
       return 0.5 - 0.5 * Math.cos(Math.PI * k);
     }
     K.__register({
-      kind: 'speed', name: o.name || 'speed', label: 'Скорость времени',
+      kind: 'speed', name: o.name || 'speed', label: __simT('speed'),
       get: function () { return cur; },
       set: function (v) { cur = Number(v); sync(); if (o.onChange) o.onChange(cur); },
       restart: function () { startedAt = null; },
@@ -300,7 +300,7 @@ export const KIT_WIDGETS_JS = `
   }
 
   function goals(list) {
-    var body = K.panel({ title: 'Чему учит', corner: 'tl', collapsed: true });
+    var body = K.panel({ title: __simT('goals'), corner: 'tl', collapsed: true });
     var ul = document.createElement('ul');
     ul.className = 'sim-goals';
     for (var i = 0; i < list.length; i++) {

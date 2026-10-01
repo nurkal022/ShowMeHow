@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { useT } from '@/i18n/client';
+import { app } from '@/i18n/messages/app';
 
 interface SimError { id: number; message: string }
 
@@ -12,6 +14,7 @@ export default function PreviewFrame({ html, frameRef, onSimError }: {
   /** Кому нужен сам iframe: задание «Состояние симуляции» спрашивает у него значения контролов. */
   frameRef?: MutableRefObject<HTMLIFrameElement | null>;
 }) {
+  const t = useT(app);
   const [errors, setErrors] = useState<SimError[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const onSimErrorRef = useRef(onSimError);
@@ -40,7 +43,7 @@ export default function PreviewFrame({ html, frameRef, onSimError }: {
   }
 
   if (!html) {
-    return <div className="preview-empty">Здесь появится симуляция</div>;
+    return <div className="preview-empty">{t('previewEmpty')}</div>;
   }
   return (
     <div className="preview-wrap">
@@ -49,14 +52,14 @@ export default function PreviewFrame({ html, frameRef, onSimError }: {
         className="preview-frame"
         sandbox="allow-scripts"
         srcDoc={html}
-        title="Симуляция"
+        title={t('simulation')}
       />
       {errors.length > 0 && (
         <div className="sim-error-overlay">
           {errors.map((err) => (
             <div key={err.id} className="sim-error-item">
-              <span>Ошибка в симуляции: {err.message}</span>
-              <button onClick={() => dismiss(err.id)} aria-label="Закрыть">×</button>
+              <span>{t('simError', { message: err.message })}</span>
+              <button onClick={() => dismiss(err.id)} aria-label={t('close')}>×</button>
             </div>
           ))}
         </div>

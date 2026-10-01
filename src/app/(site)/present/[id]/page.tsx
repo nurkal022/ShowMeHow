@@ -2,6 +2,8 @@ import { getRenderableArtifact, getSharedArtifact } from '@/lib/storage';
 import { requirePageUser } from '@/lib/auth/page-guard';
 import { canView } from '@/lib/lms/access';
 import { IconBack } from '@/components/icons';
+import { getT } from '@/i18n/server';
+import { app } from '@/i18n/messages/app';
 
 export default async function Present({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,18 +20,19 @@ export default async function Present({ params }: { params: Promise<{ id: string
   } catch {
     html = null;
   }
+  const t = await getT(app);
   if (html === null) {
-    return <p style={{ padding: 20 }}>Симуляция не найдена. Возможно, автор её удалил.</p>;
+    return <p style={{ padding: 20 }}>{t('presentNotFound')}</p>;
   }
   return (
     <>
       <iframe
         sandbox="allow-scripts"
         srcDoc={html}
-        title="Презентация"
+        title={t('presentTitle')}
         style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', border: 'none', zIndex: 40 }}
       />
-      <a className="present-exit" href={own ? '/library' : '/learn'}><IconBack size={17} />Выйти</a>
+      <a className="present-exit" href={own ? '/library' : '/learn'}><IconBack size={17} />{t('exit')}</a>
     </>
   );
 }

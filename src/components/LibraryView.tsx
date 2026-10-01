@@ -3,10 +3,15 @@ import { useEffect, useMemo, useState } from 'react';
 import type { SimulationMeta } from '@/lib/types';
 import { IconDownload, IconEdit, IconLibrary, IconPlay, IconSearch, IconTrash } from '@/components/icons';
 import { isUnauthorized, loginWithReturnTo } from '@/lib/auth/client-session';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { app } from '@/i18n/messages/app';
+import { INTL_LOCALE } from '@/i18n/config';
 
 type Sort = 'recent' | 'title';
 
 export default function LibraryView() {
+  const t = useT(app);
+  const locale = useLocale();
   const [sims, setSims] = useState<SimulationMeta[]>([]);
   const [q, setQ] = useState('');
   const [subject, setSubject] = useState('all');
@@ -26,7 +31,7 @@ export default function LibraryView() {
       setSims(await resp.json());
       setError('');
     } catch (err) {
-      setError('Не удалось загрузить библиотеку');
+      setError(t('libLoadFailed'));
       console.error(err);
     } finally {
       setLoading(false);
@@ -41,14 +46,14 @@ export default function LibraryView() {
   }, []);
 
   async function remove(id: string) {
-    if (!confirm('Удалить симуляцию?')) return;
+    if (!confirm(t('libDeleteConfirm'))) return;
     try {
       const resp = await fetch(`/api/simulations/${id}`, { method: 'DELETE' });
       if (isUnauthorized(resp)) { loginWithReturnTo('/library'); return; }
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       await load();
     } catch (err) {
-      setError('Не удалось удалить симуляцию');
+      setError(t('libDeleteFailed'));
       console.error(err);
     }
   }
@@ -61,7 +66,7 @@ export default function LibraryView() {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       await load();
     } catch (err) {
-      setError('Не удалось установить примеры');
+      setError(t('libDemosFailed'));
       console.error(err);
     } finally {
       setInstalling(false);
@@ -83,9 +88,9 @@ export default function LibraryView() {
       .filter((s) => !needle
         || (s.title + s.prompt + s.subject + s.tags.join(' ')).toLowerCase().includes(needle))
       .sort((a, b) => (sort === 'title'
-        ? a.title.localeCompare(b.title, 'ru')
+        ? a.title.localeCompare(b.title, INTL_LOCALE[locale])
         : +new Date(b.updatedAt) - +new Date(a.updatedAt)));
-  }, [sims, q, subject, sort]);
+  }, [sims, q, subject, sort, locale]);
 
   const counts = useMemo(() => {
     const seen = new Map<string, number>();
@@ -97,13 +102,13 @@ export default function LibraryView() {
     <div className="library">
       <div className="library-head">
         <div>
-          <h1>Библиотека</h1>
-          <p className="muted">Готовые тренажёры. Нажмите на карточку — тренажёр откроется на весь экран.</p>
+          <h1>{t('libTitle')}</h1>
+          <p className="muted">{t('libLead')}</p>
         </div>
         <label className="search">
           <IconSearch size={18} />
-          <input placeholder="Поиск по названию и описанию" value={q}
-            aria-label="Поиск" onChange={(e) => setQ(e.target.value)} />
+          <input placeholder={t('libSearchPh')} value={q}
+            aria-label={t('searchAria')} onChange={(e) => setQ(e.target.value)} />
         </label>
       </div>
 
@@ -113,13 +118,13 @@ export default function LibraryView() {
         <div className="empty-library">
           <IconLibrary size={34} />
           <div>
-            <h2>Здесь пока пусто</h2>
-            <p className="muted">Опишите явление — симуляция появится здесь.</p>
+            <h2>{t('libEmpty')}</h2>
+            <p className="muted">{t('libEmptyText')}</p>
           </div>
           <div className="row">
-            {canCreate && <a className="btn btn-primary" href="/">Создать симуляцию</a>}
+            {canCreate && <a className="btn btn-primary" href="/">{t('libCreate')}</a>}
             <button className="btn" onClick={installDemos} disabled={installing}>
-              {installing ? 'Возвращаю…' : 'Вернуть примеры'}
+              {installing ? t('libRestoring') : t('libRestoreDemos')}
             </button>
           </div>
         </div>
@@ -127,9 +132,9 @@ export default function LibraryView() {
 
       {(loading || sims.length > 0) && (
         <div className="lib-layout">
-          <aside className="lib-side" aria-label="Разделы">
+          <aside className="lib-side" aria-label={t('libSections')}>
             <button className={subject === 'all' ? 'lib-sub active' : 'lib-sub'} onClick={() => setSubject('all')}>
-              Все разделы<b>{sims.length}</b>
+              {t('libAll')}<b>{sims.length}</b>
             </button>
             {subjects.map((s) => (
               <button key={s} className={subject === s ? 'lib-sub active' : 'lib-sub'}
@@ -140,13 +145,13 @@ export default function LibraryView() {
           <div className="lib-main">
             <div className="lib-bar">
               <span className="count">
-                {subject === 'all' ? 'Все разделы' : subject} · {shown.length}
+                {subject === 'all' ? t('libAll') : subject} · {shown.length}
               </span>
               <div className="segmented">
                 <button className={sort === 'recent' ? 'segmented-item active' : 'segmented-item'}
-                  onClick={() => setSort('recent')}>Новые</button>
+                  onClick={() => setSort('recent')}>{t('libNewest')}</button>
                 <button className={sort === 'title' ? 'segmented-item active' : 'segmented-item'}
-                  onClick={() => setSort('title')}>По алфавиту</button>
+                  onClick={() => setSort('title')}>{t('libAbc')}</button>
               </div>
             </div>
 
@@ -157,7 +162,7 @@ export default function LibraryView() {
                 </div>
               )
               : shown.length === 0
-                ? <p className="muted" style={{ marginTop: 24 }}>Ничего не нашлось. Попробуйте другой запрос.</p>
+                ? <p className="muted" style={{ marginTop: 24 }}>{t('libNothing')}</p>
                 : (
                   <div className="cards">
                     {shown.map((s) => <SimCard key={s.id} sim={s} onRemove={() => remove(s.id)} />)}
@@ -175,32 +180,34 @@ export default function LibraryView() {
  * десяток iframe'ов и грузил страницу. Клик открывает сам тренажёр.
  */
 function SimCard({ sim, onRemove }: { sim: SimulationMeta; onRemove: () => void }) {
+  const t = useT(app);
+  const f = useFormat();
   return (
     <article className="sim-card">
-      <a href={`/present/${sim.id}`} className="card-thumb" aria-label={`Открыть тренажёр «${sim.title}»`}>
+      <a href={`/present/${sim.id}`} className="card-thumb" aria-label={t('libOpenSim', { title: sim.title })}>
         <img src={`/api/simulations/${sim.id}/thumbnail`} alt="" loading="lazy" decoding="async"
           onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
-        <span className="card-thumb-hint"><IconPlay size={26} />Открыть</span>
+        <span className="card-thumb-hint"><IconPlay size={26} />{t('open')}</span>
       </a>
       <div className="card-body">
         <h3><a href={`/present/${sim.id}`}>{sim.title}</a></h3>
         <div className="card-sub">
           <span>{sim.subject}</span>
           <span>·</span>
-          <span>{new Date(sim.updatedAt).toLocaleDateString('ru')}</span>
+          <span>{f.date(sim.updatedAt, { day: 'numeric', month: 'numeric', year: 'numeric' })}</span>
         </div>
-        {sim.warning && <p className="warn">{sim.warning}</p>}
+        {sim.warning && <p className="warn">{f.message(sim.warning)}</p>}
         <div className="card-actions">
           <a className="btn btn-sm btn-ghost" href={`/?id=${sim.id}`}>
-            <IconEdit size={15} />В мастерской
+            <IconEdit size={15} />{t('libInWorkbench')}
           </a>
           <a className="btn btn-sm btn-ghost" href={`/api/simulations/${sim.id}/export`}
-            title="Скачать HTML" aria-label="Скачать HTML">
+            title={t('libDownload')} aria-label={t('libDownload')}>
             <IconDownload size={15} />
           </a>
           <span className="spacer" />
           <button className="btn btn-sm btn-danger" onClick={onRemove}
-            title="Удалить" aria-label="Удалить">
+            title={t('delete')} aria-label={t('delete')}>
             <IconTrash size={15} />
           </button>
         </div>

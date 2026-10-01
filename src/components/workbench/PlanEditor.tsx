@@ -3,15 +3,18 @@ import { useState } from 'react';
 import type { PlanSpec, SimLevel, SimParameter, PlanStep, PlanView } from '@/lib/types';
 import { IconCheck, IconClose, IconPlus, IconSend, IconTrash } from '../icons';
 import Markup from '../lms/Markup';
+import { useT } from '@/i18n/client';
+import { workbench } from '@/i18n/messages/workbench';
+import { common } from '@/i18n/messages/common';
 
-export const LEVEL_OPTIONS: [SimLevel, string, string][] = [
-  ['demo', 'Демонстрация', 'показ явления: сцена, график, формула'],
-  ['lab', 'Лаборатория', 'измерения, несколько видов, шаги урока'],
-  ['research', 'Исследование', 'сценарий с заданиями и проверкой ответов'],
+export const LEVEL_OPTIONS: [SimLevel, 'levelDemo' | 'levelLab' | 'levelResearch', 'levelDemoHint' | 'levelLabHint' | 'levelResearchHint'][] = [
+  ['demo', 'levelDemo', 'levelDemoHint'],
+  ['lab', 'levelLab', 'levelLabHint'],
+  ['research', 'levelResearch', 'levelResearchHint'],
 ];
 
-const VIEW_LABELS: Record<PlanView['kind'], string> = {
-  scene: 'сцена', chart: 'график', phase: 'фазовая диаграмма', table: 'таблица', formula: 'формула', section: 'разрез',
+const VIEW_LABELS: Record<PlanView['kind'], keyof typeof workbench.ru> = {
+  scene: 'viewScene', chart: 'viewChart', phase: 'viewPhase', table: 'viewTable', formula: 'viewFormula', section: 'viewSection',
 };
 
 /**
@@ -31,6 +34,8 @@ export default function PlanEditor({
   onCorrect: (text: string) => void;
   onCancel: () => void;
 }) {
+  const t = useT(workbench);
+  const tc = useT(common);
   const [correction, setCorrection] = useState('');
   const [physicsOpen, setPhysicsOpen] = useState(false);
   const level = spec.level ?? 'demo';
@@ -57,9 +62,9 @@ export default function PlanEditor({
   return (
     <div className={`plan-editor${replanning ? ' is-replanning' : ''}`}>
       <div className="plan-editor-head">
-        <span className="plan-editor-kicker">План тренажёра</span>
+        <span className="plan-editor-kicker">{t('planKicker')}</span>
         <input className="plan-editor-title" value={spec.title} disabled={disabled}
-          aria-label="Название" onChange={(e) => set({ title: e.target.value })} />
+          aria-label={t('planTitleAria')} onChange={(e) => set({ title: e.target.value })} />
         <div className="plan-editor-meta">
           <span>{spec.subject}</span>
           <span className={`badge badge-${spec.mode}`}>{spec.mode.toUpperCase()}</span>
@@ -68,46 +73,46 @@ export default function PlanEditor({
       </div>
 
       <div className="plan-section">
-        <div className="plan-section-title">Уровень</div>
-        <div className="level-cards" role="radiogroup" aria-label="Уровень тренажёра">
+        <div className="plan-section-title">{t('planLevel')}</div>
+        <div className="level-cards" role="radiogroup" aria-label={t('simLevel')}>
           {LEVEL_OPTIONS.map(([v, label, hint]) => (
             <button key={v} type="button" role="radio" aria-checked={level === v} disabled={disabled}
               className={level === v ? 'level-card active' : 'level-card'} onClick={() => set({ level: v })}>
-              <b>{label}</b><span>{hint}</span>
+              <b>{t(label)}</b><span>{t(hint)}</span>
             </button>
           ))}
         </div>
       </div>
 
       <div className="plan-section">
-        <div className="plan-section-title">Чему учит</div>
+        <div className="plan-section-title">{t('planGoals')}</div>
         <textarea className="plan-goals" rows={Math.max(2, spec.learningGoals.length)} disabled={disabled}
-          value={spec.learningGoals.join('\n')} aria-label="Цели обучения, по одной в строке"
+          value={spec.learningGoals.join('\n')} aria-label={t('planGoalsAria')}
           onChange={(e) => set({ learningGoals: e.target.value.split('\n').map((g) => g.trimStart()).filter((g, i, a) => g || i === a.length - 1) })} />
       </div>
 
       <div className="plan-section">
         <div className="plan-section-title">
-          Параметры <span className="muted">— слайдеры на панели</span>
+          {t('planParams')} <span className="muted">{t('planParamsHint')}</span>
         </div>
         <div className="plan-params">
           <div className="plan-param plan-param-head" aria-hidden>
-            <span>Подпись</span><span>от</span><span>до</span><span>сначала</span><span>ед.</span><span />
+            <span>{t('colLabel')}</span><span>{t('colFrom')}</span><span>{t('colTo')}</span><span>{t('colStart')}</span><span>{t('colUnit')}</span><span />
           </div>
           {spec.parameters.map((p, i) => (
             <div className="plan-param" key={`${p.name}:${p.min}:${p.max}:${p.value}`}>
-              <input value={p.label} disabled={disabled} aria-label="Подпись параметра"
+              <input value={p.label} disabled={disabled} aria-label={t('paramLabelAria')}
                 onChange={(e) => setParam(i, { label: e.target.value })} />
-              <input inputMode="decimal" defaultValue={p.min} disabled={disabled} aria-label="Минимум"
+              <input inputMode="decimal" defaultValue={p.min} disabled={disabled} aria-label={t('minAria')}
                 onBlur={(e) => setParam(i, { min: numberField(e.target.value, p.min) })} />
-              <input inputMode="decimal" defaultValue={p.max} disabled={disabled} aria-label="Максимум"
+              <input inputMode="decimal" defaultValue={p.max} disabled={disabled} aria-label={t('maxAria')}
                 onBlur={(e) => setParam(i, { max: numberField(e.target.value, p.max) })} />
-              <input inputMode="decimal" defaultValue={p.value} disabled={disabled} aria-label="Начальное значение"
+              <input inputMode="decimal" defaultValue={p.value} disabled={disabled} aria-label={t('startAria')}
                 onBlur={(e) => setParam(i, { value: numberField(e.target.value, p.value) })} />
-              <input value={p.unit} disabled={disabled} aria-label="Единица"
+              <input value={p.unit} disabled={disabled} aria-label={t('unitAria')}
                 onChange={(e) => setParam(i, { unit: e.target.value })} />
               <button type="button" className="icon-btn" disabled={disabled || spec.parameters.length <= 1}
-                aria-label={`Убрать параметр ${p.label}`}
+                aria-label={t('removeParam', { name: p.label })}
                 onClick={() => set({ parameters: spec.parameters.filter((_, k) => k !== i) })}>
                 <IconTrash size={15} />
               </button>
@@ -118,12 +123,12 @@ export default function PlanEditor({
 
       {(spec.views?.length ?? 0) > 0 && (
         <div className="plan-section">
-          <div className="plan-section-title">Виды и приборы</div>
+          <div className="plan-section-title">{t('planViews')}</div>
           <div className="plan-chips">
             {spec.views!.map((v, i) => (
               <span className="plan-chip" key={`${v.title}-${i}`} title={v.what}>
-                <em>{VIEW_LABELS[v.kind]}</em>{v.title}
-                <button type="button" aria-label={`Убрать вид ${v.title}`} disabled={disabled}
+                <em>{t(VIEW_LABELS[v.kind])}</em>{v.title}
+                <button type="button" aria-label={t('removeView', { name: v.title })} disabled={disabled}
                   onClick={() => set({ views: spec.views!.filter((_, k) => k !== i) })}><IconClose size={12} /></button>
               </span>
             ))}
@@ -133,22 +138,22 @@ export default function PlanEditor({
 
       {level !== 'demo' && (
         <div className="plan-section">
-          <div className="plan-section-title">Сценарий урока</div>
+          <div className="plan-section-title">{t('planScenario')}</div>
           <ol className="plan-steps">
             {(spec.scenario ?? []).map((s, i) => (
               <li key={i}>
-                <input className="plan-step-title" value={s.title} disabled={disabled} aria-label="Шаг"
+                <input className="plan-step-title" value={s.title} disabled={disabled} aria-label={t('stepAria')}
                   onChange={(e) => setStep(i, { title: e.target.value })} />
-                <textarea rows={2} value={s.task} disabled={disabled} aria-label="Что делает ученик"
+                <textarea rows={2} value={s.task} disabled={disabled} aria-label={t('stepTaskAria')}
                   onChange={(e) => setStep(i, { task: e.target.value })} />
-                <button type="button" className="icon-btn" disabled={disabled} aria-label="Убрать шаг"
+                <button type="button" className="icon-btn" disabled={disabled} aria-label={t('removeStep')}
                   onClick={() => set({ scenario: (spec.scenario ?? []).filter((_, k) => k !== i) })}><IconTrash size={15} /></button>
               </li>
             ))}
           </ol>
           <button type="button" className="btn btn-sm btn-ghost" disabled={disabled}
-            onClick={() => set({ scenario: [...(spec.scenario ?? []), { title: 'Новый шаг', task: 'Что сделать ученику' }] })}>
-            <IconPlus size={15} />Шаг
+            onClick={() => set({ scenario: [...(spec.scenario ?? []), { title: t('newStepTitle'), task: t('newStepTask') }] })}>
+            <IconPlus size={15} />{t('addStep')}
           </button>
         </div>
       )}
@@ -156,7 +161,7 @@ export default function PlanEditor({
       {(spec.invariants?.length ?? 0) > 0 && (
         <div className="plan-section">
           <div className="plan-section-title">
-            Проверим числами <span className="muted">— ядро физики тестируется до сцены</span>
+            {t('planInvariants')} <span className="muted">{t('planInvariantsHint')}</span>
           </div>
           <ul className="plan-invariants">
             {spec.invariants!.map((inv, i) => <li key={i}><IconCheck size={13} /><Markup text={inv.text} /></li>)}
@@ -165,27 +170,27 @@ export default function PlanEditor({
       )}
 
       {spec.wowMoment && (
-        <div className="plan-wow"><b>Момент для занятия</b><Markup text={spec.wowMoment} /></div>
+        <div className="plan-wow"><b>{t('planWow')}</b><Markup text={spec.wowMoment} /></div>
       )}
 
       <button type="button" className="plan-physics-toggle" onClick={() => setPhysicsOpen((v) => !v)}>
-        {physicsOpen ? 'Скрыть физическую модель' : 'Физическая модель'}
+        {physicsOpen ? t('physicsHide') : t('physicsShow')}
       </button>
       {physicsOpen && <div className="plan-physics"><Markup text={spec.physics} /></div>}
 
       <div className="plan-correct">
-        <input value={correction} disabled={disabled} placeholder="Попросить изменить план: «добавь трение», «для 7 класса»…"
-          aria-label="Поправка к плану" onChange={(e) => setCorrection(e.target.value)}
+        <input value={correction} disabled={disabled} placeholder={t('planCorrectPh')}
+          aria-label={t('planCorrectAria')} onChange={(e) => setCorrection(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitCorrection(); } }} />
         <button type="button" className="icon-btn" disabled={disabled || !correction.trim()}
-          aria-label="Отправить поправку" onClick={submitCorrection}><IconSend size={17} /></button>
+          aria-label={t('planCorrectSend')} onClick={submitCorrection}><IconSend size={17} /></button>
       </div>
 
       <div className="plan-actions">
         <button type="button" className="btn btn-primary" disabled={disabled} onClick={onGenerate}>
-          {replanning ? 'Меняю план…' : 'Собрать тренажёр'}
+          {replanning ? t('replanning') : t('buildSim')}
         </button>
-        <button type="button" className="btn btn-ghost" disabled={busy} onClick={onCancel}>Отмена</button>
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={onCancel}>{tc('cancel')}</button>
       </div>
     </div>
   );

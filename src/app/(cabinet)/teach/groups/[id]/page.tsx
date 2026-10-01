@@ -5,9 +5,10 @@ import { canManageGroup, requireOrgRole } from '@/lib/org/access';
 import { getGroup, listGroupTeachers } from '@/lib/org/groups';
 import { getOrgById } from '@/lib/org/orgs';
 import { teachGroupDetail } from '@/lib/lms/teach-home';
-import { ruPlural } from '@/lib/lms/format';
+import { getLocale, getT } from '@/i18n/server';
+import { teachHome } from '@/i18n/messages/teach-home';
 import { learnCourseHref, withOrgParam } from '@/lib/lms/links';
-import { COURSE_STATUS_LABELS, type CourseStatus } from '@/lib/lms/types';
+import { courseStatusLabels, type CourseStatus } from '@/lib/lms/types';
 import CabinetHeader from '@/components/cabinet/CabinetHeader';
 import EmptyState from '@/components/cabinet/EmptyState';
 import StatusPill from '@/components/cabinet/StatusPill';
@@ -29,6 +30,8 @@ export default async function TeachGroupPage({ params }: { params: Promise<{ id:
   const isAdmin = (await requireOrgRole(user, org.id, ['org_admin'])) !== null;
   const [detail, teachers] = await Promise.all([teachGroupDetail(group.id, user.id), listGroupTeachers(group.id)]);
   const link = (href: string) => withOrgParam(href, org.slug);
+  const tr = await getT(teachHome);
+  const statusLabels = courseStatusLabels(await getLocale());
 
   const s = detail.students.filter((x) => !x.disabled);
   const week = Date.now() - 7 * 86_400_000;
@@ -42,65 +45,65 @@ export default async function TeachGroupPage({ params }: { params: Promise<{ id:
 
   return (
     <>
-      <CabinetHeader title={`Группа ${group.title}`}
-        subtitle={`${org.name} · ${teachers.map((t) => t.label).join(', ') || 'учитель не назначен'}`}>
-        <Link className="btn" href={`/org/groups/${group.id}/credentials`}><IconPrint size={16} />Лист паролей</Link>
-        <Link className="btn btn-ghost" href={`/org/groups/${group.id}`}><IconSettings size={16} />{isAdmin ? 'Управление' : 'Пароли и доступ'}</Link>
+      <CabinetHeader title={tr('groupTitle', { title: group.title })}
+        subtitle={`${org.name} · ${teachers.map((t) => t.label).join(', ') || tr('noTeacher')}`}>
+        <Link className="btn" href={`/org/groups/${group.id}/credentials`}><IconPrint size={16} />{tr('passwordSheet')}</Link>
+        <Link className="btn btn-ghost" href={`/org/groups/${group.id}`}><IconSettings size={16} />{isAdmin ? tr('manage') : tr('passwordsAccess')}</Link>
       </CabinetHeader>
 
       <section className="group-hero">
         <div className="group-hero-stat">
-          <Ring value={progress} size={72} stroke={7} label={`Группа прошла ${progress ?? 0}% тем`} />
-          <div><strong>Прогресс</strong><span className="muted">открыто тем из опубликованных курсов</span></div>
+          <Ring value={progress} size={72} stroke={7} label={tr('groupProgressRing', { n: progress ?? 0 })} />
+          <div><strong>{tr('progress')}</strong><span className="muted">{tr('progressSub')}</span></div>
         </div>
         <div className="group-hero-stat">
-          <Ring value={avg} size={72} stroke={7} tone="var(--cab-teal)" label={`Средний балл ${avg ?? 0}%`} />
-          <div><strong>Средний балл</strong><span className="muted">{graded.length ? `по ${graded.length} ${ruPlural(graded.length, 'ученику', 'ученикам', 'ученикам')}` : 'проверенных работ нет'}</span></div>
+          <Ring value={avg} size={72} stroke={7} tone="var(--cab-teal)" label={tr('ringAvg', { n: avg ?? 0 })} />
+          <div><strong>{tr('avgScoreTitle')}</strong><span className="muted">{graded.length ? tr('byStudents', { n: graded.length }) : tr('noGraded')}</span></div>
         </div>
         <div className="group-hero-num">
           <b><CountUp value={active} /><small>/{s.length}</small></b>
-          <span className="muted">активны за неделю</span>
+          <span className="muted">{tr('activeWeek')}</span>
         </div>
         <div className="group-hero-num">
           <b className={pending ? 'hot' : ''}><CountUp value={pending} /></b>
-          <span className="muted">{ruPlural(pending, 'работа ждёт', 'работы ждут', 'работ ждут')} проверки</span>
+          <span className="muted">{tr('pendingReview', { n: pending })}</span>
         </div>
         <div className="group-hero-chart">
-          <span className="muted">Активность за 30 дней</span>
+          <span className="muted">{tr('activity30')}</span>
           {detail.spark.some((v) => v > 0)
-            ? <Sparkline values={detail.spark} label="Активность учеников группы за 30 дней" />
-            : <span className="muted">пока нет</span>}
+            ? <Sparkline values={detail.spark} label={tr('activity30Label')} />
+            : <span className="muted">{tr('notYet')}</span>}
         </div>
       </section>
 
       <div className="group-layout">
         <section className="cab-card">
-          <header className="cab-card-head"><div><h2>Ученики</h2><span className="muted">Прогресс по всем опубликованным курсам группы</span></div></header>
+          <header className="cab-card-head"><div><h2>{tr('studentsTitle')}</h2><span className="muted">{tr('studentsSub')}</span></div></header>
           <GroupStudents students={detail.students} />
         </section>
 
         <section className="cab-card">
-          <header className="cab-card-head"><div><h2>Курсы группы</h2><span className="muted">{detail.courses.length} {ruPlural(detail.courses.length, 'курс', 'курса', 'курсов')}</span></div></header>
+          <header className="cab-card-head"><div><h2>{tr('groupCourses')}</h2><span className="muted">{tr('courses', { n: detail.courses.length })}</span></div></header>
           {detail.courses.length === 0 ? (
-            <EmptyState icon={<IconCourses size={24} />} text="Группе ещё не открыт ни один курс — откройте его в настройках курса.">
-              <Link className="btn btn-primary" href={link('/teach/courses')}>К курсам</Link>
+            <EmptyState icon={<IconCourses size={24} />} text={tr('noGroupCourses')}>
+              <Link className="btn btn-primary" href={link('/teach/courses')}>{tr('toCourses')}</Link>
             </EmptyState>
           ) : (
             <ul className="group-courses">
               {detail.courses.map((c) => (
                 <li key={c.id}>
-                  <Ring value={c.progress} size={44} stroke={4} label={`Прошли ${c.progress}% тем`} />
+                  <Ring value={c.progress} size={44} stroke={4} label={tr('passedRing', { n: c.progress })} />
                   <div>
                     {c.mine || isAdmin ? <Link href={link(`/teach/courses/${c.id}/progress`)}>{c.title}</Link> : <strong>{c.title}</strong>}
-                    <span className="muted">{c.topics} {ruPlural(c.topics, 'тема', 'темы', 'тем')}{c.mine ? '' : ` · ${c.owner}`}</span>
+                    <span className="muted">{tr('topics', { n: c.topics })}{c.mine ? '' : ` · ${c.owner}`}</span>
                     <span className="chip-row">
-                      <StatusPill tone={c.status === 'published' ? 'ok' : 'neutral'}>{COURSE_STATUS_LABELS[c.status as CourseStatus]}</StatusPill>
-                      {c.pending > 0 && <StatusPill tone="warn">{c.pending} на проверку</StatusPill>}
+                      <StatusPill tone={c.status === 'published' ? 'ok' : 'neutral'}>{statusLabels[c.status as CourseStatus]}</StatusPill>
+                      {c.pending > 0 && <StatusPill tone="warn">{tr('nToReview', { n: c.pending })}</StatusPill>}
                     </span>
                   </div>
                   {(c.mine || isAdmin) && (
                     <a className="cab-icon-btn" href={learnCourseHref(c.id, true)} target="_blank" rel="noopener noreferrer"
-                      title="Как видит ученик" aria-label={`Открыть «${c.title}» как ученик`}><IconView size={17} /></a>
+                      title={tr('asStudent')} aria-label={tr('openAsStudent', { title: c.title })}><IconView size={17} /></a>
                   )}
                 </li>
               ))}

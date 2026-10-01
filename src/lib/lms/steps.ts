@@ -1,3 +1,4 @@
+import type { Locale } from '@/i18n/config';
 import { assignmentTitle, type StudentBlockBody } from './block-schema';
 
 /**
@@ -19,13 +20,21 @@ export interface Step {
   points: number;
 }
 
-export const STEP_LABELS: Record<StepKind, string> = {
-  theory: 'Теория', sim: 'Тренажёр', lab: 'Лаборатория', task: 'Задание',
+const STEP_LABELS_BY_LOCALE: Record<Locale, Record<StepKind, string>> = {
+  ru: { theory: 'Теория', sim: 'Тренажёр', lab: 'Лаборатория', task: 'Задание' },
+  kk: { theory: 'Теория', sim: 'Тренажер', lab: 'Зертхана', task: 'Тапсырма' },
+  en: { theory: 'Theory', sim: 'Simulator', lab: 'Lab', task: 'Assignment' },
 };
+export const STEP_LABELS: Record<StepKind, string> = STEP_LABELS_BY_LOCALE.ru;
+export function stepLabels(locale: Locale = 'ru'): Record<StepKind, string> {
+  return STEP_LABELS_BY_LOCALE[locale] ?? STEP_LABELS_BY_LOCALE.ru;
+}
 
 const MATERIAL = new Set(['text', 'callout', 'formula', 'image', 'video', 'spoiler', 'code', 'divider']);
 
-export function buildSteps(blocks: { id: string; body: StudentBlockBody }[]): Step[] {
+/** Заголовки шагов без собственного названия — на языке locale (по умолчанию русский). */
+export function buildSteps(blocks: { id: string; body: StudentBlockBody }[], locale: Locale = 'ru'): Step[] {
+  const L = stepLabels(locale);
   const steps: Step[] = [];
   let theory: Step | null = null;
   for (const { id, body } of blocks) {
@@ -33,7 +42,7 @@ export function buildSteps(blocks: { id: string; body: StudentBlockBody }[]): St
       // Новый подзаголовок — новый шаг: так теория режется на читаемые куски.
       const heading = body.kind === 'text' && body.payload.title.trim() ? body.payload.title.trim() : '';
       if (!theory || (heading && theory.blockIds.length > 0)) {
-        theory = { id, kind: 'theory', title: heading || 'Теория', blockIds: [], points: 0 };
+        theory = { id, kind: 'theory', title: heading || L.theory, blockIds: [], points: 0 };
         steps.push(theory);
       } else if (heading && !theory.title.trim()) {
         theory.title = heading;
@@ -43,11 +52,11 @@ export function buildSteps(blocks: { id: string; body: StudentBlockBody }[]): St
     }
     theory = null;
     if (body.kind === 'simulation') {
-      steps.push({ id, kind: 'sim', title: body.payload.caption.trim().slice(0, 60) || 'Тренажёр', blockIds: [id], points: 0 });
+      steps.push({ id, kind: 'sim', title: body.payload.caption.trim().slice(0, 60) || L.sim, blockIds: [id], points: 0 });
     } else if (body.kind === 'lab') {
-      steps.push({ id, kind: 'lab', title: body.payload.caption.trim().slice(0, 60) || 'Лаборатория', blockIds: [id], points: 0 });
+      steps.push({ id, kind: 'lab', title: body.payload.caption.trim().slice(0, 60) || L.lab, blockIds: [id], points: 0 });
     } else if (body.kind === 'assignment') {
-      steps.push({ id, kind: 'task', title: assignmentTitle(body.payload.prompt) || 'Задание', blockIds: [id], points: body.payload.points });
+      steps.push({ id, kind: 'task', title: assignmentTitle(body.payload.prompt) || L.task, blockIds: [id], points: body.payload.points });
     }
   }
   return steps.filter((s) => s.blockIds.length > 0);

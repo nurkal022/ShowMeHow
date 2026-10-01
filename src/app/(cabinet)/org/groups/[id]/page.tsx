@@ -15,6 +15,9 @@ import BulkStudents from '@/components/org/BulkStudents';
 import GroupTeachers from '@/components/org/GroupTeachers';
 import GroupAdminActions from '@/components/org/GroupAdminActions';
 import { IconPlus, IconPrint } from '@/components/icons';
+import { getLocale } from '@/i18n/server';
+import { translator } from '@/i18n/core';
+import { orgPeople } from '@/i18n/messages/org-people';
 
 /** Админ организации — всё; учитель группы — список учеников, сброс пароля и лист. */
 export default async function GroupPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,14 +35,16 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
     isAdmin ? listOrgPeople(org.id, ['org_admin', 'teacher']) : Promise.resolve([] as OrgPerson[]),
     isAdmin ? listGroups(org.id) : Promise.resolve([] as GroupSummary[]),
   ]);
+  const locale = await getLocale();
+  const t = translator(orgPeople, locale);
   const moveTargets = groups.filter((g) => g.id !== group.id).map((g) => ({ id: g.id, title: g.title }));
   return (
     <>
-      <CabinetHeader title={`Группа ${group.title}`} subtitle={org.name}>
-        {isAdmin && <Link className="btn btn-ghost" href={withOrgParam('/org/groups', org.slug)}>← Все группы</Link>}
-        <Link className="btn" href={`/org/groups/${group.id}/credentials`}><IconPrint size={16} />Лист паролей</Link>
+      <CabinetHeader title={t('groupTitle', { title: group.title })} subtitle={org.name}>
+        {isAdmin && <Link className="btn btn-ghost" href={withOrgParam('/org/groups', org.slug)}>{t('allGroups')}</Link>}
+        <Link className="btn" href={`/org/groups/${group.id}/credentials`}><IconPrint size={16} />{t('sheet')}</Link>
         {isAdmin && (
-          <Drawer label="Добавить учеников" title="Добавить учеников" subtitle={`Группа ${group.title} · логины и пароли создадутся сами`}
+          <Drawer label={t('addStudents')} title={t('addStudents')} subtitle={t('addStudentsHint', { title: group.title })}
             icon={<IconPlus size={16} />} openInitially={students.length === 0}>
             <BulkStudents slug={org.slug} groupId={group.id} />
           </Drawer>
@@ -48,20 +53,18 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
       </CabinetHeader>
 
       <section className="panel">
-        <h2>Учителя группы</h2>
+        <h2>{t('groupTeachers')}</h2>
         {isAdmin
           ? <GroupTeachers slug={org.slug} groupId={group.id} assigned={teachers}
               candidates={staff.map((p) => ({ userId: p.userId, label: userLabel(p) }))} />
-          : <p>{teachers.map((t) => t.label).join(', ') || 'не назначены'}</p>}
+          : <p>{teachers.map((x) => x.label).join(', ') || t('notAssigned')}</p>}
       </section>
 
       <section className="panel">
-        <h2>Ученики ({students.length})</h2>
+        <h2>{t('studentsN', { n: students.length })}</h2>
         {students.length === 0
           ? <p className="empty-state">
-              В группе пока нет учеников. {isAdmin
-                ? 'Нажмите «Добавить учеников» и вставьте список из Excel.'
-                : 'Их добавляет администратор организации.'}
+              {t('noStudentsYet')} {isAdmin ? t('noStudentsAdmin') : t('noStudentsTeacher')}
             </p>
           : <StudentsBoard slug={org.slug} groupId={group.id} students={students} canBlock={isAdmin}
               moveTargets={isAdmin ? moveTargets : undefined}

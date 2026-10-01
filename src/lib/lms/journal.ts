@@ -1,4 +1,5 @@
-import { ANSWER_STATE_LABELS, type AnswerState, type SubmissionStatus } from './types';
+import type { Locale } from '@/i18n/config';
+import { answerStateLabels, type AnswerState, type SubmissionStatus } from './types';
 import { formatScore } from './format';
 
 /** Журнал и прогресс курса как чистые функции от строк базы. */
@@ -34,7 +35,12 @@ export function buildJournal(
 
 /** В клетке — балл, если работа проверена, иначе статус словами. */
 export function cellText(cell: JournalCell): string {
-  return cell.state === 'graded' && cell.score !== null ? formatScore(cell.score) : ANSWER_STATE_LABELS[cell.state];
+  return cellTextIn(cell, 'ru');
+}
+
+/** То же на языке locale. Отдельная функция: cellText передают в .map, второй аргумент там — индекс. */
+export function cellTextIn(cell: JournalCell, locale: Locale = 'ru'): string {
+  return cell.state === 'graded' && cell.score !== null ? formatScore(cell.score, locale) : answerStateLabels(locale)[cell.state];
 }
 
 /** Ячейка CSV: кавычки при разделителях и защита от формул в Excel. */
@@ -43,12 +49,25 @@ function csvCell(raw: string): string {
   return /[;"\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
-export function journalCsv(j: Journal): string {
-  const header = ['Ученик', 'Группы',
-    ...j.assignments.map((a) => `${a.topicTitle}: ${a.title} (${a.points})`), 'Итого', 'Максимум'];
+const CSV_HEADER: Record<Locale, [student: string, groups: string, total: string, max: string]> = {
+  ru: ['Ученик', 'Группы', 'Итого', 'Максимум'],
+  kk: ['Оқушы', 'Топтар', 'Барлығы', 'Ең көбі'],
+  en: ['Student', 'Groups', 'Total', 'Maximum'],
+};
+
+/** Имя файла журнала без расширения. */
+export function journalFileName(courseTitle: string, locale: Locale = 'ru'): string {
+  const word = locale === 'kk' ? 'Журнал' : locale === 'en' ? 'Gradebook' : 'Журнал';
+  return `${word} — ${courseTitle}`;
+}
+
+export function journalCsv(j: Journal, locale: Locale = 'ru'): string {
+  const [student, groups, total, max] = CSV_HEADER[locale] ?? CSV_HEADER.ru;
+  const header = [student, groups,
+    ...j.assignments.map((a) => `${a.topicTitle}: ${a.title} (${a.points})`), total, max];
   const lines = [header, ...j.rows.map((r) => [
-    r.student.name, r.student.groups.join(', '), ...r.cells.map(cellText),
-    formatScore(r.total), formatScore(r.max),
+    r.student.name, r.student.groups.join(', '), ...r.cells.map((c) => cellTextIn(c, locale)),
+    formatScore(r.total, locale), formatScore(r.max, locale),
   ])];
   return `﻿${lines.map((cells) => cells.map(csvCell).join(';')).join('\r\n')}`;
 }

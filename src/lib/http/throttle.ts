@@ -11,10 +11,14 @@ import { NextResponse } from 'next/server';
 
 export interface ThrottleRule { perMinute: number }
 
-export const THROTTLE: Record<'plan' | 'check' | 'config', ThrottleRule> = {
+export const THROTTLE: Record<'plan' | 'check' | 'config' | 'write' | 'zenodo', ThrottleRule> = {
   plan: { perMinute: 8 },
   check: { perMinute: 6 },
   config: { perMinute: 12 },
+  // ИИ-помощник статьи: правка абзаца — частое действие, но каждый вызов — запрос к модели.
+  write: { perMinute: 20 },
+  // Публикация в Zenodo необратима и идёт от имени автора: двойной клик не должен дать две записи.
+  zenodo: { perMinute: 3 },
 };
 
 interface Slot { running: boolean; starts: number[] }

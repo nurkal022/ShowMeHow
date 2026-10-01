@@ -17,8 +17,14 @@ export type CabinetIcon =
 
 export type CabinetGroupKey = 'platform' | 'org' | 'teach';
 
+/** Ключ пункта: по нему интерфейс берёт перевод (словарь cabinet, item_<key>); label — русская подпись. */
+export type CabinetItemKey =
+  | 'overview' | 'orgs' | 'users' | 'catalog' | 'log' | 'settings' | 'report' | 'risk' | 'ask'
+  | 'teachers' | 'groups' | 'today' | 'courses' | 'review';
+
 export interface CabinetMenuItem {
   href: string;
+  key: CabinetItemKey;
   label: string;
   icon: CabinetIcon;
   exact?: boolean;
@@ -48,29 +54,29 @@ export interface CabinetMenu {
 }
 
 const PLATFORM_ITEMS: CabinetMenuItem[] = [
-  { href: '/admin', label: 'Обзор', icon: 'dashboard', exact: true },
-  { href: '/admin/orgs', label: 'Организации', icon: 'orgs' },
-  { href: '/admin/users', label: 'Пользователи', icon: 'users' },
-  { href: '/admin/catalog', label: 'Каталог', icon: 'catalog' },
-  { href: '/admin/log', label: 'Журнал', icon: 'log' },
-  { href: '/admin/settings', label: 'Настройки', icon: 'settings' },
+  { href: '/admin', key: 'overview', label: 'Обзор', icon: 'dashboard', exact: true },
+  { href: '/admin/orgs', key: 'orgs', label: 'Организации', icon: 'orgs' },
+  { href: '/admin/users', key: 'users', label: 'Пользователи', icon: 'users' },
+  { href: '/admin/catalog', key: 'catalog', label: 'Каталог', icon: 'catalog' },
+  { href: '/admin/log', key: 'log', label: 'Журнал', icon: 'log' },
+  { href: '/admin/settings', key: 'settings', label: 'Настройки', icon: 'settings' },
 ];
 
 const ORG_ITEMS: CabinetMenuItem[] = [
-  { href: '/org', label: 'Обзор', icon: 'dashboard', exact: true },
-  { href: '/org/reports', label: 'Отчёт недели', icon: 'report' },
-  { href: '/org/risk', label: 'Риски', icon: 'risk' },
-  { href: '/org/ask', label: 'Спросить ИИ', icon: 'ask' },
-  { href: '/org/teachers', label: 'Учителя', icon: 'teachers' },
-  { href: '/org/groups', label: 'Группы', icon: 'groups' },
-  { href: '/org/settings', label: 'Настройки', icon: 'settings' },
+  { href: '/org', key: 'overview', label: 'Обзор', icon: 'dashboard', exact: true },
+  { href: '/org/reports', key: 'report', label: 'Отчёт недели', icon: 'report' },
+  { href: '/org/risk', key: 'risk', label: 'Риски', icon: 'risk' },
+  { href: '/org/ask', key: 'ask', label: 'Спросить ИИ', icon: 'ask' },
+  { href: '/org/teachers', key: 'teachers', label: 'Учителя', icon: 'teachers' },
+  { href: '/org/groups', key: 'groups', label: 'Группы', icon: 'groups' },
+  { href: '/org/settings', key: 'settings', label: 'Настройки', icon: 'settings' },
 ];
 
 const TEACH_ITEMS: CabinetMenuItem[] = [
-  { href: '/teach', label: 'Сегодня', icon: 'dashboard', exact: true },
-  { href: '/teach/courses', label: 'Курсы', icon: 'courses' },
-  { href: '/teach/groups', label: 'Группы', icon: 'groups' },
-  { href: '/teach/review', label: 'Проверка', icon: 'review' },
+  { href: '/teach', key: 'today', label: 'Сегодня', icon: 'dashboard', exact: true },
+  { href: '/teach/courses', key: 'courses', label: 'Курсы', icon: 'courses' },
+  { href: '/teach/groups', key: 'groups', label: 'Группы', icon: 'groups' },
+  { href: '/teach/review', key: 'review', label: 'Проверка', icon: 'review' },
 ];
 
 export function buildCabinetMenu(user: Pick<AuthUser, 'role'>, memberships: Membership[]): CabinetMenu {
@@ -96,7 +102,8 @@ export function groupAllows(key: CabinetGroupKey, role: OrgRole): boolean {
 
 /* ------------------------------ хлебные крошки ----------------------------- */
 
-export interface Crumb { href: string; label: string }
+/** key — ключ перевода в словаре cabinet (seg_<сегмент>, id_<родитель>, courseSettings); label — русская подпись. */
+export interface Crumb { href: string; label: string; key?: string }
 
 const SEGMENT_LABELS: Record<string, string> = {
   admin: 'Платформа', orgs: 'Организации', users: 'Пользователи', catalog: 'Каталог', log: 'Журнал',
@@ -119,9 +126,11 @@ export function breadcrumbs(pathname: string): Crumb[] {
     if (SKIPPED.has(part) && i > 0) return;
     const href = `/${parts.slice(0, i + 1).join('/')}`;
     // «settings» внутри курса — страница «О курсе», у организации — её настройки.
-    const label = part === 'settings' && parts[i - 2] === 'courses' ? 'О курсе'
-      : SEGMENT_LABELS[part] ?? ID_LABELS[parts[i - 1] ?? ''] ?? part;
-    crumbs.push({ href, label });
+    const prev = parts[i - 1] ?? '';
+    if (part === 'settings' && parts[i - 2] === 'courses') crumbs.push({ href, label: 'О курсе', key: 'courseSettings' });
+    else if (SEGMENT_LABELS[part]) crumbs.push({ href, label: SEGMENT_LABELS[part], key: `seg_${part}` });
+    else if (ID_LABELS[prev]) crumbs.push({ href, label: ID_LABELS[prev], key: `id_${prev}` });
+    else crumbs.push({ href, label: part });
   });
   return crumbs;
 }

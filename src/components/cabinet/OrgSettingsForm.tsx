@@ -2,9 +2,12 @@
 import { useState } from 'react';
 import type { OrgSettings } from '@/lib/org/settings';
 import { callApi } from './api';
+import { useT } from '@/i18n/client';
+import { cabinet } from '@/i18n/messages/cabinet';
 
 /** Три переключателя цикла 0 — в карточке организации админки и в /org/settings. */
 export default function OrgSettingsForm({ endpoint, settings }: { endpoint: string; settings: OrgSettings }) {
+  const t = useT(cabinet);
   const [value, setValue] = useState(settings);
   const [limit, setLimit] = useState(String(settings.teacherGenerationLimit));
   const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -27,7 +30,7 @@ export default function OrgSettingsForm({ endpoint, settings }: { endpoint: stri
   function saveLimit() {
     const n = Number(limit);
     if (!Number.isInteger(n) || n < 0 || n > 100000) {
-      setError('Лимит — целое число от 0 до 100 000.');
+      setError(t('set_limitError'));
       return;
     }
     if (n !== value.teacherGenerationLimit) void save({ teacherGenerationLimit: n });
@@ -37,8 +40,8 @@ export default function OrgSettingsForm({ endpoint, settings }: { endpoint: stri
     <div className="settings-list">
       <label className="row">
         <span className="row-label">
-          <strong>Ученики могут генерировать</strong>
-          <span>Без этого раздел «Создать» ученикам не показывается.</span>
+          <strong>{t('set_generate')}</strong>
+          <span>{t('set_generateHint')}</span>
         </span>
         <span className="spacer" />
         <input type="checkbox" checked={value.studentsCanGenerate} disabled={state === 'saving'}
@@ -46,8 +49,8 @@ export default function OrgSettingsForm({ endpoint, settings }: { endpoint: stri
       </label>
       <label className="row">
         <span className="row-label">
-          <strong>Длинные сессии учеников</strong>
-          <span>Ученики остаются в системе 30 дней вместо одного учебного дня.</span>
+          <strong>{t('set_long')}</strong>
+          <span>{t('set_longHint')}</span>
         </span>
         <span className="spacer" />
         <input type="checkbox" checked={value.studentLongSessions} disabled={state === 'saving'}
@@ -55,15 +58,15 @@ export default function OrgSettingsForm({ endpoint, settings }: { endpoint: stri
       </label>
       <div className="row">
         <span className="row-label">
-          <strong>Лимит генераций учителя</strong>
-          <span>Сколько симуляций может создать каждый учитель за всё время.</span>
+          <strong>{t('set_limit')}</strong>
+          <span>{t('set_limitHint')}</span>
         </span>
         <span className="spacer" />
         <input className="input" style={{ width: 120 }} type="number" min={0} max={100000}
-          aria-label="Лимит генераций учителя" value={limit}
+          aria-label={t('set_limit')} value={limit}
           onChange={(e) => setLimit(e.target.value)} onBlur={saveLimit} />
       </div>
-      {state === 'saved' && <span className="saved-note">Сохранено</span>}
+      {state === 'saved' && <span className="saved-note">{t('saved')}</span>}
       {error && <p className="error-box">{error}</p>}
     </div>
   );

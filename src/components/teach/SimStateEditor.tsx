@@ -3,6 +3,8 @@ import { useRef, useState } from 'react';
 import SimStateFrame, { type CaptureSimState } from '@/components/lms/SimStateFrame';
 import { defaultTolerance, SIM_LIMITS } from '@/lib/lms/sim-state';
 import type { SimTargetRow } from './assignment-form';
+import { useT } from '@/i18n/client';
+import { teachLesson } from '@/i18n/messages/teach-lesson';
 
 /**
  * Режим «задать цель»: учитель выставляет контролы в симуляции и фиксирует их
@@ -12,6 +14,7 @@ export default function SimStateEditor({ simulationId, rows, showHints, invalid,
   simulationId: string; rows: SimTargetRow[]; showHints: boolean; invalid?: boolean;
   onRows: (rows: SimTargetRow[]) => void; onShowHints: (v: boolean) => void;
 }) {
+  const t = useT(teachLesson);
   const captureRef = useRef<CaptureSimState | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<'' | 'wait' | 'none'>('');
@@ -44,44 +47,42 @@ export default function SimStateEditor({ simulationId, rows, showHints, invalid,
       <SimStateFrame simulationId={simulationId} captureRef={captureRef} />
       <div className="cf-inline">
         <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={capture}>
-          {rows.length > 0 ? 'Зафиксировать заново' : 'Зафиксировать как цель'}
+          {rows.length > 0 ? t('captureAgain') : t('capture')}
         </button>
-        <span className="muted">Выставьте ползунки и переключатели так, как должно получиться у ученика.</span>
+        <span className="muted">{t('captureHint')}</span>
       </div>
       {problem === 'wait' && (
-        <p className="warn-banner" role="alert">Симуляция ещё загружается или не отвечает. Подождите пару секунд и нажмите снова.</p>
+        <p className="warn-banner" role="alert">{t('simWait')}</p>
       )}
       {problem === 'none' && (
         <p className="warn-banner" role="alert">
-          Эта симуляция не сообщает значения своих параметров, поэтому проверить состояние автоматически нельзя.
-          Выберите другую симуляцию или сделайте задание с развёрнутым ответом, поставив эту симуляцию стендом.
+          {t('simNone')}
         </p>
       )}
       {rows.length > 0 && (
-        <div className={invalid ? 'cf-simstate-table invalid' : 'cf-simstate-table'} role="group" aria-label="Параметры цели">
+        <div className={invalid ? 'cf-simstate-table invalid' : 'cf-simstate-table'} role="group" aria-label={t('targetParams')}>
           <div className="cf-simstate-row cf-simstate-head" aria-hidden="true">
-            <span>Проверять</span><span>Параметр</span><span>Цель</span><span>Допуск (±)</span>
+            <span>{t('check')}</span><span>{t('param')}</span><span>{t('target')}</span><span>{t('tolerance')}</span>
           </div>
           {rows.map((r) => (
             <div key={r.name} className={r.include ? 'cf-simstate-row' : 'cf-simstate-row off'}>
-              <input type="checkbox" checked={r.include} aria-label={`Проверять «${r.label}»`}
+              <input type="checkbox" checked={r.include} aria-label={t('checkParam', { label: r.label })}
                 onChange={(e) => patch(r.name, { include: e.target.checked })} />
               <span className="cf-simstate-label">{r.label}</span>
               <input className="input" inputMode="decimal" value={r.value} disabled={!r.include}
-                aria-label={`Цель для «${r.label}»`} onChange={(e) => patch(r.name, { value: e.target.value })} />
+                aria-label={t('targetFor', { label: r.label })} onChange={(e) => patch(r.name, { value: e.target.value })} />
               <input className="input" inputMode="decimal" value={r.tolerance} disabled={!r.include}
-                aria-label={`Допуск для «${r.label}»`} onChange={(e) => patch(r.name, { tolerance: e.target.value })} />
+                aria-label={t('toleranceFor', { label: r.label })} onChange={(e) => patch(r.name, { tolerance: e.target.value })} />
             </div>
           ))}
         </div>
       )}
       <label className="check-row">
         <input type="checkbox" checked={!showHints} onChange={(e) => onShowHints(!e.target.checked)} />
-        Не подсказывать ученику, какие параметры совпали
+        {t('noHints')}
       </label>
       <p className="muted">
-        Балл — доля совпавших параметров (шаг 0,5); все в допуске — полный балл. Переключатель — это 0 или 1.
-        Состояние присылает браузер ученика: для текущего контроля этого достаточно, для экзамена — нет.
+        {t('scoring')}
       </p>
     </div>
   );

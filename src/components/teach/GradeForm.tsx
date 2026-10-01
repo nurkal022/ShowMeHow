@@ -5,12 +5,11 @@ import { LIMITS } from '@/lib/lms/types';
 import type { RubricItem } from '@/lib/lms/block-schema';
 import { callApi } from '@/components/cabinet/api';
 import { IconClose, IconKeyboard, IconPlus, IconSpark } from '@/components/icons';
+import { useFormat, useT } from '@/i18n/client';
+import { teachReview } from '@/i18n/messages/teach-review';
 
 const BANK_KEY = 'tesseract.grade.comments';
-const DEFAULT_BANK = [
-  'Отлично, всё верно.', 'Верно, но не хватает вывода.', 'Проверь единицы измерения.',
-  'Нет объяснения — опиши, почему так.', 'Перечитай теорию в начале темы и попробуй ещё раз.',
-];
+const DEFAULT_BANK = ['bank1', 'bank2', 'bank3', 'bank4', 'bank5'] as const;
 const fmt = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');
 
 /**
@@ -30,10 +29,12 @@ export default function GradeForm({ submissionId, points, score, comment, nextHr
   canSuggest?: boolean;
 }) {
   const router = useRouter();
+  const t = useT(teachReview);
+  const f = useFormat();
   const [value, setValue] = useState(score !== null ? fmt(score) : suggested !== null ? fmt(suggested) : '');
   const [text, setText] = useState(comment ?? '');
   const [marks, setMarks] = useState<Record<string, number>>({});
-  const [bank, setBank] = useState<string[]>(DEFAULT_BANK);
+  const [bank, setBank] = useState<string[]>(() => DEFAULT_BANK.map((k) => t(k)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [scoreError, setScoreError] = useState('');
@@ -51,7 +52,7 @@ export default function GradeForm({ submissionId, points, score, comment, nextHr
     setMarks(res.data.marks);
     setValue(fmt(res.data.score));
     if (res.data.comment) setText(res.data.comment);
-    setDone('Помощник предложил оценку — проверьте и поправьте перед сохранением.');
+    setDone(t('suggested'));
   }
 
   useEffect(() => {
@@ -100,14 +101,14 @@ export default function GradeForm({ submissionId, points, score, comment, nextHr
     setDone('');
     if (action === 'grade') {
       const n = parsed();
-      if (n === null) return setScoreError('Введите балл числом.');
-      if (n < 0 || n > points) return setScoreError(`Балл — от 0 до ${points}.`);
+      if (n === null) return setScoreError(t('scoreNaN'));
+      if (n < 0 || n > points) return setScoreError(t('scoreRange', { n: points }));
     } else if (!text.trim()) {
-      return setError('Напишите в комментарии, что нужно доработать, — ученик увидит его рядом с заданием.');
+      return setError(t('returnNeedsComment'));
     }
     setScoreError('');
     // Отмеченные критерии уходят ученику строками комментария: он видит, за что именно балл.
-    const lines = rubric.filter((r) => marks[r.id] !== undefined).map((r) => `• ${r.label}: ${fmt(marks[r.id])} из ${fmt(r.points)}`);
+    const lines = rubric.filter((r) => marks[r.id] !== undefined).map((r) => t('rubricLine', { label: r.label, a: fmt(marks[r.id]), b: fmt(r.points) }));
     const full = [text.trim(), lines.join('\n')].filter(Boolean).join('\n').slice(0, LIMITS.comment);
     // Адрес следующей работы берётся до запроса: после него эта работа уже не «ждёт проверки».
     const next = thenNext ? findNext() : null;
@@ -121,8 +122,8 @@ export default function GradeForm({ submissionId, points, score, comment, nextHr
       return;
     }
     setDone(action === 'grade'
-      ? thenNext ? 'Оценка поставлена. Непроверенных работ больше нет.' : 'Оценка поставлена.'
-      : 'Работа возвращена на доработку.');
+      ? thenNext ? t('gradedNoMore') : t('gradedOk')
+      : t('returnedOk'));
     router.refresh();
   }
 
@@ -131,12 +132,12 @@ export default function GradeForm({ submissionId, points, score, comment, nextHr
       onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send('grade', true); } }}>
       {canSuggest && (
         <button type="button" className="btn btn-sm ai-btn cf-suggest" disabled={suggesting} onClick={suggest}>
-          <IconSpark size={15} />{suggesting ? 'Помощник читает ответ…' : 'Предложить оценку'}
+          <IconSpark size={15} />{suggesting ? t('suggesting') : t('suggest')}
         </button>
       )}
       {rubric.length > 0 && (
         <fieldset className="cf-rubric">
-          <legend>Критерии</legend>
+          <legend>{t('rubric')}</legend>
           {rubric.map((r) => {
             const steps = [...new Set([0, r.points / 2, r.points])];
             return (
@@ -154,48 +155,48 @@ export default function GradeForm({ submissionId, points, score, comment, nextHr
         </fieldset>
       )}
       <div className="cf-grade-score">
-        <label className="field"><span>Балл</span>
+        <label className="field"><span>{t('score')}</span>
           <span className="cf-score-input">
             <input value={value} inputMode="decimal" autoComplete="off" aria-invalid={scoreError ? true : undefined}
               aria-describedby="grade-score-note" onChange={(e) => { setValue(e.target.value); setScoreError(''); }} />
-            <span className="cf-score-max" id="grade-score-note">{`из ${points}`}</span>
+            <span className="cf-score-max" id="grade-score-note">{t('outOf', { n: points })}</span>
           </span>
         </label>
         {rubric.length === 0 && (
-          <div className="cf-quick" role="group" aria-label="Быстрый балл">
+          <div className="cf-quick" role="group" aria-label={t('quickScore')}>
             {quick.map((q, i) => (
               <button key={q} type="button" className="cf-chip" title={`Alt + ${i + 1}`} onClick={() => { setValue(String(q)); setScoreError(''); }}>
-                {q === points && points > 0 ? `${q} — максимум` : String(q)}
+                {q === points && points > 0 ? t('maxScore', { n: q }) : String(q)}
               </button>
             ))}
           </div>
         )}
       </div>
       {scoreError && <span className="cf-field-error" role="alert">{scoreError}</span>}
-      <label className="field"><span>Комментарий ученику</span>
+      <label className="field"><span>{t('comment')}</span>
         <textarea className="input cf-textarea" rows={3} value={text} maxLength={LIMITS.comment}
-          placeholder="Что получилось и что поправить." onChange={(e) => setText(e.target.value)} />
+          placeholder={t('commentPh')} onChange={(e) => setText(e.target.value)} />
       </label>
-      <div className="cf-bank" role="group" aria-label="Заготовки комментариев">
+      <div className="cf-bank" role="group" aria-label={t('bankGroup')}>
         {bank.map((b) => (
           <span key={b} className="cf-bank-item">
-            <button type="button" className="cf-bank-text" title="Вставить в комментарий"
-              onClick={() => setText((t) => (t.trim() ? `${t.trim()} ${b}` : b).slice(0, LIMITS.comment))}>{b}</button>
-            <button type="button" className="cf-bank-x" aria-label={`Убрать заготовку «${b}»`} onClick={() => saveBank(bank.filter((x) => x !== b))}><IconClose size={12} /></button>
+            <button type="button" className="cf-bank-text" title={t('bankInsert')}
+              onClick={() => setText((v) => (v.trim() ? `${v.trim()} ${b}` : b).slice(0, LIMITS.comment))}>{b}</button>
+            <button type="button" className="cf-bank-x" aria-label={t('bankRemove', { text: b })} onClick={() => saveBank(bank.filter((x) => x !== b))}><IconClose size={12} /></button>
           </span>
         ))}
         {text.trim() && !bank.includes(text.trim()) && text.trim().length <= 160 && (
-          <button type="button" className="cf-bank-add" onClick={() => saveBank([...bank, text.trim()].slice(-12))}><IconPlus size={13} />В заготовки</button>
+          <button type="button" className="cf-bank-add" onClick={() => saveBank([...bank, text.trim()].slice(-12))}><IconPlus size={13} />{t('bankAdd')}</button>
         )}
       </div>
       <div className="cf-grade-actions">
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Сохраняю…' : 'Сохранить и к следующему'}</button>
-        <button type="button" className="btn" disabled={busy} onClick={() => send('grade', false)}>Сохранить</button>
-        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => send('return', false)}>Вернуть на доработку</button>
+        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? t('saving') : t('saveNext')}</button>
+        <button type="button" className="btn" disabled={busy} onClick={() => send('grade', false)}>{t('save')}</button>
+        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => send('return', false)}>{t('returnWork')}</button>
       </div>
-      <p className="cf-keys muted"><IconKeyboard size={15} />Ctrl + Enter — сохранить и дальше · Alt + ← → — соседние работы{rubric.length === 0 && ' · Alt + 1–3 — быстрый балл'}</p>
+      <p className="cf-keys muted"><IconKeyboard size={15} />{t('keys')}{rubric.length === 0 && t('keysQuick')}</p>
       {done && <p className="ok-box" role="status">{done}</p>}
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <p className="error-box" role="alert">{f.message(error)}</p>}
     </form>
   );
 }

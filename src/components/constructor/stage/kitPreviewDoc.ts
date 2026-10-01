@@ -62,8 +62,11 @@ function build(cfg) {
   (0, eval)(KIT_SOURCE);
   var K = window.SimUI;
   var has = function (name) { return cfg.instruments.indexOf(name) !== -1; };
+  // Подписи приходят со страницы на языке интерфейса; русские — запасные.
+  var L = cfg.labels || {};
+  var l = function (key, fallback) { return L[key] || fallback; };
 
-  K.title(cfg.title || 'Симуляция');
+  K.title(cfg.title || l('sim', 'Симуляция'));
 
   if (has('slider')) {
     for (var i = 0; i < cfg.parameters.length; i++) {
@@ -82,40 +85,40 @@ function build(cfg) {
     var preset = function (label, v) {
       return { label: label, values: { p0: v }, onApply: function () { post({ type: 'knob', value: v / 100 }); } };
     };
-    K.presets({ items: [preset('Медленно', 15), preset('Обычно', 40), preset('Быстро', 85)] });
+    K.presets({ items: [preset(l('slow', 'Медленно'), 15), preset(l('normal', 'Обычно'), 40), preset(l('fast', 'Быстро'), 85)] });
   }
   if (has('steps')) {
-    K.button({ name: 'step', label: 'Следующий шаг', onClick: function () {} });
+    K.button({ name: 'step', label: l('nextStep', 'Следующий шаг'), onClick: function () {} });
   }
   K.speed({ values: [0.5, 1, 2], value: 1 });
   K.playPause({ onPlay: function () {}, onPause: function () {}, onReset: function () {} });
 
   if (has('readout')) {
-    readouts.push(K.readout({ label: cfg.readoutLabel || 'Величина', unit: cfg.readoutUnit || '', digits: 2, corner: 'bl' }));
-    readouts.push(K.readout({ label: 'Время', unit: 'с', digits: 1, corner: 'bl' }));
+    readouts.push(K.readout({ label: cfg.readoutLabel || l('quantity', 'Величина'), unit: cfg.readoutUnit || '', digits: 2, corner: 'bl' }));
+    readouts.push(K.readout({ label: l('time', 'Время'), unit: l('sec', 'с'), digits: 1, corner: 'bl' }));
   }
   if (has('chart')) {
-    chart = K.chart({ title: cfg.chartTitle || 'График', xLabel: 't, с', yLabel: cfg.chartY || '',
+    chart = K.chart({ title: cfg.chartTitle || l('chart', 'График'), xLabel: 't, ' + l('sec', 'с'), yLabel: cfg.chartY || '',
       width: 220, height: 118,
-      mode: 'time', series: [{ name: cfg.chartTitle || 'величина', color: '#4f8ff7' }], corner: 'br' });
+      mode: 'time', series: [{ name: cfg.chartTitle || l('value', 'величина'), color: '#4f8ff7' }], corner: 'br' });
   }
   if (has('formula') && cfg.tex) {
-    K.formula({ title: 'Как это работает', tex: cfg.tex, corner: 'tl' });
+    K.formula({ title: l('howItWorks', 'Как это работает'), tex: cfg.tex, corner: 'tl' });
   }
   if (has('lesson')) {
     K.steps({ items: [
-      { title: 'Наблюдай', text: 'Запусти опыт и посмотри, что происходит.' },
-      { title: 'Измени', text: 'Сдвинь параметр и сравни с тем, что было.' },
-      { title: 'Измерь', text: 'Запиши величину и найди закономерность.' },
+      { title: l('observe', 'Наблюдай'), text: l('observeText', 'Запусти опыт и посмотри, что происходит.') },
+      { title: l('change', 'Измени'), text: l('changeText', 'Сдвинь параметр и сравни с тем, что было.') },
+      { title: l('measure', 'Измерь'), text: l('measureText', 'Запиши величину и найди закономерность.') },
     ], corner: 'tl' });
   }
   if (has('task')) {
-    K.task({ question: 'Во сколько раз изменится величина, если параметр удвоить?',
-      options: ['в 2 раза', 'в 4 раза', 'не изменится'], correct: 0, corner: 'tl' });
+    K.task({ question: l('task', 'Во сколько раз изменится величина, если параметр удвоить?'),
+      options: [l('opt1', 'в 2 раза'), l('opt2', 'в 4 раза'), l('opt3', 'не изменится')], correct: 0, corner: 'tl' });
   }
   if (has('table')) {
-    var rows = K.table({ title: 'Измерения', columns: [{ label: cfg.parameters[0] || 'x' },
-      { label: cfg.readoutLabel || 'Величина', unit: cfg.readoutUnit || '' }],
+    var rows = K.table({ title: l('table', 'Измерения'), columns: [{ label: cfg.parameters[0] || 'x' },
+      { label: cfg.readoutLabel || l('quantity', 'Величина'), unit: cfg.readoutUnit || '' }],
       record: function () { return [40, 50 + 40 * Math.sin((Date.now() - t0) / 1000 * 1.1)]; }, corner: 'bl' });
     rows.add([20, 31.4]); rows.add([40, 62.8]);
   }

@@ -2,6 +2,8 @@
 import { useEffect, useId, useRef } from 'react';
 import { IconClose } from '@/components/icons';
 import Layer from '@/components/cabinet/Layer';
+import { useT } from '@/i18n/client';
+import { lms } from '@/i18n/messages/lms';
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -27,6 +29,7 @@ export default function Dialog(props: DialogProps) {
 
 function DialogBox({ title, subtitle, onClose, children, footer, wide, icon, tone }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const t = useT(lms);
   const titleId = useId();
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -63,7 +66,7 @@ function DialogBox({ title, subtitle, onClose, children, footer, wide, icon, ton
             <h2 id={titleId}>{title}</h2>
             {subtitle && <p className="muted">{subtitle}</p>}
           </div>
-          <button type="button" className="icon-btn" aria-label="Закрыть окно" title="Закрыть" onClick={onClose}>
+          <button type="button" className="icon-btn" aria-label={t('closeDialog')} title={t('close')} onClick={onClose}>
             <IconClose size={18} />
           </button>
         </header>

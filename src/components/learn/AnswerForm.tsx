@@ -5,7 +5,9 @@ import {
 } from '@/lib/lms/answers';
 import type { Reveal, StudentAssignmentPayload } from '@/lib/lms/block-schema';
 import type { AnswerState } from '@/lib/lms/types';
-import { formatScore } from '@/lib/lms/format';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { learnLesson } from '@/i18n/messages/learn-lesson';
+import { learnScore } from './format';
 import { callApi } from '@/components/cabinet/api';
 import { bridgeProblem } from '@/lib/lms/sim-bridge';
 import type { CaptureSimState } from '@/components/lms/SimStateFrame';
@@ -24,6 +26,9 @@ import SubmissionStatus, { scoreTone } from './SubmissionStatus';
 export default function AnswerForm({ blockId, payload, initial, preview }: {
   blockId: string; payload: StudentAssignmentPayload; initial: StudentSubmission | null; preview: boolean;
 }) {
+  const t = useT(learnLesson);
+  const f = useFormat();
+  const locale = useLocale();
   const [sub, setSub] = useState(initial);
   const [answer, setAnswer] = useState<Answer>(initial?.answer ?? emptyAnswer(payload.spec));
   const [reveal, setReveal] = useState<Reveal | null>(
@@ -81,17 +86,17 @@ export default function AnswerForm({ blockId, payload, initial, preview }: {
     if (preview) return;
     if (payload.spec.type === 'table' && answerRef.current.type === 'table'
       && tableFilledRows(answerRef.current.rows) < payload.spec.minRows) {
-      setError(`Нужно заполнить числами не меньше ${payload.spec.minRows} строк.`);
+      setError(t('tableMinRows', { n: payload.spec.minRows }));
       return;
     }
     if (!isSim && !isAnswerComplete(ready(answerRef.current))) {
-      setError(payload.spec.type === 'gaps' ? 'Заполните все пропуски.'
-        : payload.spec.type === 'table' ? 'Заполните числами хотя бы одну строку таблицы.' : 'Сначала дайте ответ.');
+      setError(payload.spec.type === 'gaps' ? t('fillGaps')
+        : payload.spec.type === 'table' ? t('fillTableRow') : t('answerFirst'));
       return;
     }
     if (!payload.allowRetry && !(await ask({
-      title: 'Сдать ответ?', confirmLabel: 'Сдать',
-      text: 'У этого задания одна попытка: после сдачи изменить ответ будет нельзя.',
+      title: t('confirmTitle'), confirmLabel: t('confirmLabel'),
+      text: t('confirmText'),
     }))) return;
     if (isSim) return submitSimState();
     await save(true);
@@ -104,7 +109,7 @@ export default function AnswerForm({ blockId, payload, initial, preview }: {
     const reply = captureRef.current ? await captureRef.current() : null;
     if (!reply || !reply.ok) {
       setSaving('idle');
-      setError(reply ? bridgeProblem(reply) : 'Симуляция ещё не загрузилась.');
+      setError(reply ? f.message(bridgeProblem(reply)) : t('simNotLoaded'));
       return;
     }
     const controls: Record<string, number> = {};
@@ -136,19 +141,19 @@ export default function AnswerForm({ blockId, payload, initial, preview }: {
 
   return (
     <div className={`settings-list learn-answer${celebrate ? ' celebrate' : ''}`}>
-      {preview && <p className="warn-banner">Режим просмотра: ответы не сохраняются.</p>}
+      {preview && <p className="warn-banner">{t('previewMode')}</p>}
       {!(reveal && sub?.status === 'graded' && !editable) && <SubmissionStatus sub={sub} points={payload.points} />}
 
       {reveal && graded && !editable ? (
         <div className={`learn-review ${tone}`}>
           <div className="learn-review-head">
-            <span className="learn-review-score"><strong>{formatScore(sub.score)}</strong>{` из ${payload.points}`}</span>
+            <span className="learn-review-score"><strong>{learnScore(sub.score, locale)}</strong>{t('reviewOf', { n: payload.points })}</span>
             <span className="learn-review-title">
-              {tone === 'full' ? 'Всё верно' : tone === 'part' ? 'Верно частично' : 'Пока неверно'}
+              {tone === 'full' ? t('allCorrect') : tone === 'part' ? t('partCorrect') : t('wrongYet')}
             </span>
           </div>
           {reveal.solution.type !== 'text' && <AnswerView spec={reveal.solution} answer={sub.answer} />}
-          {sub.comment && <p className="teacher-note learn-note">{`Комментарий учителя: ${sub.comment}`}</p>}
+          {sub.comment && <p className="teacher-note learn-note">{t('teacherComment', { text: sub.comment })}</p>}
           {reveal.explanation && (
             <div className="learn-explain"><IconBulb size={18} /><Markup text={reveal.explanation} /></div>
           )}
@@ -161,20 +166,20 @@ export default function AnswerForm({ blockId, payload, initial, preview }: {
       <div className="row learn-answer-foot">
         {editable && (
           <button type="button" className="btn btn-primary" disabled={saving === 'saving'} onClick={submit}>
-            {isSim ? (first ? 'Сдать состояние' : 'Сдать состояние заново') : first ? 'Сдать ответ' : 'Сдать заново'}
+            {isSim ? (first ? t('submitState') : t('resubmitState')) : first ? t('submitAnswer') : t('resubmit')}
           </button>
         )}
         {!editable && !preview && canSubmit(state, payload.allowRetry) && (
-          <button type="button" className="btn" onClick={() => setReopened(true)}>Попробовать ещё раз</button>
+          <button type="button" className="btn" onClick={() => setReopened(true)}>{t('tryAgain')}</button>
         )}
         {draftable && !isSim && (
           <span className="saved-note learn-draft-note" role="status" aria-live="polite">
-            {saving === 'saving' && 'Сохраняю черновик…'}
-            {saving === 'saved' && state === 'draft' && <><IconCheck size={14} />Черновик сохранён</>}
+            {saving === 'saving' && t('savingDraft')}
+            {saving === 'saved' && state === 'draft' && <><IconCheck size={14} />{t('draftSaved')}</>}
           </span>
         )}
       </div>
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <p className="error-box" role="alert">{f.message(error)}</p>}
       {celebrate && <span className="learn-burst" aria-hidden="true">{Array.from({ length: 12 }, (_, i) => <i key={i} style={{ ['--i' as string]: i }} />)}</span>}
       {confirmDialog}
     </div>

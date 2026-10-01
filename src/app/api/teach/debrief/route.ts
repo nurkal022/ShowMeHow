@@ -9,6 +9,8 @@ import { createTopic } from '@/lib/lms/courses';
 import { courseEditorHref } from '@/lib/lms/links';
 import { db } from '@/lib/db/client';
 import type { DebriefSummary } from '@/lib/lms/debrief';
+import { aiDefaults } from '@/lib/lms/texts';
+import { localeFromRequest } from '@/i18n/config';
 
 const str = (v: unknown, max = 60) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
@@ -23,6 +25,8 @@ export async function POST(req: Request) {
   if (!body) return badRequest(INVALID_BODY_MESSAGE);
   const staff = await staffTopic(user, str(body.topicId));
   if (!staff) return notFound();
+  const locale = localeFromRequest(req);
+  const topicTitle = aiDefaults(locale).debriefTopic(staff.topic.title);
   return withUserErrors(async () => {
     if (body.action === 'remedial') {
       const { rows } = await db().query<{ summary: DebriefSummary }>(
@@ -30,19 +34,19 @@ export async function POST(req: Request) {
       const s = rows[0]?.summary;
       if (!s) return badRequest('Сначала сделайте разбор темы.');
       const bodies = await draftLesson({
-        topic: `Работа над ошибками: ${staff.topic.title}`, subject: staff.course.subject, grade: '',
+        topic: topicTitle, subject: staff.course.subject, grade: '',
         wishes: `Это короткий урок-повторение по итогам проверки. Что объяснить заново: ${s.remedial}
 Типичные ошибки класса: ${s.misconceptions.map((m) => `${m.title} — ${m.detail}`).join('; ')}.
 Каждое задание должно проверять именно эти ошибки. Объяснение короче обычного.`,
-      });
-      const topic = await createTopic(staff.course.id, `Работа над ошибками: ${staff.topic.title}`.slice(0, 200));
+      }, locale);
+      const topic = await createTopic(staff.course.id, topicTitle.slice(0, 200));
       let after: string | undefined;
       for (const b of bodies) after = (await createBlock(topic.id, b.kind, { afterBlockId: after, payload: b.payload })).id;
       return NextResponse.json({ topicId: topic.id, href: courseEditorHref(staff.course.id, topic.id) }, { status: 201 });
     }
     const debrief = await createDebrief({
       orgId: staff.course.orgId, courseId: staff.course.id, topicId: staff.topic.id, topicTitle: staff.topic.title,
-      courseTitle: staff.course.title, subject: staff.course.subject, authorId: user.id,
+      courseTitle: staff.course.title, subject: staff.course.subject, authorId: user.id, locale,
     });
     return NextResponse.json({ debrief }, { status: 201 });
   });

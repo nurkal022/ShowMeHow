@@ -7,6 +7,8 @@ import { progressPercent, teachDashboard } from '@/lib/lms/overview';
 import { listGroups } from '@/lib/org/groups';
 import { answersHref, withOrgParam } from '@/lib/lms/links';
 import { IconSpark } from '@/components/icons';
+import { getLocale, getT } from '@/i18n/server';
+import { teachHome } from '@/i18n/messages/teach-home';
 import CabinetHeader from '@/components/cabinet/CabinetHeader';
 import NewCourseDialog from '@/components/cabinet/NewCourseDialog';
 import CoursesBoard, { type BoardCourse } from '@/components/teach/CoursesBoard';
@@ -19,8 +21,10 @@ export default async function TeachCoursesPage({ searchParams }: { searchParams:
   const isAdmin = m.role === 'org_admin';
   const ownerId = isAdmin ? null : user.id;
   const sp = await searchParams;
+  const t = await getT(teachHome);
+  const locale = await getLocale();
   const [courses, allowed, orgGroups] = await Promise.all([listStaffCourses(m.orgId, ownerId), allowedGroupIds(user, m), listGroups(m.orgId)]);
-  const d = await teachDashboard(m.orgId, ownerId, allowed);
+  const d = await teachDashboard(m.orgId, ownerId, allowed, locale);
 
   const rows: BoardCourse[] = courses.map((c) => {
     const p = d.progress[c.id];
@@ -35,9 +39,9 @@ export default async function TeachCoursesPage({ searchParams }: { searchParams:
 
   return (
     <>
-      <CabinetHeader title={isAdmin ? 'Курсы организации' : 'Мои курсы'}
-        subtitle={`${m.orgName} · ${courses.filter((c) => c.status !== 'archived').length} в работе`}>
-        <Link className="btn ai-btn" href={withOrgParam('/teach/courses/generate', m.orgSlug)}><IconSpark size={16} />Курс из программы</Link>
+      <CabinetHeader title={isAdmin ? t('orgCourses') : t('myCourses')}
+        subtitle={t('inWork', { org: m.orgName, n: courses.filter((c) => c.status !== 'archived').length })}>
+        <Link className="btn ai-btn" href={withOrgParam('/teach/courses/generate', m.orgSlug)}><IconSpark size={16} />{t('fromProgram')}</Link>
         <NewCourseDialog org={m.orgSlug} openInitially={firstParam(sp.new) === '1'}
           groups={orgGroups.filter((g) => allowed.includes(g.id)).map((g) => ({ id: g.id, title: g.title }))} />
       </CabinetHeader>

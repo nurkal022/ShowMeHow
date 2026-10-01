@@ -3,11 +3,13 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { GroupStudent } from '@/lib/org/groups';
-import { ruPlural } from '@/lib/lms/format';
 import { callApi } from '@/components/cabinet/api';
-import StatusPill, { personStatus } from '@/components/cabinet/StatusPill';
+import StatusPill, { personStatus, personStatusKey } from '@/components/cabinet/StatusPill';
 import { useConfirm } from '@/components/lms/ui/useConfirm';
 import { IconKey, IconLock, IconPrint, IconSearch, IconSwap } from '@/components/icons';
+import { useFormat, useT } from '@/i18n/client';
+import { orgPeople } from '@/i18n/messages/org-people';
+import { cabinet } from '@/i18n/messages/cabinet';
 
 type Bulk = 'reset-password' | 'disable' | 'enable' | 'move';
 
@@ -21,6 +23,9 @@ export default function StudentsBoard({ slug, groupId, students, canBlock, moveT
   rowActions: Record<string, React.ReactNode>;
 }) {
   const router = useRouter();
+  const t = useT(orgPeople);
+  const tk = useT(cabinet);
+  const f = useFormat();
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState('');
@@ -38,13 +43,13 @@ export default function StudentsBoard({ slug, groupId, students, canBlock, moveT
 
   async function run(action: Bulk) {
     const n = chosen.length;
-    const who = `${n} ${ruPlural(n, 'ученика', 'учеников', 'учеников')}`;
+    const who = t('who', { n });
     const target = moveTargets?.find((g) => g.id === moveTo);
     const question = {
-      'reset-password': { title: `Сбросить пароли у ${who}?`, confirmLabel: 'Сбросить пароли', text: 'Старые пароли перестанут работать. Новые временные пароли появятся в листе паролей — его можно сразу распечатать.' },
-      disable: { title: `Заблокировать ${who}?`, confirmLabel: 'Заблокировать', danger: true, text: 'Они не смогут войти. Ответы и оценки сохранятся, блокировку можно снять.' },
-      enable: { title: `Разблокировать ${who}?`, confirmLabel: 'Разблокировать', text: 'Ученики снова смогут войти со своими паролями.' },
-      move: { title: `Перевести ${who} в «${target?.title ?? ''}»?`, confirmLabel: 'Перевести', text: 'Ученики исчезнут из этой группы и увидят курсы новой. Сданные работы сохранятся.' },
+      'reset-password': { title: t('qReset', { who }), confirmLabel: t('resetPasswords'), text: t('qResetText') },
+      disable: { title: t('qBlock', { who }), confirmLabel: t('block'), danger: true, text: t('qBlockText') },
+      enable: { title: t('qUnblock', { who }), confirmLabel: t('unblock'), text: t('qUnblockText') },
+      move: { title: t('qMove', { who, group: target?.title ?? '' }), confirmLabel: t('move'), text: t('qMoveText') },
     }[action];
     if (action === 'move' && !target) return;
     if (!(await ask(question))) return;
@@ -52,16 +57,16 @@ export default function StudentsBoard({ slug, groupId, students, canBlock, moveT
     let ok = 0;
     let firstError = '';
     for (const [i, s] of chosen.entries()) {
-      setBusy(`${i + 1} из ${n}`);
+      setBusy(t('progress', { i: i + 1, n }));
       const res = await callApi(`/api/org/${slug}/members/${s.userId}`, 'POST', { action, groupId, toGroupId: moveTo });
-      if (res.ok) ok += 1; else if (!firstError) firstError = `${s.displayName}: ${res.error}`;
+      if (res.ok) ok += 1; else if (!firstError) firstError = `${s.displayName}: ${f.message(res.error)}`;
     }
     setBusy('');
     setPicked(new Set());
     setNote(firstError
-      ? { tone: 'bad', text: `Готово для ${ok} из ${n}. ${firstError}` }
+      ? { tone: 'bad', text: t('partial', { ok, n, error: firstError }) }
       : { tone: 'ok', sheet: action === 'reset-password',
-        text: { 'reset-password': `Пароли сброшены: ${n}.`, disable: `Заблокировано: ${n}.`, enable: `Разблокировано: ${n}.`, move: `Переведено: ${n}.` }[action] });
+        text: t(({ 'reset-password': 'doneReset', disable: 'doneBlock', enable: 'doneUnblock', move: 'doneMove' } as const)[action], { n }) });
     router.refresh();
   }
 
@@ -69,41 +74,41 @@ export default function StudentsBoard({ slug, groupId, students, canBlock, moveT
     <div className="cf-board">
       <div className="cf-board-bar">
         <label className="cf-board-search"><IconSearch size={16} />
-          <input value={q} placeholder="Найти ученика" aria-label="Найти ученика" onChange={(e) => setQ(e.target.value)} />
+          <input value={q} placeholder={t('findStudent')} aria-label={t('findStudent')} onChange={(e) => setQ(e.target.value)} />
         </label>
         {waiting.length > 0 && chosen.length === 0 && (
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPicked(new Set(waiting.map((s) => s.userId)))}>
-            {`Выбрать тех, кто ещё не входил: ${waiting.length}`}
+            {t('pickWaiting', { n: waiting.length })}
           </button>
         )}
       </div>
 
       {chosen.length > 0 && (
-        <div className="cf-bulk" role="toolbar" aria-label="Действия с выбранными">
-          <strong>{`Выбрано: ${chosen.length}`}</strong>
-          <button type="button" className="btn btn-sm" disabled={!!busy} onClick={() => run('reset-password')}><IconKey size={15} />Сбросить пароли</button>
+        <div className="cf-bulk" role="toolbar" aria-label={t('bulkBar')}>
+          <strong>{t('picked', { n: chosen.length })}</strong>
+          <button type="button" className="btn btn-sm" disabled={!!busy} onClick={() => run('reset-password')}><IconKey size={15} />{t('resetPasswords')}</button>
           {canBlock && moveTargets && moveTargets.length > 0 && (
             <span className="cf-bulk-move">
-              <select className="select" value={moveTo} aria-label="Куда перевести" onChange={(e) => setMoveTo(e.target.value)}>
-                <option value="">Перевести в…</option>
+              <select className="select" value={moveTo} aria-label={t('moveWhere')} onChange={(e) => setMoveTo(e.target.value)}>
+                <option value="">{t('moveTo')}</option>
                 {moveTargets.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
               </select>
-              <button type="button" className="btn btn-sm" disabled={!!busy || !moveTo} onClick={() => run('move')}><IconSwap size={15} />Перевести</button>
+              <button type="button" className="btn btn-sm" disabled={!!busy || !moveTo} onClick={() => run('move')}><IconSwap size={15} />{t('move')}</button>
             </span>
           )}
           {canBlock && (chosen.every((s) => s.disabled)
-            ? <button type="button" className="btn btn-sm" disabled={!!busy} onClick={() => run('enable')}>Разблокировать</button>
-            : <button type="button" className="btn btn-sm btn-danger" disabled={!!busy} onClick={() => run('disable')}><IconLock size={15} />Заблокировать</button>)}
+            ? <button type="button" className="btn btn-sm" disabled={!!busy} onClick={() => run('enable')}>{t('unblock')}</button>
+            : <button type="button" className="btn btn-sm btn-danger" disabled={!!busy} onClick={() => run('disable')}><IconLock size={15} />{t('block')}</button>)}
           <span className="spacer" />
-          {busy ? <span className="muted">{`Выполняю… ${busy}`}</span>
-            : <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPicked(new Set())}>Снять выбор</button>}
+          {busy ? <span className="muted">{t('running', { progress: busy })}</span>
+            : <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPicked(new Set())}>{t('clearPick')}</button>}
         </div>
       )}
 
       {note && (
         <p className={note.tone === 'ok' ? 'ok-box' : 'error-box'} role="status">
           {note.text}{' '}
-          {note.sheet && <Link href={`/org/groups/${groupId}/credentials`}><IconPrint size={14} /> Открыть лист паролей</Link>}
+          {note.sheet && <Link href={`/org/groups/${groupId}/credentials`}><IconPrint size={14} /> {t('openSheet')}</Link>}
         </p>
       )}
 
@@ -112,10 +117,10 @@ export default function StudentsBoard({ slug, groupId, students, canBlock, moveT
           <thead>
             <tr>
               <th className="cf-col-check">
-                <input type="checkbox" checked={allShown} aria-label="Выбрать всех"
+                <input type="checkbox" checked={allShown} aria-label={t('pickAll')}
                   onChange={() => setPicked(allShown ? new Set() : new Set(shown.map((s) => s.userId)))} />
               </th>
-              <th>Ученик</th><th>Логин</th><th>Статус</th><th><span className="visually-hidden">Действия</span></th>
+              <th>{t('student')}</th><th>{t('login')}</th><th>{t('status')}</th><th><span className="visually-hidden">{t('actions')}</span></th>
             </tr>
           </thead>
           <tbody>
@@ -124,15 +129,15 @@ export default function StudentsBoard({ slug, groupId, students, canBlock, moveT
               const on = picked.has(s.userId);
               return (
                 <tr key={s.userId} className={on ? 'selected' : undefined}>
-                  <td className="cf-col-check"><input type="checkbox" checked={on} aria-label={`Выбрать: ${s.displayName}`} onChange={() => flip(s.userId)} /></td>
-                  <td data-label="Ученик"><strong>{s.displayName}</strong></td>
-                  <td data-label="Логин"><span className="num">{s.login ?? '—'}</span></td>
-                  <td data-label="Статус"><StatusPill tone={status.tone}>{status.label}</StatusPill></td>
+                  <td className="cf-col-check"><input type="checkbox" checked={on} aria-label={t('pickOne', { name: s.displayName })} onChange={() => flip(s.userId)} /></td>
+                  <td data-label={t('student')}><strong>{s.displayName}</strong></td>
+                  <td data-label={t('login')}><span className="num">{s.login ?? '—'}</span></td>
+                  <td data-label={t('status')}><StatusPill tone={status.tone}>{tk(personStatusKey(s))}</StatusPill></td>
                   <td className="actions">{rowActions[s.userId]}</td>
                 </tr>
               );
             })}
-            {shown.length === 0 && <tr><td colSpan={5}><p className="muted cf-board-none">Никого не нашлось.</p></td></tr>}
+            {shown.length === 0 && <tr><td colSpan={5}><p className="muted cf-board-none">{t('nobody')}</p></td></tr>}
           </tbody>
         </table>
       </div>

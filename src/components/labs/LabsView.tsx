@@ -1,10 +1,15 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import type { LabEntry } from '@/lib/labs';
-import { labUrl } from '@/lib/labs';
+import { labUrl, localizeLab } from '@/lib/labs';
+import { useLocale, useT } from '@/i18n/client';
+import { app } from '@/i18n/messages/app';
+
 import { IconLab, IconPlay, IconPlus, IconVr } from '@/components/icons';
 
 export default function LabsView({ labs, isGuest = false }: { labs: LabEntry[]; isGuest?: boolean }) {
+  const t = useT(app);
+  const locale = useLocale();
   const [vrFor, setVrFor] = useState<LabEntry | null>(null);
   const [soon, setSoon] = useState(false);
   // WebXR живёт только в защищённом контексте (HTTPS или localhost). Пока боевой
@@ -16,30 +21,28 @@ export default function LabsView({ labs, isGuest = false }: { labs: LabEntry[]; 
   return (
     <div className="library labs">
       <div className="library-head">
-        <h1>Лаборатории</h1>
+        <h1>{t('labsTitle')}</h1>
         {/* Гостю форма всё равно отправит на вход: она пока показывает лишь «скоро». */}
         {!isGuest && (
           <button type="button" className="btn btn-primary" onClick={() => setSoon(true)}>
-            <IconPlus size={17} />Создать лабораторию
+            <IconPlus size={17} />{t('labsCreate')}
           </button>
         )}
       </div>
       <p className="muted labs-lead">
-        Трёхмерные сцены: открываются в браузере и рассматриваются мышью.
-        Наведите на предмет — появится подпись; предметы берутся руками.
+        {t('labsLead')}
       </p>
       {secure === false && (
         <p className="muted labs-note">
-          Вход в очках Quest появится, когда сайт откроется по HTTPS: WebXR работает
-          только на защищённом соединении. Сами сцены доступны уже сейчас.
+          {t('labsHttps')}
         </p>
       )}
       <div className="lab-grid">
-        {labs.map((lab, i) => (
+        {labs.map((l) => localizeLab(l, locale)).map((lab, i) => (
           <article key={lab.slug} className="lab-card" style={{ animationDelay: `${i * 60}ms` }}>
             <a className="card-thumb" href={labUrl(lab.slug)} target="_blank" rel="noopener">
               <img src={`/labs/${lab.slug}.png`} alt="" loading="lazy" decoding="async" />
-              <span className="card-thumb-hint"><IconPlay size={22} />Открыть</span>
+              <span className="card-thumb-hint"><IconPlay size={22} />{t('open')}</span>
             </a>
             <div className="card-body">
               <div className="card-sub"><span className="chip">{lab.subject}</span></div>
@@ -50,11 +53,11 @@ export default function LabsView({ labs, isGuest = false }: { labs: LabEntry[]; 
               </ul>
               <div className="card-actions">
                 <a className="btn btn-sm btn-primary" href={labUrl(lab.slug)} target="_blank" rel="noopener">
-                  <IconPlay size={15} />Открыть сцену
+                  <IconPlay size={15} />{t('labsOpenScene')}
                 </a>
                 {secure && (
                   <button type="button" className="btn btn-sm btn-ghost" onClick={() => setVrFor(lab)}>
-                    <IconVr size={16} />В VR
+                    <IconVr size={16} />{t('labsVr')}
                   </button>
                 )}
               </div>
@@ -68,11 +71,10 @@ export default function LabsView({ labs, isGuest = false }: { labs: LabEntry[]; 
         <div className="modal-backdrop" onClick={() => setSoon(false)}>
           <div className="modal soon-modal" role="dialog" aria-modal="true" aria-labelledby="soon-title"
             onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head"><IconLab size={22} /><h2 id="soon-title">Скоро</h2></div>
-            <p className="muted">Лаборатории по описанию, как симуляции, — в работе.
-              Пока доступны четыре готовые сцены.</p>
+            <div className="modal-head"><IconLab size={22} /><h2 id="soon-title">{t('labsSoon')}</h2></div>
+            <p className="muted">{t('labsSoonText')}</p>
             <div className="row" style={{ justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-primary" onClick={() => setSoon(false)}>Понятно</button>
+              <button type="button" className="btn btn-primary" onClick={() => setSoon(false)}>{t('gotIt')}</button>
             </div>
           </div>
         </div>
@@ -83,6 +85,7 @@ export default function LabsView({ labs, isGuest = false }: { labs: LabEntry[]; 
 
 /** QR со ссылкой на сцену: очки сканируют его камерой и открывают страницу. */
 function VrDialog({ lab, onClose }: { lab: LabEntry; onClose: () => void }) {
+  const t = useT(app);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [href, setHref] = useState('');
   useEffect(() => {
@@ -104,17 +107,17 @@ function VrDialog({ lab, onClose }: { lab: LabEntry; onClose: () => void }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal vr-modal" role="dialog" aria-modal="true" aria-labelledby="vr-title"
         onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head"><IconVr size={22} /><h2 id="vr-title">{lab.title} в VR</h2></div>
+        <div className="modal-head"><IconVr size={22} /><h2 id="vr-title">{t('labsVrTitle', { title: lab.title })}</h2></div>
         <ol className="vr-steps">
-          <li>Наденьте очки Quest и откройте браузер.</li>
-          <li>Наведите камеру на код или введите адрес.</li>
-          <li>На странице нажмите «Войти в VR».</li>
+          <li>{t('vr1')}</li>
+          <li>{t('vr2')}</li>
+          <li>{t('vr3')}</li>
         </ol>
         <div className="vr-qr"><canvas ref={canvasRef} width={220} height={220} /></div>
         <code className="vr-href">{href}</code>
         <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <a className="btn" href={labUrl(lab.slug)} target="_blank" rel="noopener">Открыть здесь</a>
-          <button type="button" className="btn btn-primary" onClick={onClose}>Готово</button>
+          <a className="btn" href={labUrl(lab.slug)} target="_blank" rel="noopener">{t('openHere')}</a>
+          <button type="button" className="btn btn-primary" onClick={onClose}>{t('done')}</button>
         </div>
       </div>
     </div>

@@ -4,12 +4,16 @@ import { requirePageUser } from '@/lib/auth/page-guard';
 import { firstParam, type SearchParams } from '@/lib/http/params';
 import { learnerCourse } from '@/lib/lms/access';
 import { listTopics } from '@/lib/lms/courses';
-import { continueTopicId, courseTeacherNames, dueLabel, listTopicProgress, progressTotals, TOPIC_STATE_LABELS, type TopicProgress } from '@/lib/lms/learn';
+import { continueTopicId, courseTeacherNames, listTopicProgress, progressTotals, type TopicProgress } from '@/lib/lms/learn';
 import { blockCounts } from '@/lib/lms/blocks';
 import { viewedCountsByTopic } from '@/lib/lms/discussion';
 import { learnTopicHref } from '@/lib/lms/links';
 import { coverStyle } from '@/lib/lms/covers';
-import { formatScore, ruPlural } from '@/lib/lms/format';
+import { getLocale } from '@/i18n/server';
+import { translator } from '@/i18n/core';
+import { learn } from '@/i18n/messages/learn';
+import { learnHome } from '@/i18n/messages/learn-home';
+import { learnDue, learnScore } from '@/components/learn/format';
 import Markup from '@/components/lms/Markup';
 import { Ring } from '@/components/cabinet/viz';
 import { IconCheck, IconChevron, IconTask, IconUser } from '@/components/icons';
@@ -24,6 +28,10 @@ export default async function LearnCoursePage({ params, searchParams }: {
   const ctx = await learnerCourse(user, id, firstParam((await searchParams).preview) === '1');
   if (!ctx) notFound();
   const { course, preview } = ctx;
+  const locale = await getLocale();
+  const t = translator(learnHome, locale);
+  const tl = translator(learn, locale);
+  const score = (n: number) => learnScore(n, locale);
   const [topics, teachers, counts, viewedSteps] = await Promise.all([
     preview
       ? listTopics(course.id).then((list): TopicProgress[] => list.map((t) => ({
@@ -42,9 +50,9 @@ export default async function LearnCoursePage({ params, searchParams }: {
 
   return (
     <div className="lc">
-      {preview && <p className="warn-banner">Так курс видит ученик. Ответы в этом режиме не сохраняются.</p>}
+      {preview && <p className="warn-banner">{t('previewCourse')}</p>}
       <Link href={preview ? `/teach/courses/${course.id}` : '/learn'} className="learn-back">
-        {preview ? '← К редактору' : '← Мои курсы'}
+        {preview ? t('toEditor') : t('myCourses')}
       </Link>
 
       <section className="lc-hero">
@@ -62,20 +70,20 @@ export default async function LearnCoursePage({ params, searchParams }: {
           <div className="lc-hero-actions">
             {continueId && !preview && (
               <Link className="btn btn-primary btn-lg" href={learnTopicHref(continueId, false)}>
-                {totals.topicsViewed > 0 ? 'Продолжить' : 'Начать курс'}<IconChevron size={16} />
+                {totals.topicsViewed > 0 ? tl('continue') : t('startCourse')}<IconChevron size={16} />
               </Link>
             )}
-            {!continueId && !preview && topics.length > 0 && <span className="lc-done"><IconCheck size={16} />Курс пройден</span>}
-            <span className="muted">{topics.length} {ruPlural(topics.length, 'тема', 'темы', 'тем')} · {totals.assignmentsTotal} {ruPlural(totals.assignmentsTotal, 'задание', 'задания', 'заданий')}</span>
+            {!continueId && !preview && topics.length > 0 && <span className="lc-done"><IconCheck size={16} />{t('courseCompleted')}</span>}
+            <span className="muted">{tl('topicsN', { n: topics.length })} · {tl('tasksN', { n: totals.assignmentsTotal })}</span>
           </div>
         </div>
         {!preview && topics.length > 0 && (
           <div className="lc-hero-progress">
-            <Ring value={percent} size={92} stroke={9} label={`Пройдено ${percent}% курса`} />
+            <Ring value={percent} size={92} stroke={9} label={t('ringLabel', { p: percent })} />
             <dl>
-              <div><dt>тем пройдено</dt><dd>{totals.topicsDone} / {totals.topicsTotal}</dd></div>
-              <div><dt>заданий сдано</dt><dd>{totals.assignmentsDone} / {totals.assignmentsTotal}</dd></div>
-              {totals.pointsMax > 0 && <div><dt>баллов</dt><dd>{formatScore(totals.pointsEarned)} / {formatScore(totals.pointsMax)}</dd></div>}
+              <div><dt>{t('dtTopicsDone')}</dt><dd>{totals.topicsDone} / {totals.topicsTotal}</dd></div>
+              <div><dt>{t('dtTasksDone')}</dt><dd>{totals.assignmentsDone} / {totals.assignmentsTotal}</dd></div>
+              {totals.pointsMax > 0 && <div><dt>{t('dtPoints')}</dt><dd>{score(totals.pointsEarned)} / {score(totals.pointsMax)}</dd></div>}
             </dl>
           </div>
         )}
@@ -83,30 +91,30 @@ export default async function LearnCoursePage({ params, searchParams }: {
 
       <section className="lc-syllabus">
         <header className="lc-syllabus-head">
-          <h2>Программа курса</h2>
-          {!preview && <span className="muted">Темы открыты все: можно идти по порядку или повторить пройденное</span>}
+          <h2>{t('syllabus')}</h2>
+          {!preview && <span className="muted">{t('syllabusHint')}</span>}
         </header>
-        {topics.length === 0 ? <p className="empty-state">В курсе пока нет тем.</p> : (
+        {topics.length === 0 ? <p className="empty-state">{t('noTopics')}</p> : (
           <ol className="lc-topics">
-            {topics.map((t, i) => {
-              const c = counts.get(t.topicId) ?? { blocks: 0, tasks: 0 };
-              const seen = viewedSteps.get(t.topicId) ?? 0;
+            {topics.map((tp, i) => {
+              const c = counts.get(tp.topicId) ?? { blocks: 0, tasks: 0 };
+              const seen = viewedSteps.get(tp.topicId) ?? 0;
               const share = c.blocks ? Math.min(100, Math.round((seen / c.blocks) * 100)) : 0;
-              const due = t.dueAt && t.state !== 'done' ? dueLabel(t.dueAt) : null;
-              const here = t.topicId === continueId && !preview;
+              const due = tp.dueAt && tp.state !== 'done' ? learnDue(tp.dueAt, locale) : null;
+              const here = tp.topicId === continueId && !preview;
               return (
-                <li key={t.topicId} className={`lc-topic ${t.state}${here ? ' next' : ''}`}>
-                  <Link href={learnTopicHref(t.topicId, preview)}>
-                    <span className="lc-topic-num">{t.state === 'done' ? <IconCheck size={15} /> : i + 1}</span>
+                <li key={tp.topicId} className={`lc-topic ${tp.state}${here ? ' next' : ''}`}>
+                  <Link href={learnTopicHref(tp.topicId, preview)}>
+                    <span className="lc-topic-num">{tp.state === 'done' ? <IconCheck size={15} /> : i + 1}</span>
                     <span className="lc-topic-body">
-                      <span className="lc-topic-title">{t.title}{here && <span className="lc-badge">продолжить</span>}</span>
+                      <span className="lc-topic-title">{tp.title}{here && <span className="lc-badge">{t('badgeContinue')}</span>}</span>
                       <span className="lc-topic-meta">
-                        {!preview && <span className={`learn-state ${t.state}`}>{TOPIC_STATE_LABELS[t.state]}</span>}
-                        <span className="muted">{c.blocks} {ruPlural(c.blocks, 'шаг', 'шага', 'шагов')}</span>
-                        {c.tasks > 0 && <span className="muted"><IconTask size={13} />{t.assignmentsDone}/{c.tasks}</span>}
+                        {!preview && <span className={`learn-state ${tp.state}`}>{tl(`state_${tp.state}`)}</span>}
+                        <span className="muted">{tl('stepsN', { n: c.blocks })}</span>
+                        {c.tasks > 0 && <span className="muted"><IconTask size={13} />{tp.assignmentsDone}/{c.tasks}</span>}
                         {due && <span className={`learn-due ${due.tone}`}>{due.text}</span>}
-                        {t.assignmentsReturned > 0 && <span className="learn-state returned">на доработке</span>}
-                        {t.pointsMax > 0 && t.state !== 'none' && <span className="muted">{formatScore(t.pointsEarned)} / {formatScore(t.pointsMax)} б.</span>}
+                        {tp.assignmentsReturned > 0 && <span className="learn-state returned">{tl('onRevision')}</span>}
+                        {tp.pointsMax > 0 && tp.state !== 'none' && <span className="muted">{tl('pointsShort', { a: score(tp.pointsEarned), b: score(tp.pointsMax) })}</span>}
                       </span>
                       {!preview && share > 0 && <span className="lv-bar sm"><i style={{ width: `${share}%` }} /></span>}
                     </span>

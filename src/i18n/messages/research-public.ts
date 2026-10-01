@@ -1,0 +1,47 @@
+import { defineMessages } from '../core';
+
+/** Публичная страница материала или проекта (/r/<token>) — для читателя без аккаунта. */
+export const researchPublic = defineMessages({
+  ru: {
+    kindPlot: 'График', kindModel: 'Живая модель', kindSim: 'Интерактивный тренажёр',
+    doiSandbox: 'Тестовая запись Zenodo (sandbox)', doiPermanent: 'Постоянная ссылка DOI',
+    figNTitle: 'Рис. {n}. ', figN: 'Рис. {n}',
+    barProject: 'Интерактивное приложение к статье', barItem: 'Интерактивный рисунок',
+    graphical: 'Графический абстракт', empty: 'В проекте пока нет материалов.',
+    madeIn: 'Сделано в', madeInTail: '— графики, модели и тренажёры для науки и обучения.',
+    figuresCount: '{n, plural, one {# рисунок} few {# рисунка} many {# рисунков} other {# рисунка}}', itemEyebrow: 'Материал исследования',
+    updated: 'Обновлено', howToCite: 'Как цитировать', share: 'Поделиться', citeStyle: 'Стиль ссылки', gost: 'ГОСТ',
+    citeDoi: 'Ссылка на архивную запись Zenodo — DOI не изменится, даже если страница переедет.',
+    citeWeb: 'DOI у материалов пока нет — это ссылка на веб-страницу с сегодняшней датой обращения.',
+    pageLink: 'Ссылка на страницу', copyLink: 'Копировать ссылку', embedCode: 'Код для сайта', send: 'Отправить…',
+    qr: 'QR для постера и слайда', figures: 'Рисунки', contents: 'Содержание', embed: 'Встроить', fullscreen: 'На весь экран',
+  },
+  kk: {
+    kindPlot: 'График', kindModel: 'Тірі модель', kindSim: 'Интерактивті тренажер',
+    doiSandbox: 'Zenodo сынақ жазбасы (sandbox)', doiPermanent: 'Тұрақты DOI сілтемесі',
+    figNTitle: 'Сурет {n}. ', figN: 'Сурет {n}',
+    barProject: 'Мақалаға интерактивті қосымша', barItem: 'Интерактивті сурет',
+    graphical: 'Графикалық аңдатпа', empty: 'Жобада әзірге материалдар жоқ.',
+    madeIn: 'Жасалған орны:', madeInTail: '— ғылым мен оқуға арналған графиктер, модельдер және тренажерлер.',
+    figuresCount: '{n, plural, other {# сурет}}', itemEyebrow: 'Зерттеу материалы',
+    updated: 'Жаңартылды', howToCite: 'Қалай сілтеме жасау керек', share: 'Бөлісу', citeStyle: 'Сілтеме стилі', gost: 'МЕМСТ',
+    citeDoi: 'Zenodo мұрағат жазбасына сілтеме — бет көшсе де, DOI өзгермейді.',
+    citeWeb: 'Материалдарда әзірге DOI жоқ — бұл бүгінгі қаралған күні көрсетілген веб-бетке сілтеме.',
+    pageLink: 'Бетке сілтеме', copyLink: 'Сілтемені көшіру', embedCode: 'Сайтқа арналған код', send: 'Жіберу…',
+    qr: 'Постер мен слайдқа арналған QR', figures: 'Суреттер', contents: 'Мазмұны', embed: 'Ендіру', fullscreen: 'Толық экран',
+  },
+  en: {
+    kindPlot: 'Plot', kindModel: 'Live model', kindSim: 'Interactive simulator',
+    doiSandbox: 'Zenodo test record (sandbox)', doiPermanent: 'Permanent DOI link',
+    figNTitle: 'Fig. {n}. ', figN: 'Fig. {n}',
+    barProject: 'Interactive supplement to the article', barItem: 'Interactive figure',
+    graphical: 'Graphical abstract', empty: 'The project has no items yet.',
+    madeIn: 'Made with', madeInTail: '— plots, models and simulators for science and education.',
+    figuresCount: '{n, plural, one {# figure} other {# figures}}', itemEyebrow: 'Research item',
+    updated: 'Updated', howToCite: 'How to cite', share: 'Share', citeStyle: 'Citation style', gost: 'GOST',
+    citeDoi: 'A link to the archived Zenodo record — the DOI stays the same even if the page moves.',
+    citeWeb: 'These items have no DOI yet — this cites the web page with today’s access date.',
+    pageLink: 'Page link', copyLink: 'Copy link', embedCode: 'Embed code', send: 'Send…',
+    qr: 'QR for a poster or slide', figures: 'Figures', contents: 'Contents', embed: 'Embed', fullscreen: 'Full screen',
+  },
+});

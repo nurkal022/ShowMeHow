@@ -36,6 +36,8 @@ export interface ClarifyInput {
   subject: string;
   /** Прошлые просьбы по этой симуляции: по ним видно, что уже обсуждалось. */
   past: string[];
+  /** Язык интерфейса: на нём задаются уточняющие вопросы и варианты ответа. */
+  lang?: 'ru' | 'kk' | 'en';
 }
 
 export async function clarifyRefine(input: ClarifyInput): Promise<Clarification | null> {
@@ -48,7 +50,9 @@ ${past ? `Уже просили раньше:\n${past}\n` : ''}
   try {
     const chat = bindChat(provider, 'planner');
     const out = await chat([
-      { role: 'system', content: SYSTEM },
+      { role: 'system', content: SYSTEM + (input.lang && input.lang !== 'ru'
+        ? `\n\nВопрос и варианты ответа пиши ${input.lang === 'kk' ? 'на казахском языке (литературный, кириллица)' : 'на английском языке'} — это язык интерфейса пользователя.`
+        : '') },
       { role: 'user', content: user },
     ]);
     return readClarification(out);

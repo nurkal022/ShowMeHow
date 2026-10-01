@@ -4,7 +4,11 @@
  * про абстрактные тела на наклонной плоскости. Модуль чистый: форма в профиле
  * считает заполненность и чистит ввод теми же функциями, что и сервер.
  * Запись в базу — в interests-store.ts, туда клиенту нельзя.
+ * Для формы на языке пользователя — presetTags(locale) и styleOptions(locale);
+ * PRESET_TAGS и STYLE_OPTIONS — русские (их же видит помощник в промпте).
  */
+
+import type { Locale } from '@/i18n/config';
 
 export type LearnStyle = 'examples' | 'story' | 'practice' | 'visual' | '';
 
@@ -36,6 +40,43 @@ export const STYLE_OPTIONS: readonly { value: Exclude<LearnStyle, ''>; label: st
   { value: 'practice', label: 'Через практику', hint: 'Сразу пробовать самому, разбор по ходу' },
   { value: 'visual', label: 'Схемами и картинками', hint: 'Рисунок, таблица, схема — и уже потом текст' },
 ];
+
+const PRESET_TAGS_BY_LOCALE: Record<'kk' | 'en', readonly string[]> = {
+  kk: [
+    'футбол', 'баскетбол', 'киберспорт', 'аниме', 'музыка', 'гитара', 'би', 'аспаздық',
+    'автокөліктер', 'ғарыш', 'бағдарламалау', 'робототехника', 'дрондар', 'жануарлар',
+    'балық аулау', 'шахмат', 'сурет салу', 'фотография', 'бейнемонтаж', 'сән', 'саяхат',
+    'тарих', 'медицина', 'бизнес', 'майнкрафт', 'үстел ойындары', 'велоспорт', 'жүзу',
+  ],
+  en: [
+    'football', 'basketball', 'esports', 'anime', 'music', 'guitar', 'dancing', 'cooking',
+    'cars', 'space', 'programming', 'robotics', 'drones', 'animals',
+    'fishing', 'chess', 'drawing', 'photography', 'video editing', 'fashion', 'travel',
+    'history', 'medicine', 'business', 'minecraft', 'board games', 'cycling', 'swimming',
+  ],
+};
+export function presetTags(locale: Locale = 'ru'): readonly string[] {
+  return locale === 'ru' ? PRESET_TAGS : PRESET_TAGS_BY_LOCALE[locale] ?? PRESET_TAGS;
+}
+
+const STYLE_TEXT: Record<'kk' | 'en', Record<Exclude<LearnStyle, ''>, [label: string, hint: string]>> = {
+  kk: {
+    examples: ['Мысалдармен', 'Алдымен өмірден мысал, содан кейін ереже'],
+    story: ['Әңгімемен', 'Кейіпкері мен сюжеті бар әңгіме сияқты түсіндіру'],
+    practice: ['Практика арқылы', 'Бірден өзі байқап көру, талдау қатар жүреді'],
+    visual: ['Сызбалар мен суреттермен', 'Сурет, кесте, сызба — содан кейін ғана мәтін'],
+  },
+  en: {
+    examples: ['With examples', 'A real-life example first, then the rule'],
+    story: ['As a story', 'An explanation told as a story, with a hero and a plot'],
+    practice: ['Through practice', 'Try it yourself right away, with feedback along the way'],
+    visual: ['With diagrams and pictures', 'A picture, table or diagram — and only then text'],
+  },
+};
+export function styleOptions(locale: Locale = 'ru'): readonly { value: Exclude<LearnStyle, ''>; label: string; hint: string }[] {
+  const t = locale === 'ru' ? undefined : STYLE_TEXT[locale];
+  return t ? STYLE_OPTIONS.map((o) => ({ ...o, label: t[o.value][0], hint: t[o.value][1] })) : STYLE_OPTIONS;
+}
 
 const STYLES: readonly string[] = STYLE_OPTIONS.map((s) => s.value);
 

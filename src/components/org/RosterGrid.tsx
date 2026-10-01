@@ -2,6 +2,8 @@
 import { useRef } from 'react';
 import { MAX_ROSTER_LINES, rosterKey } from '@/lib/org/roster';
 import { IconTrash } from '@/components/icons';
+import { useT } from '@/i18n/client';
+import { orgPeople } from '@/i18n/messages/org-people';
 
 export type RosterRow = [string, string];
 
@@ -29,6 +31,7 @@ export function parsePasted(text: string): RosterRow[] {
  * Дубли и неполные строки подсвечиваются сразу, до проверки на сервере.
  */
 export default function RosterGrid({ rows, onChange }: { rows: RosterRow[]; onChange: (rows: RosterRow[]) => void }) {
+  const t = useT(orgPeople);
   const table = useRef<HTMLTableElement>(null);
   const shown = rows.length < MIN_ROWS ? [...rows, ...blank(MIN_ROWS - rows.length)] : rows;
   const seen = new Map<string, number>();
@@ -62,7 +65,7 @@ export default function RosterGrid({ rows, onChange }: { rows: RosterRow[]; onCh
   return (
     <div className="cf-grid-wrap">
       <table ref={table} className="cf-grid">
-        <thead><tr><th className="cf-grid-n">№</th><th>Фамилия</th><th>Имя</th><th className="cf-grid-x" /></tr></thead>
+        <thead><tr><th className="cf-grid-n">{t('num')}</th><th>{t('lastName')}</th><th>{t('firstName')}</th><th className="cf-grid-x" /></tr></thead>
         <tbody>
           {shown.map((row, r) => {
             const filled = row[0].trim() || row[1].trim();
@@ -74,8 +77,8 @@ export default function RosterGrid({ rows, onChange }: { rows: RosterRow[]; onCh
                 {[0, 1].map((c) => (
                   <td key={c}>
                     <input data-cell={`${r}-${c}`} value={row[c]} maxLength={60} autoComplete="off" spellCheck={false}
-                      aria-label={`${c === 0 ? 'Фамилия' : 'Имя'}, строка ${r + 1}`}
-                      placeholder={r === 0 ? (c === 0 ? 'Иванов' : 'Иван') : undefined}
+                      aria-label={t('rowN', { col: c === 0 ? t('lastName') : t('firstName'), n: r + 1 })}
+                      placeholder={r === 0 ? (c === 0 ? t('lastNamePh') : t('firstNamePh')) : undefined}
                       onChange={(e) => commit(shown.map((x, i) => (i === r ? (c === 0 ? [e.target.value, x[1]] : [x[0], e.target.value]) : x) as RosterRow))}
                       onPaste={(e) => paste(e, r, c)}
                       onKeyDown={(e) => {
@@ -85,10 +88,10 @@ export default function RosterGrid({ rows, onChange }: { rows: RosterRow[]; onCh
                   </td>
                 ))}
                 <td className="cf-grid-x">
-                  {incomplete && <span className="cf-grid-flag" title="Нужны и фамилия, и имя">неполная</span>}
-                  {dup && <span className="cf-grid-flag" title="Такая строка уже есть в списке">дубль</span>}
+                  {incomplete && <span className="cf-grid-flag" title={t('incompleteTip')}>{t('incomplete')}</span>}
+                  {dup && <span className="cf-grid-flag" title={t('dupTip')}>{t('dup')}</span>}
                   {filled && (
-                    <button type="button" className="icon-btn" tabIndex={-1} aria-label={`Удалить строку ${r + 1}`}
+                    <button type="button" className="icon-btn" tabIndex={-1} aria-label={t('deleteRow', { n: r + 1 })}
                       onClick={() => commit(shown.filter((_, i) => i !== r))}><IconTrash size={14} /></button>
                   )}
                 </td>

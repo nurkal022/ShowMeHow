@@ -7,8 +7,11 @@ import { callApi } from '@/components/cabinet/api';
 import Link from 'next/link';
 import { learnCourseHref, withOrgParam } from '@/lib/lms/links';
 import { coverStyle } from '@/lib/lms/covers';
-import { formatAgo, ruPlural } from '@/lib/lms/format';
-import { COURSE_STATUS_LABELS, type CourseStatus } from '@/lib/lms/types';
+import { formatAgo } from '@/lib/lms/format';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { INTL_LOCALE } from '@/i18n/config';
+import { teachCourse } from '@/i18n/messages/teach-course';
+import { courseStatusLabels, type CourseStatus } from '@/lib/lms/types';
 import StatusPill from '@/components/cabinet/StatusPill';
 import EmptyState from '@/components/cabinet/EmptyState';
 import { IconCourses, IconEdit, IconFold, IconSearch, IconTrash, IconUndo } from '@/components/icons';
@@ -21,18 +24,22 @@ export interface BoardCourse {
 }
 
 type StatusFilter = 'all' | 'published' | 'draft' | 'unassigned' | 'archived';
-const FILTERS: { key: StatusFilter; label: string; match: (c: BoardCourse) => boolean }[] = [
-  { key: 'all', label: 'В работе', match: (c) => c.status !== 'archived' },
-  { key: 'published', label: 'Опубликованы', match: (c) => c.status === 'published' },
-  { key: 'draft', label: 'Черновики', match: (c) => c.status === 'draft' },
-  { key: 'unassigned', label: 'Никому не открыты', match: (c) => c.status !== 'archived' && c.groups.length === 0 },
-  { key: 'archived', label: 'Архив', match: (c) => c.status === 'archived' },
+const FILTERS: { key: StatusFilter; label: 'fAll' | 'fPublished' | 'fDraft' | 'fUnassigned' | 'fArchived'; match: (c: BoardCourse) => boolean }[] = [
+  { key: 'all', label: 'fAll', match: (c) => c.status !== 'archived' },
+  { key: 'published', label: 'fPublished', match: (c) => c.status === 'published' },
+  { key: 'draft', label: 'fDraft', match: (c) => c.status === 'draft' },
+  { key: 'unassigned', label: 'fUnassigned', match: (c) => c.status !== 'archived' && c.groups.length === 0 },
+  { key: 'archived', label: 'fArchived', match: (c) => c.status === 'archived' },
 ];
 const VIEW_KEY = 'tesseract.teach.courses.view';
 
 export default function CoursesBoard({ courses, org, initialStatus }: {
   courses: BoardCourse[]; org: string; initialStatus: string;
 }) {
+  const t = useT(teachCourse);
+  const fmt = useFormat();
+  const locale = useLocale();
+  const COURSE_STATUS_LABELS = courseStatusLabels(locale);
   const [status, setStatus] = useState<StatusFilter>(FILTERS.some((f) => f.key === initialStatus) ? initialStatus as StatusFilter : 'all');
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState('');
@@ -42,7 +49,7 @@ export default function CoursesBoard({ courses, org, initialStatus }: {
   }, []);
   const pickView = (v: 'grid' | 'list') => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* не беда */ } };
 
-  const groups = useMemo(() => [...new Set(courses.flatMap((c) => c.groups))].sort((a, b) => a.localeCompare(b, 'ru', { numeric: true })), [courses]);
+  const groups = useMemo(() => [...new Set(courses.flatMap((c) => c.groups))].sort((a, b) => a.localeCompare(b, INTL_LOCALE[locale], { numeric: true })), [courses, locale]);
   const filter = FILTERS.find((f) => f.key === status) ?? FILTERS[0];
   const q = query.trim().toLowerCase();
   const shown = courses.filter((c) => filter.match(c)
@@ -56,9 +63,9 @@ export default function CoursesBoard({ courses, org, initialStatus }: {
   async function act(c: BoardCourse, kind: 'archive' | 'restore' | 'delete') {
     setError('');
     if (kind === 'delete' && !(await ask({
-      title: `Удалить курс «${c.title}»?`,
-      text: 'Удалятся все темы, уроки и задания. Если по курсу уже есть ответы учеников, удалить не получится — только в архив.',
-      confirmLabel: 'Удалить курс', danger: true,
+      title: t('deleteCourseQ', { title: c.title }),
+      text: t('deleteCourseText'),
+      confirmLabel: t('deleteCourse'), danger: true,
     }))) return;
     const res = kind === 'delete'
       ? await callApi(`/api/teach/courses/${c.id}`, 'DELETE')
@@ -67,28 +74,28 @@ export default function CoursesBoard({ courses, org, initialStatus }: {
     router.refresh();
   }
   const menu = (c: BoardCourse) => (
-    <RowMenu label={`Действия с курсом «${c.title}»`} items={[
-      { key: 'about', label: 'О курсе и настройки', icon: <IconEdit size={16} />, onSelect: () => router.push(link(`/teach/courses/${c.id}/settings`)) },
+    <RowMenu label={t('courseActions', { title: c.title })} items={[
+      { key: 'about', label: t('aboutSettings'), icon: <IconEdit size={16} />, onSelect: () => router.push(link(`/teach/courses/${c.id}/settings`)) },
       c.status === 'archived'
-        ? { key: 'restore', label: 'Вернуть из архива', icon: <IconUndo size={16} />, onSelect: () => void act(c, 'restore') }
-        : { key: 'archive', label: 'В архив', icon: <IconFold size={16} />, onSelect: () => void act(c, 'archive') },
-      { key: 'delete', label: 'Удалить курс', icon: <IconTrash size={16} />, danger: true, onSelect: () => void act(c, 'delete') },
+        ? { key: 'restore', label: t('restore'), icon: <IconUndo size={16} />, onSelect: () => void act(c, 'restore') }
+        : { key: 'archive', label: t('archive'), icon: <IconFold size={16} />, onSelect: () => void act(c, 'archive') },
+      { key: 'delete', label: t('deleteCourse'), icon: <IconTrash size={16} />, danger: true, onSelect: () => void act(c, 'delete') },
     ]} />
   );
 
   return (
     <div className="board">
       {confirmDialog}
-      {error && <p className="error-box" role="alert">{error}</p>}
+      {error && <p className="error-box" role="alert">{fmt.message(error)}</p>}
       <div className="board-bar">
-        <div className="cf-filter" role="group" aria-label="Какие курсы показать">
+        <div className="cf-filter" role="group" aria-label={t('filterGroup')}>
           {FILTERS.map((f) => {
             const n = courses.filter(f.match).length;
             if (n === 0 && f.key !== 'all' && f.key !== status) return null;
             return (
               <button key={f.key} type="button" aria-pressed={status === f.key}
                 className={status === f.key ? 'cf-filter-item active' : 'cf-filter-item'} onClick={() => setStatus(f.key)}>
-                {f.label}<span className="cf-count">{n}</span>
+                {t(f.label)}<span className="cf-count">{n}</span>
               </button>
             );
           })}
@@ -96,19 +103,19 @@ export default function CoursesBoard({ courses, org, initialStatus }: {
         <div className="board-tools">
           <label className="board-search">
             <IconSearch size={16} />
-            <span className="visually-hidden">Поиск курса</span>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Найти курс" />
+            <span className="visually-hidden">{t('searchCourse')}</span>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('findCourse')} />
           </label>
           {groups.length > 1 && (
-            <select className="select board-select" value={group} onChange={(e) => setGroup(e.target.value)} aria-label="Группа">
-              <option value="">Все группы</option>
+            <select className="select board-select" value={group} onChange={(e) => setGroup(e.target.value)} aria-label={t('group')}>
+              <option value="">{t('allGroups')}</option>
               {groups.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
           )}
-          <div className="segmented" role="group" aria-label="Вид">
-            <button type="button" aria-pressed={view === 'grid'} aria-label="Плиткой" title="Плиткой"
+          <div className="segmented" role="group" aria-label={t('view')}>
+            <button type="button" aria-pressed={view === 'grid'} aria-label={t('grid')} title={t('grid')}
               className={view === 'grid' ? 'segmented-item active' : 'segmented-item'} onClick={() => pickView('grid')}><IconDashboard size={16} /></button>
-            <button type="button" aria-pressed={view === 'list'} aria-label="Списком" title="Списком"
+            <button type="button" aria-pressed={view === 'list'} aria-label={t('list')} title={t('list')}
               className={view === 'list' ? 'segmented-item active' : 'segmented-item'} onClick={() => pickView('list')}><IconList size={16} /></button>
           </div>
         </div>
@@ -117,7 +124,7 @@ export default function CoursesBoard({ courses, org, initialStatus }: {
       {shown.length === 0 ? (
         <div className="cab-card">
           <EmptyState icon={<IconCourses size={24} />}
-            text={courses.length === 0 ? 'Курсов пока нет — создайте первый, например «Физика 7: механика».' : 'Под эти условия ни один курс не подходит.'} />
+            text={courses.length === 0 ? t('boardEmpty') : t('boardNoMatch')} />
         </div>
       ) : view === 'grid' ? (
         <div className="course-grid" key={`${status}-${group}`}>
@@ -125,38 +132,38 @@ export default function CoursesBoard({ courses, org, initialStatus }: {
             <article key={c.id} className={c.status === 'archived' ? 'course-tile archived' : 'course-tile'}>
               <Link href={link(`/teach/courses/${c.id}`)} className="course-tile-cover" style={coverStyle(c.subject || c.title)} tabIndex={-1} aria-hidden="true">
                 <span className="course-tile-glyph">{(c.subject || c.title).slice(0, 1).toUpperCase()}</span>
-                <span className="course-tile-subject">{c.subject || 'Без предмета'}</span>
-                {c.ungraded > 0 && <span className="course-tile-badge">{c.ungraded} на проверку</span>}
+                <span className="course-tile-subject">{c.subject || t('noSubject')}</span>
+                {c.ungraded > 0 && <span className="course-tile-badge">{t('nToReview', { n: c.ungraded })}</span>}
               </Link>
               <div className="course-tile-body">
                 <div className="course-tile-meta">
                   <StatusPill tone={c.status === 'published' ? 'ok' : c.status === 'draft' ? 'neutral' : 'danger'}>{COURSE_STATUS_LABELS[c.status]}</StatusPill>
-                  <span className="muted">изменён {formatAgo(c.updatedAt)}</span>
+                  <span className="muted">{t('changedAgo', { ago: formatAgo(c.updatedAt, locale) })}</span>
                 </div>
                 <h3><Link href={link(`/teach/courses/${c.id}`)}>{c.title}</Link></h3>
                 <div className="chip-row">
-                  {c.groups.length ? c.groups.map((g) => <span key={g} className="chip-sm">{g}</span>) : <span className="chip-sm warn">никому не открыт</span>}
+                  {c.groups.length ? c.groups.map((g) => <span key={g} className="chip-sm">{g}</span>) : <span className="chip-sm warn">{t('notOpened')}</span>}
                   {c.owner && <span className="muted">· {c.owner}</span>}
                 </div>
                 <dl className="course-tile-facts">
-                  <div><dt>{ruPlural(c.topics, 'тема', 'темы', 'тем')}</dt><dd>{c.topics}</dd></div>
-                  <div><dt>{ruPlural(c.students, 'ученик', 'ученика', 'учеников')}</dt><dd>{c.students}</dd></div>
-                  <div><dt>проверено</dt><dd>{c.graded}</dd></div>
+                  <div><dt>{t('factTopics', { n: c.topics })}</dt><dd>{c.topics}</dd></div>
+                  <div><dt>{t('factStudents', { n: c.students })}</dt><dd>{c.students}</dd></div>
+                  <div><dt>{t('checked')}</dt><dd>{c.graded}</dd></div>
                 </dl>
                 <div className="course-tile-progress">
-                  <span className="muted">Прошли тем</span><b>{c.percent}%</b>
+                  <span className="muted">{t('topicsPassed')}</span><b>{c.percent}%</b>
                   <div className="meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={c.percent}
-                    aria-label={`Ученики открыли ${c.percent}% тем`}><i style={{ width: `${c.percent}%` }} /></div>
+                    aria-label={t('topicsPassedAria', { n: c.percent })}><i style={{ width: `${c.percent}%` }} /></div>
                 </div>
               </div>
               <footer className="course-tile-foot">
                 {c.reviewHref
-                  ? <Link className="btn btn-sm btn-warn" href={link(c.reviewHref)}>Проверить · {c.ungraded}</Link>
-                  : <Link className="btn btn-sm btn-secondary" href={link(`/teach/courses/${c.id}`)}>Редактор</Link>}
-                <Link className="btn btn-sm btn-ghost" href={link(`/teach/courses/${c.id}/journal`)}>Журнал</Link>
-                <Link className="btn btn-sm btn-ghost" href={link(`/teach/courses/${c.id}/analytics`)}>Аналитика</Link>
+                  ? <Link className="btn btn-sm btn-warn" href={link(c.reviewHref)}>{t('reviewN', { n: c.ungraded })}</Link>
+                  : <Link className="btn btn-sm btn-secondary" href={link(`/teach/courses/${c.id}`)}>{t('editor')}</Link>}
+                <Link className="btn btn-sm btn-ghost" href={link(`/teach/courses/${c.id}/journal`)}>{t('journal')}</Link>
+                <Link className="btn btn-sm btn-ghost" href={link(`/teach/courses/${c.id}/analytics`)}>{t('analytics')}</Link>
                 <a className="cab-icon-btn" href={learnCourseHref(c.id, true)} target="_blank" rel="noopener noreferrer"
-                  title="Как видит ученик" aria-label={`Открыть курс «${c.title}» так, как его видит ученик`}><IconView size={18} /></a>
+                  title={t('asStudent')} aria-label={t('openAsStudent', { title: c.title })}><IconView size={18} /></a>
                 {menu(c)}
               </footer>
             </article>
@@ -166,26 +173,26 @@ export default function CoursesBoard({ courses, org, initialStatus }: {
         <div className="cab-card">
           <div className="table-wrap">
             <table className="data-table course-rows">
-              <thead><tr><th>Курс</th><th>Группы</th><th className="center">Тем</th><th className="center">Учеников</th><th>Прошли</th><th className="center">На проверку</th><th className="actions"><span className="visually-hidden">Действия</span></th></tr></thead>
+              <thead><tr><th>{t('colCourse')}</th><th>{t('colGroups')}</th><th className="center">{t('colTopics')}</th><th className="center">{t('colStudents')}</th><th>{t('colPassed')}</th><th className="center">{t('colReview')}</th><th className="actions"><span className="visually-hidden">{t('actions')}</span></th></tr></thead>
               <tbody>
                 {shown.map((c) => (
                   <tr key={c.id}>
-                    <td data-label="Курс">
+                    <td data-label={t('colCourse')}>
                       <span className="course-row-title">
                         <span className="course-row-dot" style={coverStyle(c.subject || c.title)} aria-hidden="true">{(c.subject || c.title).slice(0, 1).toUpperCase()}</span>
                         <span><Link href={link(`/teach/courses/${c.id}`)}>{c.title}</Link>
                           <small className="muted">{COURSE_STATUS_LABELS[c.status]}{c.subject ? ` · ${c.subject}` : ''}{c.owner ? ` · ${c.owner}` : ''}</small></span>
                       </span>
                     </td>
-                    <td data-label="Группы">{c.groups.join(', ') || <span className="muted">—</span>}</td>
-                    <td data-label="Тем" className="center num">{c.topics}</td>
-                    <td data-label="Учеников" className="center num">{c.students}</td>
-                    <td data-label="Прошли"><span className="inline-meter"><span className="meter"><i style={{ width: `${c.percent}%` }} /></span><span className="num">{c.percent}%</span></span></td>
-                    <td data-label="На проверку" className="center num">{c.ungraded || '—'}</td>
+                    <td data-label={t('colGroups')}>{c.groups.join(', ') || <span className="muted">—</span>}</td>
+                    <td data-label={t('colTopics')} className="center num">{c.topics}</td>
+                    <td data-label={t('colStudents')} className="center num">{c.students}</td>
+                    <td data-label={t('colPassed')}><span className="inline-meter"><span className="meter"><i style={{ width: `${c.percent}%` }} /></span><span className="num">{c.percent}%</span></span></td>
+                    <td data-label={t('colReview')} className="center num">{c.ungraded || '—'}</td>
                     <td className="actions">
                       {c.reviewHref
-                        ? <Link className="btn btn-sm btn-warn" href={link(c.reviewHref)}>Проверить</Link>
-                        : <Link className="btn btn-sm btn-ghost" href={link(`/teach/courses/${c.id}/journal`)}>Журнал</Link>}
+                        ? <Link className="btn btn-sm btn-warn" href={link(c.reviewHref)}>{t('review')}</Link>
+                        : <Link className="btn btn-sm btn-ghost" href={link(`/teach/courses/${c.id}/journal`)}>{t('journal')}</Link>}
                       {menu(c)}
                     </td>
                   </tr>

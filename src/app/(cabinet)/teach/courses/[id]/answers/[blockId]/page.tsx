@@ -12,6 +12,8 @@ import AnswerView from '@/components/lms/AnswerView';
 import AnswersTable from '@/components/teach/AnswersTable';
 import GradeForm from '@/components/teach/GradeForm';
 import { formatScore } from '@/lib/lms/format';
+import { getLocale, getT } from '@/i18n/server';
+import { teachReview } from '@/i18n/messages/teach-review';
 
 export default async function AnswersPage({ params, searchParams }: {
   params: Promise<{ id: string; blockId: string }>; searchParams: SearchParams;
@@ -23,6 +25,8 @@ export default async function AnswersPage({ params, searchParams }: {
   if (!staff || staff.course.id !== id || staff.block.body.kind !== 'assignment') notFound();
   const payload = staff.block.body.payload;
   const sp = await searchParams;
+  const t = await getT(teachReview);
+  const locale = await getLocale();
   const pending = firstParam(sp.pending) === '1';
   const picked = firstParam(sp.s) ?? null;
 
@@ -37,14 +41,14 @@ export default async function AnswersPage({ params, searchParams }: {
 
   return (
     <>
-      <CabinetHeader title={`Ответы: ${assignmentTitle(payload.prompt)}`} subtitle={`${staff.course.title} · ${staff.topic.title}`}>
-        <Link className="btn btn-ghost" href={courseEditorHref(id, staff.topic.id)}>К заданию в редакторе</Link>
+      <CabinetHeader title={t('answersTitle', { title: assignmentTitle(payload.prompt) })} subtitle={`${staff.course.title} · ${staff.topic.title}`}>
+        <Link className="btn btn-ghost" href={courseEditorHref(id, staff.topic.id)}>{t('toEditor')}</Link>
         <Link className={pending ? 'btn btn-secondary' : 'btn'} href={answersHref(id, blockId, { pending: !pending })}>
-          {pending ? 'Показать все' : 'Только непроверенные'}
+          {pending ? t('showAll') : t('onlyPending')}
         </Link>
       </CabinetHeader>
       <div className="grading">
-        <AnswersTable rows={shown} points={payload.points} selectedId={selected} hrefFor={(s) => href(s)} dueAt={staff.topic.dueAt} />
+        <AnswersTable locale={locale} rows={shown} points={payload.points} selectedId={selected} hrefFor={(s) => href(s)} dueAt={staff.topic.dueAt} />
         <section className="panel">
           {current?.submission ? (
             <>
@@ -52,14 +56,14 @@ export default async function AnswersPage({ params, searchParams }: {
               <Markup text={payload.prompt} />
               <AnswerView spec={payload.spec} answer={current.submission.answer} />
               {current.submission.autoScore !== null && (
-                <p className="muted">{`Автопроверка: ${formatScore(current.submission.autoScore)} из ${payload.points}.`}</p>
+                <p className="muted">{t('autoCheck', { score: formatScore(current.submission.autoScore, locale), points: payload.points })}</p>
               )}
               {current.submission.blockRevision < staff.block.revision && (
-                <p className="warn-banner">Ответ сдан до правки задания. Пересчитать можно в редакторе курса.</p>
+                <p className="warn-banner">{t('staleBanner')}</p>
               )}
               {payload.reference && (
                 <details className="reference-box">
-                  <summary>Эталонный ответ</summary>
+                  <summary>{t('reference')}</summary>
                   <Markup text={payload.reference} />
                 </details>
               )}
@@ -70,12 +74,12 @@ export default async function AnswersPage({ params, searchParams }: {
                 prevHref={nav.prev ? href(nav.prev) : null} nextAnyHref={nav.next ? href(nav.next) : null} />
             </>
           ) : (
-            <p className="muted">Выберите ответ в таблице, чтобы проверить его.</p>
+            <p className="muted">{t('pickAnswer')}</p>
           )}
           <div className="row">
-            {nav.prev && <Link className="btn btn-sm" href={href(nav.prev)}>Предыдущий</Link>}
+            {nav.prev && <Link className="btn btn-sm" href={href(nav.prev)}>{t('prev')}</Link>}
             <span className="spacer" />
-            {nav.next && <Link className="btn btn-sm" href={href(nav.next)}>Следующий</Link>}
+            {nav.next && <Link className="btn btn-sm" href={href(nav.next)}>{t('next')}</Link>}
           </div>
         </section>
       </div>

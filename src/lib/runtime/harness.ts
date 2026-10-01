@@ -49,7 +49,7 @@ export const HARNESS_JS = `
             var lock = locked.indexOf(c.name) !== -1;
             c.el.style.pointerEvents = lock ? 'none' : '';
             c.el.style.opacity = lock ? '.45' : '';
-            c.el.title = lock ? 'Учитель зафиксировал этот параметр' : '';
+            c.el.title = lock ? (window.__simT ? window.__simT('locked') : 'Учитель зафиксировал этот параметр') : '';
           }
         }
         out.ok = true;

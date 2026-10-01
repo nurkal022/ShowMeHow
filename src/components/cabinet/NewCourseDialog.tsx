@@ -8,9 +8,11 @@ import { callApi } from '@/components/cabinet/api';
 import { coverStyle } from '@/lib/lms/covers';
 import Layer from './Layer';
 import { IconClose, IconCourses, IconPlus, IconSpark } from '@/components/icons';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { COURSE_GRADES, COURSE_SUBJECTS, teachCourse } from '@/i18n/messages/teach-course';
 
-export const SUBJECTS = ['Физика', 'Химия', 'Биология', 'Математика', 'Алгебра', 'Геометрия', 'Информатика', 'География', 'История', 'Литература', 'Английский'];
-const GRADES = ['5 класс', '6 класс', '7 класс', '8 класс', '9 класс', '10 класс', '11 класс', 'колледж'];
+/** Русский список предметов-подсказок; на других языках — COURSE_SUBJECTS[locale]. */
+export const SUBJECTS = COURSE_SUBJECTS.ru;
 
 /**
  * «Создать курс» — короткое окно: название, предмет и класс. Остальное (описание, план тем,
@@ -19,11 +21,12 @@ const GRADES = ['5 класс', '6 класс', '7 класс', '8 класс', 
 export default function NewCourseDialog({ org, openInitially }: {
   org: string; openInitially?: boolean; groups?: { id: string; title: string }[];
 }) {
+  const t = useT(teachCourse);
   const [open, setOpen] = useState(false);
   useEffect(() => { if (openInitially) setOpen(true); }, [openInitially]);
   return (
     <>
-      <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}><IconPlus size={16} />Создать курс</button>
+      <button type="button" className="btn btn-primary" onClick={() => setOpen(true)}><IconPlus size={16} />{t('createCourse')}</button>
       {open && <Layer><NewCourseModal org={org} onClose={() => setOpen(false)} /></Layer>}
     </>
   );
@@ -32,6 +35,11 @@ export default function NewCourseDialog({ org, openInitially }: {
 function NewCourseModal({ org, onClose }: { org: string; onClose: () => void }) {
   const router = useRouter();
   const uid = useId();
+  const t = useT(teachCourse);
+  const fmt = useFormat();
+  const locale = useLocale();
+  const SUBJECTS = COURSE_SUBJECTS[locale];
+  const GRADES = COURSE_GRADES[locale];
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
   const [grade, setGrade] = useState('');
@@ -51,7 +59,7 @@ function NewCourseModal({ org, onClose }: { org: string; onClose: () => void }) 
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) { setError('Назовите курс — так его увидят ученики.'); titleRef.current?.focus(); return; }
+    if (!title.trim()) { setError(t('nameCourse')); titleRef.current?.focus(); return; }
     setBusy(true);
     setError('');
     const res = await callApi<{ course: Course }>('/api/teach/courses', 'POST', { org, title, subject, grade });
@@ -64,43 +72,43 @@ function NewCourseModal({ org, onClose }: { org: string; onClose: () => void }) 
       <div className="nx-scrim" onClick={() => !busy && onClose()} />
       <form className="nx-modal nx-small" onSubmit={submit} noValidate>
         <div className="nq-cover" style={coverStyle(subject || title || 'курс')} aria-hidden="true">
-          <span className="course-tile-glyph">{(subject || title || 'К').slice(0, 1).toUpperCase()}</span>
-          <span className="nq-cover-text"><IconCourses size={18} />{subject || 'Новый курс'}{grade ? ` · ${grade}` : ''}</span>
-          <button type="button" className="nx-close nq-close" aria-label="Закрыть" onClick={onClose}><IconClose size={18} /></button>
+          <span className="course-tile-glyph">{(subject || title || t('colCourse')).slice(0, 1).toUpperCase()}</span>
+          <span className="nq-cover-text"><IconCourses size={18} />{subject || t('newCourse')}{grade ? ` · ${grade}` : ''}</span>
+          <button type="button" className="nx-close nq-close" aria-label={t('close')} onClick={onClose}><IconClose size={18} /></button>
         </div>
         <div className="nq-body">
-          <h2 id={`${uid}-t`}>Новый курс</h2>
-          <label className="nx-field"><span>Название</span>
-            <input ref={titleRef} className="input nc-title" value={title} maxLength={LIMITS.title} placeholder="Физика 8: колебания и волны"
+          <h2 id={`${uid}-t`}>{t('newCourse')}</h2>
+          <label className="nx-field"><span>{t('name')}</span>
+            <input ref={titleRef} className="input nc-title" value={title} maxLength={LIMITS.title} placeholder={t('namePh')}
               aria-invalid={error && !title.trim() ? true : undefined} onChange={(e) => { setTitle(e.target.value); setError(''); }} />
           </label>
-          <div className="nx-field"><span>Предмет</span>
+          <div className="nx-field"><span>{t('subject')}</span>
             <div className="nc-subjects">
               {SUBJECTS.map((s) => (
                 <button key={s} type="button" aria-pressed={subject === s} className={subject === s ? 'nc-subject on' : 'nc-subject'}
                   style={coverStyle(s)} onClick={() => setSubject(subject === s ? '' : s)}>{s}</button>
               ))}
               <input className="input nc-subject-own" value={SUBJECTS.includes(subject) ? '' : subject} maxLength={LIMITS.subject}
-                placeholder="другой…" aria-label="Другой предмет" onChange={(e) => setSubject(e.target.value)} />
+                placeholder={t('otherPh')} aria-label={t('otherSubject')} onChange={(e) => setSubject(e.target.value)} />
             </div>
           </div>
-          <div className="nx-field"><span>Класс</span>
+          <div className="nx-field"><span>{t('grade')}</span>
             <div className="nq-grades">
               {GRADES.map((g) => (
-                <button key={g} type="button" aria-pressed={grade === g} className={grade === g ? 'nq-grade on' : 'nq-grade'}
-                  onClick={() => setGrade(grade === g ? '' : g)}>{g.replace(' класс', '')}</button>
+                <button key={g.value} type="button" aria-pressed={grade === g.value} className={grade === g.value ? 'nq-grade on' : 'nq-grade'}
+                  onClick={() => setGrade(grade === g.value ? '' : g.value)}>{g.short}</button>
               ))}
             </div>
           </div>
-          {error && <p className="error-box" role="alert">{error}</p>}
+          {error && <p className="error-box" role="alert">{fmt.message(error)}</p>}
           <Link className="nq-program" href={withOrgParam('/teach/courses/generate', org)} onClick={onClose}>
-            <IconSpark size={16} /><span><b>Есть программа или КТП?</b> Помощник соберёт весь курс сразу — темы, уроки и контрольные</span>
+            <IconSpark size={16} /><span><b>{t('haveProgram')}</b> {t('haveProgramHint')}</span>
           </Link>
         </div>
         <footer className="nx-foot">
-          <span className="muted nq-hint">Описание, план тем и группы — на следующем шаге</span>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Отмена</button>
-          <button type="submit" className="btn btn-primary" disabled={busy}><IconPlus size={16} />{busy ? 'Создаю…' : 'Создать и продолжить'}</button>
+          <span className="muted nq-hint">{t('nextStepHint')}</span>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>{t('cancel')}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}><IconPlus size={16} />{busy ? t('creating') : t('createContinue')}</button>
         </footer>
       </form>
     </div>

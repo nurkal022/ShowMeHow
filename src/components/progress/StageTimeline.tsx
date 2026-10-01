@@ -1,14 +1,17 @@
 'use client';
-import { STAGE_LABELS, type StageInfo } from './deriveProgress';
-import { stageCopy } from './stepCopy';
+import type { StageInfo } from './deriveProgress';
+import { stageCopy, stageTitle } from './stepCopy';
 import { IconCheck } from '../icons';
-
-function formatDuration(ms: number): string {
-  const sec = Math.round(ms / 1000);
-  return sec <= 0 ? '<1с' : `${sec}с`;
-}
+import { useLocale, useT } from '@/i18n/client';
+import { workbenchProgress } from '@/i18n/messages/workbench-progress';
 
 export default function StageTimeline({ stages, now }: { stages: StageInfo[]; now: number }) {
+  const t = useT(workbenchProgress);
+  const locale = useLocale();
+  const formatDuration = (ms: number): string => {
+    const sec = Math.round(ms / 1000);
+    return sec <= 0 ? t('lessThanSec') : t('seconds', { n: sec });
+  };
   const active = stages.find((s) => s.status === 'active');
   const doneCount = stages.filter((s) => s.status === 'done').length;
   const pct = Math.round((doneCount / stages.length) * 100);
@@ -27,18 +30,18 @@ export default function StageTimeline({ stages, now }: { stages: StageInfo[]; no
           } else if (s.status === 'skipped') {
             suffix = '—';
           } else if (s.status === 'interrupted') {
-            suffix = 'прервано';
+            suffix = t('interrupted');
           }
           return (
             <div key={s.stage} className={`stage-chip stage-${s.status}`}>
               {s.status === 'done' && <span className="stage-check"><IconCheck size={13} /></span>}
-              <span className="stage-chip-label">{STAGE_LABELS[s.stage]}</span>
+              <span className="stage-chip-label">{stageTitle(s.stage, locale)}</span>
               {suffix && <span className="stage-chip-suffix">{suffix}</span>}
             </div>
           );
         })}
       </div>
-      {active && <div className="stage-caption">{stageCopy(active.stage)}</div>}
+      {active && <div className="stage-caption">{stageCopy(active.stage, locale)}</div>}
     </div>
   );
 }

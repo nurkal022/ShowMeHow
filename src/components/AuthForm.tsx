@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useFormat, useT } from '@/i18n/client';
+import { auth } from '@/i18n/messages/auth';
 
 /**
  * `next` приходит из query-строки — с точки зрения приложения это чужой ввод.
@@ -21,6 +23,8 @@ export function authRequestBody(mode: 'login' | 'register', identifier: string, 
 
 export default function AuthForm({ mode, registrationOpen = true }: { mode: 'login' | 'register'; registrationOpen?: boolean }) {
   const search = useSearchParams();
+  const t = useT(auth);
+  const f = useFormat();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -42,10 +46,10 @@ export default function AuthForm({ mode, registrationOpen = true }: { mode: 'log
         return;
       } else {
         const body = await res.json().catch(() => ({}));
-        setError(body.error ?? 'Не удалось войти. Попробуйте ещё раз.');
+        setError(body.error ?? t('loginFailed'));
       }
     } catch {
-      setError('Сеть недоступна. Проверьте соединение и попробуйте снова.');
+      setError(t('network'));
     } finally {
       setBusy(false);
     }
@@ -53,36 +57,36 @@ export default function AuthForm({ mode, registrationOpen = true }: { mode: 'log
 
   return (
     <form className="auth-card" onSubmit={submit}>
-      <h1>{isLogin ? 'С возвращением' : 'Создать аккаунт'}</h1>
+      <h1>{isLogin ? t('welcomeBack') : t('createAccount')}</h1>
       <p className="muted">
-        {isLogin ? 'Войдите, чтобы открыть свою библиотеку.' : 'Десять генераций в пробной версии.'}
+        {isLogin ? t('loginLead') : t('registerLead')}
       </p>
       {isLogin ? (
-        <label>Почта или логин
+        <label>{t('emailOrLogin')}
           <input className="input" type="text" value={identifier} autoComplete="username" required
             autoCapitalize="none" spellCheck={false}
             onChange={(e) => setIdentifier(e.target.value)} />
         </label>
       ) : (
-        <label>Почта
+        <label>{t('email')}
           <input className="input" type="email" value={identifier} autoComplete="email" required
             onChange={(e) => setIdentifier(e.target.value)} />
         </label>
       )}
-      <label>Пароль
+      <label>{t('password')}
         <input className="input" type="password" value={password} required minLength={8}
           autoComplete={isLogin ? 'current-password' : 'new-password'}
           onChange={(e) => setPassword(e.target.value)} />
       </label>
-      {error && <p className="error-box">{error}</p>}
+      {error && <p className="error-box">{f.message(error)}</p>}
       <button className="btn btn-primary" type="submit" disabled={busy}>
-        {busy ? 'Минуту…' : isLogin ? 'Войти' : 'Зарегистрироваться'}
+        {busy ? t('wait') : isLogin ? t('login') : t('register')}
       </button>
       <p className="muted" style={{ textAlign: 'center' }}>
-        {isLogin && !registrationOpen ? 'Логин и пароль выдаёт школа. Потеряли пароль — спросите учителя.' : (
+        {isLogin && !registrationOpen ? t('schoolIssues') : (
           <>
-            {isLogin ? 'Нет аккаунта? ' : 'Уже есть аккаунт? '}
-            <a href={isLogin ? '/register' : '/login'}>{isLogin ? 'Регистрация' : 'Вход'}</a>
+            {isLogin ? t('noAccount') : t('haveAccount')}{' '}
+            <a href={isLogin ? '/register' : '/login'}>{isLogin ? t('toRegister') : t('toLogin')}</a>
           </>
         )}
       </p>

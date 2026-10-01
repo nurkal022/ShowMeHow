@@ -1,34 +1,41 @@
 'use client';
+import { formatNumber } from '@/i18n/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PipelineEvent, PlanSummary } from '@/lib/types';
 import PreviewFrame from '@/components/PreviewFrame';
 import Markup from '@/components/lms/Markup';
 import { IconCheck } from '@/components/icons';
+import { useLocale, useT } from '@/i18n/client';
+import { translator } from '@/i18n/core';
+import type { Locale } from '@/i18n/config';
+import { workbench } from '@/i18n/messages/workbench';
 
 interface DraftRef { version: number; label: string }
 
-const STAGE_TEXT: Record<string, string> = {
-  planning: 'Продумываю, что и как показать',
-  generating: 'Пишу код симуляции',
-  judging: 'Оцениваю результат со стороны',
-  refining: 'Довожу по замечаниям',
-  saving: 'Сохраняю',
+type WbKey = keyof typeof workbench.ru;
+const STAGE_TEXT: Record<string, WbKey> = {
+  planning: 'actPlanning',
+  generating: 'actGenerating',
+  judging: 'actJudging',
+  refining: 'actRefining',
+  saving: 'actSaving',
 };
-const CANDIDATE_TEXT: Record<string, string> = {
-  rendering: 'Запускаю и смотрю, что получилось', fixing: 'Чиню найденные ошибки',
-  critiquing: 'Проверяю физику и наглядность', ok: 'Проверка пройдена',
+const CANDIDATE_TEXT: Record<string, WbKey> = {
+  rendering: 'actRendering', fixing: 'actFixing',
+  critiquing: 'actCritiquing', ok: 'actOk',
 };
 
 /** Что сейчас происходит — одной фразой, по журналу задания. */
-export function currentActivity(events: PipelineEvent[]): string {
+export function currentActivity(events: PipelineEvent[], locale: Locale = 'ru'): string {
+  const t = translator(workbench, locale);
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const e = events[i];
-    if (e.type === 'queued') return `В очереди: ${e.position}`;
-    if (e.type === 'candidate' && CANDIDATE_TEXT[e.status]) return CANDIDATE_TEXT[e.status];
-    if (e.type === 'targeted-fix') return 'Исправляю конкретные замечания';
-    if (e.type === 'stage' && e.status === 'start') return STAGE_TEXT[e.stage] ?? 'Работаю';
+    if (e.type === 'queued') return t('actQueued', { n: e.position });
+    if (e.type === 'candidate' && CANDIDATE_TEXT[e.status]) return t(CANDIDATE_TEXT[e.status]);
+    if (e.type === 'targeted-fix') return t('actTargeted');
+    if (e.type === 'stage' && e.status === 'start') return t(STAGE_TEXT[e.stage] ?? 'actWorking');
   }
-  return 'Начинаю';
+  return t('actStarting');
 }
 
 /**
@@ -39,6 +46,8 @@ export function currentActivity(events: PipelineEvent[]): string {
 export default function LiveStage({ events, jobId, onKeep, keeping }: {
   events: PipelineEvent[]; jobId: string | null; onKeep: (version: number) => void; keeping: boolean;
 }) {
+  const t = useT(workbench);
+  const locale = useLocale();
   const plan = useMemo(() => {
     const e = events.find((x) => x.type === 'plan-ready');
     return e && e.type === 'plan-ready' ? e.spec : null;
@@ -60,7 +69,7 @@ export default function LiveStage({ events, jobId, onKeep, keeping }: {
   // Пока новая версия грузится, на экране остаётся прежняя — без мигания пустотой.
   const shown = wanted !== null && html[wanted] ? wanted
     : [...usable].reverse().find((d) => html[d.version])?.version ?? null;
-  const activity = currentActivity(events);
+  const activity = currentActivity(events, locale);
 
   useEffect(() => {
     if (!jobId || wanted === null || html[wanted]) return;
@@ -88,13 +97,13 @@ export default function LiveStage({ events, jobId, onKeep, keeping }: {
         <div className={flash ? 'live-bar flash' : 'live-bar'}>
           <span className="live-pulse" aria-hidden="true" />
           <div className="live-bar-text">
-            <strong>{`Версия ${shown} · ${current?.label ?? ''}`}{broken.size > 0 && <em className="live-note">{' · версия с ошибкой скрыта'}</em>}</strong>
+            <strong>{t('liveVersion', { v: shown, label: current?.label ?? '' })}{broken.size > 0 && <em className="live-note">{t('liveBrokenHidden')}</em>}</strong>
             <span>{pinned !== null && pinned !== latest
-              ? `Есть версия новее (v${latest}) — вы смотрите закреплённую`
-              : `${activity}… — с симуляцией уже можно работать`}</span>
+              ? t('livePinned', { latest })
+              : t('liveCanWork', { activity })}</span>
           </div>
           {usable.length > 1 && (
-            <div className="live-versions" role="group" aria-label="Версии">
+            <div className="live-versions" role="group" aria-label={t('liveVersionsAria')}>
               {usable.map((d) => (
                 <button key={d.version} type="button" title={d.label} aria-pressed={d.version === shown}
                   className={d.version === shown ? 'on' : undefined}
@@ -103,8 +112,8 @@ export default function LiveStage({ events, jobId, onKeep, keeping }: {
             </div>
           )}
           <button type="button" className="btn btn-sm btn-primary" disabled={keeping} onClick={() => onKeep(shown)}
-            title="Остановить полировку и сохранить эту версию в библиотеку">
-            <IconCheck size={15} />{keeping ? 'Сохраняю…' : 'Оставить эту версию'}
+            title={t('keepTitle')}>
+            <IconCheck size={15} />{keeping ? t('keeping') : t('keep')}
           </button>
         </div>
         <PreviewFrame html={html[shown]} key={shown} onSimError={() => {
@@ -128,11 +137,12 @@ export default function LiveStage({ events, jobId, onKeep, keeping }: {
 }
 
 function Thinking() {
+  const t = useT(workbench);
   return (
     <div className="live-thinking">
       <div className="live-orbit" aria-hidden="true"><i /><i /><i /></div>
-      <p>Разбираю запрос: какое явление, какие величины менять, что измерять.</p>
-      <p className="muted">Первая рабочая версия появится здесь же — с ней можно будет работать, не дожидаясь конца.</p>
+      <p>{t('thinking1')}</p>
+      <p className="muted">{t('thinking2')}</p>
     </div>
   );
 }
@@ -165,12 +175,14 @@ function Blueprint({ plan }: { plan: PlanSummary }) {
 }
 
 function CodeTicker({ chars, tail }: { chars: number; tail: string }) {
+  const t = useT(workbench);
+  const locale = useLocale();
   const box = useRef<HTMLPreElement>(null);
   useEffect(() => { if (box.current) box.current.scrollTop = box.current.scrollHeight; }, [tail]);
   const lines = tail.split('\n').slice(-9).join('\n');
   return (
     <div className="live-code">
-      <div className="live-code-head"><span>пишется код</span><span>{`${(chars / 1000).toFixed(1).replace('.', ',')} тыс. символов`}</span></div>
+      <div className="live-code-head"><span>{t('codeWriting')}</span><span>{t('codeChars', { n: formatNumber(chars / 1000, locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}</span></div>
       <pre ref={box}>{lines}<span className="live-caret" /></pre>
     </div>
   );

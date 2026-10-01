@@ -5,6 +5,9 @@ import {
 } from '@/lib/lms/block-schema';
 import { SIM_LIMITS } from '@/lib/lms/sim-state';
 import { LIMITS } from '@/lib/lms/types';
+import type { Locale } from '@/i18n/config';
+import { translator } from '@/i18n/core';
+import { teachEditor } from '@/i18n/messages/teach-editor';
 
 /**
  * Состояние формы задания: числа — строками, как в полях ввода. Проверяет всё
@@ -136,45 +139,46 @@ export type AssignmentErrors = Partial<Record<
  * Проверка до отправки: те же правила, что на сервере, но ошибка встаёт рядом
  * со своим полем. Сервер всё равно проверит тело ещё раз.
  */
-export function validateAssignmentForm(f: AssignmentForm): AssignmentErrors {
+export function validateAssignmentForm(f: AssignmentForm, locale: Locale = 'ru'): AssignmentErrors {
+  const t = translator(teachEditor, locale);
   const errors: AssignmentErrors = {};
-  if (!f.prompt.trim()) errors.prompt = 'Напишите текст задания: что нужно сделать ученику.';
+  if (!f.prompt.trim()) errors.prompt = t('vPrompt');
   if (f.type === 'choice') {
-    if (f.options.some((o) => !o.text.trim())) errors.options = 'Заполните текст каждого варианта или удалите пустые.';
+    if (f.options.some((o) => !o.text.trim())) errors.options = t('vOptions');
     const correct = f.options.filter((o) => o.correct).length;
-    if (correct === 0) errors.correct = 'Отметьте хотя бы один правильный вариант.';
-    else if (!f.multiple && correct > 1) errors.correct = 'В задании с одним ответом правильный вариант должен быть один.';
+    if (correct === 0) errors.correct = t('vCorrect');
+    else if (!f.multiple && correct > 1) errors.correct = t('vSingle');
   }
-  if (f.type === 'short' && !f.accepted.some((a) => a.trim())) errors.accepted = 'Укажите хотя бы один правильный ответ.';
+  if (f.type === 'short' && !f.accepted.some((a) => a.trim())) errors.accepted = t('vAccepted');
   if (f.type === 'gaps') {
     const { answers } = parseGaps(f.gapsText);
-    if (answers.length === 0) errors.gaps = 'Выделите слово и нажмите «Сделать пропуском» — или напишите {{слово}} вручную.';
-    else if (answers.length > GAP_LIMITS.maxGaps) errors.gaps = `Пропусков — не больше ${GAP_LIMITS.maxGaps}.`;
-    else if (answers.some((a) => a.length === 0)) errors.gaps = 'В каждом пропуске должен быть ответ.';
+    if (answers.length === 0) errors.gaps = t('vGaps', { example: `{{${t('gapWord')}}}` });
+    else if (answers.length > GAP_LIMITS.maxGaps) errors.gaps = t('vGapsMax', { n: GAP_LIMITS.maxGaps });
+    else if (answers.some((a) => a.length === 0)) errors.gaps = t('vGapEmpty');
   }
-  if (f.type === 'match' && f.pairs.some((p) => !p.left.trim() || !p.right.trim())) errors.pairs = 'Заполните обе стороны каждой пары или удалите пустые.';
-  if (f.type === 'order' && f.items.some((i) => !i.text.trim())) errors.items = 'Заполните каждый шаг или удалите пустые.';
-  if (f.type === 'table' && f.columns.some((c) => !c.label.trim())) errors.columns = 'Назовите каждый столбец или удалите лишние.';
+  if (f.type === 'match' && f.pairs.some((p) => !p.left.trim() || !p.right.trim())) errors.pairs = t('vPairs');
+  if (f.type === 'order' && f.items.some((i) => !i.text.trim())) errors.items = t('vItems');
+  if (f.type === 'table' && f.columns.some((c) => !c.label.trim())) errors.columns = t('vColumns');
   if (f.type === 'number') {
-    if (parseNumber(f.answer) === null) errors.answer = 'Укажите правильное число, например 9,8.';
+    if (parseNumber(f.answer) === null) errors.answer = t('vAnswer');
     const tolerance = f.tolerance.trim() === '' ? 0 : parseNumber(f.tolerance);
-    if (tolerance === null || tolerance < 0) errors.tolerance = 'Допуск — неотрицательное число.';
+    if (tolerance === null || tolerance < 0) errors.tolerance = t('vTolerance');
   }
   const points = parseNumber(f.points);
   if (points === null || !Number.isInteger(points) || points < 0 || points > LIMITS.maxPoints) {
-    errors.points = `Баллы — целое число от 0 до ${LIMITS.maxPoints}.`;
+    errors.points = t('vPoints', { n: LIMITS.maxPoints });
   }
   if (f.type === 'sim_state') {
     const picked = f.simTargets.filter((t) => t.include);
-    if (!f.standSimulationId) errors.stand = 'Выберите симуляцию, в которой ученик будет добиваться цели.';
-    else if (picked.length === 0) errors.targets = 'Нажмите «Зафиксировать как цель» и отметьте хотя бы один параметр.';
-    else if (picked.length > SIM_LIMITS.maxTargets) errors.targets = `Параметров в цели — не больше ${SIM_LIMITS.maxTargets}.`;
-    else if (picked.some((t) => parseNumber(t.value) === null)) errors.targets = 'У каждого отмеченного параметра должно быть число.';
+    if (!f.standSimulationId) errors.stand = t('vSimStand');
+    else if (picked.length === 0) errors.targets = t('vTargets');
+    else if (picked.length > SIM_LIMITS.maxTargets) errors.targets = t('vTargetsMax', { n: SIM_LIMITS.maxTargets });
+    else if (picked.some((t) => parseNumber(t.value) === null)) errors.targets = t('vTargetNum');
     else if (picked.some((t) => { const n = t.tolerance.trim() === '' ? 0 : parseNumber(t.tolerance); return n === null || n < 0; })) {
-      errors.targets = 'Допуск — неотрицательное число.';
+      errors.targets = t('vTolerance');
     }
   } else if (f.standKind === 'simulation' && !f.standSimulationId) {
-    errors.stand = 'Выберите тренажёр для стенда или уберите стенд.';
+    errors.stand = t('vStand');
   }
   return errors;
 }

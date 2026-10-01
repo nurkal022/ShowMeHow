@@ -2,7 +2,11 @@
  * Конструктор урока с помощником: шаблоны и «слоты» — из чего собирается урок и в каком порядке.
  * Модуль чистый: его зовут и форма конструктора, и сервер. Текстовые слоты пишет модель,
  * тренажёр, видео и лабораторию сервер ставит сам: выдумать их модель не может.
+ * Подписи на языке пользователя — slotMeta(locale), taskTypeLabels(locale), levelLabels(locale),
+ * templates(locale); константы SLOT_META, TASK_TYPE_LABELS, LEVEL_LABELS, TEMPLATES — русские.
  */
+
+import type { Locale } from '@/i18n/config';
 
 export type SlotKind =
   | 'hook' | 'explain' | 'definition' | 'formula' | 'example' | 'important' | 'summary'
@@ -32,12 +36,74 @@ export const SLOT_META: Record<SlotKind, SlotMeta> = {
   lab: { label: 'VR-лаборатория', hint: 'Лаборатория для очков и браузера', group: 'interactive', llm: false, minutes: 10 },
 };
 
-export const TASK_TYPE_LABELS: Record<TaskType, string> = {
-  mix: 'Разные типы', choice: 'Выбор ответа', number: 'Число', short: 'Короткий ответ', gaps: 'Пропуски', match: 'Сопоставление', order: 'Порядок',
+type SlotText = Record<SlotKind, [label: string, hint: string]>;
+const SLOT_TEXT: Record<'kk' | 'en', SlotText> = {
+  kk: {
+    hook: ['Қызықтыру', 'Сабақ басталатын өмірлік сұрақ немесе жағдай'],
+    explain: ['Түсіндіру', 'Тақырыптың негізгі мәтіні: тақырыпшалар мен формулалар'],
+    definition: ['Анықтама', 'Негізгі ұғым жақтаудың ішінде'],
+    formula: ['Формула', 'Негізгі формула және шамалардың түсіндірмесі'],
+    example: ['Талданған мысал', 'Шешімі жасырылған есеп'],
+    important: ['Есте сақтаңыз', 'Жиі кездесетін қателер және неге назар аудару керек'],
+    summary: ['Сабақ қорытындысы', 'Қысқа конспект: 3–5 тармақ'],
+    tasks: ['Тапсырмалар', 'Автотексеру: таңдау, сан, бос орындар, сәйкестендіру, реттілік'],
+    check: ['Өзіңізді тексеріңіз', 'Түсіндіруден кейінгі түсінуге арналған жылдам сұрақтар'],
+    essay: ['Толық жауап', 'Өз сөзімен түсіндіру — критерийлер мен эталонмен'],
+    lab_table: ['Өлшеулер кестесі', 'Зертханалық жұмыс: оқушы тәжірибе нәтижелерін енгізеді'],
+    simulation: ['Тренажер', 'Кітапханадан немесе каталогтан интерактивті симуляция'],
+    video: ['Бейне', 'YouTube, VK немесе Rutube сілтемесі бойынша ролик'],
+    lab: ['VR-зертхана', 'Көзілдірік пен браузерге арналған зертхана'],
+  },
+  en: {
+    hook: ['Hook', 'A real-life question or situation to open the lesson'],
+    explain: ['Explanation', 'The main text of the topic with headings and formulas'],
+    definition: ['Definition', 'The key concept in a box'],
+    formula: ['Formula', 'The main formula with its quantities explained'],
+    example: ['Worked example', 'A problem with the solution under a spoiler'],
+    important: ['Key points', 'Common mistakes and what to watch out for'],
+    summary: ['Lesson summary', 'A short recap: 3–5 points'],
+    tasks: ['Assignments', 'Auto-checked: choice, number, gaps, matching, ordering'],
+    check: ['Check yourself', 'Quick comprehension questions after the explanation'],
+    essay: ['Extended answer', 'Explain in your own words — with criteria and a model answer'],
+    lab_table: ['Measurement table', 'Lab work: the student records the results of the experiment'],
+    simulation: ['Simulator', 'An interactive simulation from the library or catalog'],
+    video: ['Video', 'A clip from a YouTube, VK or Rutube link'],
+    lab: ['VR lab', 'A lab for headsets and the browser'],
+  },
 };
 
+const slotMetaCache = new Map<Locale, Record<SlotKind, SlotMeta>>();
+export function slotMeta(locale: Locale = 'ru'): Record<SlotKind, SlotMeta> {
+  if (locale === 'ru' || !SLOT_TEXT[locale]) return SLOT_META;
+  let m = slotMetaCache.get(locale);
+  if (!m) {
+    const text = SLOT_TEXT[locale];
+    m = Object.fromEntries((Object.keys(SLOT_META) as SlotKind[]).map((k) => [k, { ...SLOT_META[k], label: text[k][0], hint: text[k][1] }])) as Record<SlotKind, SlotMeta>;
+    slotMetaCache.set(locale, m);
+  }
+  return m;
+}
+
+const TASK_TYPE_LABELS_BY_LOCALE: Record<Locale, Record<TaskType, string>> = {
+  ru: { mix: 'Разные типы', choice: 'Выбор ответа', number: 'Число', short: 'Короткий ответ', gaps: 'Пропуски', match: 'Сопоставление', order: 'Порядок' },
+  kk: { mix: 'Әртүрлі түрлер', choice: 'Жауапты таңдау', number: 'Сан', short: 'Қысқа жауап', gaps: 'Бос орындар', match: 'Сәйкестендіру', order: 'Реттілік' },
+  en: { mix: 'Mixed types', choice: 'Multiple choice', number: 'Number', short: 'Short answer', gaps: 'Gaps', match: 'Matching', order: 'Ordering' },
+};
+export const TASK_TYPE_LABELS: Record<TaskType, string> = TASK_TYPE_LABELS_BY_LOCALE.ru;
+export function taskTypeLabels(locale: Locale = 'ru'): Record<TaskType, string> {
+  return TASK_TYPE_LABELS_BY_LOCALE[locale] ?? TASK_TYPE_LABELS_BY_LOCALE.ru;
+}
+
 export type LessonLevel = 'basic' | 'standard' | 'advanced';
-export const LEVEL_LABELS: Record<LessonLevel, string> = { basic: 'Базовый', standard: 'Стандарт', advanced: 'Углублённый' };
+const LEVEL_LABELS_BY_LOCALE: Record<Locale, Record<LessonLevel, string>> = {
+  ru: { basic: 'Базовый', standard: 'Стандарт', advanced: 'Углублённый' },
+  kk: { basic: 'Базалық', standard: 'Стандарт', advanced: 'Тереңдетілген' },
+  en: { basic: 'Basic', standard: 'Standard', advanced: 'Advanced' },
+};
+export const LEVEL_LABELS: Record<LessonLevel, string> = LEVEL_LABELS_BY_LOCALE.ru;
+export function levelLabels(locale: Locale = 'ru'): Record<LessonLevel, string> {
+  return LEVEL_LABELS_BY_LOCALE[locale] ?? LEVEL_LABELS_BY_LOCALE.ru;
+}
 
 export interface LessonTemplate {
   key: string; title: string; about: string; tone: string; exam?: boolean;
@@ -59,6 +125,34 @@ export const TEMPLATES: LessonTemplate[] = [
     slots: [{ kind: 'tasks', count: 6, taskType: 'mix' }, { kind: 'essay' }] },
   { key: 'custom', title: 'С нуля', about: 'Соберите урок из блоков сами', tone: 'gray', slots: [] },
 ];
+
+const TEMPLATE_TEXT: Record<'kk' | 'en', Record<string, [title: string, about: string]>> = {
+  kk: {
+    new: ['Жаңа тақырып', 'Түсіндіру, формула, тренажер, мысал және тапсырмалар'],
+    lab: ['Зертханалық жұмыс', 'Мақсат пен теория, тренажер-стенд, өлшеулер кестесі және қорытынды'],
+    practice: ['Практикум', 'Қысқаша теория, екі талданған мысал және көп есеп'],
+    review: ['Қайталау', 'Конспект, негізгі идеялар және барлық түрдегі тапсырмалар'],
+    flipped: ['Бейне бойынша', 'Ролик, оған сұрақтар, талқылау және тапсырмалар'],
+    exam: ['Бақылау жұмысы', 'Күрделілігі артатын есептер және бір толық жауап'],
+    custom: ['Нөлден', 'Сабақты блоктардан өзіңіз құрастырыңыз'],
+  },
+  en: {
+    new: ['New topic', 'Explanation, formula, simulator, example and assignments'],
+    lab: ['Lab work', 'Goal and theory, simulator setup, measurement table and conclusion'],
+    practice: ['Practice', 'Brief theory, two worked examples and many problems'],
+    review: ['Review', 'Summary, key ideas and assignments of every type'],
+    flipped: ['Video-based', 'A clip, questions about it, discussion and assignments'],
+    exam: ['Test', 'Problems of increasing difficulty and one extended answer'],
+    custom: ['From scratch', 'Build the lesson from blocks yourself'],
+  },
+};
+
+/** Шаблоны с названиями на языке locale (по умолчанию русский). */
+export function templates(locale: Locale = 'ru'): LessonTemplate[] {
+  const text = locale === 'ru' ? undefined : TEMPLATE_TEXT[locale];
+  if (!text) return TEMPLATES;
+  return TEMPLATES.map((t) => (text[t.key] ? { ...t, title: text[t.key][0], about: text[t.key][1] } : t));
+}
 
 let seq = 0;
 export function newSlot(kind: SlotKind, extra: Partial<Slot> = {}): Slot {

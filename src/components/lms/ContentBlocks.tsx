@@ -1,9 +1,10 @@
 import {
-  CALLOUT_TONE_LABELS, videoEmbed,
+  videoEmbed,
   type CalloutPayload, type CodePayload, type FormulaPayload, type ImagePayload, type SpoilerPayload, type VideoPayload,
 } from '@/lib/lms/block-schema';
 import { IconAlert, IconBook, IconBulb, IconChevron, IconInfo, IconSpark } from '@/components/icons';
 import Markup, { Tex } from './Markup';
+import { CalloutToneLabel, LmsText, VideoIframe } from './LmsText';
 
 /** Блоки-материалы урока: одинаково выглядят у ученика и в карточке редактора. Без состояния — рендерятся на сервере. */
 
@@ -15,7 +16,7 @@ export function CalloutBlock({ payload }: { payload: CalloutPayload }) {
     <aside className={`lb-callout tone-${payload.tone}`}>
       <span className="lb-callout-icon" aria-hidden="true"><Icon size={18} /></span>
       <div className="lb-callout-body">
-        <strong className="lb-callout-title">{payload.title || CALLOUT_TONE_LABELS[payload.tone]}</strong>
+        <strong className="lb-callout-title">{payload.title || <CalloutToneLabel tone={payload.tone} />}</strong>
         {payload.body && <Markup text={payload.body} />}
       </div>
     </aside>
@@ -48,9 +49,7 @@ export function VideoBlock({ payload }: { payload: VideoPayload }) {
     <figure className="lb-video">
       <div className="lb-video-frame">
         {embed.kind === 'iframe'
-          ? <iframe src={embed.src} title={payload.caption || 'Видео'} loading="lazy" allowFullScreen
-              allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-              referrerPolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" />
+          ? <VideoIframe src={embed.src} caption={payload.caption} />
           : <video src={embed.src} controls preload="metadata" />}
       </div>
       {payload.caption && <figcaption>{payload.caption}</figcaption>}
@@ -61,7 +60,7 @@ export function VideoBlock({ payload }: { payload: VideoPayload }) {
 export function SpoilerBlock({ payload }: { payload: SpoilerPayload }) {
   return (
     <details className="lb-spoiler">
-      <summary><IconChevron size={16} /><span>{payload.title || 'Показать решение'}</span></summary>
+      <summary><IconChevron size={16} /><span>{payload.title || <LmsText k="showSolution" />}</span></summary>
       <div className="lb-spoiler-body"><Markup text={payload.body} /></div>
     </details>
   );

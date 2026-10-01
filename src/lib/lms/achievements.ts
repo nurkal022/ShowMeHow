@@ -1,4 +1,5 @@
 import { db } from '../db/client';
+import type { Locale } from '@/i18n/config';
 
 /**
  * Серия и значки ученика. Ничего не хранится отдельно: всё считается по сданным работам
@@ -25,7 +26,29 @@ export function streakOf(days: string[], today: string): { current: number; best
   return { current, best };
 }
 
-export async function studentAchievements(userId: string): Promise<Achievements> {
+type BadgeId = 'first' | 'ten' | 'sniper' | 'explorer' | 'lab' | 'exam' | 'streak3' | 'streak7';
+const BADGE_TEXT: Record<Locale, Record<BadgeId, [title: string, hint: string]>> = {
+  ru: {
+    first: ['Первый шаг', 'Сдать первое задание'], ten: ['Десятка', 'Сдать 10 заданий'],
+    sniper: ['Снайпер', '5 заданий на полный балл'], explorer: ['Исследователь', 'Открыть 5 тем'],
+    lab: ['Экспериментатор', 'Сдать таблицу измерений'], exam: ['Выдержка', 'Написать контрольную'],
+    streak3: ['Три дня подряд', 'Заниматься 3 дня без перерыва'], streak7: ['Неделя', 'Серия из 7 дней'],
+  },
+  kk: {
+    first: ['Алғашқы қадам', 'Алғашқы тапсырманы тапсыру'], ten: ['Ондық', '10 тапсырма тапсыру'],
+    sniper: ['Мерген', 'Толық ұпайға 5 тапсырма'], explorer: ['Зерттеуші', '5 тақырып ашу'],
+    lab: ['Экспериментатор', 'Өлшеулер кестесін тапсыру'], exam: ['Төзімділік', 'Бақылау жұмысын жазу'],
+    streak3: ['Қатарынан үш күн', '3 күн үзіліссіз оқу'], streak7: ['Апта', '7 күндік серия'],
+  },
+  en: {
+    first: ['First step', 'Submit your first assignment'], ten: ['Top ten', 'Submit 10 assignments'],
+    sniper: ['Sharpshooter', '5 assignments with full points'], explorer: ['Explorer', 'Open 5 topics'],
+    lab: ['Experimenter', 'Submit a measurement table'], exam: ['Composure', 'Take a test'],
+    streak3: ['Three days in a row', 'Study 3 days without a break'], streak7: ['Full week', 'A 7-day streak'],
+  },
+};
+
+export async function studentAchievements(userId: string, locale: Locale = 'ru'): Promise<Achievements> {
   const [days, stats] = await Promise.all([
     db().query<{ d: string }>(
       `SELECT DISTINCT to_char(at AT TIME ZONE 'Asia/Almaty', 'YYYY-MM-DD') AS d FROM (
@@ -48,19 +71,20 @@ export async function studentAchievements(userId: string): Promise<Achievements>
   const list = days.rows.map((r) => r.d);
   const { current, best } = streakOf(list, today);
   const s = stats.rows[0];
-  const badge = (id: string, title: string, hint: string, have: number, goal: number): Badge =>
-    ({ id, title, hint, earned: have >= goal, progress: Math.min(have, goal), goal });
+  const text = BADGE_TEXT[locale] ?? BADGE_TEXT.ru;
+  const badge = (id: BadgeId, have: number, goal: number): Badge =>
+    ({ id, title: text[id][0], hint: text[id][1], earned: have >= goal, progress: Math.min(have, goal), goal });
   return {
     streak: current, bestStreak: best, activeDays: list,
     badges: [
-      badge('first', 'Первый шаг', 'Сдать первое задание', s.submitted, 1),
-      badge('ten', 'Десятка', 'Сдать 10 заданий', s.submitted, 10),
-      badge('sniper', 'Снайпер', '5 заданий на полный балл', s.full, 5),
-      badge('explorer', 'Исследователь', 'Открыть 5 тем', s.topics, 5),
-      badge('lab', 'Экспериментатор', 'Сдать таблицу измерений', s.tables, 1),
-      badge('exam', 'Выдержка', 'Написать контрольную', s.exams, 1),
-      badge('streak3', 'Три дня подряд', 'Заниматься 3 дня без перерыва', best, 3),
-      badge('streak7', 'Неделя', 'Серия из 7 дней', best, 7),
+      badge('first', s.submitted, 1),
+      badge('ten', s.submitted, 10),
+      badge('sniper', s.full, 5),
+      badge('explorer', s.topics, 5),
+      badge('lab', s.tables, 1),
+      badge('exam', s.exams, 1),
+      badge('streak3', best, 3),
+      badge('streak7', best, 7),
     ],
   };
 }

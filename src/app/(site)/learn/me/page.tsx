@@ -8,7 +8,11 @@ import { listGaps } from '@/lib/lms/gaps';
 import { getInterests } from '@/lib/lms/interests-store';
 import { activityDays, studentPlaces, studentStats } from '@/lib/lms/student-home';
 import { coverStyle } from '@/lib/lms/covers';
-import { formatScore, ruPlural } from '@/lib/lms/format';
+import { getLocale } from '@/i18n/server';
+import { formatDate, translator } from '@/i18n/core';
+import { learn } from '@/i18n/messages/learn';
+import { learnMe } from '@/i18n/messages/learn-me';
+import { learnScore } from '@/components/learn/format';
 import Achievements from '@/components/learn/Achievements';
 import ActivityGrid from '@/components/learn/ActivityGrid';
 import StudentProfile from '@/components/learn/StudentProfile';
@@ -20,6 +24,10 @@ import { IconCheck, IconChevron, IconSpark, IconTable, IconUser } from '@/compon
 export default async function StudentProfilePage() {
   const user = await requirePageUser('/learn/me');
   if (!user) return null;
+  const locale = await getLocale();
+  const t = translator(learnMe, locale);
+  const tl = translator(learn, locale);
+  const score = (n: number) => learnScore(n, locale);
   const cards = await listStudentCourses(user.id);
   const [teachers, progress, stats, places, achievements, activity, interests, gaps] = await Promise.all([
     courseTeacherNames(cards.map((c) => c.course.id)),
@@ -40,10 +48,11 @@ export default async function StudentProfilePage() {
   const going = items.filter((x) => x.continueId !== null && (x.totals.topicsViewed > 0 || x.totals.assignmentsDone > 0));
   const percentAll = stats.pointsMax > 0 ? Math.round((stats.pointsEarned / stats.pointsMax) * 100) : 0;
   // Родительный падеж месяца получается только с днём — день потом отбрасываем: «августа 2026 г.».
-  const since = stats.since
-    ? new Date(stats.since).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-      .split(' ').slice(1).join(' ')
-    : null;
+  // В казахском и английском месяц с годом пишется сразу, без дня.
+  const since = !stats.since ? null
+    : locale === 'ru'
+      ? formatDate(stats.since, locale, { day: 'numeric', month: 'long', year: 'numeric' }).split(' ').slice(1).join(' ')
+      : formatDate(stats.since, locale, { month: 'long', year: 'numeric' });
 
   return (
     <div className="learn-page sp">
@@ -55,30 +64,30 @@ export default async function StudentProfilePage() {
         <Link className="mk-invite" href="/learn/mistakes">
           <span className="mk-invite-icon"><IconSpark size={20} /></span>
           <span className="mk-invite-text">
-            <b>{`Есть что подтянуть: ${gaps.length} ${ruPlural(gaps.length, 'задание', 'задания', 'заданий')}`}</b>
-            <small>Помощник разберёт каждое по отдельности — объяснит ошибку и даст похожие задачи без оценок.</small>
+            <b>{t('toImprove', { n: gaps.length })}</b>
+            <small>{t('toImproveHint')}</small>
           </span>
         </Link>
       )}
 
-      <section className="sp-stats" aria-label="Итоги">
+      <section className="sp-stats" aria-label={t('statsAria')}>
         <div className="sp-stat accent">
-          <Ring value={percentAll} size={78} stroke={8} label={`Средний результат ${percentAll}%`} />
+          <Ring value={percentAll} size={78} stroke={8} label={t('avgResultLabel', { p: percentAll })} />
           <div>
             <b>{percentAll}%</b>
-            <span>средний результат</span>
-            <small className="muted">{formatScore(stats.pointsEarned)} из {formatScore(stats.pointsMax)} баллов</small>
+            <span>{t('avgResult')}</span>
+            <small className="muted">{tl('pointsOfFull', { a: score(stats.pointsEarned), b: score(stats.pointsMax) })}</small>
           </div>
         </div>
-        <div className="sp-stat"><div><b>{done.length}</b><span>{ruPlural(done.length, 'курс пройден', 'курса пройдено', 'курсов пройдено')}</span></div></div>
-        <div className="sp-stat"><div><b>{stats.submitted}</b><span>{ruPlural(stats.submitted, 'работа сдана', 'работы сдано', 'работ сдано')}</span></div></div>
-        <div className="sp-stat"><div><b>{stats.full}</b><span>на полный балл</span></div></div>
-        <div className="sp-stat"><div><b>{stats.stepsSeen}</b><span>{ruPlural(stats.stepsSeen, 'шаг пройден', 'шага пройдено', 'шагов пройдено')}</span></div></div>
+        <div className="sp-stat"><div><b>{done.length}</b><span>{t('coursesPassed', { n: done.length })}</span></div></div>
+        <div className="sp-stat"><div><b>{stats.submitted}</b><span>{t('worksSubmitted', { n: stats.submitted })}</span></div></div>
+        <div className="sp-stat"><div><b>{stats.full}</b><span>{t('fullScore')}</span></div></div>
+        <div className="sp-stat"><div><b>{stats.stepsSeen}</b><span>{t('stepsPassed', { n: stats.stepsSeen })}</span></div></div>
         <div className="sp-stat">
           <div>
             <b>{stats.activeDays}</b>
-            <span>{ruPlural(stats.activeDays, 'день занятий', 'дня занятий', 'дней занятий')}</span>
-            {since && <small className="muted">с {since}</small>}
+            <span>{t('studyDays', { n: stats.activeDays })}</span>
+            {since && <small className="muted">{t('since', { since })}</small>}
           </div>
         </div>
       </section>
@@ -88,13 +97,13 @@ export default async function StudentProfilePage() {
         <Achievements data={achievements} />
       </section>
 
-      <section className="sp-block" aria-label="Пройденные курсы">
+      <section className="sp-block" aria-label={t('passedCourses')}>
         <div className="lh-section-head">
-          <h2 className="learn-section-title"><IconCheck size={17} />Пройденные курсы</h2>
-          <Link className="btn btn-sm" href="/learn/grades"><IconTable size={15} />Все оценки</Link>
+          <h2 className="learn-section-title"><IconCheck size={17} />{t('passedCourses')}</h2>
+          <Link className="btn btn-sm" href="/learn/grades"><IconTable size={15} />{t('allGrades')}</Link>
         </div>
         {done.length === 0
-          ? <p className="empty-state">Пока ни одного завершённого курса. Первый появится здесь, когда пройдёте все темы.</p>
+          ? <p className="empty-state">{t('noPassed')}</p>
           : (
             <ul className="sp-courses">
               {done.map((x, i) => (
@@ -106,12 +115,12 @@ export default async function StudentProfilePage() {
                     <span className="sp-course-text">
                       <b>{x.course.title}</b>
                       <small>
-                        {x.course.subject || 'курс'}
+                        {x.course.subject || t('courseLower')}
                         {x.teacher ? ` · ${x.teacher}` : ''}
-                        {x.totals.pointsMax > 0 ? ` · ${formatScore(x.totals.pointsEarned)} / ${formatScore(x.totals.pointsMax)} б.` : ''}
+                        {x.totals.pointsMax > 0 ? ` · ${tl('pointsShort', { a: score(x.totals.pointsEarned), b: score(x.totals.pointsMax) })}` : ''}
                       </small>
                     </span>
-                    <span className="sp-course-mark"><IconCheck size={14} />пройден</span>
+                    <span className="sp-course-mark"><IconCheck size={14} />{t('passedLower')}</span>
                   </Link>
                 </li>
               ))}
@@ -120,8 +129,8 @@ export default async function StudentProfilePage() {
       </section>
 
       {going.length > 0 && (
-        <section className="sp-block" aria-label="Курсы в работе">
-          <h2 className="learn-section-title">Сейчас в работе</h2>
+        <section className="sp-block" aria-label={t('activeCourses')}>
+          <h2 className="learn-section-title">{t('nowActive')}</h2>
           <ul className="sp-courses">
             {going.map((x) => {
               const percent = x.totals.topicsTotal ? Math.round((x.totals.topicsDone / x.totals.topicsTotal) * 100) : 0;
@@ -133,7 +142,7 @@ export default async function StudentProfilePage() {
                     </span>
                     <span className="sp-course-text">
                       <b>{x.course.title}</b>
-                      <small>{x.teacher ? <><IconUser size={12} />{x.teacher} · </> : null}{percent}% пройдено</small>
+                      <small>{x.teacher ? <><IconUser size={12} />{x.teacher} · </> : null}{tl('percentDone', { p: percent })}</small>
                       <span className="lv-bar sm"><i style={{ width: `${percent}%` }} /></span>
                     </span>
                     <IconChevron size={18} />

@@ -1,6 +1,8 @@
 import { db } from '../db/client';
 import { isUuid } from '../org/access';
-import { assignmentTitle, bodyFromRow, ASSIGNMENT_TYPE_LABELS } from './block-schema';
+import type { Locale } from '@/i18n/config';
+import { assignmentTitle, assignmentTypeLabels, bodyFromRow } from './block-schema';
+import { lmsText } from './texts';
 import { courseStudents } from './courses';
 
 /**
@@ -18,7 +20,8 @@ export interface CourseAnalytics { students: number; tasks: TaskStat[]; funnel: 
 
 const POINTS = `CASE WHEN b.payload->>'points' ~ '^[0-9]+$' THEN (b.payload->>'points')::int ELSE 0 END`;
 
-export async function courseAnalytics(courseId: string): Promise<CourseAnalytics> {
+export async function courseAnalytics(courseId: string, locale: Locale = 'ru'): Promise<CourseAnalytics> {
+  const T = lmsText(locale);
   const students = await courseStudents(courseId);
   const ids = students.map((s) => s.id);
   const [tasks, funnel, perStudent] = await Promise.all([
@@ -69,10 +72,10 @@ export async function courseAnalytics(courseId: string): Promise<CourseAnalytics
     const avg = r.avg === null ? null : Math.round(Number(r.avg) * 100);
     const last = r.last?.getTime() ?? null;
     const reasons: string[] = [];
-    if (last === null) reasons.push('ни разу не открывал курс');
-    else if (last < week) reasons.push(`не заходил ${Math.round((Date.now() - last) / 86_400_000)} дн.`);
-    if (avg !== null && avg < 55) reasons.push(`средний балл ${avg}%`);
-    if (r.returned > 0) reasons.push(`на доработке: ${r.returned}`);
+    if (last === null) reasons.push(T.neverOpenedCourse);
+    else if (last < week) reasons.push(T.away(Math.round((Date.now() - last) / 86_400_000)));
+    if (avg !== null && avg < 55) reasons.push(T.avg(avg));
+    if (r.returned > 0) reasons.push(T.returned(r.returned));
     if (reasons.length) risk.push({ id: s.id, name: s.name, groups: s.groups, avgPercent: avg, lastActive: r.last?.toISOString() ?? null, reason: reasons.join(' · ') });
   }
   risk.sort((a, b) => (a.lastActive ?? '') < (b.lastActive ?? '') ? -1 : 1);
@@ -83,8 +86,8 @@ export async function courseAnalytics(courseId: string): Promise<CourseAnalytics
       const body = bodyFromRow('assignment', r.payload);
       const p = body.kind === 'assignment' ? body.payload : null;
       return {
-        blockId: r.id, topicId: r.topic_id, topicTitle: r.topic, title: p ? assignmentTitle(p.prompt) : 'Задание',
-        typeLabel: p ? ASSIGNMENT_TYPE_LABELS[p.spec.type] : '', points: r.points, answered: r.answered,
+        blockId: r.id, topicId: r.topic_id, topicTitle: r.topic, title: p ? assignmentTitle(p.prompt) : T.task,
+        typeLabel: p ? assignmentTypeLabels(locale)[p.spec.type] : '', points: r.points, answered: r.answered,
         avgPercent: r.avg === null ? null : Math.round(Number(r.avg) * 100),
         fullShare: r.graded ? Math.round((r.full / r.graded) * 100) : null, pending: r.pending,
       };
@@ -105,7 +108,8 @@ export interface StudentCard {
 }
 
 /** Карточка ученика в курсе: все задания по порядку, его статус, балл и комментарий. */
-export async function studentCard(courseId: string, studentId: string): Promise<StudentCard | null> {
+export async function studentCard(courseId: string, studentId: string, locale: Locale = 'ru'): Promise<StudentCard | null> {
+  const T = lmsText(locale);
   if (!isUuid(studentId)) return null;
   const student = (await courseStudents(courseId)).find((s) => s.id === studentId);
   if (!student) return null;
@@ -128,8 +132,8 @@ export async function studentCard(courseId: string, studentId: string): Promise<
     const body = bodyFromRow('assignment', r.payload);
     const p = body.kind === 'assignment' ? body.payload : null;
     return {
-      blockId: r.id, topicId: r.topic_id, topicTitle: r.topic, title: p ? assignmentTitle(p.prompt) : 'Задание',
-      typeLabel: p ? ASSIGNMENT_TYPE_LABELS[p.spec.type] : '', points: r.points, status: r.status ?? 'none',
+      blockId: r.id, topicId: r.topic_id, topicTitle: r.topic, title: p ? assignmentTitle(p.prompt) : T.task,
+      typeLabel: p ? assignmentTypeLabels(locale)[p.spec.type] : '', points: r.points, status: r.status ?? 'none',
       score: r.score === null ? null : Number(r.score), comment: r.comment, at: r.at?.toISOString() ?? null,
     };
   });

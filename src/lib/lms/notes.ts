@@ -1,4 +1,6 @@
 import { db } from '../db/client';
+import type { Locale } from '@/i18n/config';
+import { lmsText } from './texts';
 import { LmsError } from './types';
 import { VISIBLE_TO_STUDENT } from './courses';
 
@@ -58,7 +60,7 @@ export async function saveNote(
 }
 
 /** Все заметки и закладки ученика — для страницы «Заметки». */
-export async function listNotes(userId: string): Promise<NoteEntry[]> {
+export async function listNotes(userId: string, locale: Locale = 'ru'): Promise<NoteEntry[]> {
   const { rows } = await db().query<{
     block_id: string; topic_id: string; body: string; bookmarked: boolean; updated_at: Date;
     course_id: string; course: string; subject: string; topic: string; payload: { title?: string; prompt?: string; caption?: string } | null;
@@ -79,7 +81,7 @@ export async function listNotes(userId: string): Promise<NoteEntry[]> {
       blockId: r.block_id, topicId: r.topic_id, body: r.body, bookmarked: r.bookmarked,
       updatedAt: r.updated_at.toISOString(), courseId: r.course_id, courseTitle: r.course,
       subject: r.subject, topicTitle: r.topic,
-      stepTitle: raw ? raw.slice(0, 80) : r.kind === 'assignment' ? 'Задание' : 'Шаг урока',
+      stepTitle: raw ? raw.slice(0, 80) : r.kind === 'assignment' ? lmsText(locale).task : lmsText(locale).step,
     };
   });
 }

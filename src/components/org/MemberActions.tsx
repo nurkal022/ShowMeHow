@@ -7,6 +7,8 @@ import { IconCheck, IconKey, IconLock, IconSwap, IconTrash } from '@/components/
 import Dialog from '@/components/lms/ui/Dialog';
 import RowMenu, { type RowMenuItem } from '@/components/lms/ui/RowMenu';
 import { useConfirm } from '@/components/lms/ui/useConfirm';
+import { useT } from '@/i18n/client';
+import { orgPeople } from '@/i18n/messages/org-people';
 
 interface Props {
   slug: string;
@@ -23,6 +25,7 @@ interface Props {
 /** Действия с человеком — одним меню в строке: пароль, блокировка, перевод, удаление из организации. */
 export default function MemberActions({ slug, userId, label, disabled, groupId, canBlock, canRemove, moveTargets }: Props) {
   const router = useRouter();
+  const t = useT(orgPeople);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [password, setPassword] = useState<string | null>(null);
@@ -43,39 +46,39 @@ export default function MemberActions({ slug, userId, label, disabled, groupId, 
   }
 
   const items: RowMenuItem[] = [{
-    key: 'reset', label: 'Сбросить пароль', icon: <IconKey size={16} />,
+    key: 'reset', label: t('resetPassword'), icon: <IconKey size={16} />,
     onSelect: async () => {
       if (await ask({
-        title: 'Сбросить пароль?',
-        text: `${label} получит новый временный пароль, все его сессии закроются. Пароль будет показан один раз.`,
-        confirmLabel: 'Сбросить пароль',
+        title: t('qResetOne'),
+        text: t('qResetOneText', { name: label }),
+        confirmLabel: t('resetPassword'),
       })) void run('reset-password');
     },
   }];
   if (canBlock) {
     items.push(disabled
-      ? { key: 'enable', label: 'Разблокировать', icon: <IconCheck size={16} />, onSelect: () => void run('enable') }
+      ? { key: 'enable', label: t('unblock'), icon: <IconCheck size={16} />, onSelect: () => void run('enable') }
       : {
-        key: 'disable', label: 'Заблокировать', icon: <IconLock size={16} />,
+        key: 'disable', label: t('block'), icon: <IconLock size={16} />,
         onSelect: async () => {
           if (await ask({
-            title: 'Заблокировать вход?', text: `${label} не сможет войти. Работы, оценки и курсы сохранятся, блокировку можно снять.`,
-            confirmLabel: 'Заблокировать', danger: true,
+            title: t('qBlockOne'), text: t('qBlockOneText', { name: label }),
+            confirmLabel: t('block'), danger: true,
           })) void run('disable');
         },
       });
   }
   if (moveTargets && moveTargets.length > 0) {
-    items.push({ key: 'move', label: 'Перевести в другую группу', icon: <IconSwap size={16} />, onSelect: () => { setTarget(''); setMoving(true); } });
+    items.push({ key: 'move', label: t('moveToGroup'), icon: <IconSwap size={16} />, onSelect: () => { setTarget(''); setMoving(true); } });
   }
   if (canRemove) {
     items.push({
-      key: 'remove', label: 'Убрать из организации', icon: <IconTrash size={16} />, danger: true,
+      key: 'remove', label: t('removeFromOrg'), icon: <IconTrash size={16} />, danger: true,
       onSelect: async () => {
         if (await ask({
-          title: 'Убрать из организации?',
-          text: `${label} потеряет доступ к организации. Его курсы останутся в организации, владельцем станете вы.`,
-          confirmLabel: 'Убрать', danger: true,
+          title: t('qRemove'),
+          text: t('qRemoveText', { name: label }),
+          confirmLabel: t('remove'), danger: true,
         })) void run('remove');
       },
     });
@@ -84,30 +87,30 @@ export default function MemberActions({ slug, userId, label, disabled, groupId, 
   return (
     <span className="cf-row-actions">
       {error && <span className="cf-field-error" role="alert">{error}</span>}
-      <RowMenu label={`Действия: ${label}`} items={items} busy={busy} />
+      <RowMenu label={t('actionsOf', { name: label })} items={items} busy={busy} />
       {moving && moveTargets && (
-        <Dialog title="Перевести в другую группу" subtitle={label} onClose={() => setMoving(false)}
+        <Dialog title={t('moveToGroup')} subtitle={label} onClose={() => setMoving(false)}
           footer={(
             <>
-              <button type="button" className="btn" onClick={() => setMoving(false)}>Отмена</button>
+              <button type="button" className="btn" onClick={() => setMoving(false)}>{t('cancel')}</button>
               <button type="button" className="btn btn-primary" disabled={busy || !target}
-                onClick={async () => { if (await run('move', { toGroupId: target })) setMoving(false); }}>Перевести</button>
+                onClick={async () => { if (await run('move', { toGroupId: target })) setMoving(false); }}>{t('move')}</button>
             </>
           )}>
-          <label className="field"><span>Новая группа</span>
+          <label className="field"><span>{t('newGroupField')}</span>
             <select value={target} data-autofocus onChange={(e) => setTarget(e.target.value)}>
-              <option value="">Выберите группу</option>
+              <option value="">{t('pickGroup')}</option>
               {moveTargets.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
             </select>
           </label>
-          <p className="muted">Ученик увидит курсы новой группы; курсы прежней станут ему недоступны. Ответы и оценки сохранятся.</p>
+          <p className="muted">{t('moveNote')}</p>
           {error && <p className="error-box" role="alert">{error}</p>}
         </Dialog>
       )}
       {confirmDialog}
       {password && (
-        <SecretDialog title="Пароль сброшен" secret={password} onClose={() => setPassword(null)}
-          lines={[`Новый временный пароль для ${label}. Для учеников он появится и в листе паролей группы.`]} />
+        <SecretDialog title={t('passwordReset')} secret={password} onClose={() => setPassword(null)}
+          lines={[t('passwordResetLine', { name: label })]} />
       )}
     </span>
   );

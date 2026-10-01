@@ -1,6 +1,8 @@
 import { db } from '../db/client';
 import { lastDays } from '../cabinet/daily';
+import type { Locale } from '@/i18n/config';
 import { assignmentTitle } from './block-schema';
+import { lmsText } from './texts';
 
 /**
  * Данные новых страниц «Преподавания»: «Сегодня», группы учителя и общая очередь
@@ -27,7 +29,7 @@ export interface FeedItem {
   kind: FeedKind; at: string; who: string; what: string; where: string; href: string;
 }
 
-export async function teachFeed(orgId: string, ownerId: string | null, limit = 8): Promise<FeedItem[]> {
+export async function teachFeed(orgId: string, ownerId: string | null, limit = 8, locale: Locale = 'ru'): Promise<FeedItem[]> {
   const { rows } = await db().query<{
     kind: FeedKind; at: Date; who: string; prompt: string | null; topic: string; course: string;
     course_id: string; block_id: string | null; sid: string | null;
@@ -53,7 +55,7 @@ export async function teachFeed(orgId: string, ownerId: string | null, limit = 8
      ) e WHERE at <= now() ORDER BY at DESC LIMIT $3`, [orgId, ownerId, limit]);
   return rows.map((r) => ({
     kind: r.kind, at: r.at.toISOString(), who: r.who,
-    what: r.prompt !== null ? assignmentTitle(r.prompt) || 'Задание' : r.topic,
+    what: r.prompt !== null ? assignmentTitle(r.prompt) || lmsText(locale).task : r.topic,
     where: r.prompt !== null ? `${r.course} · ${r.topic}` : r.course,
     href: r.block_id
       ? `/teach/courses/${r.course_id}/answers/${r.block_id}${r.sid ? `?s=${r.sid}` : ''}`
@@ -99,19 +101,20 @@ async function studentActivity(orgId: string, ownerId: string | null, groupIds: 
   return rows;
 }
 
-function attentionOf(r: StudentActivityRow): AttentionStudent | null {
+function attentionOf(r: StudentActivityRow, locale: Locale = 'ru'): AttentionStudent | null {
+  const T = lmsText(locale);
   const avg = r.avg === null ? null : Math.round(Number(r.avg) * 100);
   const last = r.last?.getTime() ?? null;
   const reasons: string[] = [];
   let severity: 1 | 2 | 3 = 1;
-  if (r.must_change && last === null) { reasons.push('ни разу не входил'); severity = 3; }
-  else if (last === null) { reasons.push('не открывал уроки'); severity = 3; }
+  if (r.must_change && last === null) { reasons.push(T.neverSignedIn); severity = 3; }
+  else if (last === null) { reasons.push(T.noLessonsOpened); severity = 3; }
   else if (last < Date.now() - 7 * DAY) {
-    reasons.push(`не заходил ${Math.round((Date.now() - last) / DAY)} дн.`);
+    reasons.push(T.away(Math.round((Date.now() - last) / DAY)));
     severity = 2;
   }
-  if (avg !== null && avg < 55) { reasons.push(`средний балл ${avg}%`); severity = Math.max(severity, 2) as 2 | 3; }
-  if (r.returned > 0) reasons.push(`на доработке: ${r.returned}`);
+  if (avg !== null && avg < 55) { reasons.push(T.avg(avg)); severity = Math.max(severity, 2) as 2 | 3; }
+  if (r.returned > 0) reasons.push(T.returned(r.returned));
   if (!reasons.length) return null;
   return { id: r.id, name: r.name, groups: r.groups, reason: reasons.join(' · '), severity, lastActive: r.last?.toISOString() ?? null, avgPercent: avg };
 }
@@ -134,10 +137,10 @@ export interface TeachToday {
 }
 
 export async function teachToday(
-  orgId: string, ownerId: string | null, groupIds: string[],
+  orgId: string, ownerId: string | null, groupIds: string[], locale: Locale = 'ru',
 ): Promise<TeachToday> {
   const [feed, students, heat, due, courses] = await Promise.all([
-    teachFeed(orgId, ownerId),
+    teachFeed(orgId, ownerId, 8, locale),
     studentActivity(orgId, ownerId, groupIds),
     db().query<{ day: string; n: number }>(
       `WITH ev AS (
@@ -169,7 +172,7 @@ export async function teachToday(
          count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM course_groups cg WHERE cg.course_id = c.id))::int AS unassigned
        FROM courses c WHERE ${COURSE_SCOPE}`, [orgId, ownerId]),
   ]);
-  const attention = students.map(attentionOf).filter((a): a is AttentionStudent => a !== null)
+  const attention = students.map((r) => attentionOf(r, locale)).filter((a): a is AttentionStudent => a !== null)
     .sort((a, b) => b.severity - a.severity || a.name.localeCompare(b.name, 'ru'));
   const week = Date.now() - 7 * DAY;
   return {
@@ -329,7 +332,7 @@ export interface ReviewItem {
   student: string; submittedAt: string; late: boolean; points: number;
 }
 
-export async function reviewQueue(orgId: string, ownerId: string | null): Promise<ReviewItem[]> {
+export async function reviewQueue(orgId: string, ownerId: string | null, locale: Locale = 'ru'): Promise<ReviewItem[]> {
   const { rows } = await db().query<{
     id: string; block_id: string; course_id: string; course: string; topic: string; prompt: string | null;
     student: string; submitted_at: Date; late: boolean; points: number | null;
@@ -342,7 +345,7 @@ export async function reviewQueue(orgId: string, ownerId: string | null): Promis
      ORDER BY s.submitted_at, s.id LIMIT 300`, [orgId, ownerId]);
   return rows.map((r) => ({
     id: r.id, blockId: r.block_id, courseId: r.course_id, course: r.course, topic: r.topic,
-    title: assignmentTitle(r.prompt ?? '') || 'Задание', student: r.student,
+    title: assignmentTitle(r.prompt ?? '') || lmsText(locale).task, student: r.student,
     submittedAt: r.submitted_at.toISOString(), late: r.late, points: r.points ?? 0,
   }));
 }

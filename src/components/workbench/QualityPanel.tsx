@@ -3,6 +3,10 @@ import { useEffect, useState } from 'react';
 import type { QualityReport } from '@/lib/pipeline/quality';
 import { callApi } from '../cabinet/api';
 import { IconCheck, IconClose, IconMinus, IconWand } from '../icons';
+import { useFormat, useT } from '@/i18n/client';
+import { workbench } from '@/i18n/messages/workbench';
+import { common } from '@/i18n/messages/common';
+
 
 /**
  * Проверка качества открытого тренажёра: те же пробы, что при генерации, и сверка с
@@ -16,6 +20,9 @@ export default function QualityPanel({ simId, busy, onClose, onFix }: {
 }) {
   const [report, setReport] = useState<QualityReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const t = useT(workbench);
+  const tc = useT(common);
+  const f = useFormat();
 
   useEffect(() => {
     let alive = true;
@@ -29,20 +36,20 @@ export default function QualityPanel({ simId, busy, onClose, onFix }: {
 
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <div className="modal quality-panel" role="dialog" aria-label="Проверка качества" onClick={(e) => e.stopPropagation()}>
+      <div className="modal quality-panel" role="dialog" aria-label={t('qualityTitle')} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>Проверка качества</h2>
-          <button type="button" className="icon-btn" aria-label="Закрыть" onClick={onClose}><IconClose size={18} /></button>
+          <h2>{t('qualityTitle')}</h2>
+          <button type="button" className="icon-btn" aria-label={tc('close')} onClick={onClose}><IconClose size={18} /></button>
         </div>
         {!report && !error && (
-          <div className="quality-running"><span className="quality-spinner" aria-hidden />Запускаю тренажёр и прохожу пробы…</div>
+          <div className="quality-running"><span className="quality-spinner" aria-hidden />{t('qualityRunning')}</div>
         )}
-        {error && <div className="error-box">{error}</div>}
+        {error && <div className="error-box">{f.message(error)}</div>}
         {report && (
           <>
             <div className={`quality-score ${report.failed ? 'warn' : 'ok'}`}>
-              {report.failed ? `${report.failed} ${report.failed === 1 ? 'проблема' : 'проблемы'} из ${report.items.length} проверок`
-                : `Все ${report.passed} проверок пройдены`}
+              {report.failed ? t('qualityFailed', { n: report.failed, total: report.items.length })
+                : t('qualityPassed', { n: report.passed })}
             </div>
             <ul className="quality-list">
               {report.items.map((i) => (
@@ -51,8 +58,8 @@ export default function QualityPanel({ simId, busy, onClose, onFix }: {
                     {i.status === 'pass' ? <IconCheck size={12} /> : i.status === 'fail' ? '!' : <IconMinus size={12} />}
                   </span>
                   <div>
-                    <b>{i.label}</b>
-                    {i.detail && <span>{i.detail}</span>}
+                    <b>{f.message(i.label)}</b>
+                    {i.detail && <span>{f.message(i.detail)}</span>}
                   </div>
                 </li>
               ))}
@@ -61,10 +68,10 @@ export default function QualityPanel({ simId, busy, onClose, onFix }: {
               {report.fixInstruction && (
                 <button type="button" className="btn btn-primary" disabled={busy}
                   onClick={() => { onFix(report.fixInstruction!); onClose(); }}>
-                  <IconWand size={16} />Починить проваленное
+                  <IconWand size={16} />{t('fixFailed')}
                 </button>
               )}
-              <button type="button" className="btn btn-ghost" onClick={onClose}>Закрыть</button>
+              <button type="button" className="btn btn-ghost" onClick={onClose}>{tc('close')}</button>
             </div>
           </>
         )}

@@ -2,23 +2,29 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { SessionItem } from '@/lib/jobs/sessions';
 import { IconClose, IconHistory, IconPlus, IconSearch } from '@/components/icons';
+import { useFormat, useLocale, useT } from '@/i18n/client';
+import { formatDate, translator } from '@/i18n/core';
+import type { Locale } from '@/i18n/config';
+import { workbench } from '@/i18n/messages/workbench';
+import { common } from '@/i18n/messages/common';
 
-function dayLabel(iso: string): string {
+function dayLabel(iso: string, locale: Locale): string {
+  const t = translator(workbench, locale);
   const d = new Date(iso);
   const days = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86_400_000);
-  if (days <= 0) return 'Сегодня';
-  if (days === 1) return 'Вчера';
-  if (days < 7) return 'На этой неделе';
-  if (days < 31) return 'В этом месяце';
-  return d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+  if (days <= 0) return t('today');
+  if (days === 1) return t('yesterday');
+  if (days < 7) return t('thisWeek');
+  if (days < 31) return t('thisMonth');
+  return formatDate(d, locale, { month: 'long', year: 'numeric' });
 }
 
-const STATUS: Record<SessionItem['status'], { text: string; tone: string }> = {
-  done: { text: '', tone: '' },
-  running: { text: 'идёт сейчас', tone: 'run' },
-  queued: { text: 'в очереди', tone: 'run' },
-  cancelled: { text: 'остановлена', tone: 'muted' },
-  error: { text: 'не получилось', tone: 'bad' },
+const STATUS: Record<SessionItem['status'], { text: keyof typeof workbench.ru | null; tone: string }> = {
+  done: { text: null, tone: '' },
+  running: { text: 'stRunning', tone: 'run' },
+  queued: { text: 'stQueued', tone: 'run' },
+  cancelled: { text: 'stCancelled', tone: 'muted' },
+  error: { text: 'stError', tone: 'bad' },
 };
 
 /**
@@ -32,6 +38,10 @@ export default function SessionsPanel({ open, onClose, onOpen, onNew, activeSimu
 }) {
   const [items, setItems] = useState<SessionItem[] | null>(null);
   const [q, setQ] = useState('');
+  const t = useT(workbench);
+  const tc = useT(common);
+  const f = useFormat();
+  const locale = useLocale();
 
   useEffect(() => {
     if (!open) return;
@@ -50,34 +60,34 @@ export default function SessionsPanel({ open, onClose, onOpen, onNew, activeSimu
     const shown = (items ?? []).filter((s) => !needle || `${s.title ?? ''} ${s.prompt}`.toLowerCase().includes(needle));
     const out: { label: string; items: SessionItem[] }[] = [];
     for (const s of shown) {
-      const label = dayLabel(s.updatedAt);
+      const label = dayLabel(s.updatedAt, locale);
       const last = out[out.length - 1];
       if (last?.label === label) last.items.push(s); else out.push({ label, items: [s] });
     }
     return out;
-  }, [items, q]);
+  }, [items, q, locale]);
 
   if (!open) return null;
   return (
     <div className="sessions-layer">
-      <button type="button" className="sessions-scrim" aria-label="Закрыть историю" onClick={onClose} />
-      <aside className="sessions" role="dialog" aria-label="История сессий">
+      <button type="button" className="sessions-scrim" aria-label={t('closeHistory')} onClick={onClose} />
+      <aside className="sessions" role="dialog" aria-label={t('sessionsAria')}>
         <header className="sessions-head">
-          <h2><IconHistory size={18} />История</h2>
-          <button type="button" className="icon-btn" aria-label="Закрыть" onClick={onClose}><IconClose size={18} /></button>
+          <h2><IconHistory size={18} />{t('history')}</h2>
+          <button type="button" className="icon-btn" aria-label={tc('close')} onClick={onClose}><IconClose size={18} /></button>
         </header>
         <button type="button" className="btn btn-primary sessions-new" onClick={() => { onNew(); onClose(); }}>
-          <IconPlus size={16} />Новая симуляция
+          <IconPlus size={16} />{t('newSim')}
         </button>
         <label className="sessions-search"><IconSearch size={16} />
-          <input value={q} placeholder="Найти по названию или запросу" aria-label="Поиск по истории"
+          <input value={q} placeholder={t('sessionsSearchPh')} aria-label={t('sessionsSearchAria')}
             onChange={(e) => setQ(e.target.value)} />
         </label>
         <div className="sessions-list">
-          {items === null && <p className="muted sessions-note">Загружаю…</p>}
+          {items === null && <p className="muted sessions-note">{t('loadingDots')}</p>}
           {items !== null && groups.length === 0 && (
             <p className="muted sessions-note">
-              {q ? 'Ничего не нашлось.' : 'Здесь появится всё, что вы создадите: готовые симуляции, остановленные и неудачные попытки.'}
+              {q ? t('nothingFound') : t('sessionsEmpty')}
             </p>
           )}
           {groups.map((g) => (
@@ -97,14 +107,13 @@ export default function SessionsPanel({ open, onClose, onOpen, onNew, activeSimu
                           onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
                       : <span className="session-nothumb" aria-hidden="true" />}
                     <span className="session-text">
-                      <strong>{s.title ?? (s.prompt.slice(0, 70) || 'Без названия')}</strong>
+                      <strong>{s.title ?? (s.prompt.slice(0, 70) || t('untitled'))}</strong>
                       <span className="session-meta">
-                        {!kept && st.text && <em className={st.tone}>{st.text}</em>}
-                        {kept && <em className="muted">оставлена по ходу</em>}
-                        {s.refinements > 0 && <span>{`доработок: ${s.refinements}`}</span>}
-                        {!s.simulationId && s.drafts > 0 && <span>есть черновик</span>}
-                        <span>{new Date(s.updatedAt).toLocaleString('ru-RU',
-                          { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                        {!kept && st.text && <em className={st.tone}>{t(st.text)}</em>}
+                        {kept && <em className="muted">{t('keptMidway')}</em>}
+                        {s.refinements > 0 && <span>{t('refinements', { n: s.refinements })}</span>}
+                        {!s.simulationId && s.drafts > 0 && <span>{t('hasDraft')}</span>}
+                        <span>{f.dateTime(s.updatedAt)}</span>
                       </span>
                     </span>
                   </button>

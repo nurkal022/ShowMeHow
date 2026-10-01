@@ -1,4 +1,6 @@
 import { db } from '../db/client';
+import type { Locale } from '@/i18n/config';
+import { lmsText } from './texts';
 import { dailyCounts } from '../cabinet/daily';
 import { assignmentTitle } from './block-schema';
 
@@ -35,7 +37,7 @@ const SUBMISSIONS = `submissions s JOIN blocks b ON b.id = s.block_id
   JOIN topics t ON t.id = b.topic_id JOIN courses c ON c.id = t.course_id`;
 
 export async function teachDashboard(
-  orgId: string, ownerId: string | null, groupIds: string[],
+  orgId: string, ownerId: string | null, groupIds: string[], locale: Locale = 'ru',
 ): Promise<TeachDashboard> {
   const scope = [orgId, ownerId];
   const [totals, submitted, graded, pendingBlocks, progress] = await Promise.all([
@@ -83,7 +85,7 @@ export async function teachDashboard(
     chart: { days: submitted.days, submitted: submitted.values, graded: graded.values },
     pendingBlocks: pendingBlocks.rows.map((r) => ({
       courseId: r.course_id, courseTitle: r.course_title, blockId: r.block_id, topicTitle: r.topic_title,
-      title: assignmentTitle(r.prompt ?? '') || 'Задание', pending: r.pending,
+      title: assignmentTitle(r.prompt ?? '') || lmsText(locale).task, pending: r.pending,
     })),
     progress: Object.fromEntries(progress.rows.map((r) => [r.id, {
       students: r.students, topics: r.topics, views: r.views, graded: r.graded, submitted: r.submitted,

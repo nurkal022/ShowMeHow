@@ -71,6 +71,9 @@ export interface SimParameter {
  */
 export type SimLevel = 'demo' | 'lab' | 'research';
 
+/** Язык текста внутри тренажёра: совпадает с языком интерфейса автора в момент генерации. */
+export type SimLang = 'ru' | 'kk' | 'en';
+
 export interface PlanEntity { name: string; role: string }
 export interface PlanObservable { name: string; label: string; unit: string }
 export interface PlanView { kind: 'scene' | 'chart' | 'phase' | 'table' | 'formula' | 'section'; title: string; what: string }
@@ -97,6 +100,8 @@ export interface PlanSpec {
   scenario?: PlanStep[];
   presets?: PlanPreset[];
   wowMoment?: string;
+  /** Язык всего текста тренажёра (подписи, шаги, задания). Нет — русский. */
+  lang?: SimLang;
 }
 
 export interface RenderReport {
