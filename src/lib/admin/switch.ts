@@ -5,12 +5,16 @@ import type { OrgRole } from '../org/types';
 export interface SwitchTarget {
   userId: string;
   label: string;
-  role: OrgRole;
+  /** researcher — не роль в школе, а рабочее место «Исследования» (демо-исследователь без членства). */
+  role: OrgRole | 'researcher';
   orgSlug: string;
   orgName: string;
 }
 
-const ROLE_ORDER: Record<OrgRole, number> = { org_admin: 0, teacher: 1, student: 2 };
+const ROLE_ORDER: Record<SwitchTarget['role'], number> = { org_admin: 0, teacher: 1, student: 2, researcher: 3 };
+
+/** Демо-исследователь (scripts/seed-research.ts): в школе не состоит, показывается рядом с демо-школой. */
+export const DEMO_RESEARCHER_EMAIL = 'researcher@demo.test';
 
 /**
  * Есть демонстрационная организация — показываем только её людей: список для
@@ -40,8 +44,19 @@ export async function listSwitchTargets(limitOrgs = 8, limitPerRole = 4): Promis
      WHERE o.archived_at IS NULL AND u.disabled_at IS NULL AND u.role <> 'admin'
        AND o.id IN (SELECT id FROM organizations WHERE archived_at IS NULL ORDER BY name LIMIT $1)
      ORDER BY o.id, m.role, m.created_at, u.id`, [limitOrgs])).rows;
-  return rows
-    .map((r) => ({ userId: r.user_id, label: r.label, role: r.role, orgSlug: r.slug, orgName: r.name }))
+  const targets: SwitchTarget[] = rows
+    .map((r) => ({ userId: r.user_id, label: r.label, role: r.role, orgSlug: r.slug, orgName: r.name }));
+  const researcher = await db().query<{ id: string; label: string }>(
+    `SELECT id, coalesce(display_name, email) AS label FROM users
+     WHERE email = $1 AND disabled_at IS NULL AND role <> 'admin'`, [DEMO_RESEARCHER_EMAIL]);
+  if (researcher.rows[0]) {
+    const demoOrg = demo.rows[0];
+    targets.push({
+      userId: researcher.rows[0].id, label: researcher.rows[0].label, role: 'researcher',
+      orgSlug: '', orgName: demoOrg?.name ?? '',
+    });
+  }
+  return targets
     .sort((a, b) => a.orgName.localeCompare(b.orgName, 'ru')
       || ROLE_ORDER[a.role] - ROLE_ORDER[b.role]
       || a.label.localeCompare(b.label, 'ru'));

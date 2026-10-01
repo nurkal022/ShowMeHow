@@ -9,6 +9,7 @@ import {
   add, buildChemistry, buildCourse, buildInformatics, demoSimulation, liveThrough, rng, staff, task,
   type Built, type Kid,
 } from './seed-showcase';
+import { seedResearch } from './seed-research';
 
 /**
  * Демо-организация для показов: четыре полных курса, три учителя и десять учеников
@@ -219,6 +220,7 @@ export async function seedDemo(print: (line: string) => void, allowProduction = 
   print(`Ученики (10, пароль ${DEMO_PASSWORD}): ${kids.map((k) => k.login).join(', ')}`);
   print(made.length ? `Созданы курсы: ${made.join('; ')}. Работ ждут проверки: ${pending}.` : 'Все четыре курса уже были — оставлены как есть.');
   if (hidden.rowCount) print(`Прочие курсы школы убраны в черновики: ${hidden.rowCount}.`);
+  await seedResearch(print, allowProduction);
 }
 
 if (process.argv[1]?.endsWith('seed-demo.ts')) {

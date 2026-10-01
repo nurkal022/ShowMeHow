@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { db } from '../db/client';
 import { listMemberships } from '../org/access';
 import { withOrgParam } from '../lms/links';
 import { findActiveUserById, type AuthUser } from './users';
@@ -23,6 +24,9 @@ export async function landingFor(userId: string, orgSlug?: string): Promise<stri
   const teacher = pick('teacher');
   if (teacher) return withOrgParam('/teach', teacher.orgSlug);
   if (pick('student')) return '/learn';
+  // Без ролей в школе, но с проектами в «Исследованиях» — сразу туда (демо-исследователь).
+  const research = await db().query('SELECT 1 FROM research_projects WHERE owner_id = $1 LIMIT 1', [userId]);
+  if (research.rowCount) return '/research';
   return '/';
 }
 

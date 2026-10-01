@@ -31,7 +31,7 @@ export const cabinet = defineMessages({
     // 404
     nfTitle: 'Страница не найдена', nfText: 'Адрес неверный, или у вас нет доступа к этой странице.',
     // роли и типы организаций
-    role_org_admin: 'администратор', role_teacher: 'учитель', role_student: 'ученик',
+    role_org_admin: 'администратор', role_teacher: 'учитель', role_student: 'ученик', role_researcher: 'исследователь',
     kind_school: 'Школа', kind_college: 'Колледж', kind_university: 'Университет',
     // статус человека
     status_disabled: 'заблокирован', status_mustChange: 'ждёт смены пароля', status_active: 'активен',
@@ -74,7 +74,7 @@ export const cabinet = defineMessages({
     tab_settings: 'Курс туралы', tab_editor: 'Редактор', tab_journal: 'Журнал', tab_progress: 'Үлгерім', tab_answers: 'Жауаптар',
     tab_debrief: 'Талдау', tab_analytics: 'Аналитика', courseSections: 'Курс бөлімдері',
     nfTitle: 'Бет табылмады', nfText: 'Мекенжай қате немесе бұл бетке кіруге рұқсатыңыз жоқ.',
-    role_org_admin: 'әкімші', role_teacher: 'мұғалім', role_student: 'оқушы',
+    role_org_admin: 'әкімші', role_teacher: 'мұғалім', role_student: 'оқушы', role_researcher: 'зерттеуші',
     kind_school: 'Мектеп', kind_college: 'Колледж', kind_university: 'Университет',
     status_disabled: 'бұғатталған', status_mustChange: 'құпиясөзді ауыстыруды күтуде', status_active: 'белсенді',
     period: 'Кезең', periodDays: '{n} күн', lastDays: '{title}, соңғы {n} күн', perDay: 'Күніне орта есеппен', day: 'Күн',
@@ -112,7 +112,7 @@ export const cabinet = defineMessages({
     tab_settings: 'About', tab_editor: 'Editor', tab_journal: 'Gradebook', tab_progress: 'Progress', tab_answers: 'Answers',
     tab_debrief: 'Debrief', tab_analytics: 'Analytics', courseSections: 'Course sections',
     nfTitle: 'Page not found', nfText: 'The address is wrong, or you do not have access to this page.',
-    role_org_admin: 'administrator', role_teacher: 'teacher', role_student: 'student',
+    role_org_admin: 'administrator', role_teacher: 'teacher', role_student: 'student', role_researcher: 'researcher',
     kind_school: 'School', kind_college: 'College', kind_university: 'University',
     status_disabled: 'blocked', status_mustChange: 'awaiting password change', status_active: 'active',
     period: 'Period', periodDays: '{n} days', lastDays: '{title}, last {n} days', perDay: 'Daily average', day: 'Day',
