@@ -19,7 +19,7 @@ export type CabinetGroupKey = 'platform' | 'org' | 'teach';
 
 /** Ключ пункта: по нему интерфейс берёт перевод (словарь cabinet, item_<key>); label — русская подпись. */
 export type CabinetItemKey =
-  | 'overview' | 'orgs' | 'users' | 'catalog' | 'log' | 'settings' | 'report' | 'risk' | 'ask'
+  | 'overview' | 'orgs' | 'users' | 'catalog' | 'log' | 'settings' | 'report' | 'risk' | 'ask' | 'community'
   | 'teachers' | 'groups' | 'today' | 'courses' | 'review';
 
 export interface CabinetMenuItem {
@@ -58,6 +58,7 @@ const PLATFORM_ITEMS: CabinetMenuItem[] = [
   { href: '/admin/orgs', key: 'orgs', label: 'Организации', icon: 'orgs' },
   { href: '/admin/users', key: 'users', label: 'Пользователи', icon: 'users' },
   { href: '/admin/catalog', key: 'catalog', label: 'Каталог', icon: 'catalog' },
+  { href: '/admin/community', key: 'community', label: 'Сообщество', icon: 'groups' },
   { href: '/admin/log', key: 'log', label: 'Журнал', icon: 'log' },
   { href: '/admin/settings', key: 'settings', label: 'Настройки', icon: 'settings' },
 ];
@@ -106,7 +107,7 @@ export function groupAllows(key: CabinetGroupKey, role: OrgRole): boolean {
 export interface Crumb { href: string; label: string; key?: string }
 
 const SEGMENT_LABELS: Record<string, string> = {
-  admin: 'Платформа', orgs: 'Организации', users: 'Пользователи', catalog: 'Каталог', log: 'Журнал',
+  admin: 'Платформа', orgs: 'Организации', users: 'Пользователи', catalog: 'Каталог', log: 'Журнал', community: 'Сообщество',
   org: 'Организация', teachers: 'Учителя', groups: 'Группы', settings: 'Настройки', credentials: 'Лист паролей',
   teach: 'Преподавание', account: 'Профиль', courses: 'Курсы', review: 'Проверка', generate: 'Курс из программы', debrief: 'Разбор', reports: 'Отчёт недели', risk: 'Риски', ask: 'Спросить ИИ', journal: 'Журнал', progress: 'Прогресс', answers: 'Ответы', analytics: 'Аналитика',
 };

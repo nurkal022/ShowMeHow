@@ -1365,3 +1365,7 @@ html[data-theme='dark'] .lb-callout.tone-definition { --tone: #c0a8ff; --tone-so
 .account .lang-switch { margin-right: 8px; }
 .lang-switch .segmented-item { min-width: 40px; }
 @media (max-width: 560px) { .account .lang-switch .segmented-item { min-width: 32px; padding: 0 6px; font-size: 12px; } }
+
+/* Карточка Telegram в профиле (кабинет и /learn/me) */
+.telegram-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.telegram-card h2 { margin: 0 0 4px; }

@@ -4,6 +4,8 @@ import { getProfile } from '@/lib/auth/users';
 import { listMemberships } from '@/lib/org/access';
 import { teacherScorecard } from '@/lib/org/reports';
 import { ORG_ROLE_LABELS } from '@/lib/org/types';
+import TelegramCard from '@/components/community/TelegramCard';
+import { getAccountByUser } from '@/lib/telegram/store';
 import AccountView, { type AccountOrg } from '@/components/cabinet/AccountView';
 import { getT } from '@/i18n/server';
 import { cabinetAccount } from '@/i18n/messages/cabinet-account';
@@ -17,7 +19,7 @@ export async function generateMetadata() {
 export default async function AccountPage() {
   const user = await requirePageUser('/account');
   if (!user) return null;
-  const [profile, memberships] = await Promise.all([getProfile(user.id), listMemberships(user.id)]);
+  const [profile, memberships, tgAcc] = await Promise.all([getProfile(user.id), listMemberships(user.id), getAccountByUser(user.id)]);
   if (!profile) redirect('/login');
   const staff = memberships.filter((m) => m.role !== 'student');
   const orgs: AccountOrg[] = await Promise.all(staff.map(async (m) => {
@@ -30,5 +32,10 @@ export default async function AccountPage() {
       },
     };
   }));
-  return <AccountView profile={profile} orgs={orgs} platformAdmin={user.role === 'admin'} />;
+  return (
+    <>
+      <AccountView profile={profile} orgs={orgs} platformAdmin={user.role === 'admin'} />
+      <TelegramCard linkedAs={tgAcc ? (tgAcc.username ? `@${tgAcc.username}` : tgAcc.firstName ?? String(tgAcc.tgUserId)) : null} />
+    </>
+  );
 }

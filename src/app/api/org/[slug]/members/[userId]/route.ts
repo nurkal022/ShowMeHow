@@ -5,6 +5,7 @@ import { canManageGroup, isPlatformAdmin } from '@/lib/org/access';
 import { getOrgPerson, isExclusiveMember, removeMember } from '@/lib/org/people';
 import { getGroup, isStudentInGroup, moveStudent } from '@/lib/org/groups';
 import { savePendingCredential } from '@/lib/org/credentials';
+import { onUserDisabled } from '@/lib/telegram/community';
 import { disableUser, enableUser, setTemporaryPassword } from '@/lib/auth/users';
 import { generateTempPassword } from '@/lib/auth/temp-password';
 import { userLabel } from '@/lib/auth/identifier';
@@ -55,6 +56,7 @@ export async function POST(req: Request, { params }: P) {
       }
       case 'disable':
         await disableUser(target.userId);
+        onUserDisabled(target.userId);
         return NextResponse.json({ ok: true });
       case 'enable':
         await enableUser(target.userId);

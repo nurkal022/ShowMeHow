@@ -2,7 +2,7 @@
 export type AdminActionName =
   | 'org.create' | 'org.archive' | 'org.restore' | 'org.settings'
   | 'user.reset_password' | 'user.disable' | 'user.enable' | 'user.make_admin' | 'user.revoke_admin' | 'user.impersonate' | 'platform.registration'
-  | 'catalog.add' | 'catalog.remove';
+  | 'catalog.add' | 'catalog.remove' | 'community.announce' | 'community.revoke';
 
 export const ADMIN_ACTION_LABELS: Record<AdminActionName, string> = {
   'org.create': 'создал организацию',
@@ -18,6 +18,8 @@ export const ADMIN_ACTION_LABELS: Record<AdminActionName, string> = {
   'platform.registration': 'изменил регистрацию',
   'catalog.add': 'добавил в общий каталог',
   'catalog.remove': 'убрал из общего каталога',
+  'community.announce': 'опубликовал анонс в сообществе',
+  'community.revoke': 'отключил Telegram',
 };
 
 export function adminActionLabel(action: string): string {

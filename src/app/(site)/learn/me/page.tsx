@@ -8,6 +8,8 @@ import { listGaps } from '@/lib/lms/gaps';
 import { getInterests } from '@/lib/lms/interests-store';
 import { activityDays, studentPlaces, studentStats } from '@/lib/lms/student-home';
 import { coverStyle } from '@/lib/lms/covers';
+import TelegramCard from '@/components/community/TelegramCard';
+import { getAccountByUser } from '@/lib/telegram/store';
 import { getLocale } from '@/i18n/server';
 import { formatDate, translator } from '@/i18n/core';
 import { learn } from '@/i18n/messages/learn';
@@ -29,7 +31,7 @@ export default async function StudentProfilePage() {
   const tl = translator(learn, locale);
   const score = (n: number) => learnScore(n, locale);
   const cards = await listStudentCourses(user.id);
-  const [teachers, progress, stats, places, achievements, activity, interests, gaps] = await Promise.all([
+  const [teachers, progress, stats, places, achievements, activity, interests, gaps, tgAcc] = await Promise.all([
     courseTeacherNames(cards.map((c) => c.course.id)),
     Promise.all(cards.map((c) => listTopicProgress(c.course.id, user.id))),
     studentStats(user.id),
@@ -38,6 +40,7 @@ export default async function StudentProfilePage() {
     activityDays(user.id),
     getInterests(user.id),
     listGaps(user.id),
+    getAccountByUser(user.id),
   ]);
   const day = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Almaty' });
   const items = cards.map((c, i) => ({
@@ -153,6 +156,7 @@ export default async function StudentProfilePage() {
           </ul>
         </section>
       )}
+      <TelegramCard linkedAs={tgAcc ? (tgAcc.username ? `@${tgAcc.username}` : tgAcc.firstName ?? String(tgAcc.tgUserId)) : null} />
     </div>
   );
 }

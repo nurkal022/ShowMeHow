@@ -1,0 +1,18 @@
+[Unit]
+Description=Tesseract Telegram-бот (сообщество и доступ к платформе)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=user
+WorkingDirectory=/home/user/teseract
+EnvironmentFile=/home/user/teseract/.env.local
+Environment=NODE_ENV=production
+# node напрямую, без npm: SIGTERM должен прийти в процесс бота.
+ExecStart=/usr/bin/node --import tsx scripts/bot.ts
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

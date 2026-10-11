@@ -19,5 +19,7 @@ export async function register(): Promise<void> {
       const { startEmbeddedWorker } = await import('./lib/worker/embedded');
       startEmbeddedWorker();
     }
+    const { startEmbeddedBot } = await import('./lib/telegram/poller');
+    startEmbeddedBot();
   }
 }

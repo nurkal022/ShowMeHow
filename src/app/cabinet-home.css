@@ -1273,3 +1273,11 @@ html[data-theme='dark'] .avatar-chip { color: color-mix(in srgb, var(--av) 55%, 
 .lb-draft { margin: 4px 0 0 !important; font-size: 12.5px !important; color: var(--cab-amber); font-weight: 600; }
 .lb-draft.quiet { color: var(--muted); font-weight: 500; }
 .lb-draft button { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+/* ------------------------------ сообщество -------------------------------- */
+.community-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 16px; }
+.community-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; word-break: break-all; }
+.community-announce { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.community-announce textarea { resize: vertical; min-height: 96px; }
+.community-announce-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+@media (max-width: 640px) { .community-kpis { grid-template-columns: 1fr; } }

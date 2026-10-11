@@ -14,7 +14,7 @@ export const cabinet = defineMessages({
     // группы меню
     group_platform: 'Платформа', group_org: 'Организация', group_teach: 'Преподавание',
     // пункты меню
-    item_overview: 'Обзор', item_orgs: 'Организации', item_users: 'Пользователи', item_catalog: 'Каталог', item_log: 'Журнал',
+    item_overview: 'Обзор', item_orgs: 'Организации', item_users: 'Пользователи', item_catalog: 'Каталог', item_log: 'Журнал', item_community: 'Сообщество', seg_community: 'Сообщество',
     item_settings: 'Настройки', item_report: 'Отчёт недели', item_risk: 'Риски', item_ask: 'Спросить ИИ',
     item_teachers: 'Учителя', item_groups: 'Группы', item_today: 'Сегодня', item_courses: 'Курсы', item_review: 'Проверка',
     // хлебные крошки
@@ -61,7 +61,7 @@ export const cabinet = defineMessages({
     accountMenu: 'Аккаунт мәзірі', platformAdmin: 'Платформа әкімшісі', profileSettings: 'Профиль және баптаулар',
     logout: 'Шығу', loginAs: 'Кім ретінде кіру', otherPerson: 'Басқа адам…', sections: 'Кабинет бөлімдері',
     group_platform: 'Платформа', group_org: 'Ұйым', group_teach: 'Оқыту',
-    item_overview: 'Шолу', item_orgs: 'Ұйымдар', item_users: 'Пайдаланушылар', item_catalog: 'Каталог', item_log: 'Журнал',
+    item_overview: 'Шолу', item_orgs: 'Ұйымдар', item_users: 'Пайдаланушылар', item_catalog: 'Каталог', item_log: 'Журнал', item_community: 'Қауымдастық', seg_community: 'Қауымдастық',
     item_settings: 'Баптаулар', item_report: 'Апта есебі', item_risk: 'Тәуекелдер', item_ask: 'ЖИ-ден сұрау',
     item_teachers: 'Мұғалімдер', item_groups: 'Топтар', item_today: 'Бүгін', item_courses: 'Курстар', item_review: 'Тексеру',
     seg_admin: 'Платформа', seg_orgs: 'Ұйымдар', seg_users: 'Пайдаланушылар', seg_catalog: 'Каталог', seg_log: 'Журнал',
@@ -99,7 +99,7 @@ export const cabinet = defineMessages({
     accountMenu: 'Account menu', platformAdmin: 'Platform administrator', profileSettings: 'Profile and settings',
     logout: 'Sign out', loginAs: 'Sign in as', otherPerson: 'Someone else…', sections: 'Workspace sections',
     group_platform: 'Platform', group_org: 'Organization', group_teach: 'Teaching',
-    item_overview: 'Overview', item_orgs: 'Organizations', item_users: 'Users', item_catalog: 'Catalog', item_log: 'Activity log',
+    item_overview: 'Overview', item_orgs: 'Organizations', item_users: 'Users', item_catalog: 'Catalog', item_log: 'Activity log', item_community: 'Community', seg_community: 'Community',
     item_settings: 'Settings', item_report: 'Weekly report', item_risk: 'Risks', item_ask: 'Ask AI',
     item_teachers: 'Teachers', item_groups: 'Groups', item_today: 'Today', item_courses: 'Courses', item_review: 'Review',
     seg_admin: 'Platform', seg_orgs: 'Organizations', seg_users: 'Users', seg_catalog: 'Catalog', seg_log: 'Activity log',

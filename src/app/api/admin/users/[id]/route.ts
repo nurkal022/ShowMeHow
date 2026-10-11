@@ -3,6 +3,7 @@ import { guardAdmin } from '@/lib/http/guards';
 import { badRequest, INVALID_BODY_MESSAGE, notFound, readBody, type IdParams } from '@/lib/http/route-kit';
 import { getUserCard, setPlatformRole } from '@/lib/admin/users';
 import { logAdminAction } from '@/lib/admin/actions';
+import { onUserDisabled } from '@/lib/telegram/community';
 import { disableUser, enableUser, setTemporaryPassword } from '@/lib/auth/users';
 import { generateTempPassword } from '@/lib/auth/temp-password';
 import { userContact } from '@/lib/auth/identifier';
@@ -28,6 +29,7 @@ export async function POST(req: Request, { params }: IdParams) {
     case 'disable':
       if (self) return badRequest('Нельзя заблокировать самого себя.');
       await disableUser(card.id);
+      onUserDisabled(card.id);
       await logAdminAction(admin.id, 'user.disable', target);
       return NextResponse.json({ ok: true });
     case 'enable':

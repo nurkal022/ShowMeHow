@@ -16,6 +16,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "migrate:data": "tsx scripts/migrate-to-db.ts",
     "worker": "tsx scripts/worker.ts",
+    "bot": "tsx scripts/bot.ts",
     "load": "tsx scripts/load/run.ts",
     "load:mock": "tsx scripts/load/mock-provider.ts",
     "org": "tsx scripts/org.ts",

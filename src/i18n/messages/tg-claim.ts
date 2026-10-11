@@ -1,0 +1,47 @@
+import { defineMessages } from '../core';
+
+/** Страница привязки Telegram по ссылке из бота. */
+export const tgClaim = defineMessages({
+  ru: {
+    blockedTitle: 'Аккаунт заблокирован', blocked: 'Аккаунт, к которому привязан этот Telegram, заблокирован. Обратитесь к администратору школы или платформы.',
+    impersonating: 'Вы вошли от имени другого пользователя. Вернитесь в свой аккаунт и откройте ссылку из бота снова.',
+    notMe: 'Это не мой аккаунт — выйти',
+    title: 'Доступ через Telegram',
+    leadNew: 'Создайте аккаунт Tesseract — он будет связан с Telegram {name}.',
+    leadLinked: 'Вы вошли как {who}. Привязать к этому аккаунту Telegram {name}?',
+    link: 'Привязать Telegram', create: 'Создать аккаунт',
+    haveAccount: 'Уже есть аккаунт?', login: 'Войти и привязать',
+    expiredTitle: 'Ссылка устарела',
+    expired: 'Ссылка одноразовая и действует 15 минут. Получите новую в боте командой /start или /login.',
+    done: 'Готово! Telegram привязан, бот прислал ссылку в сообщество.',
+    open: 'Открыть платформу',
+  },
+  kk: {
+    blockedTitle: 'Аккаунт бұғатталған', blocked: 'Осы Telegram байланыстырылған аккаунт бұғатталған. Мектеп немесе платформа әкімшісіне хабарласыңыз.',
+    impersonating: 'Сіз басқа пайдаланушы атынан кірдіңіз. Өз аккаунтыңызға оралып, боттағы сілтемені қайта ашыңыз.',
+    notMe: 'Бұл менің аккаунтым емес — шығу',
+    title: 'Telegram арқылы кіру',
+    leadNew: 'Tesseract аккаунтын жасаңыз — ол Telegram {name} байланыстырылады.',
+    leadLinked: 'Сіз {who} ретінде кірдіңіз. Осы аккаунтқа Telegram {name} байланыстыру керек пе?',
+    link: 'Telegram байланыстыру', create: 'Аккаунт жасау',
+    haveAccount: 'Аккаунтыңыз бар ма?', login: 'Кіріп, байланыстыру',
+    expiredTitle: 'Сілтеме ескірген',
+    expired: 'Сілтеме бір реттік және 15 минут жарамды. Боттан /start немесе /login арқылы жаңасын алыңыз.',
+    done: 'Дайын! Telegram байланыстырылды, бот қауымдастыққа сілтеме жіберді.',
+    open: 'Платформаны ашу',
+  },
+  en: {
+    blockedTitle: 'Account blocked', blocked: 'The account this Telegram is connected to is blocked. Contact your school or platform administrator.',
+    impersonating: 'You are signed in as another user. Return to your own account and open the bot link again.',
+    notMe: 'Not my account — sign out',
+    title: 'Access via Telegram',
+    leadNew: 'Create a Tesseract account — it will be connected to Telegram {name}.',
+    leadLinked: 'You are signed in as {who}. Connect Telegram {name} to this account?',
+    link: 'Connect Telegram', create: 'Create account',
+    haveAccount: 'Already have an account?', login: 'Sign in and connect',
+    expiredTitle: 'Link expired',
+    expired: 'The link is single-use and valid for 15 minutes. Get a new one from the bot with /start or /login.',
+    done: 'Done! Telegram is connected, and the bot sent you a community link.',
+    open: 'Open the platform',
+  },
+});
