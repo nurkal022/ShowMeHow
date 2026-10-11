@@ -1,7 +1,8 @@
 /**
- * Четыре встроенные VR-лаборатории. Сцены статичны и лежат в public/labs,
+ * Встроенные VR-лаборатории. Сцены статичны и лежат в public/labs,
  * поэтому список — константа, а не таблица в базе: таблица появится вместе
- * с генерацией лабораторий.
+ * с генерацией лабораторий. Четыре написаны руками, «нефтешлам» собирается
+ * Vite из labs-src/oil-sludge (npm run build там же).
  */
 export interface LabEntry {
   slug: string;
@@ -82,6 +83,23 @@ export const LABS: LabEntry[] = [
         title: 'Algorithm hall', subject: 'Computer science',
         blurb: 'Four sorting algorithms step by step and a race of bubble sort against quicksort; breadth-first and depth-first graph traversal; a search tree grows before your eyes.',
         stations: ['Sorting', 'Graph traversal', 'Search tree'],
+      },
+    },
+  },
+  {
+    slug: 'oil-sludge', title: 'Термообработка нефтешлама', subject: 'Химическая технология',
+    blurb: 'Куб нефтешлама прогревается потоком горячего воздуха: пар, капли нефти, кокс и тепловизор считает 3D-модель тепломассопереноса. Ставьте термопары, крутите T₀ и U₀, проходите шесть лабораторных работ.',
+    stations: ['Установка с феном', 'Приборы и графики', 'Лабораторные работы'],
+    i18n: {
+      kk: {
+        title: 'Мұнай шламын термиялық өңдеу', subject: 'Химиялық технология',
+        blurb: 'Мұнай шламының текшесі ыстық ауа ағынымен қызады: бу, мұнай тамшылары, кокс пен тепловизорды жылу-масса алмасудың 3D-моделі есептейді. Термопараларды қойып, T₀ мен U₀-ды өзгертіп, алты зертханалық жұмысты орындаңыз.',
+        stations: ['Фені бар қондырғы', 'Аспаптар мен графиктер', 'Зертханалық жұмыстар'],
+      },
+      en: {
+        title: 'Oil sludge heat treatment', subject: 'Chemical engineering',
+        blurb: 'A cube of oil sludge is heated by a hot air stream: steam, oil drops, coke and a thermal camera are computed by a 3D heat and mass transfer model. Place thermocouples, adjust T₀ and U₀ and work through six lab assignments.',
+        stations: ['Heater rig', 'Instruments and charts', 'Lab assignments'],
       },
     },
   },

@@ -73,7 +73,7 @@
 .land-card-play { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, .5);
   opacity: 0; transform: scale(.8); transition: all .2s ease; }
 .land-card:hover .land-card-play { opacity: 1; transform: none; }
-.land-labs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.land-labs { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
 .land-lab { position: relative; display: block; border-radius: 18px; overflow: hidden; color: #fff; aspect-ratio: 4 / 3; text-decoration: none; }
 .land-lab img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s var(--ease-out); }
 .land-lab:hover img { transform: scale(1.07); }

@@ -15,7 +15,8 @@ async function main(): Promise<void> {
       // Локальный сервер может идти по самоподписанному https — сертификат не проверяем.
       const page = await browser.newPage({ viewport: { width: 960, height: 600 }, ignoreHTTPSErrors: true });
       await page.goto(`${base}/lab/${lab.slug}`, { waitUntil: 'networkidle' });
-      await page.addStyleTag({ content: '.hud{display:none}' });
+      // .hud — у сцен на common.js; #hud, #dock и др. — у нефтешлама (своя сборка из labs-src).
+      await page.addStyleTag({ content: '.hud,#hud,#dock,#views,#xr,#help{display:none!important}' });
       await page.waitForTimeout(2500);
       const file = path.join(process.cwd(), 'public', 'labs', `${lab.slug}.png`);
       await page.screenshot({ path: file });

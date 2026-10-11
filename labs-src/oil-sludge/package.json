@@ -1,0 +1,24 @@
+{
+  "name": "tesseract-lab-oil-sludge",
+  "version": "1.0.0",
+  "description": "VR-лаборатория «Термообработка нефтешлама» для Tesseract (копия KazNU/PhD/OilDirt/vr-lab)",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "vite",
+    "build": "vite build && node -e \"require('fs').copyFileSync('../../public/labs/oil-sludge/index.html','../../public/labs/oil-sludge.html')\"",
+    "preview": "vite preview",
+    "dev:http": "vite --mode http"
+  },
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  },
+  "private": true
+}

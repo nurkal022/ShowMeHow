@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Термообработка нефтешлама — Tesseract</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='8' width='18' height='18' rx='2' fill='%233b2a1a'/%3E%3Cpath d='M8 30h16' stroke='%23ff8a3d' stroke-width='3'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=Roboto+Mono:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #1b2129; color: #e8edf3; font-family: Inter, Roboto, system-ui, sans-serif; overflow: hidden; }
+    #app { position: fixed; inset: 0; }
+    #hud { position: fixed; left: 16px; top: 16px; max-width: min(520px, calc(100vw - 32px)); pointer-events: none; }
+    #hud h1 { font-size: 20px; margin: 0 0 4px; }
+    #hud p { margin: 0; font-size: 13px; color: #93a1b3; line-height: 1.45; }
+    #xr { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    #xr button { font: 600 16px Inter, sans-serif; padding: 14px 22px; border-radius: 12px; border: 1px solid #3a4656; background: #1f2732; color: #e8edf3; cursor: pointer; }
+    #xr button.primary { background: #ff8a3d; color: #10141a; border-color: #ff8a3d; }
+    #views { position: fixed; right: 16px; top: 16px; display: flex; flex-direction: column; gap: 6px; }
+    #views button { font: 600 13px Inter, sans-serif; padding: 8px 12px; border-radius: 9px; border: 1px solid #3a4656; background: rgba(31,39,50,.88); color: #e8edf3; cursor: pointer; text-align: left; }
+    #views button:hover { border-color: #ff8a3d; }
+    #hud { background: rgba(20,25,32,.72); padding: 10px 14px; border-radius: 12px; }
+    /* Возврат в раздел лабораторий Tesseract — как у остальных сцен. */
+    #back { display: inline-block; margin-bottom: 6px; color: #8ab4f8; text-decoration: none; font-size: 13px; pointer-events: auto; }
+    #back:hover { text-decoration: underline; }
+    #dock { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: max-content; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+            align-items: center; background: rgba(16,21,28,.92); border: 1px solid #2c3644; border-radius: 16px; padding: 8px 12px; max-width: calc(100vw - 32px); box-sizing: border-box; font-size: 13px; }
+    #dock .grp { display: flex; gap: 8px; align-items: center; }
+    #dock .grp + .grp { border-left: 1px solid #2c3644; padding-left: 8px; }
+    #dock button, #dock select { font: 600 13px Inter, sans-serif; background: #1f2732; color: #e8edf3; border: 1px solid #3a4656; border-radius: 9px; padding: 7px 10px; cursor: pointer; }
+    #dock button.big { font-size: 16px; min-width: 44px; }
+    #dock button.on { background: #5bd68a; color: #10141a; border-color: #5bd68a; }
+    #dock #d-live.on { background: #ffcc4d; border-color: #ffcc4d; color: #10141a; }
+    #dock label { display: flex; align-items: center; gap: 6px; color: #93a1b3; }
+    #dock b { color: #e8edf3; min-width: 58px; font-weight: 700; }
+    #dock input[type=range] { width: 96px; accent-color: #ff8a3d; }
+    #dock .hist input[type=range] { width: 120px; accent-color: #ffcc4d; }
+    #dock .time { font: 700 14px "Roboto Mono", monospace; min-width: 70px; color: #e8edf3; }
+    #help { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(8,10,14,.6); }
+    #help.show { display: flex; }
+    #help .card { background: #161c24; border: 1px solid #2c3644; border-radius: 16px; padding: 22px 26px; max-width: min(640px, calc(100vw - 32px)); line-height: 1.6; font-size: 14px; }
+    #help h2 { margin: 0 0 10px; font-size: 18px; }
+    #help kbd { background: #2a3442; border-radius: 6px; padding: 1px 7px; font: 600 12px "Roboto Mono", monospace; }
+    #help .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; }
+    @media (max-width: 760px) { #help .cols { grid-template-columns: 1fr; } #views { display: none; } }
+    @media (max-width: 700px) { #hud p { display: none; } }
+    #xr .note { font-size: 14px; color: #93a1b3; background: rgba(20,25,32,.85); padding: 10px 14px; border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="hud">
+    <a id="back" href="/labs">← Лаборатории</a>
+    <h1>VR-лаборатория: термическая обработка нефтешлама</h1>
+    <p>Наведите на куб — увидите T и состав; клик по кубу ставит термопару. Крутите ручку T₀ и двигайте рычаг U₀ на фене. Справка — <b>?</b></p>
+  </div>
+  <div id="xr"></div>
+  <div id="views"></div>
+  <div id="dock"></div>
+  <div id="help">
+    <div class="card">
+      <h2>Управление</h2>
+      <div class="cols">
+        <div><kbd>Пробел</kbd> пуск / пауза</div><div><kbd>R</kbd> сброс образца</div>
+        <div><kbd>1</kbd>–<kbd>5</kbd> режим вида</div><div><kbd>S</kbd> сечение, <kbd>[</kbd> <kbd>]</kbd> сдвиг</div>
+        <div><kbd>↑</kbd> <kbd>↓</kbd> T₀ ± 25 °C</div><div><kbd>←</kbd> <kbd>→</kbd> перемотка, <kbd>L</kbd> live</div>
+        <div><kbd>+</kbd> <kbd>−</kbd> ускорение</div><div><kbd>?</kbd> эта справка</div>
+      </div>
+      <p><b>Мышь:</b> вращение — левая кнопка по фону, панорама — правая, масштаб — колесо. Наведение на куб — значения в точке, клик — поставить следующую термопару (на срезе — внутрь). Ручку T₀ тяните вверх/вниз, рычаг U₀ — вбок, красная кнопка на фене — пуск. Панели переносятся за заголовок (⠿).</p>
+      <p><b>Quest:</b> лазер + курок или щипок пальцами. Посмотрите на левую руку — появится меню (пуск, T₀, U₀, вид, «Панели ко мне»). Левый стик — ходьба, правый — поворот на 30°.</p>
+      <p style="color:#93a1b3">Нажмите в любом месте, чтобы закрыть.</p>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
