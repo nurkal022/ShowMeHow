@@ -11,7 +11,7 @@ export default async function ProfilePage() {
   // Временный пароль — layout уже подменяет страницу формой смены, здесь рендерить нечего.
   if (!user) return null;
   const memberships = await listMemberships(user.id);
-  // У учителей и администрации профиль живёт в кабинете — со своей работой и настройками помощника.
+  // У преподавателей и администрации профиль живёт в кабинете — со своей работой и настройками помощника.
   if (user.role === 'admin' || hasStaffRole(memberships)) redirect('/account');
   const [profile, quota] = await Promise.all([getProfile(user.id), quotaStatus(user, memberships)]);
   if (!profile) redirect('/login');

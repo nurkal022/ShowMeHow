@@ -1,7 +1,7 @@
 import { db } from '../db/client';
 
 /**
- * Лист паролей. Временный пароль ученика хранится в открытом виде, пока ученик
+ * Лист паролей. Временный пароль студента хранится в открытом виде, пока студент
  * его не сменил, и не дольше 30 дней: без почты другой доставки нет (спецификация §4).
  * Строку удаляют updatePassword и setTemporaryPassword (src/lib/auth/users.ts).
  */
@@ -26,7 +26,7 @@ export interface CredentialCard {
   userId: string;
   displayName: string;
   login: string;
-  /** null — ученик уже сменил пароль или строка устарела. */
+  /** null — студент уже сменил пароль или строка устарела. */
   password: string | null;
 }
 

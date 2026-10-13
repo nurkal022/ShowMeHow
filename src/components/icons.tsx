@@ -93,7 +93,7 @@ export const IconVr = svg(<>
   <circle cx="8" cy="12" r="1.2" opacity=".6" /><circle cx="16" cy="12" r="1.2" opacity=".6" />
 </>);
 
-/** Курсы ученика: раскрытая книга. */
+/** Курсы студента: раскрытая книга. */
 export const IconCourses = svg(<>
   <path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5z" />
   <path d="M12 6.5v13" opacity=".6" />
@@ -127,7 +127,7 @@ export const IconPrint = svg(<>
 </>);
 export const IconEdit = svg(<><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></>);
 
-/* Рабочие экраны кабинетов: меню строки, типы блоков урока, мастер учеников. */
+/* Рабочие экраны кабинетов: меню строки, типы блоков урока, мастер студентов. */
 export const IconMore = svg(<><path d="M12 5.5h.01M12 12h.01M12 18.5h.01" strokeWidth={2.6} /></>);
 export const IconText = svg(<><path d="M5 6h14M5 10.5h14M5 15h9M5 19.5h6" /></>);
 export const IconTask = svg(<>

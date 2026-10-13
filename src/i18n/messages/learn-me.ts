@@ -1,7 +1,7 @@
 import { defineMessages } from '../core';
 
 /**
- * Личные страницы ученика: профиль и интересы, мои оценки, заметки и закладки,
+ * Личные страницы студента: профиль и интересы, мои оценки, заметки и закладки,
  * работа над ошибками.
  */
 export const learnMe = defineMessages({
@@ -30,7 +30,7 @@ export const learnMe = defineMessages({
     tagsHint: 'Отметьте всё, что нравится, — можно до {n} тем.',
     addOwn: 'Добавить своё',
     hobbies: 'Чем увлекаешься',
-    hobbiesPlaceholder: 'Например: играю в футбол за школу, собираю модели самолётов, монтирую ролики для друзей',
+    hobbiesPlaceholder: 'Например: играю в футбол за университет, собираю модели самолётов, монтирую ролики для друзей',
     dream: 'Кем хочешь стать', dreamPlaceholder: 'Например: инженером-конструктором',
     stylesAria: 'Как вам понятнее объясняют',
     style_examples: 'На примерах', style_examples_hint: 'Сначала пример из жизни, потом правило',
@@ -38,8 +38,8 @@ export const learnMe = defineMessages({
     style_practice: 'Через практику', style_practice_hint: 'Сразу пробовать самому, разбор по ходу',
     style_visual: 'Схемами и картинками', style_visual_hint: 'Рисунок, таблица, схема — и уже потом текст',
     // оценки
-    gradesTitle: 'Мои оценки', gradesSub: 'Балл появляется после проверки учителем.',
-    noGrades: 'Оценок пока нет. Задания появятся в курсах, которые откроет учитель.',
+    gradesTitle: 'Мои оценки', gradesSub: 'Балл появляется после проверки преподавателем.',
+    noGrades: 'Оценок пока нет. Задания появятся в курсах, которые откроет преподаватель.',
     summaryAria: 'Итог по всем курсам', avgChecked: 'средний результат за проверенные работы',
     ofPossible: '{a} из {b} возможных баллов', ofCourseTotal: 'из {b} баллов за курс целиком',
     worksReturned: '{n, plural, one {работу вернули} few {работы вернули} many {работ вернули} other {работы вернули}} на доработку',
@@ -47,7 +47,7 @@ export const learnMe = defineMessages({
     courseLine: '{done} из {n} сдано · {a} из {b} баллов',
     // заметки
     notesTitle: 'Заметки и закладки',
-    notesSub: 'Всё, что вы отметили в уроках. Видно только вам — учитель этого не читает.',
+    notesSub: 'Всё, что вы отметили в уроках. Видно только вам — преподаватель этого не читает.',
     notesEmpty: 'Пока пусто',
     notesEmptyText: 'В уроке под шагом есть кнопка «Заметка» и звёздочка-закладка. Отмечайте сложные места — сюда они соберутся сами.',
     nf_all: 'Всё', nf_marks: 'Закладки', nf_notes: 'С заметкой',
@@ -94,22 +94,22 @@ export const learnMe = defineMessages({
     tagsHint: 'Ұнайтынның бәрін белгілеңіз — {n} тақырыпқа дейін болады.',
     addOwn: 'Өзіңізді қосу',
     hobbies: 'Немен айналысасыз',
-    hobbiesPlaceholder: 'Мысалы: мектеп командасында футбол ойнаймын, ұшақ модельдерін жинаймын, достарыма бейне монтаждаймын',
+    hobbiesPlaceholder: 'Мысалы: университет командасында футбол ойнаймын, ұшақ модельдерін жинаймын, достарыма бейне монтаждаймын',
     dream: 'Кім болғыңыз келеді', dreamPlaceholder: 'Мысалы: инженер-конструктор',
     stylesAria: 'Сізге қалай түсіндіргені ұнайды',
     style_examples: 'Мысалдармен', style_examples_hint: 'Алдымен өмірден мысал, содан кейін ереже',
     style_story: 'Әңгімемен', style_story_hint: 'Кейіпкері мен оқиғасы бар әңгіме сияқты түсіндіру',
     style_practice: 'Тәжірибе арқылы', style_practice_hint: 'Бірден өзі байқап көру, талдау қатар жүреді',
     style_visual: 'Сызбалар мен суреттермен', style_visual_hint: 'Сурет, кесте, сызба — мәтін содан кейін',
-    gradesTitle: 'Менің бағаларым', gradesSub: 'Ұпай мұғалім тексергеннен кейін шығады.',
-    noGrades: 'Әзірге баға жоқ. Тапсырмалар мұғалім ашатын курстарда пайда болады.',
+    gradesTitle: 'Менің бағаларым', gradesSub: 'Ұпай оқытушы тексергеннен кейін шығады.',
+    noGrades: 'Әзірге баға жоқ. Тапсырмалар оқытушы ашатын курстарда пайда болады.',
     summaryAria: 'Барлық курс бойынша қорытынды', avgChecked: 'тексерілген жұмыстар бойынша орташа нәтиже',
     ofPossible: '{a} / {b} мүмкін ұпай', ofCourseTotal: '/ {b} ұпай — бүкіл курс бойынша',
     worksReturned: '{n, plural, other {жұмыс}} жетілдіруге қайтарылды',
     nothingReturned: 'ештеңе қайтарылмады',
     courseLine: 'Тапсырылды: {done} / {n} · {a} / {b} ұпай',
     notesTitle: 'Жазбалар мен бетбелгілер',
-    notesSub: 'Сабақтарда белгілегеніңіздің бәрі. Оны тек Сіз көресіз — мұғалім оқымайды.',
+    notesSub: 'Сабақтарда белгілегеніңіздің бәрі. Оны тек Сіз көресіз — оқытушы оқымайды.',
     notesEmpty: 'Әзірге бос',
     notesEmptyText: 'Сабақта қадамның астында «Жазба» батырмасы мен жұлдызша-бетбелгі бар. Қиын жерлерді белгілеңіз — олар осында өздігінен жиналады.',
     nf_all: 'Барлығы', nf_marks: 'Бетбелгілер', nf_notes: 'Жазбасы бар',
@@ -155,22 +155,22 @@ export const learnMe = defineMessages({
     tagsHint: 'Mark everything you like — up to {n} topics.',
     addOwn: 'Add your own',
     hobbies: 'What are you into',
-    hobbiesPlaceholder: 'For example: I play football for my school, build model planes, edit videos for friends',
+    hobbiesPlaceholder: 'For example: I play football for my university, build model planes, edit videos for friends',
     dream: 'What do you want to become', dreamPlaceholder: 'For example: a design engineer',
     stylesAria: 'How you like things explained',
     style_examples: 'With examples', style_examples_hint: 'A real-life example first, then the rule',
     style_story: 'As a story', style_story_hint: 'An explanation told as a story, with a hero and a plot',
     style_practice: 'Through practice', style_practice_hint: 'Try it yourself right away, explanations along the way',
     style_visual: 'With diagrams and pictures', style_visual_hint: 'A picture, table or diagram — and only then text',
-    gradesTitle: 'My grades', gradesSub: 'Points appear after the teacher reviews your work.',
-    noGrades: 'No grades yet. Assignments will appear in courses your teacher opens.',
+    gradesTitle: 'My grades', gradesSub: 'Points appear after the instructor reviews your work.',
+    noGrades: 'No grades yet. Assignments will appear in courses your instructor opens.',
     summaryAria: 'Summary across all courses', avgChecked: 'average result for graded work',
     ofPossible: '{a} of {b} possible points', ofCourseTotal: 'of {b} points for the whole course',
     worksReturned: '{n, plural, one {assignment} other {assignments}} returned for revision',
     nothingReturned: 'nothing returned',
     courseLine: '{done} of {n} submitted · {a} of {b} points',
     notesTitle: 'Notes and bookmarks',
-    notesSub: 'Everything you marked in lessons. Only you can see it — the teacher doesn’t read it.',
+    notesSub: 'Everything you marked in lessons. Only you can see it — the instructor doesn’t read it.',
     notesEmpty: 'Nothing here yet',
     notesEmptyText: 'Under each lesson step there is a “Note” button and a bookmark star. Mark the tricky parts — they will be collected here automatically.',
     nf_all: 'All', nf_marks: 'Bookmarks', nf_notes: 'With a note',
@@ -198,7 +198,7 @@ export const learnMe = defineMessages({
 
 /**
  * Готовые интересы. В базе хранится русское слово (его читает и промпт помощника),
- * на экране — перевод. Свой тег ученика не переводится: его нет в словаре.
+ * на экране — перевод. Свой тег студента не переводится: его нет в словаре.
  */
 export const learnTags = defineMessages({
   ru: {

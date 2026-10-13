@@ -6,7 +6,7 @@ import { provisionMember } from '@/lib/org/people';
 
 type P = { params: Promise<{ slug: string }> };
 
-/** «Добавить учителя»: существующий по почте — членством, новый — с временным паролем. */
+/** «Добавить преподавателя»: существующий по почте — членством, новый — с временным паролем. */
 export async function POST(req: Request, { params }: P) {
   const { slug } = await params;
   const g = await guardOrg(req, slug, ['org_admin']);

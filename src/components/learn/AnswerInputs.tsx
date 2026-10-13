@@ -10,7 +10,7 @@ import SimValuePicker from './SimValuePicker';
 import { useT } from '@/i18n/client';
 import { learnLesson } from '@/i18n/messages/learn-lesson';
 
-/** Поля ответа ученика. Управляемые: состояние хранит AnswerForm. */
+/** Поля ответа студента. Управляемые: состояние хранит AnswerForm. */
 export default function AnswerInputs({ name, spec, answer, disabled, onChange, captureRef }: {
   name: string; spec: StudentAssignmentSpec; answer: Answer; disabled: boolean; onChange: (a: Answer) => void;
   /** Состояние симуляции снимает форма в момент сдачи — через эту ссылку. */

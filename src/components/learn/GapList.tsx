@@ -12,9 +12,9 @@ import { callApi } from '@/components/cabinet/api';
 import { IconBulb, IconChevron, IconSpark } from '@/components/icons';
 
 /**
- * Слабые места ученика с кнопкой «Разобрать». Сборка разбора идёт минуту-другую,
+ * Слабые места студента с кнопкой «Разобрать». Сборка разбора идёт минуту-другую,
  * поэтому кнопка блокируется вся карточка целиком, а не одна только кнопка:
- * второй такой же разбор ученику не нужен. Если разбор уже есть — ведём в него.
+ * второй такой же разбор студенту не нужен. Если разбор уже есть — ведём в него.
  */
 export default function GapList({ gaps, existing }: { gaps: Gap[]; existing: Record<string, string> }) {
   const t = useT(learnMe);

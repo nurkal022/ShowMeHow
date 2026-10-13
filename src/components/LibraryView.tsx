@@ -19,7 +19,7 @@ export default function LibraryView() {
   const [error, setError] = useState('');
   const [installing, setInstalling] = useState(false);
   const [loading, setLoading] = useState(true);
-  // Пока ответ не пришёл, кнопку «Создать» не показываем: ученику без права
+  // Пока ответ не пришёл, кнопку «Создать» не показываем: студенту без права
   // генерации она вела бы на форму, которая всё равно откажет.
   const [canCreate, setCanCreate] = useState(false);
 

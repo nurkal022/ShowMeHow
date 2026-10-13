@@ -3,8 +3,8 @@ import { lastDays } from '../cabinet/daily';
 import { assignmentTitle } from '../lms/block-schema';
 
 /**
- * Обзор организации глазами админа: где застревают ученики, как работают
- * учителя и что происходит в школе прямо сейчас.
+ * Обзор организации глазами админа: где застревают студенты, как работают
+ * преподавателя и что происходит в школе прямо сейчас.
  */
 
 /* --------------------------------- воронка -------------------------------- */
@@ -42,7 +42,7 @@ export async function orgFunnel(orgId: string): Promise<OrgFunnel> {
   };
 }
 
-/* --------------------------- активность учителей -------------------------- */
+/* --------------------------- активность преподавателей -------------------------- */
 
 export interface TeacherActivity {
   userId: string; name: string; admin: boolean; groups: string[];
@@ -82,7 +82,7 @@ export async function teacherActivity(orgId: string): Promise<TeacherActivity[]>
   ]);
   const days = lastDays(14);
   return people.rows
-    // Админ без групп и курсов — не учитель: в карточках он был бы пустым.
+    // Админ без групп и курсов — не преподаватель: в карточках он был бы пустым.
     .filter((p) => p.role === 'teacher' || p.groups.length > 0 || p.courses > 0)
     .map((p) => {
       const mine = new Map(graded.rows.filter((g) => g.uid === p.id).map((g) => [g.day, g.n]));
@@ -133,8 +133,8 @@ export async function orgFeed(orgId: string, limit = 10): Promise<OrgEvent[]> {
   return rows.map((r) => {
     const task = r.prompt !== null ? assignmentTitle(r.prompt) || 'задание' : null;
     const what = {
-      student: r.what ? `новый ученик · ${r.what}` : 'новый ученик',
-      teacher: 'присоединился к школе как учитель',
+      student: r.what ? `новый студент · ${r.what}` : 'новый студент',
+      teacher: 'присоединился к университету как преподаватель',
       group: 'создана группа',
       course: `создал курс «${r.what}»`,
       submitted: `сдал «${task}» · ${r.what}`,

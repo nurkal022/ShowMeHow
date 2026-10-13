@@ -18,7 +18,7 @@ import Markup from '@/components/lms/Markup';
 import { Ring } from '@/components/cabinet/viz';
 import { IconCheck, IconChevron, IconTask, IconUser } from '@/components/icons';
 
-/** Страница курса ученика: обложка, прогресс и программа — с чего продолжить. */
+/** Страница курса студента: обложка, прогресс и программа — с чего продолжить. */
 export default async function LearnCoursePage({ params, searchParams }: {
   params: Promise<{ id: string }>; searchParams: SearchParams;
 }) {

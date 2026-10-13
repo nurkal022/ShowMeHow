@@ -12,7 +12,7 @@ import { answersHref } from '@/lib/lms/links';
 import { assignmentTitle as taskTitle } from '@/lib/lms/block-schema';
 
 /**
- * Черновик или сдача ответа учеником. Отдаётся только студенческий вид ответа:
+ * Черновик или сдача ответа студентом. Отдаётся только студенческий вид ответа:
  * ни правильных вариантов, ни служебных полей (спецификация §6).
  */
 export async function PUT(req: Request, { params }: IdParams) {
@@ -32,7 +32,7 @@ export async function PUT(req: Request, { params }: IdParams) {
       if (window.over) throw new LmsError('Время контрольной вышло — ответы больше не принимаются.');
     }
     const sub = await saveAnswer(ctx.block, user.id, body.answer, submit);
-    // Работа ждёт человека — учителю сигнал. Повторы по тому же заданию копятся в один счётчик.
+    // Работа ждёт человека — преподавателю сигнал. Повторы по тому же заданию копятся в один счётчик.
     if (submit && sub.status === 'submitted' && ctx.block.body.kind === 'assignment') {
       await notify(ctx.course.ownerId, {
         key: `submitted:${ctx.block.id}`, kind: 'submitted',
@@ -44,7 +44,7 @@ export async function PUT(req: Request, { params }: IdParams) {
       return NextResponse.json({ submission: toStudentSubmission(sub, true), reveal: null });
     }
     const payload = ctx.block.body.kind === 'assignment' ? ctx.block.body.payload : null;
-    // Ключ и пояснение уходят ученику только после проверки (см. revealFor).
+    // Ключ и пояснение уходят студенту только после проверки (см. revealFor).
     const reveal = payload && revealFor(payload, sub) ? revealOf(payload) : null;
     return NextResponse.json({ submission: toStudentSubmission(sub), reveal });
   });

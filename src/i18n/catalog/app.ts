@@ -25,9 +25,9 @@ export const catalog: CatalogEntry[] = [
     en: 'A username may contain only lowercase Latin letters, digits, dots, hyphens and underscores, be 3 to 40 characters long, and start with a letter or digit.',
   },
   {
-    ru: 'Регистрация закрыта. Аккаунт выдаёт ваша школа или администратор платформы.',
-    kk: 'Тіркелу жабық. Аккаунтты мектебіңіз немесе платформа әкімшісі береді.',
-    en: 'Registration is closed. Your school or the platform administrator issues accounts.',
+    ru: 'Регистрация закрыта. Аккаунт выдаёт ваш университет или администратор платформы.',
+    kk: 'Тіркелу жабық. Аккаунтты университетіңіз немесе платформа әкімшісі береді.',
+    en: 'Registration is closed. Your university or the platform administrator issues accounts.',
   },
 
   // «Войти как»
@@ -50,7 +50,7 @@ export const catalog: CatalogEntry[] = [
   { ru: 'У этой генерации ещё нет версии, которую можно оставить.', kk: 'Бұл генерацияда әзірге қалдыруға болатын нұсқа жоқ.', en: 'This generation has no version to keep yet.' },
   { ru: 'Сохранена по ходу генерации: полировка остановлена вручную.', kk: 'Генерация барысында сақталды: жетілдіру қолмен тоқтатылды.', en: 'Saved mid-generation: polishing was stopped manually.' },
   { ru: 'С такими настройками тренажёр не запускается: {errors}', kk: 'Мұндай баптаулармен тренажер іске қосылмайды: {errors}', en: 'The simulator does not run with these settings: {errors}' },
-  { ru: 'Генерация недоступна для учеников вашей организации.', kk: 'Ұйымыңыздың оқушыларына генерация қолжетімсіз.', en: 'Generation is not available to students in your organization.' },
+  { ru: 'Генерация недоступна для студентов вашей организации.', kk: 'Ұйымыңыздың студенттеріне генерация қолжетімсіз.', en: 'Generation is not available to students in your organization.' },
   { ru: 'Воркер перезапущен, генерация начата заново.', kk: 'Воркер қайта іске қосылды, генерация қайтадан басталды.', en: 'The worker restarted; generation started over.' },
   { ru: 'Генерация прервалась дважды. Попробуйте ещё раз.', kk: 'Генерация екі рет үзілді. Қайтадан көріңіз.', en: 'Generation was interrupted twice. Please try again.' },
   { ru: 'Генерация завершилась без результата. Попробуйте ещё раз.', kk: 'Генерация нәтижесіз аяқталды. Қайтадан көріңіз.', en: 'Generation finished without a result. Please try again.' },

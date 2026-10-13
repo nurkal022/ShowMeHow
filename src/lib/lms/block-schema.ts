@@ -6,7 +6,7 @@ import { LIMITS, LmsError, optionalText, requireText } from './types';
 /**
  * Что лежит в blocks.payload. Санация по белому списку, как у настроек
  * организации: неизвестные поля в базу не попадают. Модуль чистый — его
- * импортируют клиентские редакторы. Ученику задание отдаётся только через
+ * импортируют клиентские редакторы. Студенту задание отдаётся только через
  * toStudentBody: правильных ответов в нём нет.
  */
 
@@ -43,7 +43,7 @@ export function isBlockKind(v: unknown): v is BlockKind {
 export interface TextPayload { title: string; body: string }
 export interface SimulationPayload {
   simulationId: string | null; caption: string;
-  /** Стартовые значения параметров (имя контрола → число) и параметры, закрытые от ученика. */
+  /** Стартовые значения параметров (имя контрола → число) и параметры, закрытые от студента. */
   preset: Record<string, number>;
   locked: string[];
 }
@@ -111,11 +111,11 @@ export interface AssignmentPayload {
   points: number;
   stand: Stand;
   allowRetry: boolean;
-  /** Критерии оценивания для ручной проверки: ученик видит их в задании, учитель — в форме оценки. */
+  /** Критерии оценивания для ручной проверки: студент видит их в задании, преподаватель — в форме оценки. */
   rubric: RubricItem[];
-  /** Пояснение к правильному ответу: ученик видит его только после проверки. */
+  /** Пояснение к правильному ответу: студент видит его только после проверки. */
   explanation: string;
-  /** Эталонный ответ — только для учителя: подсказка при проверке, ученику не отдаётся никогда. */
+  /** Эталонный ответ — только для преподавателя: подсказка при проверке, студенту не отдаётся никогда. */
   reference: string;
   spec: AssignmentSpec;
 }
@@ -145,7 +145,7 @@ export type StudentAssignmentSpec =
   | { type: 'table'; columns: TableColumn[]; minRows: number }
   | { type: 'number'; unit: string }
   | { type: 'text' }
-  /** Значений цели здесь нет; имена параметров — только если учитель разрешил подсказки. */
+  /** Значений цели здесь нет; имена параметров — только если преподаватель разрешил подсказки. */
   | { type: 'sim_state'; simulationId: string; showHints: boolean; targets?: { name: string; label: string }[] };
 
 export interface StudentAssignmentPayload {
@@ -155,7 +155,7 @@ export interface StudentAssignmentPayload {
   allowRetry: boolean;
   rubric: RubricItem[];
   spec: StudentAssignmentSpec;
-  /** Только после проверки (см. revealFor): пояснение и учительская схема с ключом. */
+  /** Только после проверки (см. revealFor): пояснение и преподавательская схема с ключом. */
   explanation?: string;
   solution?: AssignmentSpec;
 }
@@ -418,7 +418,7 @@ const IMAGE_SRC_RE = /^(https:\/\/[^\s"'<>]+|\/api\/lms\/assets\/[0-9a-f-]{36})$
 
 export type VideoEmbed = { kind: 'iframe'; src: string } | { kind: 'file'; src: string };
 
-/** Ссылка учителя → то, что можно встроить. null — источник не поддерживается. */
+/** Ссылка преподавателя → то, что можно встроить. null — источник не поддерживается. */
 export function videoEmbed(url: string): VideoEmbed | null {
   let u: URL;
   try { u = new URL(url.trim()); } catch { return null; }
@@ -537,10 +537,10 @@ export function bodyFromRow(kind: string, payload: unknown): BlockBody {
 
 export interface Reveal { explanation: string; solution: AssignmentSpec }
 
-/** reveal — ответ уже проверен и скрывать ключ незачем: добавляем пояснение и учительскую схему. */
+/** reveal — ответ уже проверен и скрывать ключ незачем: добавляем пояснение и преподавательскую схему. */
 export function toStudentBody(body: BlockBody, reveal = false): StudentBlockBody {
   if (body.kind !== 'assignment') return body;
-  // Эталон учителя не уходит ученику ни до, ни после проверки.
+  // Эталон преподавателя не уходит студенту ни до, ни после проверки.
   const { spec, explanation, reference: _reference, ...rest } = body.payload;
   let safe: StudentAssignmentSpec;
   if (spec.type === 'choice') {
@@ -577,7 +577,7 @@ export function revealOf(p: AssignmentPayload): Reveal {
 }
 
 /**
- * Когда ученику можно показать ключ: работа проверена и пересдать её либо нельзя,
+ * Когда студенту можно показать ключ: работа проверена и пересдать её либо нельзя,
  * либо незачем (полный балл). Иначе «Сдать заново» превращается в списывание.
  */
 export function revealFor(p: AssignmentPayload, sub: { status: string; score: number | null } | null | undefined): boolean {

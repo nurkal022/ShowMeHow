@@ -32,7 +32,7 @@ async function insertAll(topicId: string, bodies: BlockBody[], after: string | n
 }
 
 /**
- * Помощник учителя. lesson — урок по теме в пустую или текущую тему; tasks — задания по тексту
+ * Помощник преподавателя. lesson — урок по теме в пустую или текущую тему; tasks — задания по тексту
  * блока; variants — варианты задания; grade — черновик оценки ответа (ничего не сохраняет).
  */
 export async function POST(req: Request) {
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ...suggestion, commentHtml: renderMarkup(suggestion.comment) });
       }
       case 'build': {
-        // Конструктор урока: новая тема (или дополнение выбранной) по шаблону и слотам учителя.
+        // Конструктор урока: новая тема (или дополнение выбранной) по шаблону и слотам преподавателя.
         const staff = await staffCourse(user, str(body.courseId, 40));
         if (!staff) return notFound();
         const spec = sanitizeLessonSpec(body.spec);

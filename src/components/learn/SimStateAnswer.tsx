@@ -7,8 +7,8 @@ import { learnLesson } from '@/i18n/messages/learn-lesson';
 import SimStateFrame, { type CaptureSimState } from '@/components/lms/SimStateFrame';
 
 /**
- * Задание «Состояние симуляции» глазами ученика: симуляция и, после сдачи, список
- * «что совпало» — если учитель не отключил подсказки. Снимает состояние AnswerForm.
+ * Задание «Состояние симуляции» глазами студента: симуляция и, после сдачи, список
+ * «что совпало» — если преподаватель не отключил подсказки. Снимает состояние AnswerForm.
  */
 export default function SimStateAnswer({ spec, answer, captureRef }: {
   spec: Extract<StudentAssignmentSpec, { type: 'sim_state' }>; answer: Answer;

@@ -5,7 +5,7 @@ import { getTopic } from '@/lib/lms/courses';
 import { staffCourse, studentCourse } from '@/lib/lms/access';
 import { addComment, deleteComment, listComments } from '@/lib/lms/discussion';
 
-/** Обсуждение под уроком: читают и пишут ученики курса и его учителя. */
+/** Обсуждение под уроком: читают и пишут студенты курса и его преподаватели. */
 async function access(req: Request, topicId: unknown) {
   const user = await guardUser(req);
   if (user instanceof Response) return user;

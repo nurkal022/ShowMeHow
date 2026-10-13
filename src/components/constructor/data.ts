@@ -187,8 +187,8 @@ export const STYLES: { value: Style; label: string; hint: string }[] = [
 ];
 
 export const LEVELS: { value: Level; label: string }[] = [
-  { value: 'grade7to9', label: '7–9 класс' },
-  { value: 'grade10to11', label: '10–11 класс' },
+  { value: 'grade7to9', label: 'Школа, 7–9 класс' },
+  { value: 'grade10to11', label: 'Школа, 10–11 класс' },
   { value: 'students', label: 'Студенты' },
 ];
 
@@ -201,7 +201,7 @@ export const INSTRUMENTS: { value: Instrument; label: string; hint: string }[] =
   { value: 'steps', label: 'Пошагово', hint: 'по одному шагу вместо потока' },
   { value: 'lesson', label: 'Шаги урока', hint: 'наблюдай → измени → измерь' },
   { value: 'task', label: 'Задание', hint: 'вопрос с проверкой ответа' },
-  { value: 'table', label: 'Таблица', hint: 'ученик записывает точки опыта' },
+  { value: 'table', label: 'Таблица', hint: 'студент записывает точки опыта' },
 ];
 
 export function sectionByKey(key: string): Section | undefined {

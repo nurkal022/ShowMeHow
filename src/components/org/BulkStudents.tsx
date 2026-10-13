@@ -18,7 +18,7 @@ const STEPS: { n: Step; label: 'stepList' | 'stepCheck' | 'stepDone' }[] = [
   { n: 3, label: 'stepDone' },
 ];
 
-/** Ученики группы в три шага: вставить список или CSV → проверить логины и дубли → лист паролей. */
+/** Студенты группы в три шага: вставить список или CSV → проверить логины и дубли → лист паролей. */
 export default function BulkStudents({ slug, groupId }: { slug: string; groupId: string }) {
   const router = useRouter();
   const t = useT(orgPeople);
@@ -158,7 +158,7 @@ export default function BulkStudents({ slug, groupId }: { slug: string; groupId:
   );
 }
 
-/** Один опоздавший ученик — без списка и проверки. */
+/** Один опоздавший студент — без списка и проверки. */
 function OneStudent({ endpoint, onCreated }: { endpoint: string; onCreated: (created: CreatedStudent[]) => void }) {
   const t = useT(orgPeople);
   const [lastName, setLastName] = useState('');

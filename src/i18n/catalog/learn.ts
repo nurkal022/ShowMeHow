@@ -3,7 +3,7 @@ import type { CatalogEntry } from './types';
 /**
  * Сообщения сервера области «learn» на казахском и английском. Ошибки библиотек
  * lms (ответы, обсуждение, разборы, наставник) — в catalog/lms.ts; здесь — то, что
- * показывает только урок ученика.
+ * показывает только урок студента.
  */
 export const catalog: CatalogEntry[] = [
   // bridgeProblem (lib/lms/sim-bridge): сдача задания «Состояние симуляции».

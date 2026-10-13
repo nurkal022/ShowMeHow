@@ -15,14 +15,14 @@ const fmt = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');
 /**
  * Оценка одной работы. Лента проверки: Ctrl+Enter — сохранить и к следующей,
  * Alt+←/→ — соседние работы, Alt+1…3 — быстрый балл. Критерии складывают балл сами,
- * заготовки комментариев живут в браузере учителя.
+ * заготовки комментариев живут в браузере преподавателя.
  */
 export default function GradeForm({ submissionId, points, score, comment, nextHref, rubric = [], suggested = null, prevHref, nextAnyHref, canSuggest = false }: {
   submissionId: string; points: number; score: number | null; comment: string | null;
   /** Следующая непроверенная работа. Без него форма сама находит её в таблице ответов. */
   nextHref?: string | null;
   rubric?: RubricItem[];
-  /** Балл автопроверки — подставляется, пока учитель не поставил свой. */
+  /** Балл автопроверки — подставляется, пока преподаватель не поставил свой. */
   suggested?: number | null;
   prevHref?: string | null; nextAnyHref?: string | null;
   /** Развёрнутый ответ или таблица: помощник может предложить оценку. */
@@ -107,7 +107,7 @@ export default function GradeForm({ submissionId, points, score, comment, nextHr
       return setError(t('returnNeedsComment'));
     }
     setScoreError('');
-    // Отмеченные критерии уходят ученику строками комментария: он видит, за что именно балл.
+    // Отмеченные критерии уходят студенту строками комментария: он видит, за что именно балл.
     const lines = rubric.filter((r) => marks[r.id] !== undefined).map((r) => t('rubricLine', { label: r.label, a: fmt(marks[r.id]), b: fmt(r.points) }));
     const full = [text.trim(), lines.join('\n')].filter(Boolean).join('\n').slice(0, LIMITS.comment);
     // Адрес следующей работы берётся до запроса: после него эта работа уже не «ждёт проверки».

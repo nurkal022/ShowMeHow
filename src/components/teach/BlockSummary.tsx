@@ -16,7 +16,7 @@ function standText(t: TFn<typeof teachEditor.ru>, stand: Stand, simulationTitle:
   return t('sStandSim', { title: simulationTitle ?? t('untitled') });
 }
 
-/** Как блок выглядит в редакторе, пока его не правят. Учитель видит и правильные ответы. */
+/** Как блок выглядит в редакторе, пока его не правят. Преподаватель видит и правильные ответы. */
 export default function BlockSummary({ block, simulationTitle, missing }: {
   block: Block; simulationTitle: string | null; missing: boolean;
 }) {

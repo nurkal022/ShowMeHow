@@ -594,7 +594,7 @@ export async function refineExisting(
   ctx.emit({ type: 'done', simulationId: id });
 }
 
-/** План должен совпадать с тем, что видит ученик: подписи и диапазоны из наложения переносим в него. */
+/** План должен совпадать с тем, что видит студент: подписи и диапазоны из наложения переносим в него. */
 export function specWithConfig(spec: PlanSpec, config: SimConfig): PlanSpec {
   const params = config.parameters ?? {};
   const next: PlanSpec = {

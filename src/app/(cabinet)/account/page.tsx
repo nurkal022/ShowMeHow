@@ -15,7 +15,7 @@ export async function generateMetadata() {
   return { title: `${t('title')} — Tesseract` };
 }
 
-/** Профиль учителя и администрации — внутри кабинета, со своей работой и настройками помощника. */
+/** Профиль преподавателя и администрации — внутри кабинета, со своей работой и настройками помощника. */
 export default async function AccountPage() {
   const user = await requirePageUser('/account');
   if (!user) return null;

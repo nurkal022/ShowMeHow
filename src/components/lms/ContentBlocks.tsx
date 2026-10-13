@@ -6,7 +6,7 @@ import { IconAlert, IconBook, IconBulb, IconChevron, IconInfo, IconSpark } from 
 import Markup, { Tex } from './Markup';
 import { CalloutToneLabel, LmsText, VideoIframe } from './LmsText';
 
-/** Блоки-материалы урока: одинаково выглядят у ученика и в карточке редактора. Без состояния — рендерятся на сервере. */
+/** Блоки-материалы урока: одинаково выглядят у студента и в карточке редактора. Без состояния — рендерятся на сервере. */
 
 const TONE_ICON = { info: IconInfo, definition: IconBook, important: IconSpark, warning: IconAlert, example: IconBulb };
 

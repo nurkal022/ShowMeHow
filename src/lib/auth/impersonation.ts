@@ -14,7 +14,7 @@ import {
  */
 export const RETURN_COOKIE = 'showmehow_admin_return';
 
-/** Куда вести после входа: в кабинет по самой старшей роли, ученика — в его курсы. */
+/** Куда вести после входа: в кабинет по самой старшей роли, студента — в его курсы. */
 export async function landingFor(userId: string, orgSlug?: string): Promise<string> {
   const all = await listMemberships(userId);
   const scoped = orgSlug ? all.filter((m) => m.orgSlug === orgSlug) : all;

@@ -96,7 +96,7 @@ export function OrderInput({ items, order, disabled, onChange }: {
   const t = useT(learnLesson);
   const [drag, setDrag] = useState<string | null>(null);
   const [over, setOver] = useState<number | null>(null);
-  // Пока ученик ничего не двигал, показываем порядок выдачи — он уже перемешан сервером.
+  // Пока студент ничего не двигал, показываем порядок выдачи — он уже перемешан сервером.
   const ids = order.length === items.length ? order : items.map((i) => i.id);
   const byId = new Map(items.map((i) => [i.id, i.text]));
 

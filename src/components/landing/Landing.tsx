@@ -4,7 +4,7 @@ import { labsFor } from '@/lib/labs';
 import { getPlatformSettings } from '@/lib/platform-settings';
 import { Brand } from '@/components/SiteChrome';
 import {
-  IconCheck, IconCourses, IconLab, IconOrg, IconPlay, IconSpark, IconTask, IconTeach, IconVr, IconWand,
+  IconBook, IconCheck, IconCourses, IconLab, IconOrg, IconPlay, IconSpark, IconTable, IconTeach, IconVr, IconWand,
 } from '@/components/icons';
 import LandingHeroSwitcher from './LandingHeroSwitcher';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -15,10 +15,10 @@ import { landing } from '@/i18n/messages/landing';
 const HERO_DEMOS = ['pendulum', 'interference', 'kepler', 'refraction'];
 
 const FEATURES = [
-  { icon: IconWand, key: 'f1' },
-  { icon: IconCourses, key: 'f2' },
-  { icon: IconTask, key: 'f3' },
-  { icon: IconSpark, key: 'f4' },
+  { icon: IconTable, key: 'f1' },
+  { icon: IconWand, key: 'f2' },
+  { icon: IconBook, key: 'f3' },
+  { icon: IconCourses, key: 'f4' },
   { icon: IconVr, key: 'f5' },
   { icon: IconOrg, key: 'f6' },
 ] as const;
@@ -130,6 +130,7 @@ export default async function Landing() {
         <h2>{t('schoolTitle')}</h2>
         <p>{t('schoolText')}</p>
         <div className="land-roles">
+          <span><IconSpark size={18} />{t('roleResearcher')}</span>
           <span><IconTeach size={18} />{t('roleTeacher')}</span>
           <span><IconCourses size={18} />{t('roleStudent')}</span>
           <span><IconOrg size={18} />{t('roleDirector')}</span>

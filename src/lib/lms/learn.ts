@@ -3,13 +3,13 @@ import type { TopicProgress, TopicState } from './learn-view';
 
 export * from './learn-view';
 
-/** Только чтение для кабинета ученика: прогресс по темам и подписи карточек. Ключи ответов сюда не попадают. */
+/** Только чтение для кабинета студента: прогресс по темам и подписи карточек. Ключи ответов сюда не попадают. */
 
 
 
 const POINTS = `CASE WHEN b.payload->>'points' ~ '^[0-9]+(\\.[0-9]+)?$' THEN (b.payload->>'points')::numeric ELSE 0 END`;
 
-/** Темы курса по порядку с состоянием ученика. Права проверяет вызывающий (learnerCourse). */
+/** Темы курса по порядку с состоянием студента. Права проверяет вызывающий (learnerCourse). */
 export async function listTopicProgress(courseId: string, userId: string): Promise<TopicProgress[]> {
   const { rows } = await db().query<{
     id: string; title: string; due_at: Date | null; viewed: boolean; blocks_total: number; a_total: number; a_done: number;
@@ -42,7 +42,7 @@ export async function listTopicProgress(courseId: string, userId: string): Promi
   });
 }
 
-/** Имена учителей (владельцев) курсов: id курса → подпись. */
+/** Имена преподавателей (владельцев) курсов: id курса → подпись. */
 export async function courseTeacherNames(courseIds: string[]): Promise<Map<string, string>> {
   if (courseIds.length === 0) return new Map();
   const { rows } = await db().query<{ id: string; name: string | null }>(
@@ -52,4 +52,4 @@ export async function courseTeacherNames(courseIds: string[]): Promise<Map<strin
 }
 
 
-/** Срок глазами ученика: «просрочено», «сегодня», «завтра», «до 25 сент.». Тон — для цвета. */
+/** Срок глазами студента: «просрочено», «сегодня», «завтра», «до 25 сент.». Тон — для цвета. */

@@ -7,7 +7,7 @@ import { learnLesson } from '@/i18n/messages/learn-lesson';
 /**
  * Формат «Слайды»: один блок на экран. Стрелки, пробел и PageUp/PageDown листают,
  * F — на весь экран. Все слайды остаются в разметке: тренажёр и черновик ответа
- * не сбрасываются, когда учитель листает туда-обратно.
+ * не сбрасываются, когда преподаватель листает туда-обратно.
  */
 export default function SlideDeck({ children }: { children: React.ReactNode }) {
   const t = useT(learnLesson);

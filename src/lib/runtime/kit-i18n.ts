@@ -15,7 +15,7 @@ window.__simT = (function () {
       back: '← Назад', next: 'Далее →', stepOf: 'Шаг {i} из {n}: ', task: 'Задание',
       correct: 'Верно ✓', notYet: 'Пока нет.', hint: ' Подсказка: ', answer: 'ответ', check: 'Проверить',
       measurements: 'Измерения', record: '● Записать', clear: 'Очистить',
-      locked: 'Учитель зафиксировал этот параметр'
+      locked: 'Преподаватель зафиксировал этот параметр'
     },
     kk: {
       params: '⚙ Параметрлер', closeParams: 'Параметрлерді жабу', pause: '⏸ Кідірту', play: '▶ Жүргізу',
@@ -25,7 +25,7 @@ window.__simT = (function () {
       back: '← Артқа', next: 'Келесі →', stepOf: '{i}/{n}-қадам: ', task: 'Тапсырма',
       correct: 'Дұрыс ✓', notYet: 'Әзірге дұрыс емес.', hint: ' Кеңес: ', answer: 'жауап', check: 'Тексеру',
       measurements: 'Өлшеулер', record: '● Жазу', clear: 'Тазалау',
-      locked: 'Мұғалім бұл параметрді бекітті'
+      locked: 'Оқытушы бұл параметрді бекітті'
     },
     en: {
       params: '⚙ Parameters', closeParams: 'Close parameters', pause: '⏸ Pause', play: '▶ Play',

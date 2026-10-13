@@ -6,7 +6,7 @@ import {
 import { useT } from '@/i18n/client';
 import { learn } from '@/i18n/messages/learn';
 
-/** Значки ученика: нераскрытые тоже видны — чтобы было к чему стремиться. */
+/** Значки студента: нераскрытые тоже видны — чтобы было к чему стремиться. */
 export default function Achievements({ data }: { data: Data }) {
   const t = useT(learn);
   // Названия значков — по id из словаря; незнакомый id показывается как пришёл с сервера.

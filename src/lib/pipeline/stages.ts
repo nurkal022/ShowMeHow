@@ -173,7 +173,7 @@ export function planLayers(spec: PlanSpec): Layer[] {
       name: 'scenario', title: 'Сценарий урока',
       task: 'Добавь секцию scenario — сценарий урока через SimUI.steps по шагам плана:\n' +
         spec.scenario.map((s, i) => `${i + 1}. ${s.title}: ${s.task}${s.expect ? ` (ожидаем: ${s.expect})` : ''}`).join('\n') +
-        '\nВ onStep выставляй нужные значения через SimUI.set(name, value). Для шагов, где ученик должен ' +
+        '\nВ onStep выставляй нужные значения через SimUI.set(name, value). Для шагов, где студент должен ' +
         'ответить, добавь SimUI.task: answer считай из ядра (PHYS.observe или прогон PHYS.step), а не константой.',
     });
   }

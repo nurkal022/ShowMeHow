@@ -20,7 +20,7 @@ export const catalog: CatalogEntry[] = [
   // Уведомления хранятся в базе по-русски (язык получателя в момент события неизвестен) — переводим при показе.
   { ru: 'Новые работы: «{task}»', kk: 'Жаңа жұмыстар: «{task}»', en: 'New submissions: “{task}”' },
   { ru: 'Новый курс: «{title}»', kk: 'Жаңа курс: «{title}»', en: 'New course: “{title}”' },
-  { ru: 'Учитель открыл курс вашей группе.', kk: 'Мұғалім курсты сіздің тобыңызға ашты.', en: 'Your teacher opened the course to your group.' },
+  { ru: 'Преподаватель открыл курс вашей группе.', kk: 'Оқытушы курсты сіздің тобыңызға ашты.', en: 'Your instructor opened the course to your group.' },
   { ru: 'Проверено: {score} из {points}', kk: 'Тексерілді: {points} ұпайдан {score}', en: 'Graded: {score} of {points}' },
   { ru: 'Работу вернули на доработку', kk: 'Жұмыс пысықтауға қайтарылды', en: 'Your work was returned for revision' },
 ];

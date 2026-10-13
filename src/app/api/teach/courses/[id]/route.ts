@@ -39,7 +39,7 @@ export async function PATCH(req: Request, { params }: IdParams) {
       if (status === 'published' && staff.course.status !== 'published') {
         for (const st of await courseStudents(staff.course.id)) {
           await notify(st.id, { key: `course:${staff.course.id}`, kind: 'published', title: `Новый курс: «${staff.course.title}»`,
-            body: 'Учитель открыл курс вашей группе.', href: learnCourseHref(staff.course.id, false) });
+            body: 'Преподаватель открыл курс вашей группе.', href: learnCourseHref(staff.course.id, false) });
         }
       }
     }
@@ -47,7 +47,7 @@ export async function PATCH(req: Request, { params }: IdParams) {
   });
 }
 
-/** Удалить курс целиком — только без ответов учеников (иначе — в архив). */
+/** Удалить курс целиком — только без ответов студентов (иначе — в архив). */
 export async function DELETE(req: Request, { params }: IdParams) {
   const user = await guardUser(req);
   if (user instanceof Response) return user;

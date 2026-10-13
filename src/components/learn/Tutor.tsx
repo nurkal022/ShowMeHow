@@ -12,7 +12,7 @@ type Mode = 'hint' | 'explain' | 'check' | 'ask';
 interface Seed { mode: Mode; question: string; at: number }
 
 type Chip = { mode: Mode; text: string; label: string };
-// Текст кнопки уходит в чат от имени ученика; «: » в конце — значит, ученик допишет сам.
+// Текст кнопки уходит в чат от имени студента; «: » в конце — значит, студент допишет сам.
 const THEORY_CHIPS = (t: TFn<typeof learnLesson.ru>): Chip[] => [
   { mode: 'explain', text: t('askExplain'), label: t('explainSimple') },
   { mode: 'ask', text: t('askWhere'), label: t('whereInLife') },
@@ -61,7 +61,7 @@ export default function Tutor({ topicId, open, initial, seed, stepTitle, stepBlo
     setChips(res.data.chips);
   };
 
-  // Кнопки в самом уроке («Объясни проще», «Подскажи») открывают наставника и спрашивают за ученика.
+  // Кнопки в самом уроке («Объясни проще», «Подскажи») открывают наставника и спрашивают за студента.
   useEffect(() => {
     if (!seed || seed.at === seedAt.current) return;
     seedAt.current = seed.at;

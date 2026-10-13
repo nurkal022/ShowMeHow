@@ -63,7 +63,7 @@ export const ASSIGNMENT_META: Record<AssignmentType, Meta & { auto: boolean }> =
 };
 export const ASSIGNMENT_TYPES = Object.keys(ASSIGNMENT_META) as AssignmentType[];
 
-/** Группы меню вставки: так учитель ищет глазами, а не читает одиннадцать плиток подряд. */
+/** Группы меню вставки: так преподаватель ищет глазами, а не читает одиннадцать плиток подряд. */
 export const BLOCK_GROUPS: { title: 'groupMaterial' | 'groupInteractive'; kinds: BlockKind[] }[] = [
   { title: 'groupMaterial', kinds: ['text', 'callout', 'formula', 'image', 'video', 'code', 'spoiler', 'divider'] },
   { title: 'groupInteractive', kinds: ['simulation', 'lab'] },
@@ -114,7 +114,7 @@ export function blockHeadline(block: Block, simulationTitle: string | null, loca
   }
 }
 
-/** Чего блоку не хватает, чтобы ученик увидел что-то осмысленное. Пустая строка — всё на месте. */
+/** Чего блоку не хватает, чтобы студент увидел что-то осмысленное. Пустая строка — всё на месте. */
 export function blockProblem(block: Block, missingSimulation: boolean, locale: Locale = 'ru'): string {
   const t = translator(teachEditor, locale);
   const b = block.body;
@@ -131,7 +131,7 @@ export function blockProblem(block: Block, missingSimulation: boolean, locale: L
   return '';
 }
 
-/** Пустой блок-материал ученику не показывается вовсе. */
+/** Пустой блок-материал студенту не показывается вовсе. */
 export function isBlankBlock(block: Block): boolean {
   return block.body.kind !== 'divider' && block.body.kind !== 'assignment' && block.body.kind !== 'lab'
     && blockProblem(block, false) !== '';

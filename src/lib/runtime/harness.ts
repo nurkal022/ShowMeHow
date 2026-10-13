@@ -30,7 +30,7 @@ export const HARNESS_JS = `
       try { out.state = null; parent.postMessage(out, '*'); } catch (e3) {}
     }
   }
-  // Урок: учитель задал стартовые значения и закрыл часть ползунков от ученика.
+  // Урок: преподаватель задал стартовые значения и закрыл часть ползунков от студента.
   function applyPreset(d) {
     var out = { type: 'sim-applied', id: d.id, ok: false, applied: 0 };
     try {
@@ -49,7 +49,7 @@ export const HARNESS_JS = `
             var lock = locked.indexOf(c.name) !== -1;
             c.el.style.pointerEvents = lock ? 'none' : '';
             c.el.style.opacity = lock ? '.45' : '';
-            c.el.title = lock ? (window.__simT ? window.__simT('locked') : 'Учитель зафиксировал этот параметр') : '';
+            c.el.title = lock ? (window.__simT ? window.__simT('locked') : 'Преподаватель зафиксировал этот параметр') : '';
           }
         }
         out.ok = true;

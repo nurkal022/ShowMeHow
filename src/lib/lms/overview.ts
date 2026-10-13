@@ -5,7 +5,7 @@ import { dailyCounts } from '../cabinet/daily';
 import { assignmentTitle } from './block-schema';
 
 /**
- * Сводка для главной «Преподавания». Область — курсы организации: учителю свои
+ * Сводка для главной «Преподавания». Область — курсы организации: преподавателю свои
  * (ownerId), админу организации — все (ownerId = null), как в listStaffCourses.
  */
 
@@ -23,7 +23,7 @@ export interface TeachDashboard {
   gradedTotal: number;
   chart: { days: string[]; submitted: number[]; graded: number[] };
   pendingBlocks: PendingBlock[];
-  /** По id курса: сколько учеников видят курс и сколько тем они открыли. */
+  /** По id курса: сколько студентов видят курс и сколько тем они открыли. */
   progress: Record<string, CourseProgressStat>;
 }
 
@@ -93,7 +93,7 @@ export async function teachDashboard(
   };
 }
 
-/** Доля открытых тем: просмотры / (ученики × темы), в процентах. */
+/** Доля открытых тем: просмотры / (студенты × темы), в процентах. */
 export function progressPercent(p: CourseProgressStat | undefined): number {
   if (!p || p.students === 0 || p.topics === 0) return 0;
   return Math.min(100, Math.round((p.views / (p.students * p.topics)) * 100));

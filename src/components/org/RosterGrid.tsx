@@ -27,7 +27,7 @@ export function parsePasted(text: string): RosterRow[] {
 }
 
 /**
- * Список учеников таблицей: вставка прямо из Excel, правка в ячейках, Enter — вниз.
+ * Список студентов таблицей: вставка прямо из Excel, правка в ячейках, Enter — вниз.
  * Дубли и неполные строки подсвечиваются сразу, до проверки на сервере.
  */
 export default function RosterGrid({ rows, onChange }: { rows: RosterRow[]; onChange: (rows: RosterRow[]) => void }) {

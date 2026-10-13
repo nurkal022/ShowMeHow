@@ -10,13 +10,13 @@ import { useLocale, useT } from '@/i18n/client';
 import { lms } from '@/i18n/messages/lms';
 
 /**
- * Ответ ученика. Учительская схема несёт правильные варианты и число — тогда
+ * Ответ студента. Преподавательская схема несёт правильные варианты и число — тогда
  * они видны; студенческая их не содержит, и показать их нечем.
  * Клиентский компонент — ради подписей на языке интерфейса; HTML по-прежнему рисуется на сервере.
  */
 export default function AnswerView({ spec, answer, keyed = true }: {
   spec: AssignmentSpec | StudentAssignmentSpec; answer: Answer | null;
-  /** «Порядок» у учительской и студенческой схем выглядит одинаково: false — шаги перемешаны, сверять не с чем. */
+  /** «Порядок» у преподавательской и студенческой схем выглядит одинаково: false — шаги перемешаны, сверять не с чем. */
   keyed?: boolean;
 }) {
   const tr = useT(lms);
@@ -24,7 +24,7 @@ export default function AnswerView({ spec, answer, keyed = true }: {
   const num = (n: number) => formatScore(n, locale);
   if (!answer) return <p className="muted">{tr('noAnswer')}</p>;
   if (spec.type === 'choice' && answer.type === 'choice') {
-    // У учительской схемы у варианта есть correct, у студенческой — нет.
+    // У преподавательской схемы у варианта есть correct, у студенческой — нет.
     const options = spec.options as { id: string; text: string; correct?: boolean }[];
     const graded = options.some((o) => o.correct !== undefined);
     return (
@@ -101,7 +101,7 @@ export default function AnswerView({ spec, answer, keyed = true }: {
   }
   if (spec.type === 'order' && answer.type === 'order') {
     const text = new Map(spec.items.map((i) => [i.id, i.text]));
-    // Учительская схема хранит шаги в правильном порядке; у студенческой они перемешаны, сверять не с чем.
+    // Преподавательская схема хранит шаги в правильном порядке; у студенческой они перемешаны, сверять не с чем.
     const graded = keyed;
     const given = answer.order.length ? answer.order : spec.items.map((i) => i.id);
     return (
@@ -130,7 +130,7 @@ export default function AnswerView({ spec, answer, keyed = true }: {
     );
   }
   if (spec.type === 'sim_state' && answer.type === 'sim_state') {
-    // Учительская схема несёт цель и допуск; студенческая — только подписи (и то с подсказками).
+    // Преподавательская схема несёт цель и допуск; студенческая — только подписи (и то с подсказками).
     const rows = (spec.targets ?? []) as { name: string; label: string; value?: number; tolerance?: number }[];
     if (rows.length === 0) return <p className="muted">{tr('simStateSubmitted')}</p>;
     const hinted = new Map((answer.hints ?? []).map((h) => [h.name, h.matched]));

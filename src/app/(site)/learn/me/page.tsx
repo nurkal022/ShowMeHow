@@ -22,7 +22,7 @@ import InterestsCard from '@/components/learn/InterestsCard';
 import { Ring } from '@/components/cabinet/viz';
 import { IconCheck, IconChevron, IconSpark, IconTable, IconUser } from '@/components/icons';
 
-/** Профиль ученика: кто он, как идут дела, что уже пройдено и какие значки собраны. */
+/** Профиль студента: кто он, как идут дела, что уже пройдено и какие значки собраны. */
 export default async function StudentProfilePage() {
   const user = await requirePageUser('/learn/me');
   if (!user) return null;

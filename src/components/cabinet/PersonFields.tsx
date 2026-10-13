@@ -2,7 +2,7 @@
 import { useT } from '@/i18n/client';
 import { cabinet } from '@/i18n/messages/cabinet';
 
-/** Поля «почта или логин и имя» — в админке (первый админ) и в кабинете (учитель). */
+/** Поля «почта или логин и имя» — в админке (первый админ) и в кабинете (преподаватель). */
 
 export interface PersonValue { by: 'email' | 'login'; email: string; login: string; displayName: string }
 

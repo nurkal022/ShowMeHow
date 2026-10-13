@@ -1,6 +1,6 @@
 import { defineMessages } from '../core';
 
-/** Общие компоненты курсов (src/components/lms): встраивания, блоки-материалы, ответ ученика, диалоги. */
+/** Общие компоненты курсов (src/components/lms): встраивания, блоки-материалы, ответ студента, диалоги. */
 export const lms = defineMessages({
   ru: {
     labUnavailable: 'Лаборатория недоступна.', open: 'Открыть', vrQr: 'QR для очков',
@@ -8,9 +8,9 @@ export const lms = defineMessages({
     trainerNotChosen: 'Тренажёр ещё не выбран.', trainerDeleted: 'Тренажёр удалён автором.',
     trainerLoadFailed: 'Не удалось загрузить тренажёр. Обновите страницу.', trainerLoading: 'Загружаю тренажёр…',
     collapseTrainer: 'Свернуть тренажёр', collapseEsc: 'Свернуть · Esc',
-    lockedHint: 'Учитель зафиксировал часть параметров', lockedCount: 'закреплено: {n}',
+    lockedHint: 'Преподаватель зафиксировал часть параметров', lockedCount: 'закреплено: {n}',
     enlarge: 'Крупнее', newTab: 'В новой вкладке',
-    noAnswer: 'Ответа нет.', optionCorrect: '{text} — правильный', studentChoice: 'выбор ученика',
+    noAnswer: 'Ответа нет.', optionCorrect: '{text} — правильный', studentChoice: 'выбор студента',
     correctAnswer: ' (правильный ответ: {value} ± {tolerance})', correctIs: ' (правильно: {answer})', or: ' или ',
     orderHere: ' (здесь: {text})', simStateSubmitted: 'Состояние симуляции сдано.', target: ' (цель: {value} ± {tolerance})',
     oldVersion: 'Ответ дан к прежней версии задания.',
@@ -24,9 +24,9 @@ export const lms = defineMessages({
     trainerNotChosen: 'Тренажер әлі таңдалмаған.', trainerDeleted: 'Тренажерді авторы жойған.',
     trainerLoadFailed: 'Тренажерді жүктеу мүмкін болмады. Бетті жаңартыңыз.', trainerLoading: 'Тренажер жүктелуде…',
     collapseTrainer: 'Тренажерді кішірейту', collapseEsc: 'Кішірейту · Esc',
-    lockedHint: 'Мұғалім параметрлердің бір бөлігін бекітті', lockedCount: 'бекітілген: {n}',
+    lockedHint: 'Оқытушы параметрлердің бір бөлігін бекітті', lockedCount: 'бекітілген: {n}',
     enlarge: 'Үлкейту', newTab: 'Жаңа бетте',
-    noAnswer: 'Жауап жоқ.', optionCorrect: '{text} — дұрыс', studentChoice: 'оқушының таңдауы',
+    noAnswer: 'Жауап жоқ.', optionCorrect: '{text} — дұрыс', studentChoice: 'студенттің таңдауы',
     correctAnswer: ' (дұрыс жауап: {value} ± {tolerance})', correctIs: ' (дұрысы: {answer})', or: ' немесе ',
     orderHere: ' (мұнда: {text})', simStateSubmitted: 'Симуляция күйі тапсырылды.', target: ' (мақсат: {value} ± {tolerance})',
     oldVersion: 'Жауап тапсырманың бұрынғы нұсқасына берілген.',
@@ -40,7 +40,7 @@ export const lms = defineMessages({
     trainerNotChosen: 'No simulator selected yet.', trainerDeleted: 'The author has deleted this simulator.',
     trainerLoadFailed: 'Could not load the simulator. Refresh the page.', trainerLoading: 'Loading simulator…',
     collapseTrainer: 'Collapse simulator', collapseEsc: 'Collapse · Esc',
-    lockedHint: 'The teacher has locked some parameters', lockedCount: 'locked: {n}',
+    lockedHint: 'The instructor has locked some parameters', lockedCount: 'locked: {n}',
     enlarge: 'Enlarge', newTab: 'Open in new tab',
     noAnswer: 'No answer.', optionCorrect: '{text} — correct', studentChoice: 'student’s choice',
     correctAnswer: ' (correct answer: {value} ± {tolerance})', correctIs: ' (correct: {answer})', or: ' or ',

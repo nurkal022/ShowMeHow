@@ -11,7 +11,7 @@ import type { JournalStudent } from './journal';
 import { LmsError, type AnswerState, type SubmissionStatus } from './types';
 
 /**
- * Ответы учеников. Одна строка на ученика и задание: повторная сдача
+ * Ответы студентов. Одна строка на студента и задание: повторная сдача
  * перезаписывает ответ и сбрасывает оценку (история попыток — следующая волна).
  */
 
@@ -81,7 +81,7 @@ export async function listOwnSubmissions(studentId: string, blockIds: string[]):
 }
 
 /**
- * Черновик или сдача. Доступ ученика к блоку проверяет роут (studentBlock).
+ * Черновик или сдача. Доступ студента к блоку проверяет роут (studentBlock).
  * Выбор и число проверяются сразу: статус «проверено», балл — автобалл.
  */
 export async function saveAnswer(
@@ -95,7 +95,7 @@ export async function saveAnswer(
 
   if (!submit) {
     if (!canSaveDraft(state)) throw new LmsError('Черновик нельзя сохранить: ответ уже сдан.');
-    // Черновик после возврата остаётся «возвращённым»: комментарий учителя виден.
+    // Черновик после возврата остаётся «возвращённым»: комментарий преподавателя виден.
     const { rows } = await db().query<SubmissionRow>(
       `INSERT INTO submissions (id, block_id, student_id, block_revision, answer, status)
        VALUES ($1, $2, $3, $4, $5, 'draft')
@@ -106,7 +106,7 @@ export async function saveAnswer(
   }
 
   if (!canSubmit(state, payload.allowRetry)) {
-    throw new LmsError('Ответ уже сдан. Сдать заново можно, если учитель вернёт работу или разрешит повторную сдачу.');
+    throw new LmsError('Ответ уже сдан. Сдать заново можно, если преподаватель вернёт работу или разрешит повторную сдачу.');
   }
   if (!isAnswerComplete(answer)) {
     throw new LmsError(answer.type === 'sim_state'
@@ -135,7 +135,7 @@ export interface AnswerRow {
   submission: Submission | null;
 }
 
-/** Все ученики групп курса и их ответ на задание — таблица «Ответы». */
+/** Все студенты групп курса и их ответ на задание — таблица «Ответы». */
 export async function listBlockAnswers(blockId: string, courseId: string): Promise<AnswerRow[]> {
   const students = await courseStudents(courseId);
   const { rows } = await db().query<SubmissionRow>(

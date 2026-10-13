@@ -475,7 +475,7 @@ function TopicFormatBar({ topic, onChange }: { topic: Topic; onChange: (format: 
   );
 }
 
-/** Срок сдачи темы: ученик видит его в курсе и в уроке, опоздания помечаются в ответах. */
+/** Срок сдачи темы: студент видит его в курсе и в уроке, опоздания помечаются в ответах. */
 function DueField({ topic }: { topic: Topic }) {
   const router = useRouter();
   const t = useT(teachEditor);

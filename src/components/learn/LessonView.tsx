@@ -32,7 +32,7 @@ const STEP_ICON: Record<StepKind, (n: number) => React.ReactNode> = {
 };
 
 /**
- * Урок глазами ученика: слева оглавление курса, в центре — шаги (теория, тренажёр,
+ * Урок глазами студента: слева оглавление курса, в центре — шаги (теория, тренажёр,
  * задание) по одному, справа — наставник. Пройденные шаги отмечаются сами, место
  * в уроке живёт в адресе (?step=), поэтому его можно переслать и вернуться.
  */
@@ -50,7 +50,7 @@ export default function LessonView({
   comments: Comment[];
   me: string;
   tutorMessages: TutorMessage[];
-  /** Заметки и закладки ученика по шагам этой темы. */
+  /** Заметки и закладки студента по шагам этой темы. */
   notes: StepNote[];
   canDeleteAny: boolean;
 }) {
@@ -285,7 +285,7 @@ export default function LessonView({
             </nav>
           )}
 
-          {/* В режиме «как видит ученик» учитель тоже видит обсуждение — чтобы ответить прямо отсюда. */}
+          {/* В режиме «как видит студент» преподаватель тоже видит обсуждение — чтобы ответить прямо отсюда. */}
           {(!preview || canDeleteAny) && <Discussion topicId={topic.id} initial={comments} canDeleteAny={canDeleteAny} me={me} />}
         </div>
       </main>

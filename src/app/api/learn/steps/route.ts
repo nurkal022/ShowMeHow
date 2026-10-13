@@ -3,7 +3,7 @@ import { guardUser } from '@/lib/http/guards';
 import { badRequest, INVALID_BODY_MESSAGE, readBody } from '@/lib/http/route-kit';
 import { recordBlockViews } from '@/lib/lms/discussion';
 
-/** «Шаг открыт»: клиент отмечает блоки, которые ученик увидел. Чужие блоки отсекает запрос. */
+/** «Шаг открыт»: клиент отмечает блоки, которые студент увидел. Чужие блоки отсекает запрос. */
 export async function POST(req: Request) {
   const user = await guardUser(req);
   if (user instanceof Response) return user;

@@ -11,7 +11,7 @@ function mark(v: number | null, good: (x: number) => boolean, bad: (x: number) =
   return good(v) ? 'good' : bad(v) ? 'bad' : '';
 }
 
-/** Работа учителей за 30 дней: скорость и качество проверки, долги, разборы уроков, активность учеников. */
+/** Работа преподавателей за 30 дней: скорость и качество проверки, долги, разборы уроков, активность студентов. */
 export default function TeacherScoreTable({ teachers, locale = 'ru' }: { teachers: TeacherScore[]; locale?: Locale }) {
   const tr = translator(org, locale);
   return (

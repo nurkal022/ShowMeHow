@@ -1,7 +1,7 @@
 import type { CatalogEntry } from './types';
 
 /**
- * Сообщения сервера области «lms» (курсы, темы, блоки, ответы, помощник учителя,
+ * Сообщения сервера области «lms» (курсы, темы, блоки, ответы, помощник преподавателя,
  * наставник и разбор ошибок) на казахском и английском.
  */
 
@@ -10,7 +10,7 @@ const FIELDS: [ru: string, kk: string, en: string][] = [
   ['Название', 'Атауы', 'Title'],
   ['Название темы', 'Тақырып атауы', 'Topic title'],
   ['Предмет', 'Пән', 'Subject'],
-  ['Класс', 'Сынып', 'Grade'],
+  ['Курс', 'Курс', 'Year'],
   ['Описание', 'Сипаттама', 'Description'],
   ['Заголовок', 'Тақырыпша', 'Heading'],
   ['Текст', 'Мәтін', 'Text'],
@@ -82,7 +82,7 @@ export const catalog: CatalogEntry[] = [
   /* ---------------------------------- ответы ---------------------------------- */
   { ru: 'Отвечать можно только на задание.', kk: 'Тек тапсырмаға жауап беруге болады.', en: 'You can only answer an assignment.' },
   { ru: 'Черновик нельзя сохранить: ответ уже сдан.', kk: 'Жобаны сақтау мүмкін емес: жауап тапсырылып қойған.', en: 'The draft cannot be saved: the answer has already been submitted.' },
-  { ru: 'Ответ уже сдан. Сдать заново можно, если учитель вернёт работу или разрешит повторную сдачу.', kk: 'Жауап тапсырылып қойған. Мұғалім жұмысты қайтарса немесе қайта тапсыруға рұқсат берсе, қайта тапсыруға болады.', en: 'The answer has already been submitted. You can resubmit if the teacher returns the work or allows another attempt.' },
+  { ru: 'Ответ уже сдан. Сдать заново можно, если преподаватель вернёт работу или разрешит повторную сдачу.', kk: 'Жауап тапсырылып қойған. Оқытушы жұмысты қайтарса немесе қайта тапсыруға рұқсат берсе, қайта тапсыруға болады.', en: 'The answer has already been submitted. You can resubmit if the instructor returns the work or allows another attempt.' },
   { ru: 'Симуляция не передала значения параметров. Обновите страницу и попробуйте ещё раз.', kk: 'Симуляция параметр мәндерін жібермеді. Бетті жаңартып, қайталап көріңіз.', en: 'The simulation did not send its parameter values. Refresh the page and try again.' },
   { ru: 'Ответ пустой — заполните его перед сдачей.', kk: 'Жауап бос — тапсырмас бұрын толтырыңыз.', en: 'The answer is empty — fill it in before submitting.' },
   { ru: 'Ответ не подходит к заданию.', kk: 'Жауап тапсырмаға сәйкес келмейді.', en: 'The answer does not match the assignment.' },
@@ -107,14 +107,14 @@ export const catalog: CatalogEntry[] = [
   { ru: 'Срок сдачи указан неверно.', kk: 'Тапсыру мерзімі қате көрсетілген.', en: 'The due date is invalid.' },
   { ru: 'Неизвестный формат темы.', kk: 'Тақырып форматы белгісіз.', en: 'Unknown topic format.' },
   { ru: 'Время на контрольную — от 1 до 300 минут.', kk: 'Бақылау жұмысының уақыты — 1-ден 300 минутқа дейін.', en: 'Test time must be from 1 to 300 minutes.' },
-  { ru: 'По курсу уже есть ответы учеников ({n}) — удалить его нельзя, чтобы не пропали оценки. Отправьте курс в архив.', kk: 'Курс бойынша оқушылардың жауаптары бар ({n}) — бағалар жоғалмас үшін оны жоюға болмайды. Курсты мұрағатқа жіберіңіз.', en: 'The course already has student answers ({n}) — it cannot be deleted without losing grades. Archive the course instead.' },
+  { ru: 'По курсу уже есть ответы студентов ({n}) — удалить его нельзя, чтобы не пропали оценки. Отправьте курс в архив.', kk: 'Курс бойынша студенттердің жауаптары бар ({n}) — бағалар жоғалмас үшін оны жоюға болмайды. Курсты мұрағатқа жіберіңіз.', en: 'The course already has student answers ({n}) — it cannot be deleted without losing grades. Archive the course instead.' },
   { ru: 'Статус курса — черновик, опубликован или в архиве.', kk: 'Курс мәртебесі — жоба, жарияланған немесе мұрағатта.', en: 'Course status must be draft, published or archived.' },
   { ru: 'В плане нет ни одной темы.', kk: 'Жоспарда бірде-бір тақырып жоқ.', en: 'The plan has no topics.' },
   { ru: 'Неизвестное действие.', kk: 'Белгісіз әрекет.', en: 'Unknown action.' },
 
   /* ---------------------------------- проверка ---------------------------------- */
-  { ru: 'Черновик нельзя оценить: ученик ещё не сдал ответ.', kk: 'Жобаны бағалауға болмайды: оқушы жауапты әлі тапсырған жоқ.', en: 'A draft cannot be graded: the student has not submitted the answer yet.' },
-  { ru: 'Черновик нельзя вернуть: ученик ещё не сдал ответ.', kk: 'Жобаны қайтаруға болмайды: оқушы жауапты әлі тапсырған жоқ.', en: 'A draft cannot be returned: the student has not submitted the answer yet.' },
+  { ru: 'Черновик нельзя оценить: студент ещё не сдал ответ.', kk: 'Жобаны бағалауға болмайды: студент жауапты әлі тапсырған жоқ.', en: 'A draft cannot be graded: the student has not submitted the answer yet.' },
+  { ru: 'Черновик нельзя вернуть: студент ещё не сдал ответ.', kk: 'Жобаны қайтаруға болмайды: студент жауапты әлі тапсырған жоқ.', en: 'A draft cannot be returned: the student has not submitted the answer yet.' },
   { ru: 'Пересчитать можно только задание.', kk: 'Тек тапсырманы қайта есептеуге болады.', en: 'Only an assignment can be recalculated.' },
 
   /* ------------------------------ файлы и заметки ------------------------------ */
@@ -130,7 +130,7 @@ export const catalog: CatalogEntry[] = [
   { ru: 'Сообщение, на которое вы отвечаете, уже удалено.', kk: 'Сіз жауап беріп отырған хабарлама жойылған.', en: 'The message you are replying to has been deleted.' },
   { ru: 'Сообщение не найдено или его нельзя удалить.', kk: 'Хабарлама табылмады немесе оны жоюға болмайды.', en: 'The message was not found or cannot be deleted.' },
 
-  /* ------------------------------ помощник учителя ------------------------------ */
+  /* ------------------------------ помощник преподавателя ------------------------------ */
   { ru: 'Помощник сейчас недоступен. Попробуйте через минуту.', kk: 'Көмекші қазір қолжетімсіз. Бір минуттан кейін қайталап көріңіз.', en: 'The assistant is unavailable right now. Try again in a minute.' },
   { ru: 'Помощник ответил не по формату. Попробуйте ещё раз.', kk: 'Көмекші дұрыс емес форматта жауап берді. Қайталап көріңіз.', en: 'The assistant replied in the wrong format. Please try again.' },
   { ru: 'Помощник не смог собрать ни одного годного блока. Уточните тему и попробуйте снова.', kk: 'Көмекші бірде-бір жарамды блок құрастыра алмады. Тақырыпты нақтылап, қайталап көріңіз.', en: 'The assistant could not build a single usable block. Refine the topic and try again.' },
@@ -151,7 +151,7 @@ export const catalog: CatalogEntry[] = [
 
   /* ------------------------- разбор урока и работа над ошибками ------------------------- */
   { ru: 'В этой теме нет заданий — разбирать нечего.', kk: 'Бұл тақырыпта тапсырма жоқ — талдайтын ештеңе жоқ.', en: 'This topic has no assignments — there is nothing to review.' },
-  { ru: 'Ученики ещё ничего не сдали по этой теме. Разбор появится после первых ответов.', kk: 'Оқушылар бұл тақырып бойынша әлі ештеңе тапсырған жоқ. Талдау алғашқы жауаптардан кейін пайда болады.', en: 'Students have not submitted anything for this topic yet. The review will appear after the first answers.' },
+  { ru: 'Студенты ещё ничего не сдали по этой теме. Разбор появится после первых ответов.', kk: 'Студенттер бұл тақырып бойынша әлі ештеңе тапсырған жоқ. Талдау алғашқы жауаптардан кейін пайда болады.', en: 'Students have not submitted anything for this topic yet. The review will appear after the first answers.' },
   { ru: 'Сначала сделайте разбор темы.', kk: 'Алдымен тақырыпқа талдау жасаңыз.', en: 'Review the topic first.' },
   { ru: 'Наставник задумался и не ответил. Попробуйте ещё раз.', kk: 'Тәлімгер ойланып қалып, жауап бермеді. Қайталап көріңіз.', en: 'The tutor got lost in thought and did not reply. Please try again.' },
   { ru: 'Помощник не смог собрать задания для разбора. Попробуйте ещё раз через минуту.', kk: 'Көмекші талдауға арналған тапсырмаларды құрастыра алмады. Бір минуттан кейін қайталап көріңіз.', en: 'The assistant could not put together practice tasks. Try again in a minute.' },

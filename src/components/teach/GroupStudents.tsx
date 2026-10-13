@@ -23,7 +23,7 @@ const FILTERS: { key: Filter; label: 'gAll' | 'gBehind' | 'gNever' | 'gPending';
 
 const pct = (s: GroupStudentRow) => (s.topics ? Math.round((s.opened / s.topics) * 100) : 0);
 
-/** Ученики группы: быстрые фильтры и сортировка по прогрессу, баллу и последнему заходу. */
+/** Студенты группы: быстрые фильтры и сортировка по прогрессу, баллу и последнему заходу. */
 export default function GroupStudents({ students }: { students: GroupStudentRow[] }) {
   const t = useT(teachReview);
   const locale = useLocale();

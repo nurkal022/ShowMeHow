@@ -13,7 +13,7 @@ type Filter = 'all' | 'marks' | 'notes';
 
 const FILTERS: Filter[] = ['all', 'marks', 'notes'];
 
-/** Конспект ученика: закладки и заметки по всем курсам, с поиском и фильтром. */
+/** Конспект студента: закладки и заметки по всем курсам, с поиском и фильтром. */
 export default function NotesBoard({ notes }: { notes: NoteEntry[] }) {
   const t = useT(learnMe);
   const tl = useT(learn);

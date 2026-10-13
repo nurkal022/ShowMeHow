@@ -8,7 +8,7 @@ const STEPS: { key: keyof FunnelCounts }[] = [{ key: 'added' }, { key: 'loggedIn
 
 const share = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
 
-/** Воронка учеников школы: на каждом шаге — сколько дошло и сколько потерялось. */
+/** Воронка студентов школы: на каждом шаге — сколько дошло и сколько потерялось. */
 export function FunnelBars({ total, locale = 'ru' }: { total: FunnelCounts; locale?: Locale }) {
   const t = translator(org, locale);
   return (

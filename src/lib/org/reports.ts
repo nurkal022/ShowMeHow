@@ -1,7 +1,7 @@
 import { db } from '../db/client';
 
 /**
- * Данные отчётов администрации: работа учителей, риски учеников, наборы для вопросов
+ * Данные отчётов администрации: работа преподавателей, риски студентов, наборы для вопросов
  * на естественном языке. Все выборки — по одной организации; тексты делает org/ai.ts.
  */
 
@@ -9,23 +9,23 @@ const POINTS = `NULLIF(CASE WHEN b.payload->>'points' ~ '^[0-9]+$' THEN (b.paylo
 const DAY = 86_400_000;
 const pct = (v: string | number | null) => (v === null ? null : Math.round(Number(v) * 100));
 
-/* ------------------------------ работа учителей ----------------------------- */
+/* ------------------------------ работа преподавателей ----------------------------- */
 
 export interface TeacherScore {
   userId: string; name: string; groups: string[];
   courses: number; published: number; students: number;
-  /** Средний результат учеников в курсах учителя, %. */
+  /** Средний результат студентов в курсах преподавателя, %. */
   avgPercent: number | null;
   graded: number;
   /** Медиана часов от сдачи до проверки за период. */
   medianHours: number | null;
-  /** Доля проверенных работ с комментарием ученику, %. */
+  /** Доля проверенных работ с комментарием студенту, %. */
   commentShare: number | null;
   pending: number;
   /** Сколько дней ждёт самая давняя непроверенная работа. */
   oldestPendingDays: number | null;
   debriefs: number;
-  /** Доля учеников курсов, активных за 7 дней, %. */
+  /** Доля студентов курсов, активных за 7 дней, %. */
   activeShare: number | null;
   lastActive: string | null;
 }
@@ -83,7 +83,7 @@ export async function teacherScorecard(orgId: string, days = 30, range?: { from:
     }));
 }
 
-/* ------------------------------ риски учеников ------------------------------ */
+/* ------------------------------ риски студентов ------------------------------ */
 
 export type RiskLevel = 'high' | 'medium' | 'low' | 'ok';
 export const RISK_LABELS: Record<RiskLevel, string> = { high: 'высокий', medium: 'средний', low: 'низкий', ok: 'нет' };
@@ -98,7 +98,7 @@ export interface StudentRisk {
 
 /**
  * Раннее предупреждение: балл риска 0–100 из понятных причин — не заходит, пропускает сроки,
- * балл падает, работы на доработке. Каждая причина видна: это подсказка учителю, а не ярлык.
+ * балл падает, работы на доработке. Каждая причина видна: это подсказка преподавателю, а не ярлык.
  */
 export async function studentRisks(orgId: string, groupIds?: string[]): Promise<StudentRisk[]> {
   const { rows } = await db().query<{

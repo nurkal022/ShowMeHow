@@ -1,5 +1,5 @@
 /**
- * Ученики списком: транслит, логины и разбор вставленного списка или CSV.
+ * Студенты списком: транслит, логины и разбор вставленного списка или CSV.
  * Модуль чистый — без базы: его зовут роуты, клиентская форма, сид и юнит-тесты.
  */
 
@@ -103,7 +103,7 @@ export function parseRoster(text: string, inGroup: ReadonlySet<string> = new Set
 const MAX_LOGIN = 40;
 
 /**
- * Логин ученика: фамилия.и.slug; n-я попытка при занятости — фамилия.иN.slug.
+ * Логин студента: фамилия.и.slug; n-я попытка при занятости — фамилия.иN.slug.
  * Фамилия обрезается так, чтобы логин уложился в 40 символов правила LOGIN_RE.
  */
 export function candidateLogin(lastName: string, firstName: string, slug: string, n: number): string {
@@ -136,8 +136,8 @@ export function displayNameOf(l: Pick<RosterLine, 'lastName' | 'firstName'>): st
   return `${l.lastName} ${l.firstName}`;
 }
 
-/** «Создать 1 ученика», «Создать 2 учеников»: после числа — родительный падеж. */
+/** «Создать 1 студента», «Создать 2 студентов»: после числа — родительный падеж. */
 export function createStudentsLabel(n: number): string {
   const one = n % 10 === 1 && n % 100 !== 11;
-  return `Создать ${n} ${one ? 'ученика' : 'учеников'}`;
+  return `Создать ${n} ${one ? 'студента' : 'студентов'}`;
 }

@@ -8,7 +8,7 @@ import { learnScore } from './format';
 import { IconCheck, IconUser } from '@/components/icons';
 import ProgressBar from './ProgressBar';
 
-/** Курс ученика: предмет, учитель, две полосы прогресса и «Продолжить» к первой незавершённой теме. */
+/** Курс студента: предмет, преподаватель, две полосы прогресса и «Продолжить» к первой незавершённой теме. */
 export default function CourseCard({ course, teacher, totals, continueId }: {
   course: Course; teacher: string | null; totals: ProgressTotals; continueId: string | null;
 }) {

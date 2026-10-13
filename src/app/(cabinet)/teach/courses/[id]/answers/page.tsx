@@ -11,7 +11,7 @@ import { IconInbox } from '@/components/cabinet/icons';
 import { getT } from '@/i18n/server';
 import { teachReview } from '@/i18n/messages/teach-review';
 
-/** Задания курса со счётчиками ответов: отсюда учитель идёт проверять. */
+/** Задания курса со счётчиками ответов: отсюда преподаватель идёт проверять. */
 export default async function CourseAnswersPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requirePageUser(`/teach/courses/${id}/answers`);

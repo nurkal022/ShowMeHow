@@ -2,7 +2,7 @@ import { db } from '../db/client';
 import { VISIBLE_TO_STUDENT } from './courses';
 
 /**
- * Лента обучения ученика: где он был недавно и как идёт курс в целом.
+ * Лента обучения студента: где он был недавно и как идёт курс в целом.
  * Всё считается по открытым шагам (block_views) и сданным работам — отдельного хранилища нет.
  */
 
@@ -85,7 +85,7 @@ export async function studentStats(userId: string): Promise<StudentStats> {
 
 export interface StudentPlace { org: string; groups: string[] }
 
-/** Где ученик учится: организация и его классы — для шапки профиля. */
+/** Где студент учится: организация и его классы — для шапки профиля. */
 export async function studentPlaces(userId: string): Promise<StudentPlace[]> {
   const { rows } = await db().query<{ org: string; groups: string[] }>(
     `SELECT o.name AS org,
@@ -101,7 +101,7 @@ export interface ActivityDay { date: string; count: number }
 
 /**
  * Активность по дням: сданные работы и открытые шаги. Нужна для сетки на главной
- * ученика; дни считаются по времени Алматы, чтобы «сегодня» совпадало с ощущением.
+ * студента; дни считаются по времени Алматы, чтобы «сегодня» совпадало с ощущением.
  */
 export async function activityDays(userId: string, days = 84): Promise<ActivityDay[]> {
   const { rows } = await db().query<{ d: string; n: number }>(
@@ -116,7 +116,7 @@ export async function activityDays(userId: string, days = 84): Promise<ActivityD
 
 export interface WeekPulse { submitted: number; steps: number; points: number }
 
-/** Неделя ученика в трёх числах — строка под карточкой «Продолжить». */
+/** Неделя студента в трёх числах — строка под карточкой «Продолжить». */
 export async function weekPulse(userId: string): Promise<WeekPulse> {
   const { rows } = await db().query<{ submitted: number; steps: number; points: string | null }>(
     `SELECT

@@ -5,8 +5,8 @@ import { LmsError } from './types';
 import { VISIBLE_TO_STUDENT } from './courses';
 
 /**
- * Заметки и закладки ученика на шагах урока. Видит их только автор: это его конспект,
- * учителю он не показывается. Права на курс проверяет сам запрос — чужой блок не сохранится.
+ * Заметки и закладки студента на шагах урока. Видит их только автор: это его конспект,
+ * преподавателю он не показывается. Права на курс проверяет сам запрос — чужой блок не сохранится.
  */
 
 export interface StepNote {
@@ -59,7 +59,7 @@ export async function saveNote(
   return { blockId, topicId: rows[0].topic_id, body: text, bookmarked: mark, updatedAt: rows[0].updated_at.toISOString() };
 }
 
-/** Все заметки и закладки ученика — для страницы «Заметки». */
+/** Все заметки и закладки студента — для страницы «Заметки». */
 export async function listNotes(userId: string, locale: Locale = 'ru'): Promise<NoteEntry[]> {
   const { rows } = await db().query<{
     block_id: string; topic_id: string; body: string; bookmarked: boolean; updated_at: Date;

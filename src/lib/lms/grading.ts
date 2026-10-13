@@ -8,7 +8,7 @@ import {
 } from './submissions';
 import { LIMITS, LmsError, optionalText, type SubmissionStatus } from './types';
 
-/** Проверка учителем, пересчёт после правки задания, журнал и прогресс курса. */
+/** Проверка преподавателем, пересчёт после правки задания, журнал и прогресс курса. */
 
 function comment(raw: unknown): string | null {
   return optionalText(raw, LIMITS.comment, 'Комментарий') || null;
@@ -17,7 +17,7 @@ function comment(raw: unknown): string | null {
 export async function gradeSubmission(
   sub: Submission, points: number, graderId: string, rawScore: unknown, rawComment: unknown,
 ): Promise<Submission> {
-  if (sub.status === 'draft') throw new LmsError('Черновик нельзя оценить: ученик ещё не сдал ответ.');
+  if (sub.status === 'draft') throw new LmsError('Черновик нельзя оценить: студент ещё не сдал ответ.');
   const score = parseScore(rawScore, points);
   const { rows } = await db().query<SubmissionRow>(
     `UPDATE submissions SET status = 'graded', score = $2, comment = $3, graded_at = now(), graded_by = $4,
@@ -27,7 +27,7 @@ export async function gradeSubmission(
 }
 
 export async function returnSubmission(sub: Submission, graderId: string, rawComment: unknown): Promise<Submission> {
-  if (sub.status === 'draft') throw new LmsError('Черновик нельзя вернуть: ученик ещё не сдал ответ.');
+  if (sub.status === 'draft') throw new LmsError('Черновик нельзя вернуть: студент ещё не сдал ответ.');
   const { rows } = await db().query<SubmissionRow>(
     `UPDATE submissions SET status = 'returned', score = NULL, comment = $2, graded_at = now(), graded_by = $3,
        updated_at = now()
@@ -37,8 +37,8 @@ export async function returnSubmission(sub: Submission, graderId: string, rawCom
 
 /**
  * «Пересчитать N сданных ответов»: ответы со старой ревизией проверяются новым
- * ключом. Оценку, поставленную учителем вручную, пересчёт не трогает — меняется
- * только автобалл. Развёрнутый ответ без ручной оценки уходит учителю на проверку.
+ * ключом. Оценку, поставленную преподавателем вручную, пересчёт не трогает — меняется
+ * только автобалл. Развёрнутый ответ без ручной оценки уходит преподавателю на проверку.
  */
 export async function recalculateBlock(block: Block): Promise<number> {
   if (block.body.kind !== 'assignment') throw new LmsError('Пересчитать можно только задание.');

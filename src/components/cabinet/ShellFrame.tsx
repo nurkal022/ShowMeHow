@@ -190,7 +190,7 @@ function Crumbs({ menu, pathname }: { menu: CabinetMenu; pathname: string }) {
   const { org, section, groups } = useMenuState(menu, pathname);
   const crumbs = breadcrumbs(pathname).map((c) => ({ ...c, label: hasCabinetKey(c.key) ? t(c.key) : c.label }));
   // Ссылками крошки становятся, только если раздел есть в меню человека:
-  // учителю группы «Организация» недоступна, и вести его туда незачем.
+  // преподавателю группы «Организация» недоступна, и вести его туда незачем.
   const linked = !!section && groups.some((g) => g.key === section);
   return (
     <nav className="cab-crumbs" aria-label={t('crumbs')}>

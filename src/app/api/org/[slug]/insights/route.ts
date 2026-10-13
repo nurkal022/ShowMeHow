@@ -11,7 +11,7 @@ const str = (v: unknown, max = 60) => (typeof v === 'string' ? v.trim().slice(0,
 
 /**
  * Помощник администрации. week — собрать недельный отчёт (цифры + текст) и сохранить;
- * advise — совет по ученику из зоны риска; ask — вопрос на естественном языке → таблица,
+ * advise — совет по студенту из зоны риска; ask — вопрос на естественном языке → таблица,
  * график и вывод; run — перезапуск уже готового плана (правка сортировки без модели).
  */
 export async function POST(req: Request, { params }: P) {
@@ -35,12 +35,12 @@ export async function POST(req: Request, { params }: P) {
       }
       case 'advise': {
         const risk = (await studentRisks(orgId)).find((r) => r.id === str(body.studentId));
-        if (!risk) return badRequest('Ученик не найден.');
+        if (!risk) return badRequest('Студент не найден.');
         return NextResponse.json({ advice: await adviseOnStudent(risk, locale) });
       }
       case 'ask': {
         const question = str(body.question, 500);
-        if (question.length < 4) return badRequest('Сформулируйте вопрос, например: «Какие классы отстают по физике?»');
+        if (question.length < 4) return badRequest('Сформулируйте вопрос, например: «Какие группы отстают по физике?»');
         const plan = await planQuestion(question, locale);
         const result = await runPlan(orgId, plan);
         const insight = await explainResult(question, result, locale);

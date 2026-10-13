@@ -6,7 +6,7 @@ import { createStudents, previewStudents } from '@/lib/org/bulk';
 
 type P = { params: Promise<{ slug: string; groupId: string }> };
 
-/** Ученики списком: dryRun — предпросмотр, иначе создание. Только админ организации. */
+/** Студенты списком: dryRun — предпросмотр, иначе создание. Только админ организации. */
 export async function POST(req: Request, { params }: P) {
   const { slug, groupId } = await params;
   const g = await guardOrg(req, slug, ['org_admin']);

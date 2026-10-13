@@ -33,7 +33,7 @@ export interface LabeledUser {
   login: string | null;
 }
 
-/** Как показывать человека в шапке и профиле: у ученика почты может не быть. */
+/** Как показывать человека в шапке и профиле: у студента почты может не быть. */
 export function userLabel(u: LabeledUser): string {
   return u.displayName || u.email || u.login || '';
 }

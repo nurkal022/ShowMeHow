@@ -14,7 +14,7 @@ import { cabinet } from '@/i18n/messages/cabinet';
 type Bulk = 'reset-password' | 'disable' | 'enable' | 'move';
 
 /**
- * Ученики группы: поиск, выбор галочками и действия сразу над всеми выбранными —
+ * Студенты группы: поиск, выбор галочками и действия сразу над всеми выбранными —
  * сбросить пароли перед первым уроком, перевести в другой класс, заблокировать.
  */
 export default function StudentsBoard({ slug, groupId, students, canBlock, moveTargets, rowActions }: {

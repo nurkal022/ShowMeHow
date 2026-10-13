@@ -9,7 +9,7 @@ import { isMoveDirection } from '@/lib/lms/order';
 /**
  * Правка содержимого или перестановка. Новая симуляция в блоке (или в стенде)
  * проверяется так же, как при вставке: иначе через курс можно было бы открыть
- * ученикам чужую личную симуляцию.
+ * студентам чужую личную симуляцию.
  */
 export async function PATCH(req: Request, { params }: IdParams) {
   const user = await guardUser(req);

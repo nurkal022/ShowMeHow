@@ -8,7 +8,7 @@ export async function generateMetadata() {
 }
 
 /**
- * Права проверяет каждая страница. Учитель группы заходит только в карточку
+ * Права проверяет каждая страница. Преподаватель группы заходит только в карточку
  * своей группы и лист паролей — раздела «Организация» в его меню нет.
  */
 export default async function OrgLayout({ children }: { children: React.ReactNode }) {

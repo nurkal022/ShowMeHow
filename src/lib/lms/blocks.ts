@@ -194,7 +194,7 @@ export async function listCourseAssignments(courseId: string): Promise<CourseAss
   });
 }
 
-/** Сколько блоков и заданий в каждой теме курса — для программы курса у ученика. */
+/** Сколько блоков и заданий в каждой теме курса — для программы курса у студента. */
 export async function blockCounts(courseId: string): Promise<Map<string, { blocks: number; tasks: number }>> {
   const { rows } = await db().query<{ topic_id: string; blocks: number; tasks: number }>(
     `SELECT t.id AS topic_id, count(b.id)::int AS blocks, count(b.id) FILTER (WHERE b.kind = 'assignment')::int AS tasks

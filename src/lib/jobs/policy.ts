@@ -2,7 +2,7 @@ import type { AuthUser } from '../auth/users';
 import type { Membership } from '../org/types';
 import { hasStaffRole, isPlatformAdmin } from '../org/policy';
 
-/** Приоритет учителя и администрации: их генерация идёт раньше пробных. */
+/** Приоритет преподавателя и администрации: их генерация идёт раньше пробных. */
 export const HIGH_PRIORITY = 10;
 
 /** Сколько раз задание может начаться. Вторая потеря воркера — ошибка. */
@@ -10,7 +10,7 @@ export const MAX_ATTEMPTS = 2;
 
 /**
  * Внутри одного приоритета очередь идёт по времени создания. Роль берётся по
- * любому членству: учитель в одной школе остаётся учителем, даже если в другой он ученик.
+ * любому членству: преподаватель в одной школе остаётся преподавателем, даже если в другой он студент.
  */
 export function jobPriority(user: Pick<AuthUser, 'role'>, memberships: Membership[]): number {
   return isPlatformAdmin(user) || hasStaffRole(memberships) ? HIGH_PRIORITY : 0;

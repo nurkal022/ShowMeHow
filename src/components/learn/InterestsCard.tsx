@@ -11,8 +11,8 @@ import { common } from '@/i18n/messages/common';
 import { learnMe, learnTags } from '@/i18n/messages/learn-me';
 
 /**
- * Интересы ученика в три шага: чипы, пара фраз о себе, способ объяснения. Форма
- * разбита на шаги не ради красоты — сплошной столбец из полей ученик не заполняет,
+ * Интересы студента в три шага: чипы, пара фраз о себе, способ объяснения. Форма
+ * разбита на шаги не ради красоты — сплошной столбец из полей студент не заполняет,
  * а три коротких экрана с растущей полосой заполняет до конца.
  */
 
@@ -23,7 +23,7 @@ const STEP_ICONS = [IconSpark, IconUser, IconTarget];
 export default function InterestsCard({ initial }: { initial: StudentInterests }) {
   const t = useT(learnMe);
   const tc = useT(common);
-  // Готовый тег — по словарю; свой тег ученика словарь не знает и показывает как есть.
+  // Готовый тег — по словарю; свой тег студента словарь не знает и показывает как есть.
   const tagLabel = useT(learnTags);
   const f = useFormat();
   const [value, setValue] = useState(initial);

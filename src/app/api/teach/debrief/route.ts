@@ -15,7 +15,7 @@ import { localeFromRequest } from '@/i18n/config';
 const str = (v: unknown, max = 60) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 /**
- * Разбор урока. create — собрать разбор темы по ответам класса и сохранить;
+ * Разбор урока. create — собрать разбор темы по ответам группы и сохранить;
  * remedial — по последнему разбору создать тему «Работа над ошибками» с уроком от помощника.
  */
 export async function POST(req: Request) {
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       const bodies = await draftLesson({
         topic: topicTitle, subject: staff.course.subject, grade: '',
         wishes: `Это короткий урок-повторение по итогам проверки. Что объяснить заново: ${s.remedial}
-Типичные ошибки класса: ${s.misconceptions.map((m) => `${m.title} — ${m.detail}`).join('; ')}.
+Типичные ошибки группы: ${s.misconceptions.map((m) => `${m.title} — ${m.detail}`).join('; ')}.
 Каждое задание должно проверять именно эти ошибки. Объяснение короче обычного.`,
       }, locale);
       const topic = await createTopic(staff.course.id, topicTitle.slice(0, 200));

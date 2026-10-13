@@ -34,8 +34,8 @@ export function isOrgKind(v: unknown): v is OrgKind {
 
 export const ORG_ROLE_LABELS: Record<OrgRole, string> = {
   org_admin: 'администратор',
-  teacher: 'учитель',
-  student: 'ученик',
+  teacher: 'преподаватель',
+  student: 'студент',
 };
 
 export const ORG_KIND_LABELS: Record<OrgKind, string> = {

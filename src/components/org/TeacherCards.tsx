@@ -8,7 +8,7 @@ import { org } from '@/i18n/messages/org';
 
 const DAY = 86_400_000;
 
-/** Карточки учителей: нагрузка, долг по проверке и когда человек был в последний раз. */
+/** Карточки преподавателей: нагрузка, долг по проверке и когда человек был в последний раз. */
 export default function TeacherCards({ teachers, locale = 'ru' }: { teachers: TeacherActivity[]; locale?: Locale }) {
   const tr = translator(org, locale);
   return (

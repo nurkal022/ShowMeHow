@@ -6,7 +6,7 @@ import { checkTargets, sanitizeControls, simScore, type SimHint } from './sim-st
 import { LIMITS, LmsError, type AnswerState, type SubmissionStatus } from './types';
 
 /**
- * Ответы учеников: санация, автопроверка и правила сдачи. Модуль чистый —
+ * Ответы студентов: санация, автопроверка и правила сдачи. Модуль чистый —
  * форма ответа зовёт те же функции, что и сервер.
  */
 
@@ -18,10 +18,10 @@ export type Answer =
   /** Левый id → правый id. */
   | { type: 'match'; pairs: Record<string, string> }
   | { type: 'order'; order: string[] }
-  /** Строки таблицы измерений: ячейки — как ввёл ученик. */
+  /** Строки таблицы измерений: ячейки — как ввёл студент. */
   | { type: 'table'; rows: string[][] }
   | { type: 'text'; text: string }
-  /** hints дописывает сервер при сдаче, если учитель разрешил подсказки; от клиента они не принимаются. */
+  /** hints дописывает сервер при сдаче, если преподаватель разрешил подсказки; от клиента они не принимаются. */
   | { type: 'sim_state'; controls: Record<string, number>; capturedAt: string; hints?: SimHint[] };
 
 /** Пауза после последней правки, через которую черновик уходит на сервер. */
@@ -91,7 +91,7 @@ export function sanitizeAnswer(spec: AssignmentSpec | StudentAssignmentSpec, raw
     if (!Array.isArray(a.order) || a.order.some((v) => typeof v !== 'string')) throw new LmsError(MISMATCH);
     const ids = new Set(spec.items.map((i) => i.id));
     const order = [...new Set(a.order as string[])];
-    // Пустой порядок — черновик, где ученик ещё ничего не двигал.
+    // Пустой порядок — черновик, где студент ещё ничего не двигал.
     if (order.length !== 0 && (order.length !== ids.size || order.some((id) => !ids.has(id)))) throw new LmsError(MISMATCH);
     return { type: 'order', order };
   }
@@ -159,7 +159,7 @@ export function gapMarks(text: string, values: string[]): boolean[] {
   return parseGaps(text).answers.map((ok, i) => ok.some((a) => normalizeWord(a) === normalizeWord(values[i] ?? '')));
 }
 
-/** null — проверяет учитель (развёрнутый ответ). */
+/** null — проверяет преподаватель (развёрнутый ответ). */
 export function autoScore(payload: AssignmentPayload, answer: Answer): number | null {
   const spec = payload.spec;
   if (spec.type === 'text' || spec.type === 'table') return null;
@@ -227,7 +227,7 @@ export interface SubmissionLike {
   submittedAt: string | null;
 }
 
-/** Что уходит ученику: балл — только после проверки, служебных полей нет. */
+/** Что уходит студенту: балл — только после проверки, служебных полей нет. */
 export type StudentSubmission = SubmissionLike;
 
 /** hideResult — контрольная ещё идёт: проверенная работа выглядит просто сданной, без балла и комментария. */

@@ -9,7 +9,7 @@ import type { Membership, OrgRole } from './types';
 
 export const TRIAL_LIMIT = 10;
 
-export const GENERATION_FORBIDDEN_MESSAGE = 'Генерация недоступна для учеников вашей организации.';
+export const GENERATION_FORBIDDEN_MESSAGE = 'Генерация недоступна для студентов вашей организации.';
 
 export type SessionKind = 'long' | 'short';
 
@@ -50,7 +50,7 @@ function isStaff(m: Membership): boolean {
   return m.role === 'teacher' || m.role === 'org_admin';
 }
 
-/** Есть ли членство учителя или админа организации (org_admin включает права учителя). */
+/** Есть ли членство преподавателя или админа организации (org_admin включает права преподавателя). */
 export function hasStaffRole(memberships: Membership[]): boolean {
   return memberships.some(isStaff);
 }
@@ -59,7 +59,7 @@ export function canGenerate(user: PolicyUser, memberships: Membership[]): boolea
   if (isPlatformAdmin(user)) return true;
   if (memberships.length === 0) return true;
   if (hasStaffRole(memberships)) return true;
-  // Остались только ученические членства: разрешает любая организация.
+  // Остались только студенческие членства: разрешает любая организация.
   return memberships.some((m) => m.settings.studentsCanGenerate);
 }
 
@@ -71,7 +71,7 @@ export function sessionKind(user: PolicyUser, memberships: Membership[]): Sessio
   return 'short';
 }
 
-/** null — без лимита. Учителю — наибольший лимит среди организаций, где он учитель или админ. */
+/** null — без лимита. Преподавателю — наибольший лимит среди организаций, где он преподаватель или админ. */
 export function generationLimit(user: PolicyUser, memberships: Membership[]): number | null {
   if (isPlatformAdmin(user)) return null;
   const staff = memberships.filter(isStaff);
@@ -96,16 +96,16 @@ export function navSections(user: PolicyUser, memberships: Membership[]): NavSec
 }
 
 /**
- * Куда отправить с «/» (там форма генерации). Ученик без права генерации
+ * Куда отправить с «/» (там форма генерации). Студент без права генерации
  * попадает в свои курсы: «Создать» ему не показывается, а «Курсы» видны
- * всегда, когда есть ученическое членство. null — остаться на «/».
+ * всегда, когда есть студенческое членство. null — остаться на «/».
  * /learn сам никуда не переадресует, петли нет.
  */
 export function homeRedirect(user: PolicyUser, memberships: Membership[]): string | null {
   return canGenerate(user, memberships) ? null : '/learn';
 }
 
-/** org_admin включает права учителя — то же правило, что в requireOrgRole. */
+/** org_admin включает права преподавателя — то же правило, что в requireOrgRole. */
 export function roleSatisfies(role: OrgRole, allowed: readonly OrgRole[]): boolean {
   return allowed.includes(role) || (role === 'org_admin' && allowed.includes('teacher'));
 }

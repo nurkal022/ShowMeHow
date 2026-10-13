@@ -19,7 +19,7 @@ import { getLocale } from '@/i18n/server';
 import { translator } from '@/i18n/core';
 import { orgPeople } from '@/i18n/messages/org-people';
 
-/** Админ организации — всё; учитель группы — список учеников, сброс пароля и лист. */
+/** Админ организации — всё; преподаватель группы — список студентов, сброс пароля и лист. */
 export default async function GroupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const user = await requirePageUser(`/org/groups/${id}`);

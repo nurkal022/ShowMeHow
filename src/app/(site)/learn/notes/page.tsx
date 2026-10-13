@@ -5,7 +5,7 @@ import { IconStar } from '@/components/cabinet/icons';
 import { getT } from '@/i18n/server';
 import { learnMe } from '@/i18n/messages/learn-me';
 
-/** Заметки и закладки ученика — его личный конспект по всем курсам. Учителю он не виден. */
+/** Заметки и закладки студента — его личный конспект по всем курсам. Преподавателю он не виден. */
 export default async function NotesPage() {
   const user = await requirePageUser('/learn/notes');
   if (!user) return null;

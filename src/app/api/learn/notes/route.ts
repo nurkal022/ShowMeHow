@@ -3,7 +3,7 @@ import { guardUser } from '@/lib/http/guards';
 import { badRequest, INVALID_BODY_MESSAGE, readBody, withUserErrors } from '@/lib/http/route-kit';
 import { saveNote } from '@/lib/lms/notes';
 
-/** Заметка и закладка ученика на шаге. Доступ к блоку проверяет сам запрос в saveNote. */
+/** Заметка и закладка студента на шаге. Доступ к блоку проверяет сам запрос в saveNote. */
 export async function POST(req: Request) {
   const user = await guardUser(req);
   if (user instanceof Response) return user;

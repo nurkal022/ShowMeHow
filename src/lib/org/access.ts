@@ -55,7 +55,7 @@ export async function orgRoleOf(userId: string, orgId: string): Promise<OrgRole 
   return rows[0]?.role ?? null;
 }
 
-/** org_admin включает права учителя. */
+/** org_admin включает права преподавателя. */
 function roleAllowed(role: OrgRole, allowed: OrgRole[]): boolean {
   if (allowed.includes(role)) return true;
   return role === 'org_admin' && allowed.includes('teacher');
@@ -80,7 +80,7 @@ export async function requireOrgRole(
 }
 
 /**
- * Админ организации группы или учитель, которому группа назначена.
+ * Админ организации группы или преподаватель, которому группа назначена.
  * Архивная группа считается отсутствующей для всех, включая админа платформы;
  * архивная организация прав не даёт через orgRoleOf, а админ платформы видит её,
  * как и в requireOrgRole.

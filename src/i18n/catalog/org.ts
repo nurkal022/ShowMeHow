@@ -16,11 +16,11 @@ export const catalog: CatalogEntry[] = [
   { ru: 'Для входа по логину укажите имя человека.', kk: 'Логин арқылы кіру үшін адамның атын көрсетіңіз.', en: 'For login-based sign-in, enter the person’s name.' },
   { ru: 'Логин «{login}» уже занят. Укажите другой.', kk: '«{login}» логині бос емес. Басқасын көрсетіңіз.', en: 'The login “{login}” is already taken. Choose another one.' },
   { ru: 'Этот человек уже состоит в организации: администратор.', kk: 'Бұл адам ұйымда бар: әкімші.', en: 'This person is already in the organization: administrator.' },
-  { ru: 'Этот человек уже состоит в организации: учитель.', kk: 'Бұл адам ұйымда бар: мұғалім.', en: 'This person is already in the organization: teacher.' },
-  { ru: 'Этот человек уже состоит в организации: ученик.', kk: 'Бұл адам ұйымда бар: оқушы.', en: 'This person is already in the organization: student.' },
+  { ru: 'Этот человек уже состоит в организации: преподаватель.', kk: 'Бұл адам ұйымда бар: оқытушы.', en: 'This person is already in the organization: instructor.' },
+  { ru: 'Этот человек уже состоит в организации: студент.', kk: 'Бұл адам ұйымда бар: студент.', en: 'This person is already in the organization: student.' },
   { ru: 'Этот человек не состоит в организации.', kk: 'Бұл адам ұйымда жоқ.', en: 'This person is not in the organization.' },
 
-  // список учеников (lib/org/roster, bulk)
+  // список студентов (lib/org/roster, bulk)
   { ru: 'Список слишком длинный: не больше {n} символов.', kk: 'Тізім тым ұзын: {n} таңбадан аспауы керек.', en: 'The list is too long: at most {n} characters.' },
   { ru: 'В списке больше {n} строк. Разделите его на части.', kk: 'Тізімде {n} жолдан көп. Оны бөліктерге бөліңіз.', en: 'The list has more than {n} lines. Split it into parts.' },
   { ru: 'Не удалось подобрать логин для «{name}». Попробуйте ещё раз.', kk: '«{name}» үшін логин таңдау мүмкін болмады. Қайталап көріңіз.', en: 'Could not generate a login for “{name}”. Please try again.' },
@@ -31,8 +31,8 @@ export const catalog: CatalogEntry[] = [
   { ru: 'Группа «{title}» уже есть в этой организации.', kk: '«{title}» тобы бұл ұйымда бұрыннан бар.', en: 'The group “{title}” already exists in this organization.' },
   { ru: 'Группа не найдена.', kk: 'Топ табылмады.', en: 'Group not found.' },
   { ru: 'Добавить в группу можно только члена организации этой группы.', kk: 'Топқа тек осы топ ұйымының мүшесін қосуға болады.', en: 'Only a member of this group’s organization can be added to the group.' },
-  { ru: 'Учителем группы можно назначить только учителя или администратора её организации.', kk: 'Топ мұғалімі етіп тек оның ұйымының мұғалімін немесе әкімшісін тағайындауға болады.', en: 'Only a teacher or administrator of the group’s organization can be assigned as its teacher.' },
-  { ru: 'Ученика нет в этой группе.', kk: 'Оқушы бұл топта жоқ.', en: 'The student is not in this group.' },
+  { ru: 'Преподавателем группы можно назначить только преподавателя или администратора её организации.', kk: 'Топ оқытушысы етіп тек оның ұйымының оқытушысын немесе әкімшісін тағайындауға болады.', en: 'Only an instructor or administrator of the group’s organization can be assigned as its instructor.' },
+  { ru: 'Студента нет в этой группе.', kk: 'Студент бұл топта жоқ.', en: 'The student is not in this group.' },
 
   // организации (lib/org/orgs)
   { ru: 'Слаг может содержать только строчные латинские буквы, цифры и дефис, от 2 до 32 символов.', kk: 'Слаг тек кіші латын әріптерінен, сандардан және сызықшадан тұруы керек, 2-ден 32 таңбаға дейін.', en: 'A slug may contain only lowercase Latin letters, digits and hyphens, 2 to 32 characters.' },
@@ -45,13 +45,13 @@ export const catalog: CatalogEntry[] = [
   // люди организации (api/org/[slug]/members)
   { ru: 'Действия над администраторами организации доступны только администратору платформы.', kk: 'Ұйым әкімшілеріне қатысты әрекеттер тек платформа әкімшісіне қолжетімді.', en: 'Only a platform administrator can act on organization administrators.' },
   { ru: 'Этот человек состоит и в других организациях или администрирует платформу — это действие доступно только администратору платформы.', kk: 'Бұл адам басқа ұйымдарда да бар немесе платформаны басқарады — бұл әрекет тек платформа әкімшісіне қолжетімді.', en: 'This person also belongs to other organizations or administers the platform — only a platform administrator can do this.' },
-  { ru: 'Убрать из организации можно только учителя. Учеников блокируют.', kk: 'Ұйымнан тек мұғалімді шығаруға болады. Оқушылар бұғатталады.', en: 'Only teachers can be removed from the organization. Students are blocked instead.' },
-  { ru: 'Переводить между группами можно только учеников.', kk: 'Топтар арасында тек оқушыларды ауыстыруға болады.', en: 'Only students can be moved between groups.' },
+  { ru: 'Убрать из организации можно только преподавателя. Студентов блокируют.', kk: 'Ұйымнан тек оқытушыны шығаруға болады. Студенттер бұғатталады.', en: 'Only instructors can be removed from the organization. Students are blocked instead.' },
+  { ru: 'Переводить между группами можно только студентов.', kk: 'Топтар арасында тек студенттерді ауыстыруға болады.', en: 'Only students can be moved between groups.' },
 
   // помощник администрации (api/org/[slug]/insights, lib/org/ai)
-  { ru: 'Ученик не найден.', kk: 'Оқушы табылмады.', en: 'Student not found.' },
-  { ru: 'Сформулируйте вопрос, например: «Какие классы отстают по физике?»', kk: 'Сұрақты тұжырымдаңыз, мысалы: «Физикадан қай сыныптар артта қалып жатыр?»', en: 'Phrase a question, for example: “Which classes are falling behind in physics?”' },
-  { ru: 'Не понял, по каким данным ответить. Спросите про учеников, классы, учителей, курсы, задания или динамику по дням.', kk: 'Қандай деректер бойынша жауап беру керектігін түсінбедім. Оқушылар, сыныптар, мұғалімдер, курстар, тапсырмалар немесе күндер бойынша динамика туралы сұраңыз.', en: 'I could not tell which data to use. Ask about students, classes, teachers, courses, assignments or daily trends.' },
+  { ru: 'Студент не найден.', kk: 'Студент табылмады.', en: 'Student not found.' },
+  { ru: 'Сформулируйте вопрос, например: «Какие группы отстают по физике?»', kk: 'Сұрақты тұжырымдаңыз, мысалы: «Физикадан қай топтар артта қалып жатыр?»', en: 'Phrase a question, for example: “Which groups are falling behind in physics?”' },
+  { ru: 'Не понял, по каким данным ответить. Спросите про студентов, группы, преподавателей, курсы, задания или динамику по дням.', kk: 'Қандай деректер бойынша жауап беру керектігін түсінбедім. Студенттер, топтар, оқытушылар, курстар, тапсырмалар немесе күндер бойынша динамика туралы сұраңыз.', en: 'I could not tell which data to use. Ask about students, groups, instructors, courses, assignments or daily trends.' },
 
   // админка (api/admin, lib/auth/impersonation — показываются в админке)
   { ru: 'Нельзя заблокировать самого себя.', kk: 'Өзіңізді бұғаттай алмайсыз.', en: 'You cannot block yourself.' },

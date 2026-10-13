@@ -15,7 +15,7 @@ const LEVELS: { key: RiskLevel | 'all'; label: 'lvlAll' | 'lvlHigh' | 'lvlMedium
   { key: 'all', label: 'lvlAll' }, { key: 'high', label: 'lvlHigh' }, { key: 'medium', label: 'lvlMedium' }, { key: 'low', label: 'lvlLow' },
 ];
 
-/** Таблица риска: фильтр по уровню и классу, причины чипами, совет помощника по ученику. */
+/** Таблица риска: фильтр по уровню и классу, причины чипами, совет помощника по студенту. */
 export default function RiskBoard({ slug, students }: { slug: string; students: StudentRisk[] }) {
   const t = useT(org);
   const f = useFormat();

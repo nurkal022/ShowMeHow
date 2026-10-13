@@ -7,7 +7,7 @@ import { courseEditorHref } from '@/lib/lms/links';
 
 /**
  * Вставка тренажёра в блок: из выбора в редакторе и из мастерской по returnTo.
- * Чужая личная симуляция для учителя не существует — 404.
+ * Чужая личная симуляция для преподавателя не существует — 404.
  */
 export async function POST(req: Request, { params }: IdParams) {
   const user = await guardUser(req);

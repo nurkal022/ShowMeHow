@@ -21,7 +21,7 @@ import SubmissionStatus, { scoreTone } from './SubmissionStatus';
 /**
  * Форма ответа. Черновик уходит на сервер сам, через полторы секунды после правки.
  * Единственную попытку сдают через подтверждение. После проверки — разбор: что верно,
- * правильный ответ и пояснение учителя. В режиме «Как видит ученик» ничего не отправляется.
+ * правильный ответ и пояснение преподавателя. В режиме «Как видит студент» ничего не отправляется.
  */
 export default function AnswerForm({ blockId, payload, initial, preview }: {
   blockId: string; payload: StudentAssignmentPayload; initial: StudentSubmission | null; preview: boolean;
@@ -47,7 +47,7 @@ export default function AnswerForm({ blockId, payload, initial, preview }: {
 
   answerRef.current = answer;
 
-  /** Порядок, который ученик не трогал, — тоже ответ: тот, что он видит на экране. */
+  /** Порядок, который студент не трогал, — тоже ответ: тот, что он видит на экране. */
   function ready(a: Answer): Answer {
     if (a.type === 'order' && a.order.length === 0 && payload.spec.type === 'order') {
       return { type: 'order', order: payload.spec.items.map((i) => i.id) };

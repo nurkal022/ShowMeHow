@@ -93,11 +93,11 @@ export const workbench = defineMessages({
     removeParam: 'Убрать параметр {name}',
     planViews: 'Виды и приборы', removeView: 'Убрать вид {name}',
     viewScene: 'сцена', viewChart: 'график', viewPhase: 'фазовая диаграмма', viewTable: 'таблица', viewFormula: 'формула', viewSection: 'разрез',
-    planScenario: 'Сценарий урока', stepAria: 'Шаг', stepTaskAria: 'Что делает ученик', removeStep: 'Убрать шаг',
-    newStepTitle: 'Новый шаг', newStepTask: 'Что сделать ученику', addStep: 'Шаг',
+    planScenario: 'Сценарий урока', stepAria: 'Шаг', stepTaskAria: 'Что делает студент', removeStep: 'Убрать шаг',
+    newStepTitle: 'Новый шаг', newStepTask: 'Что сделать студенту', addStep: 'Шаг',
     planInvariants: 'Проверим числами', planInvariantsHint: '— ядро физики тестируется до сцены',
     planWow: 'Момент для занятия', physicsHide: 'Скрыть физическую модель', physicsShow: 'Физическая модель',
-    planCorrectPh: 'Попросить изменить план: «добавь трение», «для 7 класса»…',
+    planCorrectPh: 'Попросить изменить план: «добавь трение», «для первокурсников»…',
     planCorrectAria: 'Поправка к плану', planCorrectSend: 'Отправить поправку',
     replanning: 'Меняю план…', buildSim: 'Собрать тренажёр',
 
@@ -117,7 +117,7 @@ export const workbench = defineMessages({
 
     // Настройки тренажёра
     simSettingsTitle: 'Настройки тренажёра',
-    simSettingsNote: 'Меняется только то, что видит ученик на панели: подписи, диапазоны, начальные значения и пресеты. Код тренажёра не трогается — сохранение занимает секунды.',
+    simSettingsNote: 'Меняется только то, что видит студент на панели: подписи, диапазоны, начальные значения и пресеты. Код тренажёра не трогается — сохранение занимает секунды.',
     panelTitle: 'Название на панели', fieldStep: 'шаг', presets: 'Пресеты', presetNameAria: 'Название пресета',
     removePreset: 'Убрать пресет', newPreset: 'Новый режим', addPreset: 'Пресет',
   },
@@ -209,11 +209,11 @@ export const workbench = defineMessages({
     removeParam: '{name} параметрін алып тастау',
     planViews: 'Көріністер мен аспаптар', removeView: '{name} көрінісін алып тастау',
     viewScene: 'сахна', viewChart: 'график', viewPhase: 'фазалық диаграмма', viewTable: 'кесте', viewFormula: 'формула', viewSection: 'қима',
-    planScenario: 'Сабақ сценарийі', stepAria: 'Қадам', stepTaskAria: 'Оқушы не істейді', removeStep: 'Қадамды алып тастау',
-    newStepTitle: 'Жаңа қадам', newStepTask: 'Оқушы не істеуі керек', addStep: 'Қадам',
+    planScenario: 'Сабақ сценарийі', stepAria: 'Қадам', stepTaskAria: 'Студент не істейді', removeStep: 'Қадамды алып тастау',
+    newStepTitle: 'Жаңа қадам', newStepTask: 'Студент не істеуі керек', addStep: 'Қадам',
     planInvariants: 'Сандармен тексереміз', planInvariantsHint: '— физика ядросы сахнаға дейін тексеріледі',
     planWow: 'Сабаққа арналған сәт', physicsHide: 'Физикалық модельді жасыру', physicsShow: 'Физикалық модель',
-    planCorrectPh: 'Жоспарды өзгертуді сұрау: «үйкеліс қос», «7-сынып үшін»…',
+    planCorrectPh: 'Жоспарды өзгертуді сұрау: «үйкеліс қос», «бірінші курс үшін»…',
     planCorrectAria: 'Жоспарға түзету', planCorrectSend: 'Түзетуді жіберу',
     replanning: 'Жоспарды өзгертіп жатырмын…', buildSim: 'Тренажерді құрастыру',
 
@@ -230,7 +230,7 @@ export const workbench = defineMessages({
     untitled: 'Атауы жоқ', keptMidway: 'жол-жөнекей қалдырылды', refinements: 'жетілдірулер: {n}', hasDraft: 'жоба бар',
 
     simSettingsTitle: 'Тренажер баптаулары',
-    simSettingsNote: 'Тек оқушы панельде көретін нәрсе өзгереді: жазулар, ауқымдар, бастапқы мәндер және пресеттер. Тренажер коды өзгермейді — сақтау бірнеше секундқа созылады.',
+    simSettingsNote: 'Тек студент панельде көретін нәрсе өзгереді: жазулар, ауқымдар, бастапқы мәндер және пресеттер. Тренажер коды өзгермейді — сақтау бірнеше секундқа созылады.',
     panelTitle: 'Панельдегі атауы', fieldStep: 'қадам', presets: 'Пресеттер', presetNameAria: 'Пресет атауы',
     removePreset: 'Пресетті алып тастау', newPreset: 'Жаңа режим', addPreset: 'Пресет',
   },
@@ -326,7 +326,7 @@ export const workbench = defineMessages({
     newStepTitle: 'New step', newStepTask: 'What the student should do', addStep: 'Step',
     planInvariants: 'Checked with numbers', planInvariantsHint: '— the physics core is tested before the scene',
     planWow: 'Classroom moment', physicsHide: 'Hide the physical model', physicsShow: 'Physical model',
-    planCorrectPh: 'Ask to change the plan: “add friction”, “for grade 7”…',
+    planCorrectPh: 'Ask to change the plan: “add friction”, “for first-year students”…',
     planCorrectAria: 'Correction to the plan', planCorrectSend: 'Send correction',
     replanning: 'Updating the plan…', buildSim: 'Build simulator',
 

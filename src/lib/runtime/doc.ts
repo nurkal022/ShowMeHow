@@ -42,7 +42,7 @@ export const UIKIT_DOC = `
     Выбор варианта: {question, options:['растёт','падает','не меняется'], correct:0}
 - SimUI.table({title:'Измерения', columns:[{label:'L', unit:'м'}, {label:'T', unit:'с'}],
     record:function(){return [L, T];}, corner:'bl'}) -> {add(row), clear()} — таблица
-    с кнопкой «Записать»: ученик сам собирает точки опыта
+    с кнопкой «Записать»: студент сам собирает точки опыта
 - SimUI.set('temp', 80) — выставить слайдер/контрол по name (как пресет), например из onStep
 
 3D-сцена (если mode 3d) — одной строкой, в существующий холст #scene:

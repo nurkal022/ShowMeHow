@@ -11,7 +11,7 @@ export interface QuotaStatus {
   remaining: number | null;
 }
 
-/** Число берётся из фактического лимита: у учителя он задан организацией. */
+/** Число берётся из фактического лимита: у преподавателя он задан организацией. */
 export function quotaExhaustedMessage(limit: number, orgLimit: boolean): string {
   const tail = 'Доработка уже созданных симуляций по-прежнему доступна.';
   if (orgLimit) {
@@ -28,7 +28,7 @@ export const QUOTA_EXHAUSTED_MESSAGE = quotaExhaustedMessage(TRIAL_LIMIT, false)
  * завершённые генерации — отменённые и упавшие не считаются. Доработки квоту не
  * тратят: считаются только задания вида generate. Лимит зависит от
  * членств (см. generationLimit). Членства обязательны: забытый аргумент молча
- * занизил бы лимит учителя до пробного.
+ * занизил бы лимит преподавателя до пробного.
  */
 export async function quotaStatus(user: AuthUser, memberships: Membership[]): Promise<QuotaStatus> {
   const limit = generationLimit(user, memberships);

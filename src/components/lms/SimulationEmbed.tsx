@@ -11,7 +11,7 @@ type Load = { state: 'loading' } | { state: 'ready'; html: string } | { state: '
 /**
  * Тренажёр внутри урока. missing — сервер уже знает, что автор удалил симуляцию;
  * 404 от API значит то же самое. preset и locked — стартовые значения и закрытые
- * учителем ползунки. «Крупнее» разворачивает сцену поверх урока, не уводя со страницы.
+ * преподавателем ползунки. «Крупнее» разворачивает сцену поверх урока, не уводя со страницы.
  */
 export default function SimulationEmbed({ simulationId, missing, caption, preset, locked }: {
   simulationId: string | null; missing: boolean; caption: string;

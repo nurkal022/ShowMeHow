@@ -9,7 +9,7 @@ import { listArticles } from '@/lib/research/articles-store';
 import ResearchHub from '@/components/research/ResearchHub';
 import { getLocale } from '@/i18n/server';
 
-/** Рабочее место исследователя — тем, кто может создавать (ученику без права генерации — 404). */
+/** Рабочее место исследователя — тем, кто может создавать (студенту без права генерации — 404). */
 export default async function ResearchPage() {
   const user = await requirePageUser('/research');
   if (!user) return null;

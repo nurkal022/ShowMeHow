@@ -15,7 +15,7 @@ interface Props {
   userId: string;
   label: string;
   disabled: boolean;
-  /** Группа, из карточки которой вызвано действие: нужна учителю группы и для перевода. */
+  /** Группа, из карточки которой вызвано действие: нужна преподавателю группы и для перевода. */
   groupId?: string;
   canBlock?: boolean;
   canRemove?: boolean;

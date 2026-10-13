@@ -164,7 +164,7 @@ export default function Workbench() {
   const tc = useT(common);
   const f = useFormat();
   const locale = useLocale();
-  // Учитель пришёл из редактора курса: готовую симуляцию можно вставить в блок урока.
+  // Преподаватель пришёл из редактора курса: готовую симуляцию можно вставить в блок урока.
   const returnTo = lessonBlockFromSearch(search.get('returnTo'));
   const [inserting, setInserting] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -299,7 +299,7 @@ export default function Workbench() {
     // попадал бы в state дважды.
     if (didInit.current) return;
     didInit.current = true;
-    // Учитель пришёл из задания: помощник уже описал тренажёр — описание ложится в поле запроса.
+    // Преподаватель пришёл из задания: помощник уже описал тренажёр — описание ложится в поле запроса.
     const brief = search.get('brief');
     if (brief) {
       setPrompt(brief.slice(0, 2000));

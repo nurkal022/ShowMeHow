@@ -16,7 +16,7 @@ function cellTone(c: JournalCell, points: number): string {
   return 'none';
 }
 
-/** Журнал: имя ученика и шапка остаются на месте, прокручиваются только оценки — внутри карточки. */
+/** Журнал: имя студента и шапка остаются на месте, прокручиваются только оценки — внутри карточки. */
 export default function JournalTable({ journal, studentHref, locale = 'ru' }: { journal: Journal; studentHref?: (id: string) => string; locale?: Locale }) {
   const t = translator(teachReview, locale);
   if (journal.rows.length === 0 || journal.assignments.length === 0) {

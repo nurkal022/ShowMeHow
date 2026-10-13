@@ -22,7 +22,7 @@ function greeting(): 'greetNight' | 'greetMorning' | 'greetDay' | 'greetEvening'
   return h < 5 ? 'greetNight' : h < 12 ? 'greetMorning' : h < 18 ? 'greetDay' : 'greetEvening';
 }
 
-/** Моё обучение — первый экран ученика: где остановился, ритм занятий, сроки и курсы. */
+/** Моё обучение — первый экран студента: где остановился, ритм занятий, сроки и курсы. */
 export default async function LearnPage() {
   const user = await requirePageUser('/learn');
   if (!user) return null;

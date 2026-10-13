@@ -11,7 +11,7 @@ import { localeFromRequest } from '@/i18n/config';
 const MODES = new Set(['hint', 'explain', 'check', 'ask']);
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
-/** Доступ: ученик курса или его учитель (учитель смотрит наставника глазами ученика). */
+/** Доступ: студент курса или его преподаватель (преподаватель смотрит наставника глазами студента). */
 async function access(req: Request, topicId: unknown) {
   const user = await guardUser(req);
   if (user instanceof Response) return user;

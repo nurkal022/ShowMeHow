@@ -12,9 +12,9 @@ import type { Locale } from '@/i18n/config';
 import { aiDefaults, withLanguage } from './texts';
 
 /**
- * ИИ-помощник учителя: урок по теме, задания по тексту, варианты задания, черновик оценки.
+ * ИИ-помощник преподавателя: урок по теме, задания по тексту, варианты задания, черновик оценки.
  * Модель возвращает JSON; каждый блок проходит ту же санацию, что и ручной ввод, —
- * что не прошло, выбрасывается молча, а не ломает урок. Решает всегда учитель: помощник
+ * что не прошло, выбрасывается молча, а не ломает урок. Решает всегда преподаватель: помощник
  * только предлагает, блоки ложатся в тему обычными, их можно править и удалять.
  */
 
@@ -30,16 +30,16 @@ export const BLOCK_FORMAT = `Каждый блок — объект {"kind": ...
   "rubric": [{"label": "критерий", "points": 2}], "reference": "эталонный ответ"} — rubric и reference только для type "text" и "table", иначе [] и ""
   Если задание про измерение или эксперимент — сформулируй его так, чтобы ответ находился на интерактивном тренажёре.
 SPEC — один из:
-- {"type": "choice", "multiple": false, "shuffle": true, "options": [{"text": "...", "correct": true}, ...]} — 3–5 вариантов, неправильные — правдоподобные, по типичным ошибкам учеников
+- {"type": "choice", "multiple": false, "shuffle": true, "options": [{"text": "...", "correct": true}, ...]} — 3–5 вариантов, неправильные — правдоподобные, по типичным ошибкам студентов
 - {"type": "number", "answer": 9.8, "tolerance": 0.1, "unit": "м/с²"}
 - {"type": "short", "accepted": ["слово", "другое написание"]}
 - {"type": "gaps", "text": "Период {{растёт|увеличивается}} при ..."} — пропуск в двойных фигурных скобках, варианты через |
 - {"type": "match", "pairs": [{"left": "термин", "right": "определение"}, ...]} — 3–5 пар
 - {"type": "order", "items": [{"text": "шаг 1"}, ...]} — в правильном порядке, 3–6 шагов
-- {"type": "table", "columns": [{"label": "Длина нити", "unit": "м"}, ...], "minRows": 5} — таблица измерений, 2–4 колонки, проверяет учитель
-- {"type": "text"} — развёрнутый ответ, проверяет учитель`;
+- {"type": "table", "columns": [{"label": "Длина нити", "unit": "м"}, ...], "minRows": 5} — таблица измерений, 2–4 колонки, проверяет преподаватель
+- {"type": "text"} — развёрнутый ответ, проверяет преподаватель`;
 
-const SYSTEM = `Ты — методист и опытный учитель. Пишешь по-русски, коротко, точно и понятно ученику указанного класса.
+const SYSTEM = `Ты — методист и опытный преподаватель. Пишешь по-русски, коротко, точно и понятно студенту указанного курса.
 Факты и числа проверяй: ошибка в учебном материале недопустима. Отвечай только JSON без пояснений вокруг.
 ${BLOCK_FORMAT}`;
 
@@ -92,7 +92,7 @@ export async function draftLesson(b: LessonBrief, locale: Locale = 'ru'): Promis
     const raw = await askJson(`Составь контрольную работу.
 Тема: ${b.topic}
 Предмет: ${b.subject || 'не указан'}
-Класс: ${b.grade || 'средняя школа'}
+Курс: ${b.grade || 'бакалавриат'}
 Что проверить: ${b.wishes || 'основные понятия и умения темы'}
 
 Верни {"blocks": [...]} из 6–8 блоков "assignment" нарастающей сложности: выбор, число, пропуски, сопоставление,
@@ -103,8 +103,8 @@ export async function draftLesson(b: LessonBrief, locale: Locale = 'ru'): Promis
   const raw = await askJson(`Собери урок.
 Тема: ${b.topic}
 Предмет: ${b.subject || 'не указан'}
-Класс: ${b.grade || 'средняя школа'}
-Пожелания учителя: ${b.wishes || 'нет'}
+Курс: ${b.grade || 'бакалавриат'}
+Пожелания преподавателя: ${b.wishes || 'нет'}
 
 Верни {"blocks": [...]}: 1) короткое объяснение ("text", 120–220 слов), 2) определение или ключевая формула ("callout" или "formula"),
 3) пример с решением в "spoiler", 4) 4–5 заданий разных типов (выбор, число, пропуски, сопоставление или порядок; одно — развёрнутый ответ).`, SYSTEM, locale);
@@ -121,7 +121,7 @@ export async function draftTasks(text: string, count: number, locale: Locale = '
 }
 
 export async function draftVariants(p: AssignmentPayload, count: number, locale: Locale = 'ru'): Promise<BlockBody[]> {
-  const raw = await askJson(`Сделай ${count} варианта этого задания для разных учеников: тот же тип и та же проверяемая идея,
+  const raw = await askJson(`Сделай ${count} варианта этого задания для разных студентов: тот же тип и та же проверяемая идея,
 но другие числа, объекты или формулировки. Правильные ответы пересчитай заново и проверь.
 Исходное задание: ${JSON.stringify({ prompt: p.prompt, points: p.points, allowRetry: p.allowRetry, explanation: p.explanation, spec: p.spec })}
 
@@ -131,18 +131,18 @@ export async function draftVariants(p: AssignmentPayload, count: number, locale:
 
 export interface GradeSuggestion { score: number; comment: string; marks: Record<string, number> }
 
-/** Черновик оценки развёрнутого ответа. Балл зажат в пределы задания; решение — за учителем. */
+/** Черновик оценки развёрнутого ответа. Балл зажат в пределы задания; решение — за преподавателем. */
 export async function draftGrade(p: AssignmentPayload, answerText: string, locale: Locale = 'ru'): Promise<GradeSuggestion> {
-  const raw = await askJson(`Оцени ответ ученика как строгий, но доброжелательный учитель.
+  const raw = await askJson(`Оцени ответ студента как строгий, но доброжелательный преподаватель.
 Задание: ${p.prompt}
 Максимум баллов: ${p.points}
 ${p.rubric.length ? `Критерии: ${JSON.stringify(p.rubric.map((r) => ({ id: r.id, label: r.label, points: r.points })))}` : ''}
-${p.reference ? `Эталонный ответ учителя: ${p.reference.slice(0, 3000)}` : ''}
-${p.explanation ? `Пояснение учителя: ${p.explanation}` : ''}
-Ответ ученика:
+${p.reference ? `Эталонный ответ преподавателя: ${p.reference.slice(0, 3000)}` : ''}
+${p.explanation ? `Пояснение преподавателя: ${p.explanation}` : ''}
+Ответ студента:
 """${answerText.slice(0, 5000)}"""
 
-Верни {"score": число, "comment": "2–3 предложения ученику: что верно и что поправить", "marks": {"id критерия": баллы}}.
+Верни {"score": число, "comment": "2–3 предложения студенту: что верно и что поправить", "marks": {"id критерия": баллы}}.
 Если критериев нет — marks пустой объект.`, SYSTEM, locale) as Partial<GradeSuggestion>;
   const clamp = (n: unknown, max: number) => Math.max(0, Math.min(max, Math.round((Number(n) || 0) * 2) / 2));
   const marks: Record<string, number> = {};
@@ -155,7 +155,7 @@ ${p.explanation ? `Пояснение учителя: ${p.explanation}` : ''}
   };
 }
 
-/** Тренажёр под тему урока: своя библиотека учителя или общий каталог, по словам из названия. */
+/** Тренажёр под тему урока: своя библиотека преподавателя или общий каталог, по словам из названия. */
 export async function suggestSimulation(userId: string, topic: string): Promise<string | null> {
   const words = topic.toLowerCase().split(/[^a-zа-яё0-9]+/i).filter((w) => w.length >= 5).map((w) => `%${w.slice(0, 6)}%`);
   if (words.length === 0) return null;
@@ -181,14 +181,14 @@ export async function draftCoursePlan(input: {
 }, locale: Locale = 'ru'): Promise<CoursePlan> {
   const raw = await askJson(`Составь план курса.
 Предмет: ${input.subject || 'определи по программе'}
-Класс: ${input.grade || 'определи по программе'}
+Курс: ${input.grade || 'определи по программе'}
 Сколько недель/уроков примерно: ${input.weeks || 'по программе'}
-Пожелания учителя: ${input.wishes || 'нет'}
+Пожелания преподавателя: ${input.wishes || 'нет'}
 Программа:
 """${input.program.slice(0, 12000)}"""
 
-Верни {"title": "Предмет N: раздел", "subject": "Физика", "grade": "8 класс", "description": "1–2 предложения",
-"topics": [{"title": "короткое название темы", "goals": "что ученик должен понять и уметь, 1–2 предложения", "format": "lesson" | "exam", "hours": 1}]}.
+Верни {"title": "Предмет N: раздел", "subject": "Физика", "grade": "1 курс", "description": "1–2 предложения",
+"topics": [{"title": "короткое название темы", "goals": "что студент должен понять и уметь, 1–2 предложения", "format": "lesson" | "exam", "hours": 1}]}.
 Темы — в порядке прохождения, 4–20 штук. После каждого крупного раздела добавь тему "exam" — контрольную по разделу.
 Не выдумывай темы вне программы.`, PLAN_SYSTEM, locale) as Record<string, unknown>;
   const topics = (Array.isArray(raw.topics) ? raw.topics : []).slice(0, 24).flatMap((t): PlanTopic[] => {
@@ -221,7 +221,7 @@ export async function draftRubric(input: { prompt: string; points: number; subje
 Верни {"rubric": [{"label": "что проверяем, коротко и проверяемо", "points": число}], "reference": "..."}.
 2–5 критериев, сумма баллов строго ${input.points}. В "reference": сначала "Ответ на отлично:" — полный эталонный ответ,
 затем "Ответ на удовлетворительно:" — каким он обычно бывает и чего в нём не хватает, затем "Типичные ошибки:" — 2–3 пункта.`,
-  'Ты — опытный учитель и эксперт по оцениванию. Пишешь по-русски. Отвечай только JSON без пояснений вокруг.', locale) as Record<string, unknown>;
+  'Ты — опытный преподаватель и эксперт по оцениванию. Пишешь по-русски. Отвечай только JSON без пояснений вокруг.', locale) as Record<string, unknown>;
   const items = (Array.isArray(raw.rubric) ? raw.rubric : []).slice(0, 8).flatMap((r) => {
     const o = (typeof r === 'object' && r !== null ? r : {}) as Record<string, unknown>;
     const label = clip(o.label, 300);
@@ -241,14 +241,14 @@ export async function draftRubric(input: { prompt: string; points: number; subje
 
 /* -------------------------- симуляция под задание -------------------------- */
 
-/** Описание тренажёра для мастерской: что на экране, какие ползунки и что ученик должен измерить. */
+/** Описание тренажёра для мастерской: что на экране, какие ползунки и что студент должен измерить. */
 export async function draftSimulationBrief(p: AssignmentPayload, subject: string, locale: Locale = 'ru'): Promise<string> {
-  const raw = await askJson(`Учитель хочет интерактивную симуляцию, на которой ученик выполнит это задание.
+  const raw = await askJson(`Преподаватель хочет интерактивную симуляцию, на которой студент выполнит это задание.
 Предмет: ${subject || 'не указан'}
 Задание: ${p.prompt.slice(0, 3000)}
 ${p.spec.type === 'number' ? `Правильный ответ: ${p.spec.answer} ${p.spec.unit}` : ''}
 
-Опиши симуляцию для генератора одним абзацем 60–120 слов: что изображено, какие параметры ученик меняет ползунками
+Опиши симуляцию для генератора одним абзацем 60–120 слов: что изображено, какие параметры студент меняет ползунками
 (с диапазонами и единицами), какие величины показываются на экране и как с их помощью найти ответ.
 Не раскрывай сам ответ. Верни {"brief": "..."}.`,
   'Ты — методист, который ставит задачи разработчику учебных симуляций. Пишешь по-русски. Отвечай только JSON.', locale) as Record<string, unknown>;
@@ -290,16 +290,16 @@ export async function draftLessonFromSpec(spec: LessonSpec, subject: string, use
   const bySlot = new Map<number, BlockBody[]>();
   if (llmSlots.length) {
     const plan = spec.slots.map((s, i) => SLOT_META[s.kind].llm
-      ? `${i}. ${SLOT_META[s.kind].label}: ${SLOT_BRIEF[s.kind](s)}${s.note ? `. Пожелание учителя: ${s.note}` : ''}`
-      : `${i}. ${SLOT_META[s.kind].label} — вставит учитель, ничего не пиши`).join('\n');
-    const raw = await askJson(`Собери ${spec.exam ? 'контрольную работу' : 'урок'} строго по плану учителя.
+      ? `${i}. ${SLOT_META[s.kind].label}: ${SLOT_BRIEF[s.kind](s)}${s.note ? `. Пожелание преподавателя: ${s.note}` : ''}`
+      : `${i}. ${SLOT_META[s.kind].label} — вставит преподаватель, ничего не пиши`).join('\n');
+    const raw = await askJson(`Собери ${spec.exam ? 'контрольную работу' : 'урок'} строго по плану преподавателя.
 Тема: ${spec.title}
 Предмет: ${subject || 'не указан'}
-Класс: ${spec.grade || 'средняя школа'}
+Курс: ${spec.grade || 'бакалавриат'}
 Уровень: ${LEVEL_TEXT[spec.level]}
 Длительность: около ${spec.minutes} минут
 ${spec.goals ? `Цели урока: ${spec.goals}` : ''}
-${spec.materials ? `Материалы учителя — опирайся на них, бери факты, примеры и задачи отсюда:\n"""${spec.materials.slice(0, 10000)}"""` : ''}
+${spec.materials ? `Материалы преподавателя — опирайся на них, бери факты, примеры и задачи отсюда:\n"""${spec.materials.slice(0, 10000)}"""` : ''}
 
 План (номер слота. что нужно):
 ${plan}
@@ -344,16 +344,16 @@ ${plan}
 
 /* ------------------------------ паспорт курса ------------------------------ */
 
-/** Описание курса для учеников: о чём курс, что будут уметь, как устроен. */
+/** Описание курса для студентов: о чём курс, что будут уметь, как устроен. */
 export async function draftCourseDescription(c: { title: string; subject: string; grade: string; topics: string[]; wishes: string }, locale: Locale = 'ru'): Promise<string> {
-  const raw = await askJson(`Напиши описание курса для страницы курса — его читают ученики и родители.
+  const raw = await askJson(`Напиши описание курса для страницы курса — его читают студенты и родители.
 Курс: ${c.title}
 Предмет: ${c.subject || 'не указан'}
-Класс: ${c.grade || 'не указан'}
+Курс: ${c.grade || 'не указан'}
 ${c.topics.length ? `Темы: ${c.topics.slice(0, 30).join('; ')}` : ''}
-${c.wishes ? `Пожелания учителя: ${c.wishes}` : ''}
+${c.wishes ? `Пожелания преподавателя: ${c.wishes}` : ''}
 
-3–5 предложений простым живым языком: о чём курс, что ученик будет понимать и уметь в конце, как он устроен
+3–5 предложений простым живым языком: о чём курс, что студент будет понимать и уметь в конце, как он устроен
 (интерактивные тренажёры, задания с проверкой, контрольные). Без канцелярита и без обещаний, которых нет в темах.
 Верни {"description": "..."}.`, PLAN_SYSTEM, locale) as Record<string, unknown>;
   const text = clip(raw.description, 2000);
@@ -367,7 +367,7 @@ export async function draftCourseOutline(c: {
 }, locale: Locale = 'ru'): Promise<PlanTopic[]> {
   const plan = await draftCoursePlan({
     program: `Курс «${c.title}»${c.subject ? `, предмет ${c.subject}` : ''}${c.grade ? `, ${c.grade}` : ''}.
-Составь программу курса по стандартной школьной программе этого предмета и класса.
+Составь программу курса по типовой вузовской программе этого предмета и курса.
 ${c.existing.length ? `Уже есть темы (не повторяй их, продолжай после них): ${c.existing.join('; ')}` : ''}`,
     subject: c.subject, grade: c.grade, weeks: c.lessons, wishes: c.wishes,
   }, locale);

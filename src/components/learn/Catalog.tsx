@@ -47,7 +47,7 @@ function percentOf(i: CatalogItem): number {
   return i.totals.topicsTotal ? Math.round((i.totals.topicsDone / i.totals.topicsTotal) * 100) : 0;
 }
 
-/** Каталог курсов ученика: поиск, предметы и состояние. Фильтры считаются на клиенте — список небольшой. */
+/** Каталог курсов студента: поиск, предметы и состояние. Фильтры считаются на клиенте — список небольшой. */
 export default function Catalog({ items }: { items: CatalogItem[] }) {
   const t = useT(learnHome);
   const tl = useT(learn);
@@ -59,7 +59,7 @@ export default function Catalog({ items }: { items: CatalogItem[] }) {
   const [teacher, setTeacher] = useState('');
   const [sort, setSort] = useState<Sort>('progress');
 
-  // Сводка по всему, что открыто ученику: сверху фильтров, чтобы колонка
+  // Сводка по всему, что открыто студенту: сверху фильтров, чтобы колонка
   // отвечала не только «что показать», но и «сколько всего».
   const summary = useMemo(() => {
     const pointsEarned = items.reduce((a, i) => a + i.totals.pointsEarned, 0);
@@ -243,7 +243,7 @@ function Group({ title, all, options, value, onPick }: {
   );
 }
 
-/** Курс, в котором ученик дальше всего: широкая карточка сверху каталога. */
+/** Курс, в котором студент дальше всего: широкая карточка сверху каталога. */
 function Hero({ item }: { item: CatalogItem }) {
   const t = useT(learnHome);
   const tl = useT(learn);

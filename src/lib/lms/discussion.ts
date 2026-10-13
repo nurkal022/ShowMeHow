@@ -10,7 +10,7 @@ export type { Comment };
 
 const MAX_COMMENT = 2000;
 
-/** Отмечает шаги пройденными. Чужие блоки отсеиваются в самом запросе: курс должен быть виден ученику. */
+/** Отмечает шаги пройденными. Чужие блоки отсеиваются в самом запросе: курс должен быть виден студенту. */
 export async function recordBlockViews(userId: string, blockIds: string[]): Promise<void> {
   if (blockIds.length === 0) return;
   await db().query(
@@ -27,7 +27,7 @@ export async function viewedBlockIds(userId: string, blockIds: string[]): Promis
   return new Set(rows.map((r) => r.block_id));
 }
 
-/** Сколько шагов темы ученик открыл — для оглавления курса. */
+/** Сколько шагов темы студент открыл — для оглавления курса. */
 export async function viewedCountsByTopic(userId: string, courseId: string): Promise<Map<string, number>> {
   const { rows } = await db().query<{ topic_id: string; n: number }>(
     `SELECT b.topic_id, count(*)::int AS n FROM block_views v JOIN blocks b ON b.id = v.block_id
@@ -79,7 +79,7 @@ export async function addComment(topicId: string, authorId: string, raw: unknown
   };
 }
 
-/** Своё сообщение удаляет автор, чужое — учитель курса. Текст стирается, ветка остаётся. */
+/** Своё сообщение удаляет автор, чужое — преподаватель курса. Текст стирается, ветка остаётся. */
 export async function deleteComment(id: string, userId: string, isTeacher: boolean): Promise<void> {
   const { rowCount } = await db().query(
     `UPDATE lesson_comments SET deleted_at = now(), body = '' WHERE id = $1 AND deleted_at IS NULL AND ($3 OR author_id = $2)`,

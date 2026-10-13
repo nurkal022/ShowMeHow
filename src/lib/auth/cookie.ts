@@ -19,7 +19,7 @@ export function isSecureRequest(req: Request): boolean {
   }
 }
 
-/** Срок cookie совпадает со сроком сессии в базе: у ученика 12 часов, у остальных 30 дней. */
+/** Срок cookie совпадает со сроком сессии в базе: у студента 12 часов, у остальных 30 дней. */
 export function setSessionCookie(
   res: NextResponse, token: string, secure: boolean, ttlMs: number = SESSION_TTL_MS,
 ): NextResponse {

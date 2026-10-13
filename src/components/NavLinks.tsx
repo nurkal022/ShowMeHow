@@ -33,7 +33,7 @@ export function isSectionActive(href: string, pathname: string | null): boolean 
   if (!pathname) return false;
   if (href === '/') return pathname === '/';
   // «Моё обучение» и «Каталог» делят префикс /learn: курс и урок относятся к обучению,
-  // а страницы профиля ученика (оценки, заметки) не подсвечивают ни один раздел.
+  // а страницы профиля студента (оценки, заметки) не подсвечивают ни один раздел.
   if (href === '/learn') {
     return pathname === '/learn' || pathname.startsWith('/learn/topics') || pathname.startsWith('/learn/courses');
   }
@@ -48,7 +48,7 @@ const THEME_OPTIONS: { value: Theme; label: 'themeLight' | 'themeDark' | 'themeS
 
 interface NavUser { label: string; role: string }
 
-/** Личные страницы ученика живут в меню аккаунта, а не в шапке. */
+/** Личные страницы студента живут в меню аккаунта, а не в шапке. */
 const STUDENT_MENU: { href: string; label: 'studentProfile' | 'grades' | 'mistakes' | 'notes'; Icon: typeof IconUser }[] = [
   { href: '/learn/me', label: 'studentProfile', Icon: IconUser },
   { href: '/learn/grades', label: 'grades', Icon: IconTable },

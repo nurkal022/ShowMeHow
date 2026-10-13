@@ -6,7 +6,7 @@ export interface PlatformSettings {
   registrationOpen: boolean;
 }
 
-export const REGISTRATION_CLOSED_MESSAGE = 'Регистрация закрыта. Аккаунт выдаёт ваша школа или администратор платформы.';
+export const REGISTRATION_CLOSED_MESSAGE = 'Регистрация закрыта. Аккаунт выдаёт ваш университет или администратор платформы.';
 
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = { registrationOpen: true };
 

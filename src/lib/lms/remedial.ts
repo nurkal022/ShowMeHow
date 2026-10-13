@@ -12,9 +12,9 @@ import type { Answer } from './answers';
 import type { Locale } from '@/i18n/config';
 
 /**
- * Работа над ошибками: персональный мини-урок по заданию, которое ученик не сдал.
- * Помощник объясняет ту же идею заново — на сюжетах из интересов ученика — и даёт
- * свои задания нарастающей сложности. Разбор принадлежит ученику: учителю он не виден,
+ * Работа над ошибками: персональный мини-урок по заданию, которое студент не сдал.
+ * Помощник объясняет ту же идею заново — на сюжетах из интересов студента — и даёт
+ * свои задания нарастающей сложности. Разбор принадлежит студенту: преподавателю он не виден,
  * баллы за него не ставятся, проверка происходит прямо на странице.
  */
 
@@ -55,7 +55,7 @@ export function isRemedialStatus(v: unknown): v is RemedialStatus {
 const clip = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 /**
- * Типы, которые ученик проверит сам, не дожидаясь учителя. Развёрнутый ответ,
+ * Типы, которые студент проверит сам, не дожидаясь преподавателя. Развёрнутый ответ,
  * таблицу измерений и состояние тренажёра в разборе оставлять нельзя: проверить
  * их некому, а разбор ошибок должен закрываться здесь и сейчас.
  */
@@ -64,7 +64,7 @@ const SELF_CHECKED: readonly string[] = ['choice', 'number', 'short', 'gaps', 'm
 export interface RemedialDraft { title: string; why: string; sections: RemedialSection[]; tasks: AssignmentPayload[] }
 
 /**
- * Разбор ответа модели. Задания проходят ту же санацию, что и ручной ввод учителя:
+ * Разбор ответа модели. Задания проходят ту же санацию, что и ручной ввод преподавателя:
  * что не прошло — молча выбрасываем, разбор без единого задания не сохраняем.
  * Функция чистая, поэтому её проверяют тесты без базы и без провайдера.
  */
@@ -96,9 +96,9 @@ export function parseRemedial(raw: unknown, fallbackTitle: string): RemedialDraf
   return { title: clip(o.title, 200) || fallbackTitle, why: clip(o.why, 800), sections, tasks };
 }
 
-const SYSTEM = `Ты — внимательный репетитор. Ученик ошибся, и ты объясняешь ему тему заново — спокойно,
+const SYSTEM = `Ты — внимательный репетитор. Студент ошибся, и ты объясняешь ему тему заново — спокойно,
 без упрёков, через то, что ему самому интересно. Пишешь по-русски, короткими предложениями,
-обращаешься на «вы» — так с учеником говорит весь остальной интерфейс.
+обращаешься на «вы» — так с студентом говорит весь остальной интерфейс.
 Факты и числа проверяй: ошибка в объяснении недопустима. Отвечай только JSON без пояснений вокруг.
 ${BLOCK_FORMAT}`;
 
@@ -107,7 +107,7 @@ interface TaskRow {
   answer: Answer | null; score: string | null; status: string | null; comment: string | null;
 }
 
-/** Задание вместе с темой, курсом и последним ответом ученика — только из курсов, открытых ему. */
+/** Задание вместе с темой, курсом и последним ответом студента — только из курсов, открытых ему. */
 async function failedTask(userId: string, blockId: string): Promise<TaskRow | null> {
   const { rows } = await db().query<TaskRow>(
     `SELECT b.payload, t.id AS topic_id, t.title AS topic, c.title AS course, c.subject, c.grade,
@@ -132,19 +132,19 @@ export async function createRemedial(userId: string, blockId: string, locale: Lo
   const personal = !interestsEmpty(interests);
   const given = row.answer ? answerText(p, row.answer).slice(0, 2000) : '';
 
-  const raw = await askJson(`Ученик не справился с заданием. Собери ему персональный разбор.
+  const raw = await askJson(`Студент не справился с заданием. Собери ему персональный разбор.
 Предмет: ${row.subject || 'не указан'}
-Класс: ${row.grade || 'средняя школа'}
+Курс: ${row.grade || 'бакалавриат'}
 Курс: ${row.course}
 Тема: ${row.topic}
 Задание: ${p.prompt.slice(0, 3000)}
 Правильный ответ и схема проверки: ${JSON.stringify(p.spec).slice(0, 3000)}
-${p.explanation ? `Пояснение учителя: ${p.explanation.slice(0, 1500)}` : ''}
+${p.explanation ? `Пояснение преподавателя: ${p.explanation.slice(0, 1500)}` : ''}
 ${p.reference ? `Эталонный ответ: ${p.reference.slice(0, 2000)}` : ''}
-${given ? `Что ответил ученик: "${given}"` : 'Ученик ничего не ответил.'}
+${given ? `Что ответил студент: "${given}"` : 'Студент ничего не ответил.'}
 ${row.score !== null ? `Набрано баллов: ${row.score} из ${p.points}` : `Работа возвращена на доработку${row.comment ? `: ${row.comment.slice(0, 500)}` : ''}`}
-${personal ? `Чем живёт ученик — ${interestsBrief(interests)}. Придумывай примеры и сюжеты заданий только про это.`
-    : 'Про интересы ученика ничего не известно — бери обычные понятные примеры из школьной жизни.'}
+${personal ? `Чем живёт студент — ${interestsBrief(interests)}. Придумывай примеры и сюжеты заданий только про это.`
+    : 'Про интересы студента ничего не известно — бери обычные понятные примеры из студенческой жизни.'}
 
 Верни JSON:
 {"title": "короткое название разбора",
@@ -154,7 +154,7 @@ ${personal ? `Чем живёт ученик — ${interestsBrief(interests)}. �
 Поле "body" секции — простая разметка: абзацы через пустую строку, **жирный**, "- " для списка, формулы $...$.
 В "blocks" — 3–4 блока "assignment" нарастающей сложности: та же проверяемая идея, что и в проваленном задании,
 но другие числа и другой сюжет. Тип spec — только "choice", "number", "short", "gaps", "match" или "order":
-ученик проверяет себя сам, учителя рядом нет. У каждого задания заполни "explanation" — почему ответ такой.`, SYSTEM, locale);
+студент проверяет себя сам, преподавателя рядом нет. У каждого задания заполни "explanation" — почему ответ такой.`, SYSTEM, locale);
 
   const draft = parseRemedial(raw, `${REMEDIAL_PREFIX[locale] ?? REMEDIAL_PREFIX.ru}: ${assignmentTitle(p.prompt) || row.topic}`);
   const body: RemedialBody = { sections: draft.sections, tasks: draft.tasks, personal };
@@ -210,7 +210,7 @@ export async function setRemedialStatus(userId: string, id: string, status: Reme
   return rows[0] ? getRemedial(userId, id) : null;
 }
 
-/** Открытый разбор перестаёт быть новым: в списке видно, за что ученик уже взялся. */
+/** Открытый разбор перестаёт быть новым: в списке видно, за что студент уже взялся. */
 export async function markRemedialOpened(userId: string, id: string): Promise<void> {
   if (!isUuid(id)) return;
   await db().query(

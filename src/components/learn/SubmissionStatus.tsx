@@ -5,7 +5,7 @@ import { useLocale, useT } from '@/i18n/client';
 import { learnLesson } from '@/i18n/messages/learn-lesson';
 import { learnDateTime, learnScore } from './format';
 
-/** Что случилось с ответом — одной фразой. null — ученик ещё ничего не отправлял. */
+/** Что случилось с ответом — одной фразой. null — студент ещё ничего не отправлял. */
 export function submissionLine(sub: StudentSubmission | null, points: number, locale: Locale = 'ru'): string | null {
   if (!sub) return null;
   const t = translator(learnLesson, locale);

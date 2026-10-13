@@ -12,7 +12,7 @@ export function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** Карточки под печать: по восемь на лист A4, разрезаются по пунктиру и раздаются ученикам. */
+/** Карточки под печать: по восемь на лист A4, разрезаются по пунктиру и раздаются студентам. */
 export default function CredentialSheet({ cards, site, groupTitle, locale = 'ru' }: {
   cards: CredentialCard[]; site: string; groupTitle: string; locale?: Locale;
 }) {

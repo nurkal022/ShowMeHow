@@ -1,7 +1,7 @@
 import { db } from '../db/client';
 import { sanitizeInterests, type StudentInterests } from './interests';
 
-/** Чтение и запись интересов ученика. Отдельно от чистого interests.ts: там импорт 'pg' недопустим. */
+/** Чтение и запись интересов студента. Отдельно от чистого interests.ts: там импорт 'pg' недопустим. */
 
 export async function getInterests(userId: string): Promise<StudentInterests> {
   const { rows } = await db().query<{ interests: unknown }>('SELECT interests FROM users WHERE id = $1', [userId]);

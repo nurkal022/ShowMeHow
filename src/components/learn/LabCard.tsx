@@ -6,7 +6,7 @@ import { IconPlay, IconVr } from '@/components/icons';
 import { useT } from '@/i18n/client';
 import { learnLesson } from '@/i18n/messages/learn-lesson';
 
-/** VR-лаборатория в уроке ученика: карточка с превью, сцена открывается в новой вкладке, QR — для очков. */
+/** VR-лаборатория в уроке студента: карточка с превью, сцена открывается в новой вкладке, QR — для очков. */
 export default function LabCard({ slug, caption }: { slug: string; caption: string }) {
   const t = useT(learnLesson);
   const lab = LABS.find((l) => l.slug === slug);

@@ -50,8 +50,8 @@ function csvCell(raw: string): string {
 }
 
 const CSV_HEADER: Record<Locale, [student: string, groups: string, total: string, max: string]> = {
-  ru: ['Ученик', 'Группы', 'Итого', 'Максимум'],
-  kk: ['Оқушы', 'Топтар', 'Барлығы', 'Ең көбі'],
+  ru: ['Студент', 'Группы', 'Итого', 'Максимум'],
+  kk: ['Студент', 'Топтар', 'Барлығы', 'Ең көбі'],
   en: ['Student', 'Groups', 'Total', 'Maximum'],
 };
 

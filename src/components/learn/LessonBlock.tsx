@@ -11,7 +11,7 @@ import { IconTask } from '@/components/icons';
 import LabCard from './LabCard';
 import AnswerForm from './AnswerForm';
 
-/** Блок урока глазами ученика. Задание приходит уже без правильных ответов (toStudentBody). */
+/** Блок урока глазами студента. Задание приходит уже без правильных ответов (toStudentBody). */
 export default function LessonBlock({ blockId, body, missing, submission, preview }: {
   blockId: string; body: StudentBlockBody; missing: boolean; submission: StudentSubmission | null; preview: boolean;
 }) {
@@ -20,7 +20,7 @@ export default function LessonBlock({ blockId, body, missing, submission, previe
   const locale = useLocale();
   switch (body.kind) {
     case 'text':
-      // Пустой текстовый блок (учитель добавил и не заполнил) ученику не показываем.
+      // Пустой текстовый блок (преподаватель добавил и не заполнил) студенту не показываем.
       if (!body.payload.title.trim() && !body.payload.body.trim()) return null;
       return (
         <article className="learn-block learn-text">

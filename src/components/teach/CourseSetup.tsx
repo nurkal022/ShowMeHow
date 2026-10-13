@@ -414,7 +414,7 @@ function AddTopic({ courseId, onAdded }: { courseId: string; onAdded: () => void
   );
 }
 
-/** Помощник плана: предлагает темы, учитель отмечает нужные — они создаются и, по желанию, наполняются уроками. */
+/** Помощник плана: предлагает темы, преподаватель отмечает нужные — они создаются и, по желанию, наполняются уроками. */
 function PlanAssistant({ courseId, auto, hasTopics, onClose, onAdded }: {
   courseId: string; auto: boolean; hasTopics: boolean; onClose: () => void; onAdded: () => void;
 }) {

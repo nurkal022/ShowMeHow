@@ -5,7 +5,7 @@ import { teachReview } from '@/i18n/messages/teach-review';
 
 const percent = (part: number, whole: number) => (whole === 0 ? 0 : Math.round((part / whole) * 100));
 
-/** Прогресс: сколько тем открыл каждый ученик и как идёт каждая тема по группе — полосами. */
+/** Прогресс: сколько тем открыл каждый студент и как идёт каждая тема по группе — полосами. */
 export default function ProgressTable({ progress, locale = 'ru' }: { progress: Progress; locale?: Locale }) {
   const t = translator(teachReview, locale);
   if (progress.rows.length === 0 || progress.topics.length === 0) {

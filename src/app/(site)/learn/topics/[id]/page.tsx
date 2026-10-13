@@ -19,7 +19,7 @@ import { learn } from '@/i18n/messages/learn';
 import { learnLesson } from '@/i18n/messages/learn-lesson';
 import LessonView, { type LessonBlockData } from '@/components/learn/LessonView';
 
-/** Урок ученика: шаги, оглавление курса, обсуждение и наставник. Ключей к заданиям здесь нет. */
+/** Урок студента: шаги, оглавление курса, обсуждение и наставник. Ключей к заданиям здесь нет. */
 export default async function LearnTopicPage({ params, searchParams }: {
   params: Promise<{ id: string }>; searchParams: SearchParams;
 }) {

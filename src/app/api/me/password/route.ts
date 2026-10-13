@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   if (user.mustChangePassword) {
     // При временном пароле текущий не спрашиваем: человек только что вошёл с ним,
     // а школьник его уже не помнит. Но оставить временный нельзя — его знают
-    // учитель и все, кто видел листок.
+    // преподаватель и все, кто видел листок.
     if (hash && verifyPassword(newPassword, hash)) {
       return NextResponse.json(
         { error: 'Новый пароль должен отличаться от временного.' }, { status: 400 });

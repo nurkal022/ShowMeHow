@@ -3,7 +3,7 @@ import { defineMessages } from '../core';
 /** Страница привязки Telegram по ссылке из бота. */
 export const tgClaim = defineMessages({
   ru: {
-    blockedTitle: 'Аккаунт заблокирован', blocked: 'Аккаунт, к которому привязан этот Telegram, заблокирован. Обратитесь к администратору школы или платформы.',
+    blockedTitle: 'Аккаунт заблокирован', blocked: 'Аккаунт, к которому привязан этот Telegram, заблокирован. Обратитесь к администратору организации или платформы.',
     impersonating: 'Вы вошли от имени другого пользователя. Вернитесь в свой аккаунт и откройте ссылку из бота снова.',
     notMe: 'Это не мой аккаунт — выйти',
     title: 'Доступ через Telegram',
@@ -17,7 +17,7 @@ export const tgClaim = defineMessages({
     open: 'Открыть платформу',
   },
   kk: {
-    blockedTitle: 'Аккаунт бұғатталған', blocked: 'Осы Telegram байланыстырылған аккаунт бұғатталған. Мектеп немесе платформа әкімшісіне хабарласыңыз.',
+    blockedTitle: 'Аккаунт бұғатталған', blocked: 'Осы Telegram байланыстырылған аккаунт бұғатталған. Университет немесе платформа әкімшісіне хабарласыңыз.',
     impersonating: 'Сіз басқа пайдаланушы атынан кірдіңіз. Өз аккаунтыңызға оралып, боттағы сілтемені қайта ашыңыз.',
     notMe: 'Бұл менің аккаунтым емес — шығу',
     title: 'Telegram арқылы кіру',
@@ -31,7 +31,7 @@ export const tgClaim = defineMessages({
     open: 'Платформаны ашу',
   },
   en: {
-    blockedTitle: 'Account blocked', blocked: 'The account this Telegram is connected to is blocked. Contact your school or platform administrator.',
+    blockedTitle: 'Account blocked', blocked: 'The account this Telegram is connected to is blocked. Contact your organization or platform administrator.',
     impersonating: 'You are signed in as another user. Return to your own account and open the bot link again.',
     notMe: 'Not my account — sign out',
     title: 'Access via Telegram',

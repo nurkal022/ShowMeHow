@@ -19,34 +19,34 @@ const pct = (v: string | number | null) => (v === null ? null : Math.round(Numbe
 const daysAgo = (iso: string | null) => (iso ? Math.floor((Date.now() - new Date(iso).getTime()) / DAY) : null);
 
 export const DATASETS: Dataset[] = [
-  { key: 'students', title: 'Ученики', about: 'каждый ученик: класс, риск отставания, средний балл, сдано заданий, пропущенные сроки, дней без захода', columns: [
-    { key: 'name', label: 'Ученик', type: 'text' }, { key: 'group', label: 'Класс', type: 'text' },
+  { key: 'students', title: 'Студенты', about: 'каждый студент: группа, риск отставания, средний балл, сдано заданий, пропущенные сроки, дней без захода', columns: [
+    { key: 'name', label: 'Студент', type: 'text' }, { key: 'group', label: 'Группа', type: 'text' },
     { key: 'risk', label: 'Риск', type: 'number' }, { key: 'riskLevel', label: 'Уровень риска', type: 'text' },
     { key: 'avg', label: 'Средний балл', type: 'percent' }, { key: 'recent', label: 'Балл за последние работы', type: 'percent' },
     { key: 'done', label: 'Сдано', type: 'number' }, { key: 'tasks', label: 'Заданий', type: 'number' },
     { key: 'completion', label: 'Выполнено', type: 'percent' }, { key: 'missed', label: 'Пропущено сроков', type: 'number' },
     { key: 'idleDays', label: 'Дней без захода', type: 'days' }, { key: 'reasons', label: 'Причины риска', type: 'text' },
   ] },
-  { key: 'groups', title: 'Классы', about: 'каждый класс/группа: учеников, активных за 7 дней, средний балл, сдано за 30 дней, ждут проверки, выполнение, учителя', columns: [
-    { key: 'group', label: 'Класс', type: 'text' }, { key: 'teachers', label: 'Учителя', type: 'text' },
-    { key: 'students', label: 'Учеников', type: 'number' }, { key: 'active7', label: 'Активны за 7 дней', type: 'number' },
+  { key: 'groups', title: 'Группы', about: 'каждая группа: студентов, активных за 7 дней, средний балл, сдано за 30 дней, ждут проверки, выполнение, преподаватели', columns: [
+    { key: 'group', label: 'Группа', type: 'text' }, { key: 'teachers', label: 'Преподавателя', type: 'text' },
+    { key: 'students', label: 'Студентов', type: 'number' }, { key: 'active7', label: 'Активны за 7 дней', type: 'number' },
     { key: 'activeShare', label: 'Доля активных', type: 'percent' }, { key: 'avg', label: 'Средний балл', type: 'percent' },
     { key: 'submitted30', label: 'Сдано за 30 дней', type: 'number' }, { key: 'pending', label: 'Ждут проверки', type: 'number' },
-    { key: 'highRisk', label: 'Учеников с высоким риском', type: 'number' },
+    { key: 'highRisk', label: 'Студентов с высоким риском', type: 'number' },
   ] },
-  { key: 'teachers', title: 'Учителя', about: 'каждый учитель за 30 дней: курсы, учеников, средний балл учеников, проверено работ, медиана часов до проверки, доля работ с комментарием, долг по проверке, разборы уроков, доля активных учеников', columns: [
-    { key: 'teacher', label: 'Учитель', type: 'text' }, { key: 'groups', label: 'Группы', type: 'text' },
+  { key: 'teachers', title: 'Преподавателя', about: 'каждый преподаватель за 30 дней: курсы, студентов, средний балл студентов, проверено работ, медиана часов до проверки, доля работ с комментарием, долг по проверке, разборы уроков, доля активных студентов', columns: [
+    { key: 'teacher', label: 'Преподаватель', type: 'text' }, { key: 'groups', label: 'Группы', type: 'text' },
     { key: 'courses', label: 'Курсов', type: 'number' }, { key: 'published', label: 'Опубликовано', type: 'number' },
-    { key: 'students', label: 'Учеников', type: 'number' }, { key: 'avg', label: 'Средний балл учеников', type: 'percent' },
+    { key: 'students', label: 'Студентов', type: 'number' }, { key: 'avg', label: 'Средний балл студентов', type: 'percent' },
     { key: 'graded', label: 'Проверено за 30 дней', type: 'number' }, { key: 'medianHours', label: 'Часов до проверки (медиана)', type: 'hours' },
     { key: 'commentShare', label: 'С комментарием', type: 'percent' }, { key: 'pending', label: 'Ждут проверки', type: 'number' },
     { key: 'oldestPendingDays', label: 'Самая давняя работа, дн.', type: 'days' }, { key: 'debriefs', label: 'Разборов уроков', type: 'number' },
-    { key: 'activeShare', label: 'Активных учеников', type: 'percent' },
+    { key: 'activeShare', label: 'Активных студентов', type: 'percent' },
   ] },
-  { key: 'courses', title: 'Курсы', about: 'каждый курс: предмет, автор, статус, классы, тем, учеников, прохождение тем, средний балл, ждут проверки', columns: [
-    { key: 'course', label: 'Курс', type: 'text' }, { key: 'subject', label: 'Предмет', type: 'text' }, { key: 'teacher', label: 'Учитель', type: 'text' },
-    { key: 'status', label: 'Статус', type: 'text' }, { key: 'groups', label: 'Классы', type: 'text' },
-    { key: 'topics', label: 'Тем', type: 'number' }, { key: 'students', label: 'Учеников', type: 'number' },
+  { key: 'courses', title: 'Курсы', about: 'каждый курс: предмет, автор, статус, группы, тем, студентов, прохождение тем, средний балл, ждут проверки', columns: [
+    { key: 'course', label: 'Курс', type: 'text' }, { key: 'subject', label: 'Предмет', type: 'text' }, { key: 'teacher', label: 'Преподаватель', type: 'text' },
+    { key: 'status', label: 'Статус', type: 'text' }, { key: 'groups', label: 'Группы', type: 'text' },
+    { key: 'topics', label: 'Тем', type: 'number' }, { key: 'students', label: 'Студентов', type: 'number' },
     { key: 'progress', label: 'Прохождение', type: 'percent' }, { key: 'avg', label: 'Средний балл', type: 'percent' },
     { key: 'pending', label: 'Ждут проверки', type: 'number' },
   ] },
@@ -56,10 +56,10 @@ export const DATASETS: Dataset[] = [
     { key: 'answered', label: 'Сдали', type: 'number' }, { key: 'avg', label: 'Средний результат', type: 'percent' },
     { key: 'fullShare', label: 'Полностью верно', type: 'percent' },
   ] },
-  { key: 'daily', title: 'По дням', about: 'каждый день за последние 60 дней: сдано работ, проверено, открыто уроков, активных учеников', columns: [
+  { key: 'daily', title: 'По дням', about: 'каждый день за последние 60 дней: сдано работ, проверено, открыто уроков, активных студентов', columns: [
     { key: 'date', label: 'Дата', type: 'date' }, { key: 'submitted', label: 'Сдано', type: 'number' },
     { key: 'graded', label: 'Проверено', type: 'number' }, { key: 'opened', label: 'Открыто уроков', type: 'number' },
-    { key: 'active', label: 'Активных учеников', type: 'number' },
+    { key: 'active', label: 'Активных студентов', type: 'number' },
   ] },
 ];
 
@@ -254,7 +254,7 @@ export async function runPlan(orgId: string, plan: QueryPlan): Promise<QueryResu
     const g = plan.groupBy;
     const buckets = new Map<string, Row[]>();
     for (const r of rows) {
-      // Ученик в двух классах попадает в оба.
+      // Студент в двух группах попадает в оба.
       for (const k of String(r[g.column] ?? '—').split(', ')) buckets.set(k, [...(buckets.get(k) ?? []), r]);
     }
     rows = [...buckets.entries()].map(([k, list]) => {

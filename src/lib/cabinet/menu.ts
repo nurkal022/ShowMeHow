@@ -49,7 +49,7 @@ export interface CabinetOrgChoice { slug: string; name: string; role: OrgRole }
 
 export interface CabinetMenu {
   groups: CabinetMenuGroup[];
-  /** Организации, где человек учитель или админ: переключатель в боковой панели. */
+  /** Организации, где человек преподаватель или админ: переключатель в боковой панели. */
   orgs: CabinetOrgChoice[];
 }
 
@@ -68,7 +68,7 @@ const ORG_ITEMS: CabinetMenuItem[] = [
   { href: '/org/reports', key: 'report', label: 'Отчёт недели', icon: 'report' },
   { href: '/org/risk', key: 'risk', label: 'Риски', icon: 'risk' },
   { href: '/org/ask', key: 'ask', label: 'Спросить ИИ', icon: 'ask' },
-  { href: '/org/teachers', key: 'teachers', label: 'Учителя', icon: 'teachers' },
+  { href: '/org/teachers', key: 'teachers', label: 'Преподавателя', icon: 'teachers' },
   { href: '/org/groups', key: 'groups', label: 'Группы', icon: 'groups' },
   { href: '/org/settings', key: 'settings', label: 'Настройки', icon: 'settings' },
 ];
@@ -94,7 +94,7 @@ export function buildCabinetMenu(user: Pick<AuthUser, 'role'>, memberships: Memb
   return { groups, orgs };
 }
 
-/** Какая роль нужна разделу: в «Организацию» учителя не пускают. */
+/** Какая роль нужна разделу: в «Организацию» преподавателя не пускают. */
 export function groupAllows(key: CabinetGroupKey, role: OrgRole): boolean {
   if (key === 'org') return role === 'org_admin';
   if (key === 'teach') return roleSatisfies(role, ['teacher']);
@@ -108,13 +108,13 @@ export interface Crumb { href: string; label: string; key?: string }
 
 const SEGMENT_LABELS: Record<string, string> = {
   admin: 'Платформа', orgs: 'Организации', users: 'Пользователи', catalog: 'Каталог', log: 'Журнал', community: 'Сообщество',
-  org: 'Организация', teachers: 'Учителя', groups: 'Группы', settings: 'Настройки', credentials: 'Лист паролей',
+  org: 'Организация', teachers: 'Преподаватели', groups: 'Группы', settings: 'Настройки', credentials: 'Лист паролей',
   teach: 'Преподавание', account: 'Профиль', courses: 'Курсы', review: 'Проверка', generate: 'Курс из программы', debrief: 'Разбор', reports: 'Отчёт недели', risk: 'Риски', ask: 'Спросить ИИ', journal: 'Журнал', progress: 'Прогресс', answers: 'Ответы', analytics: 'Аналитика',
 };
 
 /** Подпись сегмента-идентификатора — по тому, что стоит перед ним. */
 const ID_LABELS: Record<string, string> = {
-  orgs: 'Организация', users: 'Пользователь', groups: 'Группа', courses: 'Курс', answers: 'Задание', students: 'Ученик',
+  orgs: 'Организация', users: 'Пользователь', groups: 'Группа', courses: 'Курс', answers: 'Задание', students: 'Студент',
 };
 
 /** Сегменты без собственной страницы: в крошки не попадают. */

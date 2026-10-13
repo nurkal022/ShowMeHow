@@ -34,14 +34,14 @@ export async function staffTopic(user: AuthUser, topicId: string): Promise<(Staf
   return staff ? { ...staff, topic } : null;
 }
 
-/** Опубликованный курс, открытый группе ученика. */
+/** Опубликованный курс, открытый группе студента. */
 export async function studentCourse(user: AuthUser, courseId: string): Promise<Course | null> {
   const course = await getCourse(courseId);
   if (!course || course.status !== 'published') return null;
   return (await isCourseVisibleToStudent(user.id, course.id)) ? course : null;
 }
 
-/** Страницы /learn: ученик — как обычно, учитель — в режиме «Как видит ученик». */
+/** Страницы /learn: студент — как обычно, преподаватель — в режиме «Как видит студент». */
 export async function learnerCourse(
   user: AuthUser, courseId: string, preview: boolean,
 ): Promise<{ course: Course; preview: boolean } | null> {
@@ -53,7 +53,7 @@ export async function learnerCourse(
   return course ? { course, preview: false } : null;
 }
 
-/** Группы, которым человек может открыть курс: админу — все, учителю — свои. */
+/** Группы, которым человек может открыть курс: админу — все, преподавателю — свои. */
 export async function allowedGroupIds(user: AuthUser, membership: Membership): Promise<string[]> {
   if (membership.role === 'org_admin') return (await listGroups(membership.orgId)).map((g) => g.id);
   return teacherGroupIds(user.id, membership.orgId);
@@ -81,7 +81,7 @@ export async function studentBlock(
 
 /**
  * Кто видит симуляцию (спецификация §6): владелец, любой вошедший — если она в
- * каталоге, админ платформы, а также ученик опубликованного курса, открытого его
+ * каталоге, админ платформы, а также студент опубликованного курса, открытого его
  * группе, и владелец или админ организации курса, куда она вставлена блоком,
  * стендом задания или симуляцией задания «Состояние симуляции». Правка и удаление по-прежнему только у владельца (storage.ts).
  * Без базы (юнит-тесты на памяти) — только владелец, а его проверяет storage.ts.

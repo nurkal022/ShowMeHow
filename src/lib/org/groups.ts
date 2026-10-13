@@ -62,7 +62,7 @@ async function requireActiveGroup(groupId: string): Promise<void> {
 }
 
 /**
- * Единственный путь записи в group_members. Схема не может проверить, что ученик
+ * Единственный путь записи в group_members. Схема не может проверить, что студент
  * состоит в организации группы (для этого нужны составные ключи во всех таблицах),
  * поэтому инвариант держит эта функция.
  */
@@ -84,7 +84,7 @@ export async function assignTeacher(groupId: string, userId: string): Promise<vo
     `SELECT 1 FROM groups g JOIN memberships m ON m.org_id = g.org_id
      WHERE g.id = $1 AND m.user_id = $2 AND m.role IN ('teacher', 'org_admin')`, [groupId, userId]);
   if (rows.length === 0) {
-    throw new OrgError('Учителем группы можно назначить только учителя или администратора её организации.');
+    throw new OrgError('Преподавателем группы можно назначить только преподавателя или администратора её организации.');
   }
   await db().query(
     'INSERT INTO group_teachers (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [groupId, userId]);
@@ -123,7 +123,7 @@ export async function renameGroup(groupId: string, title: string): Promise<Group
   return { ...group, title: clean };
 }
 
-/** Архив, а не удаление: курсы и ответы учеников группы остаются. */
+/** Архив, а не удаление: курсы и ответы студентов группы остаются. */
 export async function archiveGroup(groupId: string): Promise<void> {
   await db().query('UPDATE groups SET archived_at = now() WHERE id = $1 AND archived_at IS NULL', [groupId]);
 }
@@ -174,12 +174,12 @@ export async function moveStudent(userId: string, fromGroupId: string, toGroupId
   const from = await getGroup(fromGroupId);
   const to = await getGroup(toGroupId);
   if (!from || !to || from.orgId !== to.orgId) throw new OrgError('Группа не найдена.');
-  if (!(await isStudentInGroup(fromGroupId, userId))) throw new OrgError('Ученика нет в этой группе.');
+  if (!(await isStudentInGroup(fromGroupId, userId))) throw new OrgError('Студента нет в этой группе.');
   await addToGroup(toGroupId, userId);
   await db().query('DELETE FROM group_members WHERE group_id = $1 AND user_id = $2', [fromGroupId, userId]);
 }
 
-/** Группы, которые учитель ведёт в этой организации (неархивные). */
+/** Группы, которые преподаватель ведёт в этой организации (неархивные). */
 export async function teacherGroupIds(userId: string, orgId: string): Promise<string[]> {
   const { rows } = await db().query<{ id: string }>(
     `SELECT g.id FROM group_teachers gt JOIN groups g ON g.id = gt.group_id

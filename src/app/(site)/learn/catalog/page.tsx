@@ -6,7 +6,7 @@ import { IconCourses } from '@/components/icons';
 import { getT } from '@/i18n/server';
 import { learnHome } from '@/i18n/messages/learn-home';
 
-/** Каталог курсов ученика: всё, что ему открыли, с поиском и фильтрами. */
+/** Каталог курсов студента: всё, что ему открыли, с поиском и фильтрами. */
 export default async function CatalogPage() {
   const user = await requirePageUser('/learn/catalog');
   if (!user) return null;

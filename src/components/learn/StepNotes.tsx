@@ -8,7 +8,7 @@ import { learnLesson } from '@/i18n/messages/learn-lesson';
 
 /**
  * Заметка и закладка к шагу урока. Сохраняется сама — при уходе из поля и через
- * пару секунд после последней правки, чтобы ученик не думал о кнопке.
+ * пару секунд после последней правки, чтобы студент не думал о кнопке.
  */
 export default function StepNotes({ blockId, body, bookmarked, onChange }: {
   blockId: string;

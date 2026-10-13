@@ -6,7 +6,7 @@ import { lmsText } from './texts';
 import { courseStudents } from './courses';
 
 /**
- * Аналитика курса для учителя: какие задания даются трудно, где ученики бросают,
+ * Аналитика курса для преподавателя: какие задания даются трудно, где студенты бросают,
  * кому нужна помощь. Считается по тем, кому курс открыт сейчас.
  */
 
@@ -107,7 +107,7 @@ export interface StudentCard {
   answers: StudentAnswerRow[];
 }
 
-/** Карточка ученика в курсе: все задания по порядку, его статус, балл и комментарий. */
+/** Карточка студента в курсе: все задания по порядку, его статус, балл и комментарий. */
 export async function studentCard(courseId: string, studentId: string, locale: Locale = 'ru'): Promise<StudentCard | null> {
   const T = lmsText(locale);
   if (!isUuid(studentId)) return null;

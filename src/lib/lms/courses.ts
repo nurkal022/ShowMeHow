@@ -7,7 +7,7 @@ import {
   LIMITS, LmsError, optionalText, requireText, TOPIC_FORMATS, type Course, type CourseStatus, type Topic, type TopicFormat,
 } from './types';
 
-/** Курсы, их группы и темы; что видит ученик. Права проверяет src/lib/lms/access.ts. */
+/** Курсы, их группы и темы; что видит студент. Права проверяет src/lib/lms/access.ts. */
 
 const COURSE_COLUMNS = 'c.id, c.org_id, c.owner_id, c.title, c.subject, c.grade, c.description, c.status, c.created_at, c.updated_at';
 
@@ -29,7 +29,7 @@ export async function createCourse(input: {
 }): Promise<Course> {
   const title = requireText(input.title, LIMITS.title, 'Название');
   const subject = optionalText(input.subject, LIMITS.subject, 'Предмет');
-  const grade = optionalText(input.grade, LIMITS.grade, 'Класс');
+  const grade = optionalText(input.grade, LIMITS.grade, 'Курс');
   const description = optionalText(input.description, LIMITS.description, 'Описание');
   const { rows } = await db().query<CourseRow>(
     `INSERT INTO courses AS c (id, org_id, owner_id, title, subject, grade, description)
@@ -54,7 +54,7 @@ export async function updateCourse(
     ? current.subject : optionalText(patch.subject, LIMITS.subject, 'Предмет');
   const description = patch.description === undefined
     ? current.description : optionalText(patch.description, LIMITS.description, 'Описание');
-  const grade = patch.grade === undefined ? current.grade : optionalText(patch.grade, LIMITS.grade, 'Класс');
+  const grade = patch.grade === undefined ? current.grade : optionalText(patch.grade, LIMITS.grade, 'Курс');
   const { rows } = await db().query<CourseRow>(
     `UPDATE courses c SET title = $2, subject = $3, description = $4, grade = $5, updated_at = now()
      WHERE c.id = $1 RETURNING ${COURSE_COLUMNS}`, [id, title, subject, description, grade]);
@@ -107,7 +107,7 @@ export async function listCourseGroupIds(courseId: string): Promise<string[]> {
 
 /**
  * Кому открыт курс. allowed — группы, которые этот человек вправе выбирать
- * (allowedGroupIds): учитель меняет только их, группы, открытые админом, остаются.
+ * (allowedGroupIds): преподаватель меняет только их, группы, открытые админом, остаются.
  */
 export async function setCourseGroups(
   courseId: string, groupIds: string[], allowed: ReadonlySet<string>,
@@ -173,7 +173,7 @@ export async function renameTopic(topicId: string, title: unknown): Promise<void
 }
 
 /** Удаляет тему вместе с блоками и ответами (каскад в схеме). */
-/** Срок сдачи: ISO-строка или null. Прошедшие даты разрешены — учитель мог забыть поставить вовремя. */
+/** Срок сдачи: ISO-строка или null. Прошедшие даты разрешены — преподаватель мог забыть поставить вовремя. */
 export async function setTopicDue(topicId: string, raw: unknown): Promise<void> {
   let due: Date | null = null;
   if (raw !== null && raw !== '' && raw !== undefined) {
@@ -195,7 +195,7 @@ export async function setTopicFormat(topicId: string, format: unknown, rawLimit:
 
 export interface ExamWindow { startedAt: string | null; deadline: string | null; over: boolean }
 
-/** Окно контрольной ученика: отсчёт идёт с первого открытия темы (кнопка «Начать»). */
+/** Окно контрольной студента: отсчёт идёт с первого открытия темы (кнопка «Начать»). */
 export async function examWindow(topic: Topic, userId: string): Promise<ExamWindow> {
   const { rows } = await db().query<{ first_at: Date }>(
     'SELECT first_at FROM topic_views WHERE topic_id = $1 AND user_id = $2', [topic.id, userId]);
@@ -205,7 +205,7 @@ export async function examWindow(topic: Topic, userId: string): Promise<ExamWind
   return { startedAt: started.toISOString(), deadline: deadline?.toISOString() ?? null, over: deadline !== null && deadline.getTime() <= Date.now() };
 }
 
-/** Контрольная закончена: время вышло или сданы все задания. До этого баллы и разбор ученику не видны. */
+/** Контрольная закончена: время вышло или сданы все задания. До этого баллы и разбор студенту не видны. */
 export async function examFinished(topic: Topic, userId: string, window?: ExamWindow): Promise<boolean> {
   const w = window ?? await examWindow(topic, userId);
   if (w.over) return true;
@@ -226,8 +226,8 @@ export async function moveTopic(topicId: string, direction: MoveDirection): Prom
 }
 
 /**
- * Курсы, открытые ученику: опубликованность проверяет вызывающий. $1 — id ученика.
- * Ученик должен быть в неархивной группе курса и учеником той же организации.
+ * Курсы, открытые студенту: опубликованность проверяет вызывающий. $1 — id студента.
+ * Студент должен быть в неархивной группе курса и студентом той же организации.
  */
 export const VISIBLE_TO_STUDENT = `
   SELECT cg.course_id FROM course_groups cg
@@ -286,7 +286,7 @@ export async function openedTopicIds(courseId: string, userId: string): Promise<
   return new Set(rows.map((r) => r.topic_id));
 }
 
-/** Ученики групп курса — строки журнала и таблицы ответов. */
+/** Студенты групп курса — строки журнала и таблицы ответов. */
 export async function courseStudents(courseId: string): Promise<JournalStudent[]> {
   const { rows } = await db().query<{ id: string; name: string; groups: string[] }>(
     `SELECT u.id, coalesce(u.display_name, u.login, u.email) AS name,
@@ -310,14 +310,14 @@ export async function courseTopicViews(courseId: string): Promise<ProgressView[]
 
 /**
  * Удаление курса — только пока по нему нет сданных ответов: иначе пропали бы оценки
- * учеников. Курс с ответами отправляют в архив (его можно вернуть).
+ * студентов. Курс с ответами отправляют в архив (его можно вернуть).
  */
 export async function deleteCourse(courseId: string): Promise<void> {
   const { rows } = await db().query<{ n: number }>(
     `SELECT count(*)::int AS n FROM submissions s JOIN blocks b ON b.id = s.block_id JOIN topics t ON t.id = b.topic_id
      WHERE t.course_id = $1 AND s.status <> 'draft'`, [courseId]);
   if (rows[0].n > 0) {
-    throw new LmsError(`По курсу уже есть ответы учеников (${rows[0].n}) — удалить его нельзя, чтобы не пропали оценки. Отправьте курс в архив.`);
+    throw new LmsError(`По курсу уже есть ответы студентов (${rows[0].n}) — удалить его нельзя, чтобы не пропали оценки. Отправьте курс в архив.`);
   }
   await db().query('DELETE FROM courses WHERE id = $1', [courseId]);
 }

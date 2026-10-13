@@ -7,7 +7,7 @@ import { useT } from '@/i18n/client';
 import { teachLesson } from '@/i18n/messages/teach-lesson';
 
 /**
- * Режим «задать цель»: учитель выставляет контролы в симуляции и фиксирует их
+ * Режим «задать цель»: преподаватель выставляет контролы в симуляции и фиксирует их
  * значения. Что именно проверять и с каким допуском — решает здесь же.
  */
 export default function SimStateEditor({ simulationId, rows, showHints, invalid, onRows, onShowHints }: {

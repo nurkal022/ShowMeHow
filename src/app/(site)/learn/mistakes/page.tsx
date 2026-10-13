@@ -12,7 +12,7 @@ import { learnDate } from '@/components/learn/format';
 import GapList from '@/components/learn/GapList';
 import { IconBulb, IconCheck, IconSpark, IconTrophy, IconUser } from '@/components/icons';
 
-/** Работа над ошибками: где ученик просел и какие персональные разборы у него уже есть. */
+/** Работа над ошибками: где студент просел и какие персональные разборы у него уже есть. */
 export default async function MistakesPage() {
   const user = await requirePageUser('/learn/mistakes');
   if (!user) return null;

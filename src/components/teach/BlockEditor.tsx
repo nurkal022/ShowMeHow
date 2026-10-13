@@ -211,7 +211,7 @@ const marksFor = (t: TFn<typeof teachBlocks.ru>): { key: string; label: string; 
   { key: 'f', label: 'ƒ(x)', title: t('markFTitle'), hot: 'm', wrap: { before: '$', after: '$', placeholder: 'T = 2\\pi\\sqrt{L/g}' } },
 ];
 
-/** Поле с разметкой и живым предпросмотром рядом: учитель сразу видит то, что увидит ученик. */
+/** Поле с разметкой и живым предпросмотром рядом: преподаватель сразу видит то, что увидит студент. */
 function RichField({ label, value, onChange, rows = 10, placeholder, max = LIMITS.text, preview }: {
   label: string; value: string; onChange: (v: string) => void; rows?: number; placeholder?: string; max?: number;
   preview?: (text: string) => React.ReactNode;

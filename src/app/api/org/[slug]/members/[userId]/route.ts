@@ -16,8 +16,8 @@ type P = { params: Promise<{ slug: string; userId: string }> };
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
 /**
- * Действия над учителем или учеником. Админ организации — всё, кроме действий
- * над администраторами; учитель группы — только сброс пароля ученику своей группы.
+ * Действия над преподавателем или студентом. Админ организации — всё, кроме действий
+ * над администраторами; преподаватель группы — только сброс пароля студенту своей группы.
  */
 export async function POST(req: Request, { params }: P) {
   const { slug, userId } = await params;
@@ -50,7 +50,7 @@ export async function POST(req: Request, { params }: P) {
       case 'reset-password': {
         const password = generateTempPassword();
         await setTemporaryPassword(target.userId, password);
-        // Ученику новый пароль попадает в лист; учителю — только на экран.
+        // Студенту новый пароль попадает в лист; преподавателю — только на экран.
         if (target.role === 'student') await savePendingCredential(target.userId, password);
         return NextResponse.json({ ok: true, password, label: userLabel(target) });
       }
@@ -63,13 +63,13 @@ export async function POST(req: Request, { params }: P) {
         return NextResponse.json({ ok: true });
       case 'remove': {
         if (target.role !== 'teacher') {
-          throw new OrgError('Убрать из организации можно только учителя. Учеников блокируют.');
+          throw new OrgError('Убрать из организации можно только преподавателя. Студентов блокируют.');
         }
         const { reassignedCourses } = await removeMember(membership.orgId, target.userId, user.id);
         return NextResponse.json({ ok: true, reassignedCourses });
       }
       case 'move': {
-        if (target.role !== 'student') throw new OrgError('Переводить между группами можно только учеников.');
+        if (target.role !== 'student') throw new OrgError('Переводить между группами можно только студентов.');
         const from = await getGroup(groupId);
         const to = await getGroup(str(body.toGroupId));
         if (!from || !to || from.orgId !== membership.orgId || to.orgId !== membership.orgId) {

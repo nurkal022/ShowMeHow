@@ -79,7 +79,7 @@ export interface PlanObservable { name: string; label: string; unit: string }
 export interface PlanView { kind: 'scene' | 'chart' | 'phase' | 'table' | 'formula' | 'section'; title: string; what: string }
 /** Проверяемое утверждение о физике: оно уходит в числовую проверку ядра. */
 export interface PlanInvariant { text: string }
-export interface PlanStep { title: string; task: string; /** Что ученик должен заметить или ответить. */ expect?: string }
+export interface PlanStep { title: string; task: string; /** Что студент должен заметить или ответить. */ expect?: string }
 export interface PlanPreset { label: string; values: Record<string, number> }
 
 export interface PlanSpec {

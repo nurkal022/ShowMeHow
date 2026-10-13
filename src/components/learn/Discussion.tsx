@@ -9,8 +9,8 @@ import { Avatar } from '@/components/cabinet/viz';
 import { IconSend, IconTeach, IconTrash } from '@/components/icons';
 
 /**
- * Обсуждение под уроком: вопросы одноклассников и ответы учителя. Ветка одного уровня —
- * вопрос и ответы на него. Своё сообщение удаляет автор, любое — учитель курса.
+ * Обсуждение под уроком: вопросы одногруппников и ответы преподавателя. Ветка одного уровня —
+ * вопрос и ответы на него. Своё сообщение удаляет автор, любое — преподаватель курса.
  */
 export default function Discussion({ topicId, initial, canDeleteAny, me }: {
   topicId: string; initial: Comment[]; canDeleteAny: boolean; me: string;

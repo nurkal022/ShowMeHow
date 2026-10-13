@@ -5,14 +5,14 @@ import { assignmentTitle } from './block-schema';
 import { lmsText } from './texts';
 
 /**
- * Данные новых страниц «Преподавания»: «Сегодня», группы учителя и общая очередь
- * проверки. Область — как у teachDashboard: курсы организации (учителю — свои,
- * админу — все, ownerId = null) и ученики его групп и этих курсов.
+ * Данные новых страниц «Преподавания»: «Сегодня», группы преподавателя и общая очередь
+ * проверки. Область — как у teachDashboard: курсы организации (преподавателю — свои,
+ * админу — все, ownerId = null) и студенты его групп и этих курсов.
  */
 
 const COURSE_SCOPE = `c.org_id = $1 AND ($2::uuid IS NULL OR c.owner_id = $2::uuid) AND c.status <> 'archived'`;
 const POINTS = `NULLIF(CASE WHEN b.payload->>'points' ~ '^[0-9]+$' THEN (b.payload->>'points')::int ELSE 0 END, 0)`;
-/** Ученики области: $3 — группы учителя. */
+/** Студенты области: $3 — группы преподавателя. */
 const SCOPE_STUDENTS = `SELECT DISTINCT gm.user_id AS id FROM group_members gm
   JOIN groups g ON g.id = gm.group_id AND g.archived_at IS NULL
   JOIN memberships m ON m.user_id = gm.user_id AND m.org_id = g.org_id AND m.role = 'student'
@@ -63,7 +63,7 @@ export async function teachFeed(orgId: string, ownerId: string | null, limit = 8
   }));
 }
 
-/* ------------------------ ученики, которым нужна помощь ------------------- */
+/* ------------------------ студенты, которым нужна помощь ------------------- */
 
 export interface AttentionStudent {
   id: string; name: string; groups: string[]; reason: string; severity: 1 | 2 | 3;
@@ -75,7 +75,7 @@ interface StudentActivityRow {
   avg: string | null; returned: number; pending: number; opened: number; done: number;
 }
 
-/** Активность учеников по курсам области: последний заход, средний балл, доработки. */
+/** Активность студентов по курсам области: последний заход, средний балл, доработки. */
 async function studentActivity(orgId: string, ownerId: string | null, groupIds: string[]): Promise<StudentActivityRow[]> {
   const { rows } = await db().query<StudentActivityRow>(
     `WITH st AS (${SCOPE_STUDENTS}), sc AS (SELECT c.id FROM courses c WHERE ${COURSE_SCOPE})
@@ -127,7 +127,7 @@ export interface TeachToday {
   feed: FeedItem[];
   attention: AttentionStudent[];
   attentionTotal: number;
-  /** Активность учеников за 12 недель: сдачи и открытые уроки по дням, от старого к сегодня. */
+  /** Активность студентов за 12 недель: сдачи и открытые уроки по дням, от старого к сегодня. */
   heat: { days: string[]; values: number[] };
   due: DueTopic[];
   drafts: number;
@@ -266,7 +266,7 @@ export interface GroupStudentRow {
 
 export interface TeachGroupDetail { courses: GroupCourse[]; students: GroupStudentRow[]; spark: number[] }
 
-/** Карточка группы для учителя: прогресс каждого ученика по всем курсам, открытым группе. */
+/** Карточка группы для преподавателя: прогресс каждого студента по всем курсам, открытым группе. */
 export async function teachGroupDetail(groupId: string, userId: string): Promise<TeachGroupDetail> {
   const [courses, students, spark] = await Promise.all([
     db().query<{ id: string; title: string; subject: string; status: string; owner: string; owner_id: string; topics: number; views: number; students: number; pending: number }>(
