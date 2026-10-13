@@ -45,9 +45,13 @@ export function saveSettings(s: Settings): void {
  * страница настроек убрана из интерфейса: Next.js подхватывает .env.local сам.
  * Требуются как минимум ключ и модель генерации — без них профиль не имеет смысла.
  */
+const DEFAULT_OPENAI_MODEL = 'gpt-5.4';
+
 export function envProvider(): ProviderProfile | null {
-  const apiKey = process.env.SHOWMEHOW_API_KEY;
-  const generationModel = process.env.SHOWMEHOW_MODEL;
+  // OPENAI_API_KEY — короткий путь: ключ OpenAI без остальных переменных, модель по умолчанию.
+  const openai = !process.env.SHOWMEHOW_API_KEY && process.env.OPENAI_API_KEY;
+  const apiKey = process.env.SHOWMEHOW_API_KEY || process.env.OPENAI_API_KEY;
+  const generationModel = process.env.SHOWMEHOW_MODEL || (openai ? DEFAULT_OPENAI_MODEL : '');
   if (!apiKey || !generationModel) return null;
   return {
     id: 'env',
@@ -55,7 +59,7 @@ export function envProvider(): ProviderProfile | null {
     baseURL: process.env.SHOWMEHOW_BASE_URL || 'https://api.openai.com/v1',
     apiKey,
     generationModel,
-    visionModel: process.env.SHOWMEHOW_VISION_MODEL || '',
+    visionModel: process.env.SHOWMEHOW_VISION_MODEL || (openai ? generationModel : ''),
   };
 }
 

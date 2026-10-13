@@ -47,6 +47,12 @@ interface ChatOpts {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** OpenAI для GPT-5 и o-серии принимает только max_completion_tokens; совместимые провайдеры (MaaS) — max_tokens. */
+function tokenLimit(client: OpenAI, maxTokens?: number): Record<string, number> {
+  if (!maxTokens) return {};
+  return client.baseURL.includes('api.openai.com') ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens };
+}
+
 const NON_RETRYABLE_STATUSES = new Set([400, 401, 403, 404, 422]);
 
 /**
@@ -132,7 +138,7 @@ async function once(
         const stream = await client.chat.completions.create({
           model,
           messages: messages as never,
-          ...(maxTokens ? { max_tokens: maxTokens } : {}),
+          ...tokenLimit(client, maxTokens),
           ...extraBody,
           stream: true,
           stream_options: { include_usage: true },
@@ -156,7 +162,7 @@ async function once(
       const res = await client.chat.completions.create({
         model,
         messages: messages as never,
-        ...(maxTokens ? { max_tokens: maxTokens } : {}),
+        ...tokenLimit(client, maxTokens),
         ...extraBody,
       });
       const choice = res.choices[0];
