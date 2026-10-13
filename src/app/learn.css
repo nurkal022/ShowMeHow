@@ -417,3 +417,11 @@
 @media (max-width: 860px) { .ach { grid-template-columns: minmax(0, 1fr); } .ach-badges ul { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .ach-badges ul { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (prefers-reduced-motion: reduce) { .ach-flame.on { animation: none; } }
+
+/* пустая главная студента: как всё устроено */
+.learn-how { margin-top: 28px; }
+.learn-how ol { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.learn-how li { display: flex; flex-direction: column; gap: 6px; padding: 18px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface, var(--bg)); }
+.learn-how li span { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; background: var(--accent-soft); color: var(--accent); }
+.learn-how li strong { font-size: 15px; }
+.learn-how li p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }

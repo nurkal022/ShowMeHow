@@ -62,6 +62,14 @@ export default async function LearnPage() {
           <h2>{t('noCourses')}</h2>
           <p>{t('noCoursesText')}</p>
         </div>
+        <section className="learn-how" aria-label={t('howTitle')}>
+          <h2 className="learn-section-title">{t('howTitle')}</h2>
+          <ol>
+            {(['how1', 'how2', 'how3'] as const).map((k, i) => (
+              <li key={k}><span>{i + 1}</span><strong>{t(k)}</strong><p>{t(`${k}Text`)}</p></li>
+            ))}
+          </ol>
+        </section>
       </div>
     );
   }

@@ -1369,3 +1369,25 @@ html[data-theme='dark'] .lb-callout.tone-definition { --tone: #c0a8ff; --tone-so
 /* Карточка Telegram в профиле (кабинет и /learn/me) */
 .telegram-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .telegram-card h2 { margin: 0 0 4px; }
+
+/* демо-режим: личный демо-университет и переключатель ролей */
+.demo-bar {
+  position: sticky; top: 0; z-index: 60;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px;
+  padding: 7px 16px; font-size: 13.5px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg)); border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.demo-bar .btn { padding: 4px 12px; font-size: 13px; }
+.demo-bar-label { color: var(--accent); }
+.demo-bar-look, .demo-bar-hint { color: var(--muted); }
+.demo-bar-who { font-weight: 600; }
+.demo-bar-error { color: var(--danger, #d33); }
+.demo-bar-views { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); }
+.demo-bar-views button {
+  border: 0; background: none; color: inherit; font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.demo-bar-views button:hover:not(:disabled) { background: var(--bg-subtle); }
+.demo-bar-views button.on { background: var(--accent); color: #fff; }
+.demo-bar-views button:disabled { cursor: progress; }
+@media (max-width: 720px) { .demo-bar-hint, .demo-bar-look { display: none; } .demo-bar-views { overflow-x: auto; max-width: 100%; } }

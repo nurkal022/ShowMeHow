@@ -64,7 +64,8 @@ export async function stopImpersonation(req: Request): Promise<NextResponse> {
   await destroySession(current);
   const back = readCookie(req, RETURN_COOKIE);
   const own = await resolveSessionDetails(back);
-  const res = NextResponse.json({ ok: true, next: own ? '/admin' : '/login' });
+  const next = !own ? '/login' : own.user.role === 'admin' ? '/admin' : await landingFor(own.user.id);
+  const res = NextResponse.json({ ok: true, next });
   res.cookies.set(RETURN_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 });
   if (own && back && own.user.id === details.impersonator.id) {
     // Сессия админа длинная и скользящая: срок cookie — как при обычном входе.

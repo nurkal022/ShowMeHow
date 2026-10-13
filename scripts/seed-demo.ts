@@ -40,7 +40,7 @@ const CLASS_B: [string, string][] = [
 ];
 
 /** Четвёртый курс: клетка, осмос и диффузия — с VR-лабораторией «Внутри клетки». */
-async function buildBiology(
+export async function buildBiology(
   orgId: string, teacherId: string, groupIds: string[], sims: Record<string, string>,
 ): Promise<Built> {
   const course = await createCourse({

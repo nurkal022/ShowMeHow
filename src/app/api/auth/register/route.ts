@@ -4,6 +4,8 @@ import { createSession } from '@/lib/auth/session';
 import { setSessionCookie, isSecureRequest, MIN_PASSWORD_LENGTH } from '@/lib/auth/cookie';
 import { MAX_IDENTIFIER_LENGTH } from '@/lib/auth/identifier';
 import { getPlatformSettings, REGISTRATION_CLOSED_MESSAGE } from '@/lib/platform-settings';
+import { ensureSandbox } from '@/lib/demo/sandbox';
+import { withOrgParam } from '@/lib/lms/links';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -29,7 +31,11 @@ export async function POST(req: Request) {
   try {
     const user = await createUser(normalized, password);
     const token = await createSession(user.id);
-    return setSessionCookie(NextResponse.json({ user }), token, isSecureRequest(req));
+    // Пришедший по ссылке сразу видит всю систему на учебных данных. Не вышло — не беда:
+    // аккаунт создан, а демо можно открыть позже кнопкой в полосе сверху.
+    const box = await ensureSandbox(user).catch((e) => { console.error('Демо-университет не создан:', e); return null; });
+    const next = box ? withOrgParam('/org', box.slug) : null;
+    return setSessionCookie(NextResponse.json({ user, next }), token, isSecureRequest(req));
   } catch (e) {
     if (e instanceof EmailTakenError) {
       return NextResponse.json({ error: 'Такая почта уже зарегистрирована.' }, { status: 409 });

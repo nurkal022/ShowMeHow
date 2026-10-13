@@ -85,6 +85,13 @@ export async function seedResearch(print: (line: string) => void, allowProductio
   await db().query('DELETE FROM research_articles WHERE owner_id = $1', [user.id]);
   await db().query('DELETE FROM research_items WHERE owner_id = $1', [user.id]);
   await db().query('DELETE FROM research_projects WHERE owner_id = $1', [user.id]);
+  await fillResearch(user);
+  print(`Демо-исследователь готов: ${DEMO_RESEARCHER_EMAIL} / ${PASSWORD} (${NAME}).`);
+  print('Проекты: маятник, RC-цепь (со статьёй и публичной ссылкой), динамика популяций.');
+}
+
+/** Три проекта с рисунками, моделями и статьёй — у демо-исследователя и в личной песочнице. */
+export async function fillResearch(user: { id: string }): Promise<void> {
 
   // 1. Маятник: g из наклона T²(L) и затухание.
   const pend = await createProject(user.id, {
@@ -209,9 +216,6 @@ export async function seedResearch(print: (line: string) => void, allowProductio
       snapshots: [{ label: 'a = 1,5', values: { a: 1.5, b: 0.4, c: 0.4, d: 0.1 } }],
     }),
   });
-
-  print(`Демо-исследователь готов: ${DEMO_RESEARCHER_EMAIL} / ${PASSWORD} (${NAME}).`);
-  print('Проекты: маятник, RC-цепь (со статьёй и публичной ссылкой), динамика популяций.');
 }
 
 if (process.argv[1]?.endsWith('seed-research.ts')) {

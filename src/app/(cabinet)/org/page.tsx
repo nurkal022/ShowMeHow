@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import type { SearchParams } from '@/lib/http/params';
 import { requireCabinet } from '@/lib/http/org-page';
 import { orgDashboard } from '@/lib/org/orgs';
@@ -12,6 +13,9 @@ import { cabinet } from '@/i18n/messages/cabinet';
 import StatCard, { StatCards } from '@/components/cabinet/StatCard';
 import StatusPill from '@/components/cabinet/StatusPill';
 import EmptyState from '@/components/cabinet/EmptyState';
+import GettingStarted from '@/components/cabinet/GettingStarted';
+import { startCookie, type StartStep } from '@/components/cabinet/getting-started';
+import { onboarding } from '@/i18n/messages/onboarding';
 import ChartCard from '@/components/cabinet/charts/ChartCard';
 import CountUp from '@/components/motion/CountUp';
 import { FunnelBars, FunnelByGroup } from '@/components/org/Funnel';
@@ -62,6 +66,17 @@ export default async function OrgOverviewPage({ searchParams }: { searchParams: 
     }
   };
 
+  const to = translator(onboarding, locale);
+  const steps: StartStep[] = [
+    { key: 'teachers', done: d.teachers.total > 0, title: to('oTeachers'), hint: to('oTeachersHint'), href: link('/org/teachers?add=1'), cta: to('add') },
+    { key: 'groups', done: d.groups.total > 0, title: to('oGroups'), hint: to('oGroupsHint'), href: link('/org/groups'), cta: to('create') },
+    { key: 'students', done: d.students.total > 0, title: to('oStudents'), hint: to('oStudentsHint'), href: link('/org/groups'), cta: to('toGroups') },
+    { key: 'courses', done: d.courses.published > 0, title: to('oCourses'), hint: to('oCoursesHint'), href: link('/teach/courses'), cta: to('toCourses') },
+    { key: 'login', done: f.loggedIn > 0, title: to('oLogin'), hint: to('oLoginHint'), href: link('/org/groups'), cta: to('toGroups') },
+  ];
+  const stepsDone = steps.filter((s) => s.done).length;
+  const showStart = stepsDone < steps.length && !(await cookies()).get(startCookie('org'));
+
   return (
     <>
       <section className="hero-band hero-org">
@@ -98,6 +113,10 @@ export default async function OrgOverviewPage({ searchParams }: { searchParams: 
 
       <div className="today-grid">
         <div className="today-main">
+          {showStart && (
+            <GettingStarted scope="org" title={to('title')} sub={to('orgSub')} hideLabel={to('hide')}
+              progress={to('progress', { done: stepsDone, total: steps.length })} steps={steps} />
+          )}
           <section className="cab-card">
             <header className="cab-card-head">
               <div><h2>{t('pathTitle')}</h2><span className="muted">{t('pathHint')}</span></div>
@@ -154,7 +173,7 @@ export default async function OrgOverviewPage({ searchParams }: { searchParams: 
               {d.tempPasswords.total > 0 && <b className="side-count"><CountUp value={d.tempPasswords.total} /></b>}
             </header>
             {d.tempPasswords.rows.length === 0 ? (
-              <EmptyState icon={<IconCheck size={24} />} text={t('allIn')} />
+              <EmptyState icon={<IconCheck size={24} />} text={d.students.total ? t('allIn') : t('allInNone')} />
             ) : (
               <ul className="people-list">
                 {d.tempPasswords.rows.map((s) => (

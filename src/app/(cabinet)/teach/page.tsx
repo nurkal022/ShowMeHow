@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { firstParam, type SearchParams } from '@/lib/http/params';
 import { requireCabinet } from '@/lib/http/org-page';
 import { allowedGroupIds } from '@/lib/lms/access';
@@ -12,6 +13,9 @@ import { withOrgParam } from '@/lib/lms/links';
 import NewCourseDialog from '@/components/cabinet/NewCourseDialog';
 import ChartCard from '@/components/cabinet/charts/ChartCard';
 import EmptyState from '@/components/cabinet/EmptyState';
+import GettingStarted from '@/components/cabinet/GettingStarted';
+import { startCookie, type StartStep } from '@/components/cabinet/getting-started';
+import { onboarding } from '@/i18n/messages/onboarding';
 import CountUp from '@/components/motion/CountUp';
 import { Avatar, Bar, Heatmap, Ring, Timeline, type TimelineItem } from '@/components/cabinet/viz';
 import { IconCheck, IconCourses, IconEye, IconFlame, IconSpark, IconTask, IconUndo } from '@/components/icons';
@@ -71,13 +75,26 @@ export default async function TeachTodayPage({ searchParams }: { searchParams: S
     hint: tr('taskTempHint'), href: link('/teach/groups'), cta: tr('toGroups'),
   });
 
+  const to = await getT(onboarding);
+  const steps: StartStep[] = [
+    isAdmin
+      ? { key: 'group', done: groups.length > 0, title: to('tGroupAdmin'), hint: to('tGroupAdminHint'), href: link('/org/groups'), cta: to('create') }
+      : { key: 'group', done: groups.length > 0, title: to('tGroup'), hint: to('tGroupHint') },
+    { key: 'course', done: t.coursesTotal > 0, title: to('tCourse'), hint: to('tCourseHint'), href: link('/teach/courses/generate'), cta: to('create') },
+    { key: 'publish', done: t.coursesLive > 0, title: to('tPublish'), hint: to('tPublishHint'), href: link('/teach/courses'), cta: to('toCourses') },
+    { key: 'login', done: t.studentsTotal > 0 && temp < t.studentsTotal, title: to('tLogin'), hint: to('tLoginHint'), href: link('/teach/groups'), cta: to('toGroups') },
+    { key: 'review', done: d.gradedTotal > 0, title: to('tReview'), hint: to('tReviewHint'), href: link('/teach/review'), cta: to('toReview') },
+  ];
+  const stepsDone = steps.filter((s) => s.done).length;
+  const showStart = stepsDone < steps.length && !(await cookies()).get(startCookie('teach'));
+
   return (
     <>
       <section className="hero-band">
         <div className="hero-band-text">
           <span className="hero-band-date">{today}</span>
           <h1>{firstName ? tr('helloName', { name: firstName }) : tr('hello')}</h1>
-          <p>{summary.length ? `${summary.join(' · ')}.` : tr('allCalm')}</p>
+          <p>{summary.length ? `${summary.join(' · ')}.` : (t.studentsTotal ? tr('allCalm') : tr('noStudentsYet'))}</p>
           <div className="hero-band-actions">
             {d.pending > 0 && <Link className="btn btn-light" href={link('/teach/review')}><IconInbox size={16} />{tr('reviewWorks')}</Link>}
             <Link className="btn btn-glass" href={link('/teach/courses/generate')}><IconSpark size={16} />{tr('fromProgram')}</Link>
@@ -97,6 +114,10 @@ export default async function TeachTodayPage({ searchParams }: { searchParams: S
 
       <div className="today-grid">
         <div className="today-main">
+          {showStart && (
+            <GettingStarted scope="teach" title={to('title')} sub={to('teachSub')} hideLabel={to('hide')}
+              progress={to('progress', { done: stepsDone, total: steps.length })} steps={steps} />
+          )}
           <section className="cab-card">
             <header className="cab-card-head"><div><h2>{tr('todayTitle')}</h2><span className="muted">{tr('todaySub')}</span></div></header>
             {tasks.length === 0 && t.due.length === 0 ? (
@@ -153,7 +174,7 @@ export default async function TeachTodayPage({ searchParams }: { searchParams: S
               <div><h2>{tr('attentionTitle')}</h2><span className="muted">{t.attentionTotal ? tr('students', { n: t.attentionTotal }) : tr('allOk')}</span></div>
             </header>
             {t.attention.length === 0 ? (
-              <EmptyState icon={<IconCheck size={24} />} text={tr('attentionEmpty')} />
+              <EmptyState icon={<IconCheck size={24} />} text={t.studentsTotal ? tr('attentionEmpty') : tr('attentionNone')} />
             ) : (
               <ul className="people-list">
                 {t.attention.map((s) => (

@@ -42,7 +42,9 @@ export default function AuthForm({ mode, registrationOpen = true }: { mode: 'log
       if (res.ok) {
         // Полная перезагрузка, а не router.push: клиентский роутер Next кэширует
         // ответы, полученные ДО появления куки сессии, и увёл бы обратно на вход.
-        window.location.assign(safeNextPath(search.get('next')));
+        const body = await res.json().catch(() => ({}));
+        const own = search.get('next');
+        window.location.assign(!own && typeof body.next === 'string' ? safeNextPath(body.next) : safeNextPath(own));
         return;
       } else {
         const body = await res.json().catch(() => ({}));

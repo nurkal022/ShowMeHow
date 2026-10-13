@@ -9,6 +9,8 @@ import { listMemberships } from '@/lib/org/access';
 import ForcePasswordChange from '@/components/ForcePasswordChange';
 import { Brand } from '@/components/SiteChrome';
 import ImpersonationBar from '@/components/ImpersonationBar';
+import DemoBar from '@/components/DemoBar';
+import { sandboxOf } from '@/lib/demo/access';
 import { currentUserAllowingPasswordChangeFromCookies, impersonatorFromCookies } from '@/lib/auth/session';
 import { userLabel } from '@/lib/auth/identifier';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
@@ -32,7 +34,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale();
   const mustChangePassword = !!user?.mustChangePassword;
   const impersonator = user ? await impersonatorFromCookies() : null;
-  const actions = user && !mustChangePassword ? paletteActions(user, await listMemberships(user.id), locale) : null;
+  const memberships = user && !mustChangePassword ? await listMemberships(user.id) : [];
+  const actions = user && !mustChangePassword ? paletteActions(user, memberships, locale) : null;
+  // Демо-режим: у владельца песочницы — переключатель ролей; у пришедшего «посмотреть» без
+  // организаций — приглашение её создать. Админ платформы пользуется обычным «Войти как».
+  const demoOwner = impersonator ?? user;
+  const box = demoOwner && !mustChangePassword && demoOwner.role !== 'admin' ? await sandboxOf(demoOwner.id) : null;
+  const demoAs = impersonator && box ? memberships.find((m) => m.orgSlug === box.slug)?.role : null;
+  const showDemo = !!box || (!!user && !impersonator && !mustChangePassword && user.role !== 'admin' && memberships.length === 0);
   return (
     // data-theme проставляет скрипт ниже до отрисовки, поэтому значение на сервере
     // и на клиенте расходится намеренно — предупреждение о гидрации здесь ложное.
@@ -47,7 +56,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <LocaleProvider locale={locale}>
-        {user && impersonator && <ImpersonationBar viewer={userLabel(user)} />}
+        {user && impersonator && !box && <ImpersonationBar viewer={userLabel(user)} />}
+        {user && showDemo && (
+          <DemoBar slug={box?.slug ?? null} viewer={userLabel(user)}
+            as={demoAs === 'teacher' || demoAs === 'student' ? demoAs : null} />
+        )}
         {user && mustChangePassword ? (
           // С временным паролем нет ни разделов, ни кабинета: только марка и форма.
           <>

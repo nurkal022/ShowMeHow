@@ -132,6 +132,9 @@ export interface TeachToday {
   due: DueTopic[];
   drafts: number;
   unassigned: number;
+  /** Всего курсов и опубликованных с хотя бы одной группой — для «Первых шагов». */
+  coursesTotal: number;
+  coursesLive: number;
   activeWeek: number;
   studentsTotal: number;
 }
@@ -167,8 +170,9 @@ export async function teachToday(
        WHERE ${COURSE_SCOPE} AND c.status = 'published'
          AND t.due_at BETWEEN now() - interval '1 day' AND now() + interval '8 days'
        ORDER BY t.due_at LIMIT 6`, [orgId, ownerId]),
-    db().query<{ drafts: number; unassigned: number }>(
-      `SELECT count(*) FILTER (WHERE c.status = 'draft')::int AS drafts,
+    db().query<{ drafts: number; unassigned: number; total: number; live: number }>(
+      `SELECT count(*) FILTER (WHERE c.status = 'draft')::int AS drafts, count(*)::int AS total,
+         count(*) FILTER (WHERE c.status = 'published' AND EXISTS (SELECT 1 FROM course_groups cg WHERE cg.course_id = c.id))::int AS live,
          count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM course_groups cg WHERE cg.course_id = c.id))::int AS unassigned
        FROM courses c WHERE ${COURSE_SCOPE}`, [orgId, ownerId]),
   ]);
@@ -186,6 +190,8 @@ export async function teachToday(
     })),
     drafts: courses.rows[0].drafts,
     unassigned: courses.rows[0].unassigned,
+    coursesTotal: courses.rows[0].total,
+    coursesLive: courses.rows[0].live,
     activeWeek: students.filter((s) => (s.last?.getTime() ?? 0) >= week).length,
     studentsTotal: students.length,
   };

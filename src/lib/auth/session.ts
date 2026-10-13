@@ -3,6 +3,7 @@ import { db } from '../db/client';
 import { findActiveUserById, type AuthUser } from './users';
 import { SESSION_COOKIE } from './session-cookie';
 import type { SessionKind } from '../org/policy';
+import { canViewAs } from '../demo/access';
 
 export { SESSION_COOKIE };
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -39,7 +40,7 @@ export async function resolveSession(token: string | undefined): Promise<AuthUse
 }
 
 /**
- * Сессия «от имени» живёт, пока её автор — действующий админ платформы. Временный
+ * Сессия «от имени» живёт, пока её автор — действующий админ платформы или владелец песочницы. Временный
  * пароль человека в ней не мешает: админ смотрит, а не входит за него.
  */
 export async function resolveSessionDetails(token: string | undefined): Promise<ResolvedSession | null> {
@@ -63,7 +64,9 @@ export async function resolveSessionDetails(token: string | undefined): Promise<
   if (!user) return null;
   if (!row.impersonator_id) return { user, impersonator: null };
   const impersonator = await findActiveUserById(row.impersonator_id);
-  if (impersonator?.role !== 'admin') return null;
+  if (!impersonator) return null;
+  // Кроме админа платформы, «глазами» смотрит владелец демо-университета — только своих участников.
+  if (impersonator.role !== 'admin' && !(await canViewAs(impersonator.id, user.id))) return null;
   return { user: { ...user, mustChangePassword: false }, impersonator };
 }
 
