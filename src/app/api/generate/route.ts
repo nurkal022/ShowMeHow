@@ -69,6 +69,7 @@ export async function POST(req: Request) {
         ...(isLevel(body.level) ? { level: body.level } : {}),
         ...(typeof body.audience === 'string' && body.audience.trim()
           ? { audience: body.audience.trim().slice(0, 80) } : {}),
+        ...(body.presentation === 'phases' || body.presentation === 'live' ? { presentation: body.presentation as 'phases' | 'live' } : {}),
       },
       imageDataUrl,
     });

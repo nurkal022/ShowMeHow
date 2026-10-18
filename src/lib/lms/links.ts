@@ -32,7 +32,7 @@ export function learnTopicHref(topicId: string, preview: boolean): string {
 
 /** «Сгенерировать тренажёр для этого блока»: мастерская вернёт симуляцию в блок. */
 export function generateForBlockHref(blockId: string): string {
-  return `/?returnTo=${blockId}`;
+  return `/create?returnTo=${blockId}`;
 }
 
 /** «Предыдущий» и «Следующий» в списке ответов; без текущего «следующий» — первый. */

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Хищник и жертва</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
+  canvas.scene { position: fixed; top: 0; left: 0; display: block; }
+  #bg { z-index: 0; }
+</style>
+</head>
+<body>
+<canvas id="bg" class="scene"></canvas>
+
+<script>
+(function () {
+  'use strict';
+
+  var cv = document.getElementById('bg');
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0;
+  var fieldR = { x: 0, y: 0, w: 0, h: 0 };
+  var phase = { x: 0, y: 0, w: 0, h: 0 };
+
+  // ---------- Мир: тор LX×LY клеток травы, 1 тик = 1 день ----------
+  var LX = 120, LY = 80, CELLS = LX * LY;
+  var HUNT_R = 2.5;          // радиус, в котором лиса может поймать кролика
+  var EG = 4;                // энергия от одной клетки травы
+  var E_MAX = 20;
+  var R_SPEED = 0.8, F_SPEED = 1.2;
+  var DAYS_PER_SEC = 15;
+
+  var alpha = 0.04;          // вероятность рождения у сытого кролика за день
+  var hunt = 0.6;            // вероятность удачной охоты, если кролик рядом
+  var foxBirth = 0.5;        // вероятность потомства лисы после удачной охоты
+  var gamma = 0.04;          // вероятность смерти лисы за день
+  var regrow = 40;           // дней на отрастание травы
+
+  function layout() {
+    var left = W > 1100 ? 392 : W > 900 ? 300 : 12;
+    var right = W > 900 ? W - 296 : W - 12;
+    var aw = Math.max(200, right - left);
+    var fw = Math.min(aw - 10, (H - 80) * 0.62 * LX / LY);
+    var fh = fw * LY / LX;
+    fieldR = { x: left + (aw - fw) / 2, y: 24, w: fw, h: fh };
+    var ph = Math.max(120, H - fh - 24 - 60);
+    phase = { x: fieldR.x, y: fieldR.y + fh + 34, w: fw, h: ph };
+  }
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    draw();
+  }
+
+  // ---------- Агенты ----------
+  var grass = new Float32Array(CELLS);   // 0 — трава есть, >0 — дней до отрастания
+  var rabbits = [], foxes = [];
+  var day = 0;
+  var kills = [];                        // вспышки удачной охоты
+  var killEMA = 0, xyEMA = 0;            // для измерения β: убийств за день ≈ β·x·y
+  var trail = [];                        // траектория (x, y) на фазовом портрете
+
+  function wrap(v, L) { return v < 0 ? v + L : v >= L ? v - L : v; }
+  function newRabbit(x, y, e) { return { x: x, y: y, px: x, py: y, a: Math.random() * 6.283, e: e }; }
+  function newFox(x, y) { return { x: x, y: y, px: x, py: y, a: Math.random() * 6.283 }; }
+
+  function seed() {
+    for (var i = 0; i < CELLS; i++) grass[i] = Math.random() < 0.5 ? 0 : Math.random() * regrow;
+    rabbits = []; foxes = [];
+    for (i = 0; i < 300; i++) rabbits.push(newRabbit(Math.random() * LX, Math.random() * LY, 5 + Math.random() * 5));
+    for (i = 0; i < 45; i++) foxes.push(newFox(Math.random() * LX, Math.random() * LY));
+    day = 0; kills = []; trail = [];
+    killEMA = 0; xyEMA = 0;
+  }
+
+  function move(o, sp) {
+    o.px = o.x; o.py = o.y;
+    o.a += (Math.random() - 0.5) * 1.2;
+    o.x = wrap(o.x + Math.cos(o.a) * sp, LX);
+    o.y = wrap(o.y + Math.sin(o.a) * sp, LY);
+  }
+
+  var GC = 2.5, GX = Math.ceil(LX / GC), GY = Math.ceil(LY / GC);
+
+  function tick() {
+    var i;
+    for (i = 0; i < CELLS; i++) if (grass[i] > 0) { grass[i] -= 1; if (grass[i] < 0) grass[i] = 0; }
+    // кролики: шаг, расход энергии, еда, смерть от голода, рождение
+    var next = [];
+    for (i = 0; i < rabbits.length; i++) {
+      var r = rabbits[i];
+      move(r, R_SPEED);
+      r.e -= 1;
+      var ci = Math.min(LY - 1, r.y | 0) * LX + Math.min(LX - 1, r.x | 0);
+      if (grass[ci] === 0) { grass[ci] = regrow; r.e = Math.min(E_MAX, r.e + EG); }
+      if (r.e <= 0) continue;
+      if (r.e > 2 && Math.random() < alpha) {
+        r.e /= 2;
+        next.push(newRabbit(r.x, r.y, r.e));
+      }
+      next.push(r);
+    }
+    rabbits = next;
+    // сетка кроликов для поиска ближайшего
+    var grid = new Array(GX * GY);
+    for (i = 0; i < rabbits.length; i++) {
+      var k = (Math.min(GY - 1, rabbits[i].y / GC | 0)) * GX + Math.min(GX - 1, rabbits[i].x / GC | 0);
+      (grid[k] || (grid[k] = [])).push(i);
+    }
+    var dead = new Uint8Array(rabbits.length);
+    var nf = [], nKills = 0;
+    for (i = 0; i < foxes.length; i++) {
+      var f = foxes[i];
+      move(f, F_SPEED);
+      if (Math.random() < gamma) continue;            // естественная смерть лисы
+      nf.push(f);
+      var gx = f.x / GC | 0, gy = f.y / GC | 0, best = -1, bd = HUNT_R * HUNT_R;
+      for (var oy = -1; oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) {
+        var cell = grid[((gy + oy + GY) % GY) * GX + ((gx + ox + GX) % GX)];
+        if (!cell) continue;
+        for (var j = 0; j < cell.length; j++) {
+          var q = cell[j];
+          if (dead[q]) continue;
+          var dx = Math.abs(rabbits[q].x - f.x), dy = Math.abs(rabbits[q].y - f.y);
+          dx = Math.min(dx, LX - dx); dy = Math.min(dy, LY - dy);
+          var d = dx * dx + dy * dy;
+          if (d < bd) { bd = d; best = q; }
+        }
+      }
+      if (best >= 0 && Math.random() < hunt) {
+        dead[best] = 1; nKills++;
+        kills.push({ x: rabbits[best].x, y: rabbits[best].y, t: day });
+        if (Math.random() < foxBirth) nf.push(newFox(f.x, f.y));
+      }
+    }
+    foxes = nf;
+    if (nKills) rabbits = rabbits.filter(function (_, idx) { return !dead[idx]; });
+    day += 1;
+    kills = kills.filter(function (kk) { return day - kk.t < 6; });
+    // скользящие средние: β = (убийств за день) / (x·y)
+    var xy = rabbits.length * foxes.length;
+    killEMA += 0.01 * (nKills - killEMA);
+    xyEMA += 0.01 * (xy - xyEMA);
+    trail.push([rabbits.length, foxes.length]);
+    if (trail.length > 900) trail.shift();
+  }
+
+  // ---------- Лотка — Вольтерра ----------
+  // β по умолчанию — оценка среднего поля c·πh²/A; когда накопится статистика — измеренная.
+  function betaTheory() { return hunt * Math.PI * HUNT_R * HUNT_R / CELLS; }
+  function betaEff() { return xyEMA > 50 && day > 60 ? Math.max(1e-5, killEMA / xyEMA) : betaTheory(); }
+  function delta() { return foxBirth * betaEff(); }
+  function eqX() { return gamma / delta(); }
+  function eqY() { return alpha / betaEff(); }
+  function periodT() { return 2 * Math.PI / Math.sqrt(alpha * gamma); }
+  function capacity() { return EG * CELLS / regrow; }
+  function lv(s) {
+    var b = betaEff();
+    return [alpha * s[0] - b * s[0] * s[1], delta() * s[0] * s[1] - gamma * s[1]];
+  }
+  function rk4(s, h) {
+    var k1 = lv(s);
+    var k2 = lv([s[0] + k1[0] * h / 2, s[1] + k1[1] * h / 2]);
+    var k3 = lv([s[0] + k2[0] * h / 2, s[1] + k2[1] * h / 2]);
+    var k4 = lv([s[0] + k3[0] * h, s[1] + k3[1] * h]);
+    return [s[0] + h / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]),
+      s[1] + h / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])];
+  }
+
+  // ---------- Отрисовка ----------
+  var gCv = document.createElement('canvas');
+  gCv.width = LX; gCv.height = LY;
+  var gCtx = gCv.getContext('2d');
+  var gImg = gCtx.createImageData(LX, LY);
+  var frac = 0; // доля тика для плавной интерполяции позиций
+
+  function drawField() {
+    var f = fieldR, d = gImg.data;
+    for (var i = 0; i < CELLS; i++) {
+      var t = grass[i] / regrow;                  // 0 — трава, 1 — только что съедена
+      var k = i * 4;
+      d[k] = 40 + 80 * t; d[k + 1] = 120 - 60 * t; d[k + 2] = 50 - 20 * t; d[k + 3] = 255;
+    }
+    gCtx.putImageData(gImg, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(gCv, f.x, f.y, f.w, f.h);
+    ctx.imageSmoothingEnabled = true;
+    var sx = f.w / LX, sy = f.h / LY;
+    function pos(o) {
+      var x = o.x, y = o.y;
+      if (Math.abs(o.x - o.px) < LX / 2 && Math.abs(o.y - o.py) < LY / 2) {
+        x = o.px + (o.x - o.px) * frac; y = o.py + (o.y - o.py) * frac;
+      }
+      return [f.x + x * sx, f.y + y * sy];
+    }
+    // вспышки охоты
+    for (var j = 0; j < kills.length; j++) {
+      var a = (day + frac - kills[j].t) / 6;
+      ctx.strokeStyle = 'rgba(255,80,60,' + Math.max(0, 0.9 * (1 - a)) + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(f.x + kills[j].x * sx, f.y + kills[j].y * sy, 3 + 10 * a, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#f2ead8';
+    ctx.beginPath();
+    var rr = Math.max(1.6, sx * 0.45);
+    for (j = 0; j < rabbits.length; j++) {
+      var p = pos(rabbits[j]);
+      ctx.moveTo(p[0] + rr, p[1]);
+      ctx.arc(p[0], p[1], rr, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    ctx.fillStyle = '#ff8a2a';
+    ctx.strokeStyle = '#3a1a05';
+    ctx.lineWidth = 1;
+    var fs = Math.max(4, sx * 1.3);
+    for (j = 0; j < foxes.length; j++) {
+      var q = pos(foxes[j]), an = foxes[j].a, c = Math.cos(an), s = Math.sin(an);
+      ctx.beginPath();
+      ctx.moveTo(q[0] + c * fs * 1.4, q[1] + s * fs * 1.4);
+      ctx.lineTo(q[0] - c * fs + s * fs * 0.8, q[1] - s * fs - c * fs * 0.8);
+      ctx.lineTo(q[0] - c * fs - s * fs * 0.8, q[1] - s * fs + c * fs * 0.8);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    }
+    ctx.strokeStyle = '#2a3341'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(f.x, f.y, f.w, f.h);
+    ctx.fillStyle = '#8b95a3'; ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('День ' + day + ' · кролики ' + rabbits.length + ' · лисы ' + foxes.length +
+      ' · трава ' + Math.round(100 * grassShare()) + '%', f.x, f.y - 5);
+    if (!foxes.length || !rabbits.length) {
+      ctx.fillStyle = 'rgba(16,19,24,0.75)';
+      ctx.fillRect(f.x, f.y + f.h / 2 - 22, f.w, 44);
+      ctx.fillStyle = '#ffb27a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '14px system-ui, sans-serif';
+      ctx.fillText(!foxes.length ? 'Лисы вымерли — кролики растут до ёмкости среды. Кнопка «Выпустить лис» вернёт хищников.'
+        : 'Кролики вымерли — лисам нечего есть.', f.x + f.w / 2, f.y + f.h / 2);
+    }
+  }
+
+  function grassShare() {
+    var n = 0;
+    for (var i = 0; i < CELLS; i++) if (grass[i] === 0) n++;
+    return n / CELLS;
+  }
+
+  function drawPhase() {
+    var P = phase;
+    ctx.fillStyle = '#151a22';
+    ctx.fillRect(P.x, P.y, P.w, P.h);
+    var xs = eqX(), ys = eqY();
+    var xMax = 50, yMax = 20, i;
+    for (i = 0; i < trail.length; i++) { xMax = Math.max(xMax, trail[i][0]); yMax = Math.max(yMax, trail[i][1]); }
+    xMax = Math.max(xMax, xs * 1.6) * 1.08; yMax = Math.max(yMax, ys * 1.6) * 1.08;
+    xMax = Math.min(xMax, 4000); yMax = Math.min(yMax, 1500);
+    var pl = 38, pb = 22;
+    var gw = P.w - pl - 8, gh = P.h - pb - 8;
+    function X(v) { return P.x + pl + gw * v / xMax; }
+    function Y(v) { return P.y + 8 + gh * (1 - v / yMax); }
+    ctx.save();
+    ctx.beginPath(); ctx.rect(P.x + pl, P.y + 8, gw, gh); ctx.clip();
+    // поле направлений
+    ctx.strokeStyle = 'rgba(139,149,163,0.35)'; ctx.lineWidth = 1;
+    for (var gx = 1; gx < 16; gx++) for (var gy = 1; gy < 9; gy++) {
+      var sx = xMax * gx / 16, sy = yMax * gy / 9, dv = lv([sx, sy]);
+      var vx = dv[0] / xMax * gw, vy = -dv[1] / yMax * gh, m = Math.sqrt(vx * vx + vy * vy) || 1;
+      var L = 9, cx = X(sx), cy = Y(sy), ex = cx + vx / m * L, ey = cy + vy / m * L;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey);
+      var ang = Math.atan2(ey - cy, ex - cx);
+      ctx.lineTo(ex - 3 * Math.cos(ang - 0.5), ey - 3 * Math.sin(ang - 0.5));
+      ctx.stroke();
+    }
+    // нуль-изоклины x = x*, y = y*
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = 'rgba(255,138,42,0.6)';
+    ctx.beginPath(); ctx.moveTo(X(xs), P.y + 8); ctx.lineTo(X(xs), P.y + 8 + gh); ctx.stroke();
+    ctx.strokeStyle = 'rgba(242,234,216,0.55)';
+    ctx.beginPath(); ctx.moveTo(P.x + pl, Y(ys)); ctx.lineTo(P.x + pl + gw, Y(ys)); ctx.stroke();
+    ctx.setLineDash([]);
+    // замкнутая орбита ЛВ через текущее состояние агентов
+    var s0 = [Math.max(1, rabbits.length), Math.max(1, foxes.length)];
+    if (rabbits.length && foxes.length) {
+      ctx.strokeStyle = 'rgba(120,200,255,0.8)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(X(s0[0]), Y(s0[1]));
+      var s = s0, h = periodT() / 400;
+      for (i = 0; i < 520; i++) {
+        s = rk4(s, h);
+        if (!isFinite(s[0]) || !isFinite(s[1])) break;
+        ctx.lineTo(X(s[0]), Y(s[1]));
+      }
+      ctx.stroke();
+    }
+    // траектория агентной модели
+    for (i = 1; i < trail.length; i++) {
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.1 + 0.8 * i / trail.length) + ')';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(X(trail[i - 1][0]), Y(trail[i - 1][1]));
+      ctx.lineTo(X(trail[i][0]), Y(trail[i][1]));
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(X(rabbits.length), Y(foxes.length), 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ff8a2a';
+    ctx.beginPath(); ctx.arc(X(xs), Y(ys), 4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#2a3341'; ctx.lineWidth = 1;
+    ctx.strokeRect(P.x + pl, P.y + 8, gw, gh);
+    ctx.fillStyle = '#8b95a3'; ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('Фазовый портрет: белая — агенты, голубая — орбита Лотки — Вольтерры, пунктир — нуль-изоклины',
+      P.x, P.y + 4);
+    ctx.textBaseline = 'top'; ctx.textAlign = 'right';
+    ctx.fillText('кролики x → ' + Math.round(xMax), P.x + P.w - 8, P.y + 8 + gh + 4);
+    ctx.textAlign = 'left';
+    ctx.fillText('0', P.x + pl, P.y + 8 + gh + 4);
+    ctx.save();
+    ctx.translate(P.x + 12, P.y + 8 + gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('лисы y (до ' + Math.round(yMax) + ')', 0, 0);
+    ctx.restore();
+  }
+
+  function draw() {
+    if (!W) return;
+    ctx.fillStyle = '#101318';
+    ctx.fillRect(0, 0, W, H);
+    drawField();
+    drawPhase();
+  }
+
+  function updateReadouts() {
+    rDay.set(day);
+    rRab.set(rabbits.length);
+    rFox.set(foxes.length);
+    rGrass.set(grassShare() * 100);
+    rBeta.set(betaEff() * 1e4);
+    rEq.set(Math.round(eqX()) + ' / ' + Math.round(eqY()));
+    rT.set(periodT());
+    rK.set(capacity());
+    lvFormula.set({ a: alpha, b: betaEff() * 1e4, d: delta() * 1e4, g: gamma });
+  }
+
+  // ---------- Главный цикл ----------
+  var running = true, lastFrame = null, acc = 0, lastChart = -1;
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000) * speedCtl.get();
+    lastFrame = now;
+    if (running) {
+      acc += dt * DAYS_PER_SEC;
+      var n = 0;
+      while (acc >= 1 && n < 8) { tick(); acc -= 1; n++; }
+      if (acc > 1) acc = 0.999;
+      frac = acc;
+      if (day - lastChart >= 2) {
+        lastChart = day;
+        popChart.push(day, [rabbits.length, foxes.length]);
+      }
+      updateReadouts();
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function changed() { updateReadouts(); draw(); }
+
+  function resetSim() {
+    seed();
+    acc = 0; frac = 0; lastFrame = null; lastChart = -1;
+    popChart.clear();
+    popChart.push(0, [rabbits.length, foxes.length]);
+    updateReadouts();
+    draw();
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Хищник и жертва');
+  SimUI.goals([
+    'Почему численности хищника и жертвы колеблются со сдвигом по фазе',
+    'Как выглядят циклы на фазовом портрете и что такое равновесие x*, y*',
+    'Почему больше кроликов в равновесии дают не их рождаемость, а смертность лис',
+    'Чем случайные агенты отличаются от гладких уравнений',
+  ]);
+  SimUI.slider({
+    name: 'alpha', label: 'Рождаемость кроликов α', min: 0.01, max: 0.1, step: 0.005, value: alpha, unit: '1/день',
+    onChange: function (v) { alpha = v; changed(); },
+  });
+  SimUI.slider({
+    name: 'hunt', label: 'Успех охоты', min: 0.1, max: 1, step: 0.05, value: hunt, unit: '',
+    onChange: function (v) { hunt = v; changed(); },
+  });
+  SimUI.slider({
+    name: 'foxBirth', label: 'Потомство лисы на добычу', min: 0.1, max: 1, step: 0.05, value: foxBirth, unit: '',
+    onChange: function (v) { foxBirth = v; changed(); },
+  });
+  SimUI.slider({
+    name: 'gamma', label: 'Смертность лис γ', min: 0.01, max: 0.1, step: 0.005, value: gamma, unit: '1/день',
+    onChange: function (v) { gamma = v; changed(); },
+  });
+  SimUI.slider({
+    name: 'regrow', label: 'Отрастание травы', min: 15, max: 100, step: 1, value: regrow, unit: 'дн.',
+    onChange: function (v) { regrow = v; changed(); },
+  });
+  SimUI.button({
+    name: 'release', label: 'Выпустить 15 лис',
+    onClick: function () {
+      for (var i = 0; i < 15; i++) foxes.push(newFox(Math.random() * LX, Math.random() * LY));
+      changed();
+    },
+  });
+  var speedCtl = SimUI.speed({ values: [0.25, 0.5, 1, 2, 4], value: 1 });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: resetSim,
+  });
+
+  var lvFormula = SimUI.formula({
+    title: 'Уравнения Лотки — Вольтерры',
+    tex: '\\dot x = \\alpha x - \\beta x y,\\qquad \\dot y = \\delta x y - \\gamma y',
+    vars: { a: { label: 'α' }, b: { label: 'β·10⁴' }, d: { label: 'δ·10⁴' }, g: { label: 'γ' } },
+    note: 'Равновесие: x* = γ/δ, y* = α/β. β измеряется по агентам: число удачных охот за день, делённое на x·y; δ = β × потомство на добычу.',
+    corner: 'tl',
+  });
+  SimUI.legend({ items: [
+    { label: 'кролики', color: '#f2ead8' }, { label: 'лисы', color: '#ff8a2a' },
+    { label: 'трава', color: '#287832' }, { label: 'съеденная трава', color: '#784a1e' },
+  ], corner: 'tl' });
+  var rDay = SimUI.readout({ label: 'День', digits: 0, corner: 'bl' });
+  var rRab = SimUI.readout({ label: 'Кролики x', digits: 0, corner: 'bl' });
+  var rFox = SimUI.readout({ label: 'Лисы y', digits: 0, corner: 'bl' });
+  var rGrass = SimUI.readout({ label: 'Трава', unit: '%', digits: 0, corner: 'bl' });
+  var rBeta = SimUI.readout({ label: 'β (измеренное) ×10⁴', digits: 2, corner: 'bl' });
+  var rEq = SimUI.readout({ label: 'Равновесие x* / y*', digits: 0, corner: 'bl' });
+  var rT = SimUI.readout({ label: 'Период 2π/√(αγ)', unit: 'дн.', digits: 0, corner: 'bl' });
+  var rK = SimUI.readout({ label: 'Ёмкость среды для кроликов', digits: 0, corner: 'bl' });
+  var popChart = SimUI.chart({
+    title: 'Численность популяций', xLabel: 'день', yLabel: 'особей',
+    series: [{ name: 'кролики', color: '#f2ead8' }, { name: 'лисы', color: '#ff8a2a' }],
+    corner: 'br', maxPoints: 400,
+  });
+
+  SimUI.expose({
+    getState: function () {
+      return { day: day, rabbits: rabbits.length, foxes: foxes.length, grass: grassShare(),
+        beta: betaEff(), eqRabbits: eqX(), eqFoxes: eqY(), period: periodT(), capacity: capacity() };
+    },
+    reset: resetSim,
+  });
+
+  window.addEventListener('resize', resize);
+  seed();
+  popChart.push(0, [rabbits.length, foxes.length]);
+  updateReadouts();
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

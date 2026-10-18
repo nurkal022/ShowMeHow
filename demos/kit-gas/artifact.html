@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Идеальный газ в сосуде</title>
+<style>html, body { margin: 0; height: 100%; overflow: hidden; }</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ==== @section physics ====
+// Молекулы в кубе со стороной 1 и подвижной крышкой на высоте h. Упругие удары о стенки;
+// давление — импульс, переданный стенкам за окно 0.5 с, делённый на площадь и время.
+// Единицы условные: k·T = <m v²>/3, «кельвины» — масштаб скоростей.
+var PHYS = (function () {
+  var N = 220;
+  function vel(T) { var s = Math.sqrt(T / 300) * 0.6; return s * (Math.random() + Math.random() + Math.random() - 1.5) * 1.4; }
+  function init(p) {
+    var mol = [];
+    for (var i = 0; i < N; i++) mol.push({ x: Math.random() - 0.5, y: Math.random() * p.h, z: Math.random() - 0.5, vx: vel(p.T), vy: vel(p.T), vz: vel(p.T) });
+    return { t: 0, mol: mol, imp: 0, win: [], hNow: p.h, T0: p.T };
+  }
+  function step(s, p, dt) {
+    // Нагрев/охлаждение: скорости масштабируются к заданной температуре (термостат).
+    var ke = 0; for (var i = 0; i < N; i++) { var m = s.mol[i]; ke += m.vx * m.vx + m.vy * m.vy + m.vz * m.vz; }
+    var Tcur = ke / N / (3 * 0.36 / 300 * 1.0) || 1, k = Math.sqrt(Math.max(0.2, Math.min(5, 1 + (p.T / Tcur - 1) * Math.min(1, dt * 2))));
+    s.hNow += (p.h - s.hNow) * Math.min(1, dt * 3);
+    var imp = 0;
+    SimPhys.substep(dt, 0.01, function (hh) {
+      for (var i = 0; i < N; i++) {
+        var m = s.mol[i];
+        m.vx *= k; m.vy *= k; m.vz *= k;
+        m.x += m.vx * hh; m.y += m.vy * hh; m.z += m.vz * hh;
+        if (m.x < -0.5) { m.x = -1 - m.x; m.vx = -m.vx; imp += 2 * Math.abs(m.vx); }
+        if (m.x > 0.5) { m.x = 1 - m.x; m.vx = -m.vx; imp += 2 * Math.abs(m.vx); }
+        if (m.z < -0.5) { m.z = -1 - m.z; m.vz = -m.vz; imp += 2 * Math.abs(m.vz); }
+        if (m.z > 0.5) { m.z = 1 - m.z; m.vz = -m.vz; imp += 2 * Math.abs(m.vz); }
+        if (m.y < 0) { m.y = -m.y; m.vy = Math.abs(m.vy); imp += 2 * Math.abs(m.vy); }
+        if (m.y > s.hNow) { m.y = 2 * s.hNow - m.y; m.vy = -Math.abs(m.vy); imp += 2 * Math.abs(m.vy); }
+      }
+      k = 1;
+    });
+    s.win.push([s.t, imp]); s.t += dt;
+    while (s.win.length > 1 && s.t - s.win[0][0] > 0.5) s.win.shift();
+  }
+  function observe(s, p) {
+    var ke = 0, sum = 0;
+    for (var i = 0; i < N; i++) { var m = s.mol[i], v2 = m.vx * m.vx + m.vy * m.vy + m.vz * m.vz; ke += v2; sum += Math.sqrt(v2); }
+    var imp = 0; for (var j = 0; j < s.win.length; j++) imp += s.win[j][1];
+    var span = Math.max(0.1, s.t - (s.win[0] ? s.win[0][0] : 0)), area = 2 + 4 * s.hNow;
+    var Tm = ke / N / (3 * 0.36 / 300);
+    return { t: s.t, T: Tm, V: s.hNow, p: imp / span / area * 0.07, vMean: sum / N, pV: imp / span / area * 0.07 * s.hNow, n: N };
+  }
+  return { init: init, step: step, observe: observe, N: N };
+})();
+// ==== @end physics ====
+
+// ==== @section state ====
+var P = { T: 300, h: 1 };
+var S = PHYS.init(P);
+var hooks = { frame: [], reset: [] };
+// ==== @end state ====
+
+// ==== @section scene ====
+var v3 = SimUI.scene3d(THREE, OrbitControls, { radius: 1.1, view: [0.9, 0.6, 1.1] });
+var box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0x8b95a3 }));
+box.position.y = 0.5; box.position.y = 0; v3.scene.add(box);
+var glass = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x3a5a8a, transparent: true, opacity: 0.08, depthWrite: false }));
+v3.scene.add(glass);
+var lid = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.04, 1.04), new THREE.MeshStandardMaterial({ color: 0xa78bfa, metalness: 0.3, roughness: 0.4 }));
+var rod = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.6, 12), new THREE.MeshStandardMaterial({ color: 0x8b95a3 }));
+v3.scene.add(lid, rod);
+var balls = new THREE.InstancedMesh(new THREE.SphereGeometry(0.016, 10, 8), new THREE.MeshStandardMaterial({ roughness: 0.35 }), PHYS.N);
+v3.scene.add(balls);
+var M4 = new THREE.Matrix4(), C = new THREE.Color();
+v3.label('поршень', lid, { color: 'purple', offset: [0.62, 0, 0] });
+var Y0 = -0.5;
+function draw(o, P, S) {
+  var h = S.hNow;
+  box.scale.set(1, h, 1); box.position.y = Y0 + h / 2;
+  glass.scale.set(1, h, 1); glass.position.y = Y0 + h / 2;
+  lid.position.y = Y0 + h + 0.02; rod.position.y = Y0 + h + 0.32;
+  for (var i = 0; i < PHYS.N; i++) {
+    var m = S.mol[i], sp = Math.sqrt(m.vx * m.vx + m.vy * m.vy + m.vz * m.vz);
+    M4.makeTranslation(m.x, Y0 + m.y, m.z); balls.setMatrixAt(i, M4);
+    balls.setColorAt(i, C.set(SimUI.heat(Math.min(1, sp / 1.6))));
+  }
+  balls.instanceMatrix.needsUpdate = true; if (balls.instanceColor) balls.instanceColor.needsUpdate = true;
+  v3.render();
+}
+// ==== @end scene ====
+
+// ==== @section controls ====
+SimUI.title('Идеальный газ в сосуде');
+SimUI.goals(['Давление — это удары молекул о стенки', 'При постоянной температуре pV ≈ const (закон Бойля — Мариотта)', 'Нагрев ускоряет молекулы и поднимает давление']);
+SimUI.params(P, [
+  { name: 'T', label: 'Температура', min: 100, max: 900, step: 10, unit: 'К', group: 'Газ' },
+  { name: 'h', label: 'Высота поршня (объём)', min: 0.3, max: 1, step: 0.01, unit: 'V₀', group: 'Сосуд' },
+]);
+SimUI.presets([{ label: 'Холодно', values: { T: 150 } }, { label: 'Горячо', values: { T: 800 } }, { label: 'Сжать', values: { h: 0.35 } }]);
+// ==== @end controls ====
+
+// ==== @section instruments ====
+SimUI.readouts({ T: { label: 'Температура', unit: 'К', digits: 0 }, V: { label: 'Объём', unit: 'V₀' }, p: { label: 'Давление', unit: 'усл.' }, pV: { label: 'p·V', unit: 'усл.' } });
+SimUI.meter({ key: 'p', label: 'Манометр', min: 0, max: 12, unit: 'усл.', corner: 'bl', zones: [{ to: 6, color: 'green' }, { to: 9, color: 'yellow' }, { to: 99, color: 'red' }] });
+SimUI.chart({ title: 'Скорости молекул', mode: 'bars', corner: 'br', height: 130, xLabel: 'v', series: [{ name: 'число молекул', color: 'orange' }],
+  data: function (o, P) {
+    var bins = new Array(14).fill(0), labels = [];
+    for (var i = 0; i < PHYS.N; i++) { var m = S.mol[i], v = Math.sqrt(m.vx * m.vx + m.vy * m.vy + m.vz * m.vz); bins[Math.min(13, Math.floor(v / 0.15))]++; }
+    for (var b = 0; b < 14; b++) labels.push((b * 0.15).toFixed(1));
+    return { x: labels, y: bins };
+  } });
+SimUI.chart({ title: 'Давление от времени', x: 't', y: ['p'], xLabel: 't, с', series: [{ name: 'p', color: 'cyan' }], collapsed: true });
+SimUI.formula({ tex: 'pV = \\nu R T', corner: 'tl', vars: { p: { label: 'p', digits: 1 }, V: { label: 'V', digits: 2 }, T: { label: 'T', unit: 'К', digits: 0 } },
+  note: 'Цвет молекулы — её скорость: синие медленные, красные быстрые. Покрути сцену мышью.' });
+SimUI.actions([{ label: '🔥 Нагреть', onClick: function () { SimUI.set('T', Math.min(900, P.T + 150)); } },
+  { label: '❄ Охладить', onClick: function () { SimUI.set('T', Math.max(100, P.T - 150)); } }]);
+// ==== @end instruments ====
+
+// ==== @section main ====
+var app = SimUI.run({ physics: PHYS, P: P, S: S, draw: draw, hooks: hooks, autoReset: false });
+// ==== @end main ====
+</script>
+</body>
+</html>

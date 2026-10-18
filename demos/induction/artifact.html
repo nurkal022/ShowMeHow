@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Электромагнитная индукция</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
+  canvas.scene { position: fixed; top: 0; left: 0; display: block; }
+  #bg { z-index: 0; }
+</style>
+</head>
+<body>
+<canvas id="bg" class="scene"></canvas>
+
+<script>
+(function () {
+  'use strict';
+
+  var cv = document.getElementById('bg');
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0;
+  var view = { x0: 0, y0: 0, s: 1, left: 0, right: 0 }; // x0,y0 — центр катушки; s — пикселей на метр
+  var lampP = { x: 0, y: 0 }, galvP = { x: 0, y: 0, r: 60 };
+
+  // ---------- Геометрия и параметры (СИ) ----------
+  var COIL_A = 0.025;      // радиус витка, м
+  var COIL_LEN = 0.08;     // длина намотки, м
+  var MAG_H = 0.03;        // половина длины магнита, м
+  var MAG_R = 0.01;        // радиус магнита, м
+  var AMP = 0.13;          // амплитуда качания магнита, м
+  var R_LAMP = 10;         // сопротивление лампы, Ом
+  var R_PER_TURN = 0.01;   // сопротивление провода на виток, Ом
+  var P_NOM = 0.02;        // мощность, при которой лампа горит в полный накал, Вт
+  var I_FULL = 0.05;       // ток полного отклонения гальванометра, А
+
+  var turns = 300;
+  var freq = 0.5;          // Гц
+  var Br = 1.0;            // остаточная индукция магнита, Тл
+  var polarity = 1;        // +1: N справа
+  var showLines = true;
+
+  var phi = 0;             // фаза качания
+  var xm = 0, vm = 0;      // положение и скорость центра магнита
+  var t = 0;
+  var dragging = false, dragX = 0, dragPrevX = 0, dragV = 0;
+
+  // ---------- Поток по модели магнитных зарядов ----------
+  // Торцы магнита несут «заряды» ±Q, Q = Br·πr². Поток H-поля заряда через диск радиуса a
+  // на осевом расстоянии d: (Q/2)·sign(d)·(1 − |d|/√(d²+a²)). Внутри магнита к нему добавляется
+  // поток намагниченности Q — так поток B получается непрерывным.
+  function Q() { return polarity * Br * Math.PI * MAG_R * MAG_R; }
+  function diskFlux(d) {
+    if (d === 0) return 0;
+    return 0.5 * Math.sign(d) * (1 - Math.abs(d) / Math.sqrt(d * d + COIL_A * COIL_A));
+  }
+  function loopFlux(xc, x) {
+    var xN = x + MAG_H, xS = x - MAG_H, q = Q();
+    var f = q * (diskFlux(xc - xN) - diskFlux(xc - xS));
+    if (xc > xS && xc < xN) f += q;
+    return f;
+  }
+  var SAMPLES = 24;
+  /** Потокосцепление Ψ = Σ Φ по виткам, равномерно намотанным вдоль катушки. */
+  function linkage(x) {
+    var s = 0;
+    for (var i = 0; i < SAMPLES; i++) {
+      var xc = -COIL_LEN / 2 + COIL_LEN * (i + 0.5) / SAMPLES;
+      s += loopFlux(xc, x);
+    }
+    return turns * s / SAMPLES;
+  }
+  /** Поток через один средний виток (для формулы ε = −N·dΦ/dt). */
+  function fluxPerTurn(x) { return linkage(x) / turns; }
+  function dPsiDx(x) { var h = 1e-4; return (linkage(x + h) - linkage(x - h)) / (2 * h); }
+  function emf() { return -dPsiDx(xm) * vm; }
+  function rTotal() { return R_LAMP + R_PER_TURN * turns; }
+  function current() { return emf() / rTotal(); }
+  function lampPower() { var i = current(); return i * i * R_LAMP; }
+
+  // ---------- Силовые линии магнита (в его системе отсчёта, N справа) ----------
+  var lines = [];
+  function fieldAt(x, y) {
+    var bx = 0, by = 0, cs = [[MAG_H, 1], [-MAG_H, -1]];
+    for (var k = 0; k < 2; k++) {
+      var dx = x - cs[k][0], dy = y, r2 = dx * dx + dy * dy + 1e-8, r3 = r2 * Math.sqrt(r2);
+      bx += cs[k][1] * dx / r3; by += cs[k][1] * dy / r3;
+    }
+    return [bx, by];
+  }
+  function traceLines() {
+    lines = [];
+    // затравки только в верхней полуплоскости — нижняя получается зеркалом
+    var seeds = [0, 0.07, 0.15, 0.24, 0.34, 0.45, 0.57, 0.7];
+    for (var i = 0; i < seeds.length; i++) {
+      var th = seeds[i] * Math.PI;
+      var x = MAG_H + 0.003 * Math.cos(th), y = 0.003 * Math.sin(th);
+      var pts = [[x, y]];
+      for (var st = 0; st < 1400; st++) {
+        var b = fieldAt(x, y), m = Math.sqrt(b[0] * b[0] + b[1] * b[1]);
+        var h = 0.0012;
+        // шаг RK2 (средняя точка) вдоль единичного направления поля
+        var mx = x + 0.5 * h * b[0] / m, my = y + 0.5 * h * b[1] / m;
+        var b2 = fieldAt(mx, my), m2 = Math.sqrt(b2[0] * b2[0] + b2[1] * b2[1]);
+        x += h * b2[0] / m2; y += h * b2[1] / m2;
+        pts.push([x, y]);
+        var dsx = x + MAG_H;
+        if (dsx * dsx + y * y < 0.003 * 0.003) break;
+        if (Math.abs(x) > 0.5 || Math.abs(y) > 0.3) break;
+      }
+      lines.push(pts);
+    }
+  }
+
+  // ---------- Раскладка ----------
+  function layout() {
+    var left = W > 1100 ? 392 : W > 900 ? 300 : 12;
+    var right = W > 900 ? W - 296 : W - 12;
+    var aw = Math.max(240, right - left);
+    view.left = left; view.right = right;
+    view.s = Math.min(aw / 0.34, (H * 0.5) / 0.2);
+    view.x0 = left + aw / 2;
+    view.y0 = Math.max(150, H * 0.3);
+    lampP = { x: left + aw * 0.28, y: Math.min(H - 110, view.y0 + 0.11 * view.s + 140) };
+    galvP = { x: left + aw * 0.72, y: lampP.y + 10, r: Math.max(40, Math.min(70, aw * 0.12)) };
+  }
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    draw();
+  }
+  function X(x) { return view.x0 + x * view.s; }
+  function Y(y) { return view.y0 - y * view.s; }
+
+  // ---------- Отрисовка ----------
+  var flow = 0;            // фаза бегущих штрихов (идёт только при работе)
+  var needle = 0, needleV = 0; // угол стрелки гальванометра и его скорость
+  var glow = 0;            // накал лампы с тепловой инерцией
+
+  function drawFieldLines() {
+    if (!showLines) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(view.left, 0, view.right - view.left, view.y0 + 0.16 * view.s);
+    ctx.clip();
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([7, 7]);
+    ctx.lineDashOffset = -flow;
+    ctx.strokeStyle = 'rgba(120,180,255,0.45)';
+    for (var sgn = -1; sgn <= 1; sgn += 2) {
+      for (var i = 0; i < lines.length; i++) {
+        var pts = lines[i];
+        ctx.beginPath();
+        for (var k = 0; k < pts.length; k += 2) {
+          var px = X(xm + polarity * pts[k][0]), py = Y(sgn * pts[k][1]);
+          if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+    }
+    // внутри магнита линии B идут от S к N
+    for (var j = -1; j <= 1; j++) {
+      ctx.beginPath();
+      ctx.moveTo(X(xm - polarity * MAG_H), Y(j * MAG_R * 0.55));
+      ctx.lineTo(X(xm + polarity * MAG_H), Y(j * MAG_R * 0.55));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function coilTurnsDrawn() { return Math.max(4, Math.min(40, Math.round(turns / 25))); }
+
+  function drawCoil(front) {
+    var n = coilTurnsDrawn(), I = current();
+    var heat = Math.min(1, Math.abs(I) / I_FULL);
+    var rx = Math.max(3, COIL_LEN / n * view.s * 0.5), ry = COIL_A * view.s;
+    for (var i = 0; i < n; i++) {
+      var cx = X(-COIL_LEN / 2 + COIL_LEN * (i + 0.5) / n);
+      ctx.beginPath();
+      // переднюю половину витка рисуем поверх магнита, заднюю — под ним
+      if (front) ctx.ellipse(cx, view.y0, rx, ry, 0, -Math.PI / 2, Math.PI / 2, true);
+      else ctx.ellipse(cx, view.y0, rx, ry, 0, -Math.PI / 2, Math.PI / 2, false);
+      ctx.strokeStyle = front ? 'rgb(' + (205 + 50 * heat) + ',' + (130 + 60 * heat) + ',' + (70 + 40 * heat) + ')' : '#7a4a26';
+      ctx.lineWidth = front ? 2.4 : 1.6;
+      ctx.stroke();
+    }
+    if (front && Math.abs(I) > 0.002) {
+      // бегущие заряды: направление по знаку тока
+      ctx.save();
+      ctx.setLineDash([2, 10]);
+      ctx.lineDashOffset = -flow * Math.sign(I) * 0.6;
+      ctx.strokeStyle = 'rgba(255,240,170,' + (0.3 + 0.7 * heat) + ')';
+      ctx.lineWidth = 3;
+      for (i = 0; i < n; i++) {
+        var cx2 = X(-COIL_LEN / 2 + COIL_LEN * (i + 0.5) / n);
+        ctx.beginPath();
+        ctx.ellipse(cx2, view.y0, rx, ry, 0, -Math.PI / 2, Math.PI / 2, true);
+        ctx.stroke();
+      }
+      ctx.restore();
+      // индуцированные полюса катушки (правило Ленца)
+      var big = Math.min(1, Math.abs(I) / (0.3 * I_FULL));
+      ctx.font = 'bold 18px system-ui, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      var rightN = I > 0;
+      ctx.globalAlpha = 0.35 + 0.65 * big;
+      ctx.fillStyle = rightN ? '#ff6a6a' : '#5aa0ff';
+      ctx.fillText(rightN ? 'N' : 'S', X(COIL_LEN / 2) + 18, view.y0 - ry - 14);
+      ctx.fillStyle = rightN ? '#5aa0ff' : '#ff6a6a';
+      ctx.fillText(rightN ? 'S' : 'N', X(-COIL_LEN / 2) - 18, view.y0 - ry - 14);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawMagnet() {
+    var x1 = X(xm - MAG_H), x2 = X(xm + MAG_H), y1 = Y(MAG_R), y2 = Y(-MAG_R);
+    var mid = X(xm);
+    var nLeft = polarity < 0;
+    ctx.fillStyle = nLeft ? '#d94848' : '#3f6fd1';
+    ctx.fillRect(x1, y1, mid - x1, y2 - y1);
+    ctx.fillStyle = nLeft ? '#3f6fd1' : '#d94848';
+    ctx.fillRect(mid, y1, x2 - mid, y2 - y1);
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1;
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold ' + Math.max(11, Math.round((y2 - y1) * 0.6)) + 'px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(nLeft ? 'N' : 'S', (x1 + mid) / 2, view.y0);
+    ctx.fillText(nLeft ? 'S' : 'N', (mid + x2) / 2, view.y0);
+    if (dragging) {
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+      ctx.strokeRect(x1 - 3, y1 - 3, x2 - x1 + 6, y2 - y1 + 6);
+    }
+  }
+
+  function drawCircuit() {
+    var ry = COIL_A * view.s;
+    var cl = X(-COIL_LEN / 2), cr = X(COIL_LEN / 2), yb = view.y0 + ry;
+    var busY = lampP.y + 70;
+    ctx.strokeStyle = '#8b95a3'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cl, yb); ctx.lineTo(cl, view.y0 + ry + 28); ctx.lineTo(lampP.x, view.y0 + ry + 28);
+    ctx.lineTo(lampP.x, lampP.y - 34);
+    ctx.moveTo(lampP.x, lampP.y + 26); ctx.lineTo(lampP.x, busY); ctx.lineTo(galvP.x, busY);
+    ctx.lineTo(galvP.x, galvP.y + galvP.r * 0.55);
+    ctx.moveTo(galvP.x, galvP.y - galvP.r - 4); ctx.lineTo(galvP.x, view.y0 + ry + 28);
+    ctx.lineTo(cr, view.y0 + ry + 28); ctx.lineTo(cr, yb);
+    ctx.stroke();
+  }
+
+  function drawLamp() {
+    var x = lampP.x, y = lampP.y, b = glow;
+    if (b > 0.01) {
+      var g = ctx.createRadialGradient(x, y - 8, 2, x, y - 8, 30 + 90 * b);
+      g.addColorStop(0, 'rgba(255,230,140,' + (0.85 * b) + ')');
+      g.addColorStop(1, 'rgba(255,200,80,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y - 8, 30 + 90 * b, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(x, y - 8, 24, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(' + Math.round(60 + 195 * b) + ',' + Math.round(66 + 164 * b) + ',' + Math.round(80 + 40 * b) + ',0.9)';
+    ctx.fill();
+    ctx.strokeStyle = '#c9d1db'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = b > 0.05 ? '#fff6c8' : '#5c6675'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(x - 8, y + 12); ctx.lineTo(x - 6, y - 10);
+    for (var k = 0; k < 4; k++) ctx.lineTo(x - 4 + k * 3, y - (k % 2 ? 16 : 6));
+    ctx.lineTo(x + 6, y - 10); ctx.lineTo(x + 8, y + 12);
+    ctx.stroke();
+    ctx.fillStyle = '#6b7380';
+    ctx.fillRect(x - 11, y + 12, 22, 14);
+    ctx.fillStyle = '#8b95a3'; ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('лампа ' + R_LAMP + ' Ом', x, y + 30);
+  }
+
+  function drawGalv() {
+    var x = galvP.x, y = galvP.y, r = galvP.r;
+    ctx.fillStyle = '#e8e2d0';
+    ctx.beginPath(); ctx.arc(x, y, r, Math.PI, 2 * Math.PI); ctx.lineTo(x + r, y + r * 0.5);
+    ctx.lineTo(x - r, y + r * 0.5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#2a3341'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.fillStyle = '#333'; ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var MAXA = 50 * Math.PI / 180;
+    for (var k = -5; k <= 5; k++) {
+      var a = -Math.PI / 2 + MAXA * k / 5, l = k % 5 === 0 ? 12 : 6;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * (r - 6), y + Math.sin(a) * (r - 6));
+      ctx.lineTo(x + Math.cos(a) * (r - 6 - l), y + Math.sin(a) * (r - 6 - l));
+      ctx.stroke();
+      if (k % 5 === 0) ctx.fillText(String(Math.round(k / 5 * I_FULL * 1000)), x + Math.cos(a) * (r - 26), y + Math.sin(a) * (r - 26));
+    }
+    var na = -Math.PI / 2 + needle * MAXA;
+    ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, y + r * 0.2);
+    ctx.lineTo(x + Math.cos(na) * (r - 10), y + Math.sin(na) * (r - 10)); ctx.stroke();
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(x, y + r * 0.2, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#444'; ctx.fillText('мА', x, y + r * 0.38);
+    ctx.fillStyle = '#8b95a3'; ctx.font = '12px system-ui, sans-serif'; ctx.textBaseline = 'top';
+    ctx.fillText('гальванометр', x, y + r * 0.5 + 6);
+  }
+
+  function draw() {
+    if (!W) return;
+    ctx.fillStyle = '#101318';
+    ctx.fillRect(0, 0, W, H);
+    // ось катушки
+    ctx.strokeStyle = 'rgba(139,149,163,0.2)'; ctx.setLineDash([4, 6]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(view.left, view.y0); ctx.lineTo(view.right, view.y0); ctx.stroke();
+    ctx.setLineDash([]);
+    drawFieldLines();
+    drawCircuit();
+    drawCoil(false);
+    drawMagnet();
+    drawCoil(true);
+    drawLamp();
+    drawGalv();
+    ctx.fillStyle = '#8b95a3'; ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('Магнит можно схватить мышью и двигать вдоль оси', view.left + 6, 14);
+    ctx.fillText('катушка: ' + turns + ' витков, R = ' + (R_PER_TURN * turns).toFixed(1) + ' Ом',
+      X(-COIL_LEN / 2), view.y0 + COIL_A * view.s + 34);
+  }
+
+  // ---------- Движение и инструменты ----------
+  function kinematics() {
+    if (dragging) { xm = dragX; vm = dragV; return; }
+    xm = AMP * Math.sin(phi);
+    vm = AMP * 2 * Math.PI * freq * Math.cos(phi);
+  }
+
+  function stepInstruments(dt) {
+    // стрелка: колебательная система с затуханием чуть меньше критического
+    var target = Math.max(-1.08, Math.min(1.08, current() / I_FULL));
+    var w0 = 18, zeta = 0.6, h = dt / 4;
+    for (var k = 0; k < 4; k++) {
+      var acc = -w0 * w0 * (needle - target) - 2 * zeta * w0 * needleV;
+      needleV += acc * h; needle += needleV * h;
+    }
+    needle = Math.max(-1.1, Math.min(1.1, needle));
+    var bt = Math.min(1, Math.sqrt(lampPower() / P_NOM));
+    glow += (bt - glow) * Math.min(1, dt / 0.06);
+  }
+
+  var lastChart = -1;
+  function updateReadouts() {
+    rX.set(xm * 100);
+    rV.set(vm);
+    rPsi.set(linkage(xm) * 1000);
+    rE.set(emf());
+    rI.set(current() * 1000);
+    rP.set(lampPower() * 1000);
+    var dPhiDt = -emf() / turns;
+    faraday.set({ N: turns, dphi: dPhiDt * 1000, eps: emf() });
+  }
+
+  var running = true, lastFrame = null;
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var realDt = Math.min(0.05, (now - lastFrame) / 1000);
+    var dt = realDt * speedCtl.get();
+    lastFrame = now;
+    if (dragging) {
+      // скорость руки — сглаженная производная положения
+      var v = realDt > 0 ? (dragX - dragPrevX) / realDt : 0;
+      dragV += (v - dragV) * 0.35;
+      dragPrevX = dragX;
+    }
+    if (running) {
+      if (!dragging) phi += 2 * Math.PI * freq * dt;
+      t += dt;
+      kinematics();
+      flow += dt * 40;
+      stepInstruments(dragging ? realDt : dt);
+      if (t - lastChart >= 0.02) {
+        lastChart = t;
+        psiChart.push(t, [linkage(xm) * 1000]);
+        emfChart.push(t, [emf()]);
+      }
+      updateReadouts();
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function changed() { kinematics(); updateReadouts(); draw(); }
+
+  function resetSim() {
+    phi = 0; t = 0; lastChart = -1; lastFrame = null;
+    needle = 0; needleV = 0; glow = 0; flow = 0;
+    dragging = false;
+    kinematics();
+    psiChart.clear(); emfChart.clear();
+    updateReadouts();
+    draw();
+  }
+
+  // ---------- Мышь: перетаскивание магнита ----------
+  function worldX(px) { return (px - view.x0) / view.s; }
+  cv.addEventListener('pointerdown', function (e) {
+    var wx = worldX(e.clientX), wy = (view.y0 - e.clientY) / view.s;
+    if (Math.abs(wx - xm) < MAG_H + 0.01 && Math.abs(wy) < MAG_R + 0.015) {
+      dragging = true; dragX = xm; dragPrevX = xm; dragV = 0;
+      cv.setPointerCapture(e.pointerId);
+    }
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (dragging) dragX = Math.max(-AMP, Math.min(AMP, worldX(e.clientX)));
+  });
+  function release() {
+    if (!dragging) return;
+    dragging = false;
+    // продолжаем качание с той же точки
+    phi = Math.asin(Math.max(-1, Math.min(1, dragX / AMP)));
+    if (dragV < 0) phi = Math.PI - phi;
+  }
+  cv.addEventListener('pointerup', release);
+  cv.addEventListener('pointercancel', release);
+
+  // ---------- SimUI ----------
+  SimUI.title('Электромагнитная индукция');
+  SimUI.goals([
+    'ЭДС возникает только при изменении магнитного потока, а не от самого поля',
+    'Почему ЭДС меняет знак, когда магнит проходит середину катушки',
+    'Как число витков и скорость магнита влияют на ЭДС',
+    'Правило Ленца: катушка отталкивает приближающийся магнит',
+  ]);
+  SimUI.slider({
+    name: 'turns', label: 'Число витков N', min: 50, max: 1000, step: 10, value: turns, unit: '',
+    onChange: function (v) { turns = v; changed(); },
+  });
+  SimUI.slider({
+    name: 'freq', label: 'Скорость магнита (частота качаний)', min: 0.1, max: 2, step: 0.05, value: freq, unit: 'Гц',
+    onChange: function (v) { freq = v; changed(); },
+  });
+  SimUI.slider({
+    name: 'Br', label: 'Сила магнита Bᵣ', min: 0.2, max: 1.4, step: 0.05, value: Br, unit: 'Тл',
+    onChange: function (v) { Br = v; changed(); },
+  });
+  SimUI.toggle({
+    name: 'flip', label: 'Перевернуть магнит', value: false,
+    onChange: function (on) { polarity = on ? -1 : 1; changed(); },
+  });
+  SimUI.toggle({
+    name: 'lines', label: 'Силовые линии', value: true,
+    onChange: function (on) { showLines = on; draw(); },
+  });
+  var speedCtl = SimUI.speed({ values: [0.1, 0.25, 0.5, 1, 2], value: 1 });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: resetSim,
+  });
+
+  var faraday = SimUI.formula({
+    title: 'Закон Фарадея',
+    tex: '\\varepsilon = -N\\,\\frac{d\\Phi}{dt} = -\\frac{d\\Psi}{dt}',
+    vars: { N: { label: 'N' }, dphi: { label: 'dΦ/dt', unit: 'мВб/с' }, eps: { label: 'ε', unit: 'В' } },
+    note: 'Знак «минус» — правило Ленца: индукционный ток своим полем мешает изменению потока.',
+    corner: 'tl',
+  });
+  var psiChart = SimUI.chart({
+    title: 'Потокосцепление Ψ(t)', xLabel: 't, с', yLabel: 'Ψ, мВб',
+    series: [{ name: 'Ψ', color: '#78b4ff' }], corner: 'tl', maxPoints: 300, height: 130,
+  });
+  var rX = SimUI.readout({ label: 'Положение магнита', unit: 'см', digits: 1, corner: 'bl' });
+  var rV = SimUI.readout({ label: 'Скорость магнита', unit: 'м/с', digits: 2, corner: 'bl' });
+  var rPsi = SimUI.readout({ label: 'Потокосцепление Ψ', unit: 'мВб', digits: 2, corner: 'bl' });
+  var rE = SimUI.readout({ label: 'ЭДС ε', unit: 'В', digits: 3, corner: 'bl' });
+  var rI = SimUI.readout({ label: 'Ток I', unit: 'мА', digits: 1, corner: 'bl' });
+  var rP = SimUI.readout({ label: 'Мощность лампы', unit: 'мВт', digits: 1, corner: 'bl' });
+  var emfChart = SimUI.chart({
+    title: 'ЭДС индукции ε(t)', xLabel: 't, с', yLabel: 'ε, В',
+    series: [{ name: 'ε', color: '#ffb27a' }], corner: 'br', maxPoints: 300,
+  });
+
+  SimUI.expose({
+    getState: function () {
+      return { t: t, x: xm, v: vm, linkage: linkage(xm), flux: fluxPerTurn(xm), emf: emf(),
+        current: current(), lampPower: lampPower(), needle: needle };
+    },
+    reset: resetSim,
+  });
+
+  window.addEventListener('resize', resize);
+  traceLines();
+  kinematics();
+  updateReadouts();
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

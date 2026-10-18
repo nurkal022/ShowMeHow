@@ -23,7 +23,7 @@ export default function ClaimForm({ token, tgName, who }: { token: string; tgNam
         body: JSON.stringify(who ? { token } : { token, email, password }),
       });
       const body = await res.json().catch(() => ({}));
-      if (res.ok) setNext(body.next ?? '/');
+      if (res.ok) setNext(body.next ?? '/create');
       else setError(body.error ?? ta('loginFailed'));
     } catch {
       setError(ta('network'));

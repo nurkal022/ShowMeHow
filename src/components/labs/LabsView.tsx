@@ -4,60 +4,72 @@ import type { LabEntry } from '@/lib/labs';
 import { labUrl, localizeLab } from '@/lib/labs';
 import { useLocale, useT } from '@/i18n/client';
 import { app } from '@/i18n/messages/app';
+import { showcase } from '@/i18n/messages/showcase';
 
 import { IconLab, IconPlay, IconPlus, IconVr } from '@/components/icons';
 
 export default function LabsView({ labs, isGuest = false }: { labs: LabEntry[]; isGuest?: boolean }) {
   const t = useT(app);
+  const ts = useT(showcase);
   const locale = useLocale();
   const [vrFor, setVrFor] = useState<LabEntry | null>(null);
   const [soon, setSoon] = useState(false);
+  const [subject, setSubject] = useState<string | null>(null);
   // WebXR живёт только в защищённом контексте (HTTPS или localhost). Пока боевой
   // стенд отдаётся по http, вход в VR предлагать нечестно — прячем его и говорим,
   // чего не хватает. null — «ещё не знаем»: на сервере isSecureContext недоступен,
   // и без этого состояния подсказка мигала бы при гидрации.
   const [secure, setSecure] = useState<boolean | null>(null);
   useEffect(() => { setSecure(window.isSecureContext); }, []);
+  const all = labs.map((l) => localizeLab(l, locale));
+  const subjects = [...new Set(all.map((l) => l.subject.split(/\s*·\s*/)[0]))];
+  const shown = subject ? all.filter((l) => l.subject.startsWith(subject)) : all;
   return (
-    <div className="library labs">
-      <div className="library-head">
-        <h1>{t('labsTitle')}</h1>
-        {/* Гостю форма всё равно отправит на вход: она пока показывает лишь «скоро». */}
-        {!isGuest && (
-          <button type="button" className="btn btn-primary" onClick={() => setSoon(true)}>
-            <IconPlus size={17} />{t('labsCreate')}
-          </button>
-        )}
+    <div className="space lib2 labs2">
+      <header className="lib2-head">
+        <div>
+          <h1>{t('labsTitle')}</h1>
+          <p>{t('labsLead')}</p>
+          {secure === false && <p className="lib2-note">{t('labsHttps')}</p>}
+        </div>
+        <div className="lib2-head-actions">
+          <a className="sp-btn" href="/showcase">✦ {ts('kicker')}</a>
+          {/* Гостю форма всё равно отправит на вход: она пока показывает лишь «скоро». */}
+          {!isGuest && (
+            <button type="button" className="sp-btn sp-btn-primary" onClick={() => setSoon(true)}>
+              <IconPlus size={17} />{t('labsCreate')}
+            </button>
+          )}
+        </div>
+      </header>
+      <div className="lib2-bar">
+        <div className="sp-chips">
+          <button className={!subject ? 'sp-chip on' : 'sp-chip'} onClick={() => setSubject(null)}>{t('labsAll')} <b>{all.length}</b></button>
+          {subjects.map((sj) => (
+            <button key={sj} className={subject === sj ? 'sp-chip on' : 'sp-chip'} onClick={() => setSubject(subject === sj ? null : sj)}>{sj}</button>
+          ))}
+        </div>
       </div>
-      <p className="muted labs-lead">
-        {t('labsLead')}
-      </p>
-      {secure === false && (
-        <p className="muted labs-note">
-          {t('labsHttps')}
-        </p>
-      )}
-      <div className="lab-grid">
-        {labs.map((l) => localizeLab(l, locale)).map((lab, i) => (
-          <article key={lab.slug} className="lab-card" style={{ animationDelay: `${i * 60}ms` }}>
-            <a className="card-thumb" href={labUrl(lab.slug)} target="_blank" rel="noopener">
+      <div className="lib2-grid">
+        {shown.map((lab, i) => (
+          <article key={lab.slug} className="lib2-card" style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}>
+            <a className="lib2-thumb" href={labUrl(lab.slug)} target="_blank" rel="noopener" aria-label={lab.title}>
               <img src={`/labs/${lab.slug}.png`} alt="" loading="lazy" decoding="async" />
-              <span className="card-thumb-hint"><IconPlay size={22} />{t('open')}</span>
+              <span className="lib2-badge">3D · VR</span>
+              <span className="lib2-play"><IconPlay size={22} /></span>
             </a>
-            <div className="card-body">
-              <div className="card-sub"><span className="chip">{lab.subject}</span></div>
+            <div className="lib2-body">
+              <div className="lib2-meta"><span className="lib2-subject">{lab.subject}</span></div>
               <h3><a href={labUrl(lab.slug)} target="_blank" rel="noopener">{lab.title}</a></h3>
-              <p className="lab-blurb">{lab.blurb}</p>
-              <ul className="lab-stations">
-                {lab.stations.map((s) => <li key={s}>{s}</li>)}
-              </ul>
-              <div className="card-actions">
-                <a className="btn btn-sm btn-primary" href={labUrl(lab.slug)} target="_blank" rel="noopener">
+              <p className="lib2-text">{lab.blurb}</p>
+              <ul className="lib2-tags">{lab.stations.map((st) => <li key={st}>{st}</li>)}</ul>
+              <div className="lib2-actions">
+                <a className="sp-btn sp-btn-primary lib2-open" href={labUrl(lab.slug)} target="_blank" rel="noopener">
                   <IconPlay size={15} />{t('labsOpenScene')}
                 </a>
                 {secure && (
-                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => setVrFor(lab)}>
-                    <IconVr size={16} />{t('labsVr')}
+                  <button type="button" className="sp-btn" onClick={() => setVrFor(lab)}>
+                    <IconVr size={16} /><span>{t('labsVr')}</span>
                   </button>
                 )}
               </div>

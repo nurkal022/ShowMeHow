@@ -163,6 +163,15 @@ onmessage = function (e) {
     } catch (err) { bad.push(cases[c].label + ': ' + String(err).slice(0, 200)); }
   }
   add('Величины конечны на всём диапазоне параметров', bad.length === 0, bad.join('; '));
+  // Приборы тренажёра привязаны к observe() по именам величин плана: пропуск — пустой прибор на экране.
+  try {
+    var o0 = PHYS.observe(PHYS.init(P), P), lost = [];
+    for (var oi = 0; oi < (d.observables || []).length; oi++) {
+      if (typeof o0[d.observables[oi]] !== 'number') lost.push(d.observables[oi]);
+    }
+    if (d.observables && d.observables.length) add('observe() возвращает все величины плана', lost.length === 0,
+      lost.length ? 'нет числовых ключей: ' + lost.join(', ') + ' — observe обязан вернуть их под этими именами' : '');
+  } catch (err) {}
   var dead = [];
   for (var q = 0; q < d.params.length; q++) {
     var pp = d.params[q], a = {}, z = {};
@@ -173,6 +182,26 @@ onmessage = function (e) {
   add('Каждый параметр влияет на величины', dead.length === 0 ? true : 'soft', dead.length
     ? 'параметр(ы) ' + dead.join(', ') + ' не меняют ни одной величины observe() между min и max — ' +
       'либо ядро их не читает, либо observe() не выводит то, на что они влияют' : '');
+  // Показ по фазам: observe().phase обязан пройти все фазы по порядку — по нему тренажёр останавливается.
+  if (d.phases > 1) {
+    try {
+      var sp = PHYS.init(P), seen = {}, order = [], lastPh = null, bad2 = '';
+      for (var pi = 0; pi <= 60 * 120; pi++) {
+        var phv = Math.floor(Number(PHYS.observe(sp, P).phase));
+        if (!isFinite(phv) || phv < 0 || phv >= d.phases) { bad2 = 'observe().phase = ' + PHYS.observe(sp, P).phase + ' — нужен номер фазы 0..' + (d.phases - 1); break; }
+        if (phv !== lastPh) {
+          if (lastPh !== null && phv !== (lastPh + 1) % d.phases) { bad2 = 'фаза перескочила с ' + lastPh + ' на ' + phv + ' — фазы идут по порядку'; break; }
+          seen[phv] = 1; order.push(phv); lastPh = phv;
+        }
+        if (Object.keys(seen).length === d.phases) break;
+        PHYS.step(sp, P, 1 / 120);
+      }
+      var missing = [];
+      for (var mi = 0; mi < d.phases; mi++) if (!seen[mi]) missing.push(mi);
+      if (!bad2 && missing.length) bad2 = 'за 60 с не наступили фазы ' + missing.join(', ') + ' — каждая фаза должна наступать при начальных значениях';
+      add('Фазы процесса идут по порядку', !bad2, bad2);
+    } catch (err) { add('Фазы процесса идут по порядку', false, String(err).slice(0, 200)); }
+  }
   var list = [];
   try { (0, eval)(d.checks + '\\n;self.CHECKS = (typeof CHECKS !== "undefined" && CHECKS) || [];'); list = self.CHECKS || []; }
   catch (err) { add('Проверки инвариантов загружаются', false, String(err).slice(0, 200)); }
@@ -197,6 +226,8 @@ export async function checkCore(
     core: code.core, checks: code.checks, P: defaultParams(spec),
     params: spec.parameters.map((p) => ({ name: p.name, label: p.label, min: p.min, max: p.max })),
     independent: independentParams(spec),
+    observables: (spec.observables ?? []).map((o) => o.name).filter((n) => !/^(phase|stage|mode)$/i.test(n)),
+    phases: spec.presentation === 'phases' ? spec.phases?.length ?? 0 : 0,
   };
   const expr = `new Promise(function (res) {
     var w = new Worker(URL.createObjectURL(new Blob([${JSON.stringify(CORE_RUNNER_JS)}], { type: 'text/javascript' })));
@@ -264,9 +295,13 @@ var CHECKS = [
   SimPhys.collide(a, b, e) и SimPhys.walls(p, w, h, e) для частиц {x, y, vx, vy, r, m};
   SimPhys.field(charges [{x, y, q}], x, y, k, soft) -> {ex, ey, v}; SimPhys.spring(a, b, k, L0) -> {fx, fy};
   SimPhys.clamp, SimPhys.lerp.
-- observe возвращает ВСЕ величины, которые покажут приборы (spec.observables) и которыми
-  проверяются инварианты, плюс t. Все параметры обязаны влиять хотя бы на одну из них.
+- observe возвращает ВСЕ величины, которые покажут приборы, — ровно под именами spec.observables[].name
+  (по ним к ядру привязаны показания и графики), — плюс t и то, чем проверяются инварианты.
+  Все параметры обязаны влиять хотя бы на одну из них.
 - Если процесс дискретный (фазы, такты, реакции) — храни фазу в состоянии числом.
+- Если в спецификации есть phases (показ по фазам) — observe ОБЯЗАН возвращать phase: номер текущей фазы
+  0..n-1 строго по порядку spec.phases (после последней — снова 0, если процесс циклический). Каждая фаза
+  длится заметное время при начальных значениях: по phase тренажёр останавливается в начале каждой фазы.
 - CHECKS — проверки инвариантов из spec.invariants. fn(PHYS, run, P, period):
   run(over, seconds, dt?) прогоняет ядро с параметрами P, переопределёнными over, и возвращает
   {samples: [{t, obs}], state} — samples РЕДКИЕ (около 60 точек), для периодов они не годятся;

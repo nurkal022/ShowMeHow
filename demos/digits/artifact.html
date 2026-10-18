@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Нейросеть распознаёт цифры</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
+  canvas.scene { position: fixed; top: 0; left: 0; display: block; }
+  #bg { z-index: 0; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="bg" class="scene"></canvas>
+
+<script>
+(function () {
+  'use strict';
+
+  var cv = document.getElementById('bg');
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0;
+  var R = {};   // прямоугольники блоков сцены
+
+  // ---------- Случайные числа ----------
+  function rng(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(r) { var u = 1 - r(), v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+
+  // ---------- Предобработка «как в MNIST» ----------
+  // Цифра вписывается в квадрат 12×12 внутри поля 16×16, центр масс — в центр поля.
+  var S = 16, NIN = S * S;
+  function preprocess(g, w, h, dx, dy) {
+    var minx = w, miny = h, maxx = -1, maxy = -1, m = 0, sx = 0, sy = 0, x, y;
+    for (y = 0; y < h; y++) for (x = 0; x < w; x++) {
+      var v = g[y * w + x];
+      if (v > 0.1) { if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y; }
+      m += v; sx += v * (x + 0.5); sy += v * (y + 0.5);
+    }
+    var out = new Float32Array(NIN);
+    if (maxx < 0 || m < 1e-6) return out;
+    var cx = sx / m, cy = sy / m;
+    var s = Math.max(maxx - minx + 1, maxy - miny + 1) / 12;
+    var n = Math.max(1, Math.min(8, Math.ceil(s))), mx = 0;
+    for (var v2 = 0; v2 < S; v2++) for (var u = 0; u < S; u++) {
+      var x0 = cx + (u + 0.5 - S / 2 - (dx || 0)) * s, y0 = cy + (v2 + 0.5 - S / 2 - (dy || 0)) * s, acc = 0;
+      for (var j = 0; j < n; j++) for (var i = 0; i < n; i++) {
+        var px = Math.floor(x0 + ((i + 0.5) / n - 0.5) * s), py = Math.floor(y0 + ((j + 0.5) / n - 0.5) * s);
+        if (px >= 0 && py >= 0 && px < w && py < h) acc += g[py * w + px];
+      }
+      acc /= n * n;
+      out[v2 * S + u] = acc;
+      if (acc > mx) mx = acc;
+    }
+    if (mx > 0) for (i = 0; i < NIN; i++) out[i] = Math.min(1, out[i] / mx);
+    return out;
+  }
+
+  // ---------- Процедурный датасет ----------
+  var FONTS = ['Arial', 'Helvetica', 'Verdana', 'Georgia', 'Times New Roman', 'Courier New', 'Trebuchet MS',
+    'Comic Sans MS', 'Chalkboard', 'Marker Felt', 'Bradley Hand', 'Noteworthy', 'Segoe Print', 'Segoe Script',
+    'sans-serif', 'serif', 'monospace', 'cursive'];
+  var WEIGHTS = [300, 400, 500, 700, 800];
+  var G = 56;
+  var gcv = document.createElement('canvas');
+  gcv.width = G; gcv.height = G;
+  var gctx = gcv.getContext('2d', { willReadFrequently: true });
+  var gbuf = new Float32Array(G * G);
+  var distort = 0.6;
+
+  function makeDigit(d, r) {
+    var k = distort;
+    gctx.setTransform(1, 0, 0, 1, 0, 0);
+    gctx.clearRect(0, 0, G, G);
+    gctx.translate(G / 2, G / 2);
+    gctx.rotate((r() * 2 - 1) * 0.5 * k);
+    gctx.transform(1, 0, (r() * 2 - 1) * 0.5 * k, 1, 0, 0);
+    var sc = 1 + (r() * 2 - 1) * 0.25 * k;
+    gctx.scale(sc * (1 + (r() * 2 - 1) * 0.25 * k), sc);
+    gctx.font = WEIGHTS[Math.floor(r() * WEIGHTS.length)] + ' 34px "' + FONTS[Math.floor(r() * FONTS.length)] + '", sans-serif';
+    gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
+    gctx.fillStyle = '#fff'; gctx.strokeStyle = '#fff';
+    gctx.lineJoin = 'round'; gctx.lineCap = 'round';
+    gctx.fillText(String(d), 0, 2);
+    if (r() < 0.6) { gctx.lineWidth = 0.5 + r() * 3.5; gctx.strokeText(String(d), 0, 2); }
+    var data = gctx.getImageData(0, 0, G, G).data;
+    for (var i = 0; i < G * G; i++) gbuf[i] = data[i * 4 + 3] / 255;
+    var x = preprocess(gbuf, G, G, (r() * 2 - 1) * 1.2 * k, (r() * 2 - 1) * 1.2 * k);
+    // шум сенсора и случайные «кляксы»
+    for (i = 0; i < NIN; i++) {
+      var v = x[i] + gauss(r) * 0.12 * k;
+      if (r() < 0.01 * k) v = 0.5 + r() * 0.5;
+      x[i] = v < 0 ? 0 : v > 1 ? 1 : v;
+    }
+    return x;
+  }
+
+  var NTRAIN = 4000, NTEST = 1000;
+  var trainX = [], trainY = new Uint8Array(NTRAIN), testX = [], testY = new Uint8Array(NTEST);
+  var genPos = 0, genRound = 0;      // генерация идёт порциями, не блокируя кадр
+  var genRng = rng(12345);
+  function generateChunk(budgetMs) {
+    if (genPos >= NTRAIN + NTEST) return false;
+    var t0 = performance.now();
+    while (genPos < NTRAIN + NTEST && performance.now() - t0 < budgetMs) {
+      var isTrain = genPos < NTRAIN, idx = isTrain ? genPos : genPos - NTRAIN;
+      var d = idx % 10;
+      var x = makeDigit(d, genRng);
+      if (isTrain) { trainX[idx] = x; trainY[idx] = d; } else { testX[idx] = x; testY[idx] = d; }
+      genPos++;
+    }
+    return true;
+  }
+  function trainReady() { return trainX.length; }
+  function testReady() { return testX.length; }
+
+  // ---------- Сеть: 256 → H (ReLU) → [32 (ReLU)] → 10 (softmax) ----------
+  var nHidden = 48, second = false, H2 = 32;
+  var lr = 0.01, batch = 32, MOM = 0.9;
+  var WD = 0.003;   // L2-регуляризация: фильтры получаются глаже и читаются как штрихи
+  var layers = [], acts = [], deltas = [], probs = new Float32Array(10);
+  var weightSeed = 1;
+
+  function buildNet() {
+    var sizes = [NIN, nHidden].concat(second ? [H2] : []).concat([10]);
+    var r = rng(777 + weightSeed * 9973);
+    layers = []; acts = [new Float32Array(NIN)]; deltas = [null];
+    for (var l = 1; l < sizes.length; l++) {
+      var nin = sizes[l - 1], nout = sizes[l];
+      var Wt = new Float32Array(nin * nout), sc = Math.sqrt(2 / nin);
+      for (var i = 0; i < Wt.length; i++) Wt[i] = gauss(r) * sc;
+      layers.push({ nin: nin, nout: nout, W: Wt, b: new Float32Array(nout),
+        vW: new Float32Array(nin * nout), vB: new Float32Array(nout),
+        gW: new Float32Array(nin * nout), gB: new Float32Array(nout) });
+      acts.push(new Float32Array(nout));
+      deltas.push(new Float32Array(nout));
+    }
+  }
+
+  function forward(x) {
+    acts[0] = x;
+    var a = x;
+    for (var l = 0; l < layers.length; l++) {
+      var L = layers[l], out = acts[l + 1], last = l === layers.length - 1, Wt = L.W, nin = L.nin;
+      for (var j = 0; j < L.nout; j++) {
+        var s = L.b[j], o = j * nin;
+        for (var i = 0; i < nin; i++) s += Wt[o + i] * a[i];
+        out[j] = last ? s : (s > 0 ? s : 0);
+      }
+      a = out;
+    }
+    var mx = -Infinity, k, sum = 0;
+    for (k = 0; k < 10; k++) if (a[k] > mx) mx = a[k];
+    for (k = 0; k < 10; k++) { probs[k] = Math.exp(a[k] - mx); sum += probs[k]; }
+    for (k = 0; k < 10; k++) probs[k] /= sum;
+    return probs;
+  }
+  function argmax(p) { var b = 0; for (var k = 1; k < p.length; k++) if (p[k] > p[b]) b = k; return b; }
+
+  function backward(y) {
+    var nl = layers.length, dl = deltas[nl], k, l, i, j;
+    for (k = 0; k < 10; k++) dl[k] = probs[k] - (k === y ? 1 : 0);   // ∂L/∂z для softmax + CE
+    for (l = nl - 1; l >= 0; l--) {
+      var L = layers[l], d = deltas[l + 1], a = acts[l], nin = L.nin;
+      for (j = 0; j < L.nout; j++) {
+        var dj = d[j];
+        if (dj === 0) continue;
+        L.gB[j] += dj;
+        var o = j * nin, gW = L.gW;
+        for (i = 0; i < nin; i++) gW[o + i] += dj * a[i];
+      }
+      if (l > 0) {
+        var prev = deltas[l], Wt = L.W;
+        for (i = 0; i < nin; i++) {
+          if (a[i] <= 0) { prev[i] = 0; continue; }
+          var s = 0;
+          for (j = 0; j < L.nout; j++) s += Wt[j * nin + i] * d[j];
+          prev[i] = s;
+        }
+      }
+    }
+  }
+
+  function applyUpdate(bs) {
+    for (var l = 0; l < layers.length; l++) {
+      var L = layers[l], i;
+      for (i = 0; i < L.W.length; i++) {
+        L.vW[i] = MOM * L.vW[i] - lr * (L.gW[i] / bs + WD * L.W[i]); L.W[i] += L.vW[i]; L.gW[i] = 0;
+      }
+      for (i = 0; i < L.nout; i++) {
+        L.vB[i] = MOM * L.vB[i] - lr * L.gB[i] / bs; L.b[i] += L.vB[i]; L.gB[i] = 0;
+      }
+    }
+  }
+
+  // ---------- Обучение ----------
+  var order = [], cursor = 0;
+  var seen = 0, epoch = 0, lastEpochMark = 0;
+  var lossEMA = Math.log(10), accEMA = 0.1;
+  var strip = [], stripTimer = 0, lastSample = null;
+  var diverged = false;
+
+  function shuffle() {
+    var n = trainReady();
+    order = [];
+    for (var i = 0; i < n; i++) order.push(i);
+    for (i = n - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = order[i]; order[i] = order[j]; order[j] = t; }
+    cursor = 0;
+  }
+
+  function trainBatch() {
+    var n = trainReady();
+    if (n < 200) return;
+    if (cursor + batch > order.length || order.length !== n) shuffle();
+    var loss = 0, ok = 0;
+    for (var b = 0; b < batch; b++) {
+      var idx = order[cursor++], y = trainY[idx];
+      var p = forward(trainX[idx]);
+      loss -= Math.log(Math.max(1e-9, p[y]));
+      var pr = argmax(p);
+      if (pr === y) ok++;
+      backward(y);
+      if (b === batch - 1) lastSample = { x: trainX[idx], y: y, p: pr };
+    }
+    applyUpdate(batch);
+    seen += batch;
+    epoch = seen / NTRAIN;
+    loss /= batch;
+    if (!isFinite(loss)) { diverged = true; weightSeed++; buildNet(); return; }
+    lossEMA += 0.03 * (loss - lossEMA);
+    accEMA += 0.03 * (ok / batch - accEMA);
+  }
+
+  // ---------- Проверка на тесте: идёт порциями, результат — за полный проход ----------
+  var conf = [], confTmp = [], testCursor = 0, tLoss = 0, tOk = 0;
+  var testAcc = null, testLoss = null;
+  function zeroConf() { var m = []; for (var i = 0; i < 10; i++) m.push(new Array(10).fill(0)); return m; }
+  conf = zeroConf(); confTmp = zeroConf();
+  function evalChunk(n) {
+    var tn = testReady();
+    if (tn < NTEST) return;
+    for (var k = 0; k < n; k++) {
+      var y = testY[testCursor], p = forward(testX[testCursor]), pr = argmax(p);
+      tLoss -= Math.log(Math.max(1e-9, p[y]));
+      if (pr === y) tOk++;
+      confTmp[y][pr]++;
+      testCursor++;
+      if (testCursor >= NTEST) {
+        conf = confTmp; confTmp = zeroConf();
+        testAcc = tOk / NTEST; testLoss = tLoss / NTEST;
+        tOk = 0; tLoss = 0; testCursor = 0;
+      }
+    }
+  }
+
+  // ---------- Холст «нарисуй сам» ----------
+  var PAD = 280;
+  var padCv = document.createElement('canvas');
+  padCv.width = PAD; padCv.height = PAD;
+  var padCtx = padCv.getContext('2d', { willReadFrequently: true });
+  var padBuf = new Float32Array(PAD * PAD);
+  var padInput = new Float32Array(NIN), padProbs = new Float32Array(10), padInk = false;
+  var drawing = false, lastPt = null;
+
+  function predictPad() {
+    if (!padInk) { padProbs.fill(0); return; }
+    var data = padCtx.getImageData(0, 0, PAD, PAD).data;
+    for (var i = 0; i < PAD * PAD; i++) padBuf[i] = data[i * 4 + 3] / 255;
+    padInput = preprocess(padBuf, PAD, PAD, 0, 0);
+    var p = forward(padInput);
+    for (i = 0; i < 10; i++) padProbs[i] = p[i];
+  }
+  function clearPad() {
+    padCtx.clearRect(0, 0, PAD, PAD);
+    padInk = false;
+    padInput = new Float32Array(NIN);
+    predictPad();
+    draw();
+  }
+  function padPoint(e) {
+    var p = R.pad;
+    return [(e.clientX - p.x) / p.s * PAD, (e.clientY - p.y) / p.s * PAD];
+  }
+  function inPad(e) {
+    var p = R.pad;
+    return p && e.clientX >= p.x && e.clientX <= p.x + p.s && e.clientY >= p.y && e.clientY <= p.y + p.s;
+  }
+  cv.addEventListener('pointerdown', function (e) {
+    if (!inPad(e)) return;
+    drawing = true; lastPt = padPoint(e);
+    cv.setPointerCapture(e.pointerId);
+    padCtx.fillStyle = '#fff';
+    padCtx.beginPath(); padCtx.arc(lastPt[0], lastPt[1], 12, 0, Math.PI * 2); padCtx.fill();
+    padInk = true; predictPad(); draw();
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!drawing) return;
+    var p = padPoint(e);
+    padCtx.strokeStyle = '#fff'; padCtx.lineWidth = 24; padCtx.lineCap = 'round'; padCtx.lineJoin = 'round';
+    padCtx.beginPath(); padCtx.moveTo(lastPt[0], lastPt[1]); padCtx.lineTo(p[0], p[1]); padCtx.stroke();
+    lastPt = p;
+    predictPad(); draw();
+  });
+  function endDraw() { drawing = false; lastPt = null; }
+  cv.addEventListener('pointerup', endDraw);
+  cv.addEventListener('pointercancel', endDraw);
+
+  // ---------- Раскладка ----------
+  function layout() {
+    var left = W > 1100 ? 392 : W > 900 ? 300 : 12;
+    var right = W > 900 ? W - 306 : W - 12;
+    var aw = Math.max(260, right - left);
+    var x = left, y = 26;
+    var tile = Math.min(44, Math.floor((aw - 11 * 6) / 12));
+    R.strip = { x: x, y: y, t: tile };
+    y += tile + 40;
+    var half = Math.floor((aw - 16) / 2);
+    var blockH = Math.min(half, Math.floor((H - y - 60) / 2));
+    R.filters = { x: x, y: y, w: half, h: blockH };
+    R.conf = { x: x + half + 16, y: y, w: half, h: blockH };
+    y += blockH + 34;
+    // нижний ряд уже верхнего: справа внизу стоит панель графика точности
+    var half2 = Math.floor((Math.min(aw, (W > 900 ? W - 350 : W - 12) - left) - 16) / 2);
+    var padS = Math.min(half2, H - y - 20);
+    R.pad = { x: x, y: y, s: padS };
+    R.probs = { x: x + padS + 16, y: y, w: half2, h: padS };
+  }
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    draw();
+  }
+
+  // ---------- Отрисовка ----------
+  var tcv = document.createElement('canvas');
+  tcv.width = S; tcv.height = S;
+  var tctx = tcv.getContext('2d');
+  var timg = tctx.createImageData(S, S);
+
+  function blitGray(x, px, py, size) {
+    var d = timg.data;
+    for (var i = 0; i < NIN; i++) {
+      var v = Math.round(x[i] * 255);
+      d[i * 4] = v; d[i * 4 + 1] = v; d[i * 4 + 2] = v; d[i * 4 + 3] = 255;
+    }
+    tctx.putImageData(timg, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tcv, px, py, size, size);
+  }
+  function blitFilter(w, off, px, py, size) {
+    var mx = 1e-6, i;
+    for (i = 0; i < NIN; i++) mx = Math.max(mx, Math.abs(w[off + i]));
+    var d = timg.data;
+    for (i = 0; i < NIN; i++) {
+      var v = w[off + i] / mx, a = Math.abs(v);
+      // синий — положительный вес («здесь должен быть штрих»), оранжевый — отрицательный
+      var c = v >= 0 ? [64, 150, 235] : [245, 147, 34];
+      d[i * 4] = 18 + (c[0] - 18) * a; d[i * 4 + 1] = 22 + (c[1] - 22) * a; d[i * 4 + 2] = 30 + (c[2] - 30) * a;
+      d[i * 4 + 3] = 255;
+    }
+    tctx.putImageData(timg, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tcv, px, py, size, size);
+  }
+
+  function label(text, x, y) {
+    ctx.fillStyle = '#8b95a3'; ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText(text, x, y);
+  }
+
+  function drawStrip() {
+    var s = R.strip;
+    label('Что сеть видит сейчас: предсказание / верно', s.x, s.y - 6);
+    for (var i = 0; i < 12; i++) {
+      var px = s.x + i * (s.t + 6), it = strip[i];
+      ctx.fillStyle = '#151a22'; ctx.fillRect(px, s.y, s.t, s.t);
+      if (!it) continue;
+      blitGray(it.x, px, s.y, s.t);
+      var ok = it.p === it.y;
+      ctx.strokeStyle = ok ? '#3ecf8e' : '#ff5a5a'; ctx.lineWidth = 2;
+      ctx.strokeRect(px + 1, s.y + 1, s.t - 2, s.t - 2);
+      ctx.fillStyle = ok ? '#3ecf8e' : '#ff6a6a';
+      ctx.font = 'bold 12px system-ui, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(it.p + ' / ' + it.y, px + s.t / 2, s.y + s.t + 4);
+    }
+  }
+
+  function drawFilters() {
+    var f = R.filters, L = layers[0], n = L.nout;
+    var cols = Math.ceil(Math.sqrt(n * f.w / f.h)), rows = Math.ceil(n / cols);
+    var t = Math.floor(Math.min((f.w - (cols - 1) * 3) / cols, (f.h - (rows - 1) * 3) / rows));
+    label('Веса нейронов 1-го слоя (' + n + ' фильтров 16×16)', f.x, f.y - 6);
+    for (var j = 0; j < n; j++) {
+      var cx = f.x + (j % cols) * (t + 3), cy = f.y + Math.floor(j / cols) * (t + 3);
+      blitFilter(L.W, j * NIN, cx, cy, t);
+    }
+  }
+
+  function drawConf() {
+    var c = R.conf, n = 10, lab = 16;
+    var cell = Math.floor(Math.min((c.w - lab) / n, (c.h - lab) / n));
+    label('Матрица ошибок (строка — верно)', c.x, c.y - 6);
+    ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (var i = 0; i < n; i++) {
+      var rowSum = 0, j;
+      for (j = 0; j < n; j++) rowSum += conf[i][j];
+      ctx.fillStyle = '#8b95a3';
+      ctx.fillText(String(i), c.x + 7, c.y + lab + i * cell + cell / 2);
+      ctx.fillText(String(i), c.x + lab + i * cell + cell / 2, c.y + 7);
+      for (j = 0; j < n; j++) {
+        var v = rowSum ? conf[i][j] / rowSum : 0;
+        var x = c.x + lab + j * cell, y = c.y + lab + i * cell;
+        if (i === j) ctx.fillStyle = 'rgba(62,207,142,' + (0.08 + 0.92 * v) + ')';
+        else ctx.fillStyle = 'rgba(255,90,90,' + (v > 0 ? 0.12 + Math.min(1, v * 4) * 0.88 : 0.04) + ')';
+        ctx.fillRect(x, y, cell - 1, cell - 1);
+        if (conf[i][j] && cell >= 18) {
+          ctx.fillStyle = '#e8ecf1';
+          ctx.fillText(String(conf[i][j]), x + cell / 2, y + cell / 2);
+        }
+      }
+    }
+  }
+
+  function drawPad() {
+    var p = R.pad;
+    label('Нарисуйте цифру мышью или пальцем', p.x, p.y - 6);
+    ctx.fillStyle = '#0b0e12'; ctx.fillRect(p.x, p.y, p.s, p.s);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(padCv, p.x, p.y, p.s, p.s);
+    ctx.strokeStyle = '#2a3341'; ctx.lineWidth = 1.5; ctx.strokeRect(p.x, p.y, p.s, p.s);
+    if (!padInk) {
+      ctx.fillStyle = '#3a4350'; ctx.font = '13px system-ui, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('рисуйте здесь', p.x + p.s / 2, p.y + p.s / 2);
+    }
+  }
+
+  function drawProbs() {
+    var r = R.probs;
+    var prev = Math.min(80, r.h * 0.4);
+    label('Вероятности ответа сети', r.x, r.y - 6);
+    var bh = r.h - prev - 40, bw = r.w / 10, best = padInk ? argmax(padProbs) : -1;
+    for (var k = 0; k < 10; k++) {
+      var x = r.x + k * bw, h = bh * padProbs[k];
+      ctx.fillStyle = '#1a2029'; ctx.fillRect(x + 3, r.y, bw - 6, bh);
+      ctx.fillStyle = k === best ? '#3ecf8e' : '#4f8ff7';
+      ctx.fillRect(x + 3, r.y + bh - h, bw - 6, h);
+      ctx.fillStyle = k === best ? '#3ecf8e' : '#8b95a3';
+      ctx.font = (k === best ? 'bold ' : '') + '13px system-ui, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(String(k), x + bw / 2, r.y + bh + 4);
+    }
+    var py = r.y + bh + 26;
+    blitGray(padInput, r.x, py, prev);
+    ctx.strokeStyle = '#2a3341'; ctx.strokeRect(r.x, py, prev, prev);
+    ctx.fillStyle = '#8b95a3'; ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('так видит сеть (16×16)', r.x + prev + 10, py);
+    if (padInk) {
+      ctx.fillStyle = '#e8ecf1'; ctx.font = 'bold 22px system-ui, sans-serif';
+      ctx.fillText('Ответ: ' + best + '  (' + Math.round(padProbs[best] * 100) + '%)', r.x + prev + 10, py + 22);
+    }
+  }
+
+  function draw() {
+    if (!W || !layers.length) return;
+    ctx.fillStyle = '#101318';
+    ctx.fillRect(0, 0, W, H);
+    drawStrip();
+    drawFilters();
+    drawConf();
+    drawPad();
+    drawProbs();
+    if (genPos < NTRAIN + NTEST) {
+      ctx.fillStyle = '#ffb27a'; ctx.font = '12px system-ui, sans-serif';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+      ctx.fillText('генерация примеров: ' + Math.round(100 * genPos / (NTRAIN + NTEST)) + '%',
+        R.conf.x + R.conf.w, R.strip.y - 6);
+    }
+    if (diverged) {
+      ctx.fillStyle = '#ff6a6a'; ctx.font = '12px system-ui, sans-serif';
+      ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+      ctx.fillText('обучение разошлось — веса сброшены, уменьшите шаг', R.conf.x + R.conf.w, R.filters.y - 22);
+    }
+  }
+
+  // ---------- Показания ----------
+  function paramCount() { var n = 0; for (var l = 0; l < layers.length; l++) n += layers[l].W.length + layers[l].nout; return n; }
+  function updateReadouts() {
+    rEpoch.set(epoch);
+    rSeen.set(seen);
+    rLoss.set(lossEMA);
+    rAccTr.set(accEMA * 100);
+    rAccTe.set(testAcc === null ? '—' : (testAcc * 100).toFixed(1) + ' %');
+    rParams.set(paramCount());
+    rLr.set(lr);
+    rBatch.set(batch);
+    rDist.set(Math.round(distort * 100) + ' %');
+    fSoft.set({ eta: lr, B: batch, L: lossEMA });
+  }
+
+  // ---------- Главный цикл ----------
+  var running = true, lastFrame = null, frameN = 0;
+  var SAMPLES_PER_SEC = 500, sampleAcc = 0;
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dtReal = Math.min(0.05, (now - lastFrame) / 1000);
+    var sp = speedCtl.get();
+    lastFrame = now;
+    // генерация тоже стоит на паузе — иначе кадр менялся бы при «замороженной» сцене
+    if (running) generateChunk(6);
+    if (running) {
+      // темп обучения задан в примерах в секунду (чтобы процесс было видно глазами),
+      // а время на кадр ограничено ~12 мс — анимация не подвисает
+      var t0 = performance.now();
+      if (trainReady() >= 200) {
+        diverged = false;
+        sampleAcc += dtReal * sp * SAMPLES_PER_SEC;
+        while (sampleAcc >= batch && performance.now() - t0 < 12) { trainBatch(); sampleAcc -= batch; }
+        if (sampleAcc > batch) sampleAcc = batch;
+        evalChunk(Math.round(60 * Math.max(0.25, sp)));
+      }
+      stripTimer += dtReal * sp;
+      if (lastSample && stripTimer > 0.25) {
+        stripTimer = 0;
+        strip.unshift(lastSample);
+        if (strip.length > 12) strip.pop();
+      }
+      if (epoch - lastEpochMark >= 0.5) {
+        lastEpochMark = epoch;
+        lossChart.push(epoch, [lossEMA, testLoss === null ? NaN : testLoss]);
+        accChart.push(epoch, [accEMA * 100, testAcc === null ? NaN : testAcc * 100]);
+      }
+      if (padInk && ++frameN % 10 === 0) predictPad();
+      updateReadouts();
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function resetSim() {
+    weightSeed++;
+    buildNet();
+    seen = 0; epoch = 0; lastEpochMark = 0; cursor = 0; order = [];
+    lossEMA = Math.log(10); accEMA = 0.1;
+    strip = []; stripTimer = 0; lastSample = null;
+    conf = zeroConf(); confTmp = zeroConf(); testCursor = 0; tLoss = 0; tOk = 0;
+    testAcc = null; testLoss = null; diverged = false;
+    lastFrame = null; sampleAcc = 0;
+    lossChart.clear(); accChart.clear();
+    predictPad();
+    updateReadouts();
+    draw();
+  }
+
+  /** Новая архитектура — веса заново, история обучения сбрасывается. */
+  function rebuildArch() { resetSim(); }
+
+  // ---------- SimUI ----------
+  SimUI.title('Распознавание цифр');
+  SimUI.goals([
+    'Как сеть из случайных весов постепенно учится видеть штрихи цифр',
+    'Чем точность на обучении отличается от точности на тесте',
+    'Какие цифры сеть путает чаще всего — по матрице ошибок',
+    'Как шаг обучения и размер батча влияют на скорость и устойчивость',
+  ]);
+  SimUI.slider({
+    name: 'lr', label: 'Шаг обучения η', min: 0.002, max: 0.3, step: 0.002, value: lr, unit: '',
+    onChange: function (v) { lr = v; updateReadouts(); },
+  });
+  SimUI.slider({
+    name: 'hidden', label: 'Нейронов в скрытом слое', min: 8, max: 128, step: 8, value: nHidden, unit: '',
+    onChange: function (v) { nHidden = Math.round(v); rebuildArch(); },
+  });
+  SimUI.slider({
+    name: 'batch', label: 'Размер батча', min: 4, max: 128, step: 4, value: batch, unit: '',
+    onChange: function (v) { batch = Math.round(v); updateReadouts(); },
+  });
+  SimUI.slider({
+    name: 'distort', label: 'Сила искажений датасета', min: 0, max: 1, step: 0.05, value: distort, unit: '',
+    onChange: function (v) {
+      distort = v;
+      genRound++; genRng = rng(12345 + genRound * 31);
+      genPos = 0;        // примеры перегенерируются порциями, обучение не останавливается
+      updateReadouts(); draw();
+    },
+  });
+  SimUI.toggle({
+    name: 'second', label: 'Второй скрытый слой (32)', value: second,
+    onChange: function (on) { second = on; rebuildArch(); },
+  });
+  SimUI.button({ name: 'clear', label: 'Очистить холст', onClick: clearPad });
+  var speedCtl = SimUI.speed({ values: [0.25, 0.5, 1, 2, 4, 8], value: 1 });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: resetSim,
+  });
+
+  var fSoft = SimUI.formula({
+    title: 'Softmax и перекрёстная энтропия',
+    tex: 'p_k = \\frac{e^{z_k}}{\\sum_j e^{z_j}},\\qquad L = -\\ln p_y',
+    vars: { eta: { label: 'η' }, B: { label: 'батч' }, L: { label: 'L' } },
+    note: 'Сеть выдаёт 10 чисел z, softmax превращает их в вероятности. Потери — минус логарифм вероятности правильной цифры; веса сдвигаются на −η·∂L/∂w, усреднённое по батчу.',
+    corner: 'tl',
+  });
+  var lossChart = SimUI.chart({
+    title: 'Потери', xLabel: 'эпоха', yLabel: 'L', height: 120,
+    series: [{ name: 'обучение', color: '#4f8ff7' }, { name: 'тест', color: '#ffb27a' }],
+    corner: 'tl', maxPoints: 400,
+  });
+  var rEpoch = SimUI.readout({ label: 'Эпоха', digits: 2, corner: 'bl' });
+  var rSeen = SimUI.readout({ label: 'Примеров просмотрено', digits: 0, corner: 'bl' });
+  var rLoss = SimUI.readout({ label: 'Потери (обучение)', digits: 3, corner: 'bl' });
+  var rAccTr = SimUI.readout({ label: 'Точность (обучение)', unit: '%', digits: 1, corner: 'bl' });
+  var rAccTe = SimUI.readout({ label: 'Точность (тест)', corner: 'bl' });
+  var rParams = SimUI.readout({ label: 'Параметров сети', digits: 0, corner: 'bl' });
+  var rLr = SimUI.readout({ label: 'Шаг обучения η', digits: 3, corner: 'bl' });
+  var rBatch = SimUI.readout({ label: 'Батч', digits: 0, corner: 'bl' });
+  var rDist = SimUI.readout({ label: 'Искажения', corner: 'bl' });
+  var accChart = SimUI.chart({
+    title: 'Точность', xLabel: 'эпоха', yLabel: '%',
+    series: [{ name: 'обучение', color: '#4f8ff7' }, { name: 'тест', color: '#ffb27a' }],
+    corner: 'br', maxPoints: 400, yRange: [0, 100],
+  });
+
+  SimUI.expose({
+    getState: function () {
+      var w = 0, L0 = layers[0].W;
+      for (var i = 0; i < L0.length; i += 7) w += Math.abs(L0[i]);
+      return { epoch: epoch, seen: seen, trainLoss: lossEMA, trainAcc: accEMA,
+        testAcc: testAcc === null ? 0 : testAcc, weights: w, params: paramCount(),
+        generated: genPos, padGuess: padInk ? argmax(padProbs) : -1 };
+    },
+    reset: resetSim,
+  });
+
+  window.addEventListener('resize', resize);
+  buildNet();
+  generateChunk(30);
+  updateReadouts();
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -45,9 +45,68 @@ export function extractJson<T>(llmOutput: string): T {
     } else if (ch === '}') {
       depth--;
     }
-    if (depth === 0) return JSON.parse(repairJsonEscapes(source.slice(start, i + 1)));
+    if (depth === 0) {
+      const text = repairJsonEscapes(source.slice(start, i + 1));
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        // Висячие запятые перед } и ] — самая частая порча JSON у моделей; вне строк их можно убрать.
+        const relaxed = stripTrailingCommas(text);
+        if (relaxed !== text) { try { return JSON.parse(relaxed); } catch { /* дальше */ } }
+        // Кавычки внутри текста («закон "Фика"») — вторая частая порча: экранируем их.
+        const quoted = escapeInnerQuotes(relaxed);
+        if (quoted !== relaxed) { try { return JSON.parse(quoted); } catch { /* ниже — исходная ошибка */ } }
+        throw e;
+      }
+    }
   }
   throw new Error('unbalanced JSON in LLM output');
+}
+
+/**
+ * Кавычка внутри строки, за которой не идёт конец значения (`,` `}` `]` `:` или конец), — часть
+ * текста: экранируем. Эвристика для уже сломанного JSON, на целом JSON не вызывается.
+ */
+export function escapeInnerQuotes(json: string): string {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i];
+    if (!inString) { if (ch === '"') inString = true; out += ch; continue; }
+    if (ch === '\\') { out += ch + (json[i + 1] ?? ''); i++; continue; }
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < json.length && /\s/.test(json[j])) j++;
+      const next = json[j];
+      if (next === undefined || next === ',' || next === '}' || next === ']' || next === ':') { inString = false; out += ch; }
+      else out += '\\"';
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+/** Убирает запятые перед } и ] вне строк. */
+export function stripTrailingCommas(json: string): string {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < json.length; i++) {
+    const ch = json[i];
+    if (inString) {
+      out += ch;
+      if (ch === '\\') { out += json[i + 1] ?? ''; i++; } else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; out += ch; continue; }
+    if (ch === ',') {
+      let j = i + 1;
+      while (j < json.length && /\s/.test(json[j])) j++;
+      if (json[j] === '}' || json[j] === ']') continue;
+    }
+    out += ch;
+  }
+  return out;
 }
 
 /**

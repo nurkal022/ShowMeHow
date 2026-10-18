@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Стоячие волны: струна и фигуры Хладни</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e13; }
+  #scene { position: fixed; top: 0; left: 0; display: block; z-index: 0; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<script>
+(function () {
+  'use strict';
+
+  var cv = document.getElementById('scene');
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0;
+  var SX0, SX1, SY, AMP_PX, PX, PY, PS;
+
+  function layout() {
+    var left = W > 900 ? 380 : 12, right = W > 900 ? 296 : 12;
+    SX0 = left + 30; SX1 = W - right - 30;
+    SY = Math.max(120, H * 0.17);
+    AMP_PX = Math.min(70, H * 0.085);
+    PS = Math.max(160, Math.min(SX1 - SX0, H - SY - AMP_PX - 90));
+    PX = (SX0 + SX1) / 2 - PS / 2;
+    PY = SY + AMP_PX + 50;
+  }
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    buildHeat();
+    draw();
+  }
+
+  // ============ Струна: вынужденные колебания ============
+  // Струна длины L закреплена с обоих концов, вибратор в точке x₀ = 0.07L.
+  // Установившееся решение — сумма мод sin(nπx/L) с амплитудами линейного осциллятора:
+  //   A_n = sin(nπx₀/L) / sqrt((ω_n² − ω²)² + (2ζω_nω)²),  ω_n = 2π·n·v/(2L), v = √(T/μ).
+  var L = 0.65, MU = 0.005, X0 = 0.07;
+  var T = 80;            // натяжение, Н
+  var f = 292;           // частота генератора, Гц
+  var zeta = 0.01;       // относительное затухание
+  var NMODES = 40;
+  var modeA = new Float64Array(NMODES + 1), modePh = new Float64Array(NMODES + 1);
+  var gain = 1, ampRel = 0;
+
+  function vWave() { return Math.sqrt(T / MU); }
+  function f1() { return vWave() / (2 * L); }
+
+  function response(freq, out, ph) {
+    var w = 2 * Math.PI * freq, total = 0;
+    for (var n = 1; n <= NMODES; n++) {
+      var wn = 2 * Math.PI * n * f1();
+      var re = wn * wn - w * w, im = 2 * zeta * wn * w;
+      var a = Math.sin(n * Math.PI * X0) / Math.sqrt(re * re + im * im);
+      if (out) { out[n] = a; ph[n] = Math.atan2(im, re); }
+      total += a * a;
+    }
+    return Math.sqrt(total);
+  }
+
+  function nearestN() { return Math.max(1, Math.round(f / f1())); }
+  function detuning() { var n = nearestN(); return (f - n * f1()) / (n * f1()); }
+
+  function recomputeString() {
+    response(f, modeA, modePh);
+    // «Автомасштаб осциллографа»: амплитуда в резонансе ближайшей гармоники = AMP_PX.
+    var nRes = nearestN();
+    var resA = response(nRes * f1(), null, null);
+    var cur = response(f, null, null);
+    gain = resA > 0 ? 1 / resA : 0;
+    ampRel = resA > 0 ? cur / resA : 0;
+    // уровень относительно амплитуды на основной гармонике (дБ)
+    rebuildCurve();
+  }
+
+  function rebuildCurve() {
+    if (!respChart) return;
+    respChart.clear();
+    var ref = response(f1(), null, null);
+    var fmax = 1000;
+    for (var i = 0; i <= 240; i++) {
+      var ff = 20 + (fmax - 20) * i / 240;
+      respChart.push(ff, [20 * Math.log(response(ff, null, null) / ref) / Math.LN10, NaN]);
+    }
+    var here = 20 * Math.log(response(f, null, null) / ref) / Math.LN10;
+    respChart.push(f, [NaN, -80]);
+    respChart.push(f, [NaN, here]);
+  }
+
+  function stringY(x, phase) {
+    var y = 0;
+    for (var n = 1; n <= NMODES; n++) {
+      if (!modeA[n]) continue;
+      y += modeA[n] * Math.sin(n * Math.PI * x) * Math.cos(phase - modePh[n]);
+    }
+    return y * gain;
+  }
+
+  // ============ Пластина Хладни ============
+  // Квадратная пластина, приближение Рэлея–Ритца для свободных краёв:
+  //   u(x,y) = cos(mπx)cos(nπy) ± cos(nπx)cos(mπy),  x, y ∈ [0, 1],
+  // частота моды ∝ (m² + n²). Песок прыгает там, где |u| велико, и собирается на узловых линиях u = 0.
+  var pm = 2, pn = 5, sym = -1;
+  var NG = 4500;
+  var gx = new Float32Array(NG), gy = new Float32Array(NG);
+  var heat = document.createElement('canvas');
+  var showHeat = true;
+  var F_PLATE0 = 58;     // Гц для моды (1,0)-подобной: масштаб частот пластины
+
+  function u(x, y) {
+    var s = (pm === pn) ? 1 : sym;
+    return Math.cos(pm * Math.PI * x) * Math.cos(pn * Math.PI * y) +
+      s * Math.cos(pn * Math.PI * x) * Math.cos(pm * Math.PI * y);
+  }
+  function plateFreq() { return F_PLATE0 * (pm * pm + pn * pn); }
+
+  function scatterSand() {
+    for (var i = 0; i < NG; i++) { gx[i] = Math.random(); gy[i] = Math.random(); }
+  }
+
+  function buildHeat() {
+    var R = 120;
+    heat.width = R; heat.height = R;
+    var hc = heat.getContext('2d');
+    var img = hc.createImageData(R, R);
+    for (var j = 0; j < R; j++) {
+      for (var i = 0; i < R; i++) {
+        var v = u((i + 0.5) / R, (j + 0.5) / R) / 2;
+        var k = (j * R + i) * 4;
+        // синий — фаза «вверх», красный — «вниз», тёмный — узел
+        img.data[k] = v < 0 ? Math.round(-v * 200) + 18 : 18;
+        img.data[k + 1] = 22 + Math.round(Math.abs(v) * 30);
+        img.data[k + 2] = v > 0 ? Math.round(v * 220) + 30 : 30;
+        img.data[k + 3] = 255;
+      }
+    }
+    hc.putImageData(img, 0, 0);
+  }
+
+  function sandOnNodes() {
+    var c = 0;
+    for (var i = 0; i < NG; i++) if (Math.abs(u(gx[i], gy[i])) < 0.15) c++;
+    return c / NG;
+  }
+
+  function stepSand(dt) {
+    var kick = 0.075 * Math.sqrt(dt * 60);
+    for (var i = 0; i < NG; i++) {
+      var a = Math.abs(u(gx[i], gy[i])) / 2;   // 0…1: местная амплитуда колебаний
+      if (a < 0.01) continue;
+      // Прыжок песчинки растёт с амплитудой: на пучностях она скачет, у узла почти
+      // замирает — поэтому песок «застревает» на узловых линиях.
+      var s = kick * Math.pow(a, 1.3);
+      gx[i] += (Math.random() - 0.5) * s;
+      gy[i] += (Math.random() - 0.5) * s;
+      if (gx[i] < 0) gx[i] = -gx[i]; if (gx[i] > 1) gx[i] = 2 - gx[i];
+      if (gy[i] < 0) gy[i] = -gy[i]; if (gy[i] > 1) gy[i] = 2 - gy[i];
+    }
+  }
+
+  // ============ Время и цикл ============
+  var t = 0, running = true, lastFrame = null;
+  var phase = 0;        // фаза колебаний в замедленной съёмке
+
+  function step(dt) {
+    t += dt;
+    // Колебания в сотни герц глаз не видит: показываем замедленно, ≈1 Гц на экране,
+    // а отношение частот к f₁ сохраняется только в форме волны.
+    phase += dt * 2 * Math.PI * 0.9;
+    stepSand(dt);
+  }
+
+  function draw() {
+    ctx.fillStyle = '#0b0e13';
+    ctx.fillRect(0, 0, W, H);
+    ctx.font = '12px system-ui, sans-serif';
+
+    // --- струна ---
+    var n = nearestN(), det = detuning();
+    var resonant = Math.abs(det) < 2.5 * zeta && Math.sin(n * Math.PI * X0) > 0.05;
+    var len = SX1 - SX0;
+    // огибающая (пунктир) — максимальное отклонение каждой точки
+    ctx.save();
+    ctx.setLineDash([3, 5]);
+    ctx.strokeStyle = 'rgba(140,160,190,0.25)';
+    ctx.lineWidth = 1;
+    for (var sgn = -1; sgn <= 1; sgn += 2) {
+      ctx.beginPath();
+      for (var i = 0; i <= 200; i++) {
+        var x = i / 200, re = 0, im = 0;
+        for (var q = 1; q <= NMODES; q++) {
+          var sx = modeA[q] * Math.sin(q * Math.PI * x);
+          re += sx * Math.cos(modePh[q]); im += sx * Math.sin(modePh[q]);
+        }
+        var env = Math.hypot(re, im) * gain;
+        var py = SY + sgn * Math.min(1.25, env) * AMP_PX;
+        if (i) ctx.lineTo(SX0 + x * len, py); else ctx.moveTo(SX0 + x * len, py);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // сама струна
+    var glow = resonant ? '#ffcf5a' : '#cfd8e6';
+    ctx.strokeStyle = glow;
+    ctx.lineWidth = 2.4;
+    ctx.shadowColor = resonant ? 'rgba(255,200,80,0.8)' : 'transparent';
+    ctx.shadowBlur = resonant ? 14 : 0;
+    ctx.beginPath();
+    for (var k = 0; k <= 300; k++) {
+      var xx = k / 300;
+      var yy = Math.max(-1.25, Math.min(1.25, stringY(xx, phase)));
+      if (k) ctx.lineTo(SX0 + xx * len, SY - yy * AMP_PX); else ctx.moveTo(SX0 + xx * len, SY - yy * AMP_PX);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // закрепления и вибратор
+    ctx.fillStyle = '#3a4352';
+    ctx.fillRect(SX0 - 12, SY - 30, 10, 60);
+    ctx.fillRect(SX1 + 2, SY - 30, 10, 60);
+    var vx = SX0 + X0 * len;
+    ctx.fillStyle = '#4f8ff7';
+    ctx.fillRect(vx - 5, SY + AMP_PX * 0.9, 10, 16);
+    ctx.fillStyle = '#8b95a3';
+    ctx.textAlign = 'center';
+    ctx.fillText('вибратор', vx, SY + AMP_PX * 0.9 + 30);
+
+    // узлы для текущей гармоники
+    if (resonant) {
+      ctx.fillStyle = '#ff6b6b';
+      for (var m = 0; m <= n; m++) {
+        ctx.beginPath(); ctx.arc(SX0 + m / n * len, SY, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // индикатор резонанса
+    var meterW = 160, mx = (SX0 + SX1) / 2 - meterW / 2, my = SY - AMP_PX - 46;
+    ctx.fillStyle = '#1a2029';
+    ctx.fillRect(mx, my, meterW, 10);
+    ctx.fillStyle = resonant ? '#ffcf5a' : '#4f8ff7';
+    ctx.fillRect(mx, my, meterW * Math.min(1, ampRel), 10);
+    ctx.fillStyle = resonant ? '#ffcf5a' : '#8b95a3';
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.fillText(resonant ? 'РЕЗОНАНС · гармоника n = ' + n : 'амплитуда ' + Math.round(ampRel * 100) + ' % от резонансной', (SX0 + SX1) / 2, my - 8);
+    ctx.font = '12px system-ui, sans-serif';
+
+    // --- пластина ---
+    ctx.fillStyle = '#151a22';
+    ctx.fillRect(PX - 6, PY - 6, PS + 12, PS + 12);
+    if (showHeat) {
+      ctx.globalAlpha = 0.32 + 0.18 * Math.cos(phase);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(heat, PX, PY, PS, PS);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = '#1b2230';
+      ctx.fillRect(PX, PY, PS, PS);
+    }
+    // песок
+    ctx.fillStyle = 'rgba(245,226,180,0.9)';
+    var jit = 0.9;
+    for (var g = 0; g < NG; g++) {
+      ctx.fillRect(PX + gx[g] * PS - jit, PY + gy[g] * PS - jit, 1.8, 1.8);
+    }
+    ctx.strokeStyle = '#2a3341';
+    ctx.strokeRect(PX, PY, PS, PS);
+    ctx.fillStyle = '#8b95a3';
+    ctx.fillText('пластина Хладни: мода (' + pm + ', ' + pn + '), f ≈ ' + Math.round(plateFreq()) + ' Гц', PX + PS / 2, PY + PS + 22);
+    ctx.textAlign = 'left';
+  }
+
+  var lastUi = -1;
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000) * speedCtl.get();
+    lastFrame = now;
+    if (running) {
+      step(dt);
+      draw();
+      if (now - lastUi > 150) { lastUi = now; updateUi(); }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function updateUi() {
+    var n = nearestN();
+    rF1.set(f1());
+    rV.set(vWave());
+    rN.set(n);
+    rFn.set(n * f1());
+    rDet.set(detuning() * 100);
+    rAmp.set(ampRel * 100);
+    rLam.set(2 * L / n * 100);
+    rPlate.set(plateFreq());
+    rNodes.set(sandOnNodes() * 100);
+    formula.set({ n: n, L: L + ' м', T: T + ' Н', mu: MU + ' кг/м', fn: (n * f1()).toFixed(1) + ' Гц' });
+  }
+
+  function onString() { recomputeString(); updateUi(); draw(); }
+  function onPlate() { buildHeat(); updateUi(); draw(); }
+
+  function resetSim() {
+    t = 0; phase = 0; lastFrame = null;
+    scatterSand();
+    updateUi();
+    draw();
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Стоячие волны');
+  SimUI.goals([
+    'Струна резонирует только на частотах f_n = n·v/(2L)',
+    'Узлы стоячей волны неподвижны, пучности колеблются сильнее всего',
+    'Натяжение меняет скорость волны и сдвигает все резонансы',
+    'Песок на пластине уходит с пучностей и рисует узловые линии («Сброс» рассыпает его заново)',
+  ]);
+  SimUI.slider({ name: 'freq', label: 'Частота генератора f', min: 20, max: 1000, step: 1, value: f, unit: 'Гц',
+    onChange: function (v) { f = v; onString(); } });
+  SimUI.slider({ name: 'tension', label: 'Натяжение струны T', min: 20, max: 200, step: 1, value: T, unit: 'Н',
+    onChange: function (v) { T = v; onString(); } });
+  SimUI.slider({ name: 'damping', label: 'Затухание ζ', min: 0.002, max: 0.08, step: 0.001, value: zeta, unit: '',
+    onChange: function (v) { zeta = v; onString(); } });
+  SimUI.slider({ name: 'm', label: 'Пластина: мода m', min: 1, max: 8, step: 1, value: pm, unit: '',
+    onChange: function (v) { pm = Math.round(v); onPlate(); } });
+  SimUI.slider({ name: 'n', label: 'Пластина: мода n', min: 0, max: 8, step: 1, value: pn, unit: '',
+    onChange: function (v) { pn = Math.round(v); onPlate(); } });
+  SimUI.toggle({ name: 'sym', label: 'Симметричная комбинация (+)', value: false,
+    onChange: function (on) { sym = on ? 1 : -1; onPlate(); } });
+  var speedCtl = SimUI.speed({ values: [0.25, 0.5, 1, 2], value: 1 });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: resetSim,
+  });
+
+  var formula = SimUI.formula({
+    title: 'Собственные частоты струны',
+    tex: 'f_n = \\frac{n}{2L}\\sqrt{\\frac{T}{\\mu}}',
+    vars: { n: { label: 'n' }, L: { label: 'L' }, T: { label: 'T' }, mu: { label: 'μ' }, fn: { label: 'f_n' } },
+    note: 'Колебания показаны замедленно. Вибратор стоит у края: гармоники с узлом в точке вибратора не возбуждаются.',
+    corner: 'tl',
+  });
+  var rF1 = SimUI.readout({ label: 'Основная частота f₁', unit: 'Гц', digits: 1, corner: 'bl' });
+  var rV = SimUI.readout({ label: 'Скорость волны v', unit: 'м/с', digits: 1, corner: 'bl' });
+  var rN = SimUI.readout({ label: 'Ближайшая гармоника n', unit: '', digits: 0, corner: 'bl' });
+  var rFn = SimUI.readout({ label: 'Её частота f_n', unit: 'Гц', digits: 1, corner: 'bl' });
+  var rDet = SimUI.readout({ label: 'Расстройка', unit: '%', digits: 2, corner: 'bl' });
+  var rAmp = SimUI.readout({ label: 'Амплитуда / резонансная', unit: '%', digits: 0, corner: 'bl' });
+  var rLam = SimUI.readout({ label: 'Длина волны 2L/n', unit: 'см', digits: 1, corner: 'bl' });
+  var rPlate = SimUI.readout({ label: 'Частота моды пластины', unit: 'Гц', digits: 0, corner: 'bl' });
+  var rNodes = SimUI.readout({ label: 'Песка на узловых линиях', unit: '%', digits: 0, corner: 'bl' });
+  var respChart = SimUI.chart({
+    title: 'АЧХ струны', xLabel: 'f, Гц', yLabel: 'дБ', maxPoints: 300, xRange: [20, 1000], yRange: [-80, 5],
+    series: [{ name: 'отклик', color: '#4f8ff7' }, { name: 'генератор', color: '#ffcf5a' }],
+    corner: 'br',
+  });
+
+  SimUI.expose({
+    getState: function () {
+      return { t: t, phase: phase, f1: f1(), harmonic: nearestN(), detuningPct: detuning() * 100,
+        amplitudeRel: ampRel, stringMid: stringY(0.37, phase), sandOnNodes: sandOnNodes(),
+        plateFreq: plateFreq() };
+    },
+    reset: resetSim,
+  });
+
+  // ---------- Старт ----------
+  scatterSand();
+  recomputeString();
+  window.addEventListener('resize', resize);
+  resize();
+  updateUi();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+/* =========================================================================
+   Единая шапка сайта — та же на главной и на всех страницах: марка слева,
+   разделы — «таблетка» по центру, действия справа. Цвета — из токенов темы,
+   поэтому шапка одинаково выглядит в светлой и тёмной теме. На главной она
+   прозрачная поверх тёмного первого экрана и становится обычной после прокрутки.
+   ========================================================================= */
+.topnav {
+  display: flex; align-items: center; gap: 12px;
+  height: 68px; padding: 0 24px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
+  position: sticky; top: 0; z-index: 30;
+  transition: background .35s ease, border-color .35s ease, color .35s ease;
+}
+:root { --nav-h: 68px; }
+/* --bar-h — высота служебной полосы над шапкой (демо-режим), иначе 0. */
+.topnav { top: var(--bar-h, 0px); }
+body:has(.demo-bar) .cab-topbar { top: var(--bar-h); }
+body:has(.demo-bar) .cab-sidebar { top: var(--bar-h); height: calc(100vh - var(--bar-h)); }
+.topnav .brand { flex: none; margin: 0; gap: 11px; font-size: 18px; font-weight: 800; letter-spacing: -.03em; color: var(--text); }
+.topnav .brand-mark { width: 38px; height: 38px; border-radius: 12px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 85%, #8b5cf6), color-mix(in srgb, var(--accent) 70%, #1e3a8a));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+.topnav .navlinks {
+  margin: 0 auto; flex: 0 1 auto; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent); border: 1px solid var(--border); min-width: 0; overflow-x: auto; scrollbar-width: none;
+}
+.topnav .navlinks::-webkit-scrollbar { display: none; }
+.topnav .navlinks > a {
+  display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 15px; border-radius: 999px;
+  font-size: 14px; font-weight: 600; color: var(--text-2); white-space: nowrap; transition: background .2s, color .2s;
+}
+.topnav .navlinks > a svg { color: var(--accent); flex-shrink: 0; }
+.topnav .navlinks > a:hover { background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text); text-decoration: none; }
+.topnav .navlinks > a.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--border); }
+
+.topnav .account { flex: none; display: flex; align-items: center; gap: 6px; margin: 0; }
+.topnav .nav-lang { min-width: 44px; height: 38px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: transparent;
+  color: var(--text-2); font: inherit; font-size: 13px; font-weight: 700; letter-spacing: .04em; cursor: pointer; }
+.topnav .nav-lang:hover { color: var(--text); border-color: var(--border-strong); }
+.topnav .nav-icon-btn { width: 38px; height: 38px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text-2);
+  display: grid; place-items: center; cursor: pointer; transition: color .2s, border-color .2s, background .2s; }
+.topnav .nav-icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.nav-ico-moon { display: none; }
+html[data-theme='dark'] .nav-ico-sun { display: none; }
+html[data-theme='dark'] .nav-ico-moon { display: block; }
+.topnav .nav-login { padding: 9px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--text); }
+.topnav .nav-login:hover { background: color-mix(in srgb, var(--text) 7%, transparent); text-decoration: none; }
+.topnav .nav-try { display: inline-flex; align-items: center; gap: 10px; padding: 5px 5px 5px 16px; border-radius: 999px; font-size: 14px; font-weight: 700;
+  background: var(--text); color: var(--bg); white-space: nowrap; transition: box-shadow .25s; }
+.topnav .nav-try:hover { text-decoration: none; color: var(--bg); box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 45%, transparent); }
+.topnav .nav-try span { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 13px; }
+html[data-theme='dark'] .topnav .nav-try span { background: #3d6bff; }
+
+/* Мобильное меню */
+.nav-burger { display: none; width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--border); background: transparent; color: var(--text);
+  flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; justify-self: end; }
+.nav-burger span { width: 18px; height: 2px; border-radius: 2px; background: currentColor; }
+.nav-sheet { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, #000 40%, transparent); display: flex; justify-content: flex-end;
+  align-items: flex-start; padding: calc(76px + var(--bar-h, 0px)) 12px 12px; animation: nav-fade .2s ease both; }
+.nav-sheet-card { width: min(380px, 100%); padding: 12px; border-radius: 22px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; gap: 10px; animation: nav-drop .25s cubic-bezier(.2,.8,.2,1) both; }
+html[data-theme='dark'] .nav-sheet-card, body:has(.space) .nav-sheet-card { background: color-mix(in srgb, var(--bg) 96%, #1a2240); }
+.nav-sheet-links { display: flex; flex-direction: column; gap: 2px; }
+.nav-sheet-links a { display: flex; align-items: center; gap: 12px; padding: 13px 12px; border-radius: 14px; color: var(--text); font-weight: 600; font-size: 15.5px; }
+.nav-sheet-links a svg { color: var(--accent); }
+.nav-sheet-links a.active, .nav-sheet-links a:hover { background: var(--accent-soft); text-decoration: none; }
+.nav-sheet-row { display: flex; gap: 8px; align-items: center; padding: 4px; }
+.nav-sheet-row .btn { flex: 1; justify-content: center; }
+@keyframes nav-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nav-drop { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 1180px) { .topnav .navlinks > a { padding: 0 12px; } .topnav .navlinks > a svg { display: none; } }
+@media (max-width: 1100px) { .topnav .account .nav-login { display: none; } }
+@media (max-width: 960px) {
+  .topnav { padding: 0 14px; }
+  .topnav .navlinks { display: none; }
+  .topnav .account { margin-left: auto; }
+  .nav-burger { display: flex; order: 10; }
+  .topnav .account .nav-lang, .topnav .account .nav-icon-btn { display: none; }
+}
+@media (max-width: 420px) { .topnav .nav-try { padding: 5px; } .topnav .nav-try { font-size: 0; gap: 0; } }
+
+/* ---------- Главная: шапка прозрачная над тёмным первым экраном ---------- */
+body:has(.land) .topnav { position: fixed; left: 0; right: 0; top: var(--bar-h, 0px); }
+body:has(.land):not(.lp-scrolled) .topnav {
+  background: linear-gradient(180deg, rgba(4, 6, 13, .55), rgba(4, 6, 13, 0)); border-bottom-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none;
+  --text: #ffffff; --text-2: #c9d3ee; --border: rgba(170, 198, 255, .2); --border-strong: rgba(170, 198, 255, .4); --surface: rgba(255, 255, 255, .14);
+  --surface-2: rgba(14, 20, 42, .45); --accent: #8faeff; --bg: #05070f; color-scheme: dark;
+}
+body:has(.land):not(.lp-scrolled) .topnav .navlinks { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+body:has(.land):not(.lp-scrolled) .topnav .nav-try { background: #ffffff; color: #05070f; }
+/* Выпадающие окна шапки (меню аккаунта, уведомления, мобильное меню) живут внутри прозрачной шапки главной,
+   но выглядят как обычная карточка своей темы — возвращаем им токены темы, иначе они просвечивают. */
+body:has(.land):not(.lp-scrolled) .topnav :is(.menu, .bell-panel, .nav-sheet) {
+  --text: #0e1531; --text-2: #3b4667; --muted: #687493; --surface: #ffffff; --surface-2: #eef2f9; --surface-3: #e2e8f3;
+  --border: rgba(22, 40, 96, .11); --border-strong: rgba(22, 40, 96, .2); --accent: #3457e6; --accent-soft: #e8eeff; --bg: #f4f6fb;
+  color-scheme: light; color: var(--text);
+}
+html[data-theme='dark'] body:has(.land):not(.lp-scrolled) .topnav :is(.menu, .bell-panel, .nav-sheet) {
+  --text: #eef1fb; --text-2: #c6cde4; --muted: #8f9bc0; --surface: #0e1430; --surface-2: #161d3c; --surface-3: #222a4d;
+  --border: rgba(160, 190, 255, .14); --border-strong: rgba(160, 190, 255, .26); --accent: #6e93ff; --accent-soft: rgba(61, 107, 255, .18); --bg: #05070f;
+  color-scheme: dark;
+}
+.topnav .nav-quick { display: flex; align-items: center; gap: 6px; flex: none; }
+.topnav .nav-quick + .pal-btn, .topnav .nav-quick ~ .bell { margin-left: 0; }
+@media (max-width: 960px) { .topnav .nav-quick { display: none; } }

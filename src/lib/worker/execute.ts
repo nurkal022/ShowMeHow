@@ -62,7 +62,8 @@ async function runJob(job: ClaimedJob, io: JobIO, deps: ExecuteDeps): Promise<Jo
       prompt: req.prompt,
       mode: req.mode,
       spec: req.spec,
-      brief: req.level || req.audience ? { level: req.level, audience: req.audience } : undefined,
+      brief: req.level || req.audience || req.presentation
+        ? { level: req.level, audience: req.audience, presentation: req.presentation } : undefined,
       lang: req.lang,
       imageDataUrl: job.imageDataUrl ?? undefined,
       onSaved: io.markSaved,

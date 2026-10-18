@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Митоз: стадии деления клетки</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<script>
+(function () {
+// ==== @section physics ====
+var PHYS = (function () {
+  var PROPHASE = 0;
+  var PROMETAPHASE = 1;
+  var METAPHASE = 2;
+  var ANAPHASE = 3;
+  var TELOPHASE = 4;
+  var CYTOKINESIS = 5;
+
+  function clamp01(x) {
+    return SimPhys.clamp(isFinite(x) ? x : 0, 0, 1);
+  }
+
+  function safeParam(p, key, def) {
+    var v = p && typeof p[key] === 'number' && isFinite(p[key]) ? p[key] : def;
+    return v;
+  }
+
+  function phaseTau(p) {
+    var base = safeParam(p, 'phaseDuration', 1.3); /* [s] */
+    return base > 0.05 ? base : 0.05;
+  }
+
+  function spindleRate(p) {
+    var r = safeParam(p, 'spindleAssemblyRate', 1); /* [1] */
+    return r > 0.05 ? r : 0.05;
+  }
+
+  function condContrast(p) {
+    var c = safeParam(p, 'condensationContrast', 1); /* [1] */
+    return c > 0.05 ? c : 0.05;
+  }
+
+  function chromCount(p) {
+    var n = safeParam(p, 'chromosomeCount', 4); /* [count] */
+    n = Math.round(n);
+    if (n < 2) n = 2;
+    return n;
+  }
+
+  function updateMorphology(s, p) {
+    var tau = phaseTau(p);
+    var rateS = spindleRate(p);
+    var contrast = condContrast(p);
+    var u, qTarget;
+
+    qTarget = clamp01(contrast);
+
+    if (s.phase === PROPHASE) {
+      u = clamp01(s.phaseTime / tau);
+      s.q = clamp01(qTarget * u);
+      s.e = 1;
+      s.sp = clamp01(rateS * u);
+      s.x = 0.5;
+      s.xL = 0.5;
+      s.xR = 0.5;
+      s.c = 0;
+    } else if (s.phase === PROMETAPHASE) {
+      u = clamp01(s.phaseTime / tau);
+      s.q = qTarget;
+      s.e = clamp01(1 - u);
+      s.sp = clamp01(s.spindleStart + (1 - s.spindleStart) * rateS * u);
+      s.x = 0.5;
+      s.xL = 0.5;
+      s.xR = 0.5;
+      s.c = 0;
+    } else if (s.phase === METAPHASE) {
+      s.q = qTarget;
+      s.e = 0;
+      s.sp = 1;
+      s.x = 0.5;
+      s.xL = 0.5;
+      s.xR = 0.5;
+      s.c = 0;
+    } else if (s.phase === ANAPHASE) {
+      u = clamp01(s.phaseTime / tau);
+      s.q = qTarget;
+      s.e = 0;
+      s.sp = 1;
+      s.xL = clamp01(0.5 - 0.5 * u);
+      s.xR = clamp01(0.5 + 0.5 * u);
+      s.x = 0.5;
+      s.c = 0;
+    } else if (s.phase === TELOPHASE) {
+      u = clamp01(s.phaseTime / tau);
+      s.q = clamp01(qTarget * (1 - u));
+      s.e = clamp01(u);
+      s.sp = clamp01(1 - u);
+      s.xL = 0.05;
+      s.xR = 0.95;
+      s.x = 0.5;
+      s.c = 0;
+    } else if (s.phase === CYTOKINESIS) {
+      u = clamp01(s.phaseTime / tau);
+      s.q = 0;
+      s.e = 1;
+      s.sp = 0;
+      s.xL = 0.05;
+      s.xR = 0.95;
+      s.x = 0.5;
+      s.c = clamp01(u);
+    } else {
+      s.phase = PROPHASE;
+      s.phaseTime = 0;
+      updateMorphology(s, p);
+      return;
+    }
+
+    if (s.phase < ANAPHASE) {
+      s.leftCount = 0;
+      s.rightCount = 0;
+    } else {
+      s.leftCount = Math.round(s.N / 2);
+      s.rightCount = s.N - s.leftCount;
+    }
+
+    s.C = 2 * s.N;
+    s.daughterCellCount = (s.phase === CYTOKINESIS && s.c >= 0.98) ? 2 : 1;
+  }
+
+  function canLeaveProphase(s) {
+    return s.q >= 0.95 && s.sp >= 0.8;
+  }
+
+  function canLeavePrometaphase(s) {
+    return s.e <= 0.05 && s.sp >= 0.95;
+  }
+
+  function canLeaveMetaphase(s, p) {
+    return s.phaseTime >= 0.5 * phaseTau(p) && Math.abs(s.x - 0.5) < 0.05;
+  }
+
+  function canLeaveAnaphase(s) {
+    return s.xL <= 0.05 && s.xR >= 0.95;
+  }
+
+  function canLeaveTelophase(s) {
+    return s.e >= 0.95 && s.q <= 0.1;
+  }
+
+  function canLeaveCytokinesis(s) {
+    return s.c >= 0.98;
+  }
+
+  function maybeAdvancePhase(s, p) {
+    var guard = 0;
+    while (guard < 8) {
+      guard += 1;
+      updateMorphology(s, p);
+
+      if (s.phase === PROPHASE) {
+        if (canLeaveProphase(s)) {
+          s.phase = PROMETAPHASE;
+          s.phaseTime = 0;
+          s.spindleStart = s.sp;
+          continue;
+        }
+      } else if (s.phase === PROMETAPHASE) {
+        if (canLeavePrometaphase(s)) {
+          s.phase = METAPHASE;
+          s.phaseTime = 0;
+          continue;
+        }
+      } else if (s.phase === METAPHASE) {
+        if (canLeaveMetaphase(s, p)) {
+          s.phase = ANAPHASE;
+          s.phaseTime = 0;
+          continue;
+        }
+      } else if (s.phase === ANAPHASE) {
+        if (canLeaveAnaphase(s)) {
+          s.phase = TELOPHASE;
+          s.phaseTime = 0;
+          continue;
+        }
+      } else if (s.phase === TELOPHASE) {
+        if (canLeaveTelophase(s)) {
+          s.phase = CYTOKINESIS;
+          s.phaseTime = 0;
+          continue;
+        }
+      } else if (s.phase === CYTOKINESIS) {
+        if (canLeaveCytokinesis(s)) {
+          s.completedCycles += 1;
+          s.phase = PROPHASE;
+          s.phaseTime = 0;
+          s.spindleStart = 0;
+          continue;
+        }
+      }
+      break;
+    }
+    updateMorphology(s, p);
+  }
+
+  function init(p) {
+    var N = chromCount(p);
+    var s = {
+      t: 0, /* [s] */
+      phase: PROPHASE, /* [index] */
+      phaseTime: 0, /* [s] */
+      N: N, /* [count] */
+      C: 2 * N, /* [count] */
+      q: 0, /* [0..1] */
+      e: 1, /* [0..1] */
+      sp: 0, /* [0..1] */
+      x: 0.5, /* [0..1] */
+      xL: 0.5, /* [0..1] */
+      xR: 0.5, /* [0..1] */
+      c: 0, /* [0..1] */
+      spindleStart: 0, /* [0..1] */
+      leftCount: 0, /* [count] */
+      rightCount: 0, /* [count] */
+      daughterCellCount: 1, /* [count] */
+      completedCycles: 0 /* [count] */
+    };
+    updateMorphology(s, p);
+    return s;
+  }
+
+  function step(s, p, dt) {
+    if (!s || !isFinite(dt) || dt <= 0) return;
+    SimPhys.substep(dt, 0.02, function (h) {
+      if (!isFinite(h) || h <= 0) return;
+      s.phaseTime += h;
+      s.t += h;
+      maybeAdvancePhase(s, p);
+    });
+  }
+
+  function observe(s, p) {
+    var N = chromCount(p);
+    var daughterCount = s.completedCycles > 0 ? 2 : ((s.phase === CYTOKINESIS && s.c >= 0.98) ? 2 : 1);
+    return {
+      t: s.t,
+      phase: s.phase,
+
+      time: s.t,
+      phaseIndex: s.phase,
+      condensation: clamp01(s.q),
+      nuclearEnvelopeIntegrity: clamp01(s.e),
+      spindleFormation: clamp01(s.sp),
+      daughterCellCount: daughterCount,
+
+      chromosomeIdentityCount: N,
+      chromatidCount: s.C,
+      meanChromosomePosition: clamp01(s.x),
+      leftGroupPosition: clamp01(s.xL),
+      rightGroupPosition: clamp01(s.xR),
+      cleavage: clamp01(s.c),
+      leftGroupChromosomes: s.leftCount,
+      rightGroupChromosomes: s.rightCount,
+      metaphaseAligned: (s.phase === METAPHASE && Math.abs(s.x - 0.5) < 0.05) ? 1 : 0
+    };
+  }
+
+  return { init: init, step: step, observe: observe };
+})();
+// ==== @end physics ====
+
+  // ==== @section state ====
+  var P = {
+    phaseDuration: 1.3,
+    chromosomeCount: 4,
+    condensationContrast: 1,
+    spindleAssemblyRate: 1
+  };
+  var S = PHYS.init(P);
+  var hooks = { frame: [], reset: [] };
+  // ==== @end state ====
+
+  // ==== @section scene ====
+  var view = SimUI.view2d({ x: [-6.2, 6.2], y: [-4.8, 4.8], grid: false });
+  var leftTrail = view.trail(180);
+  var rightTrail = view.trail(180);
+  var lastPhase = -1;
+  var lastToastTime = -10;
+
+  hooks.reset.push(function () {
+    leftTrail.clear();
+    rightTrail.clear();
+    lastPhase = -1;
+    lastToastTime = -10;
+  });
+
+  function clamp01v(x) {
+    return Math.max(0, Math.min(1, isFinite(x) ? x : 0));
+  }
+
+  function cellBoundaryPoint(a, pinch, side) {
+    var ca = Math.cos(a), sa = Math.sin(a);
+    var rx = 4.3 * (1 - 0.42 * pinch * Math.exp(-Math.pow(sa / 0.65, 2)));
+    var ry = 3.15;
+    var x = side * rx * ca;
+    var y = ry * sa * (1 - 0.08 * pinch * Math.cos(2 * a));
+    return [x, y];
+  }
+
+  function nucleusBoundaryPoint(cx, a, r, e) {
+    var rr = r * (0.78 + 0.22 * clamp01v(e));
+    return [cx + rr * Math.cos(a), rr * Math.sin(a)];
+  }
+
+  function chromosomeShape(cx, cy, len, spread, angle) {
+    var c = Math.cos(angle), s = Math.sin(angle);
+    function rot(x, y) { return [cx + x * c - y * s, cy + x * s + y * c]; }
+    return [
+      [rot(0, 0.55 * len), rot(-spread, 0.18 * len), rot(0, -0.55 * len)],
+      [rot(0, 0.55 * len), rot(spread, 0.18 * len), rot(0, -0.55 * len)]
+    ];
+  }
+
+  function drawChromosome(cx, cy, len, q, angle, color, contrast) {
+    var cc = Math.max(0.5, Math.min(1.5, isFinite(contrast) ? contrast : 1));
+    var spread = 0.04 + 0.22 * q * cc;
+    var arms = chromosomeShape(cx, cy, len, spread, angle);
+    view.path(arms[0], { color: color, width: 2.2 + 4.2 * q * cc, glow: 0.18 + 0.18 * cc });
+    view.path(arms[1], { color: color, width: 2.2 + 4.2 * q * cc, glow: 0.18 + 0.18 * cc });
+    view.circle(cx, cy, 0.05 + 0.03 * q * cc, { color: 'white', fill: 'white', alpha: 0.65 + 0.2 * Math.min(1, q * cc) });
+  }
+
+  function drawSingleChromatid(cx, cy, len, angle, color, contrast) {
+    var cc = Math.max(0.5, Math.min(1.5, isFinite(contrast) ? contrast : 1));
+    var c = Math.cos(angle), s = Math.sin(angle);
+    var p1 = [cx - 0.1 * len * c, cy - 0.1 * len * s];
+    var p2 = [cx + 0.55 * len * c, cy + 0.55 * len * s];
+    view.path([p1, p2], { color: color, width: 2.4 + 1.6 * cc, glow: 0.16 + 0.18 * cc });
+  }
+
+  function drawSpindle(o) {
+    var sp = clamp01v(o.spindleFormation);
+    if (sp <= 0.02) return;
+    var alpha = 0.15 + 0.65 * sp;
+    var leftPole = [-4.35, 0];
+    var rightPole = [4.35, 0];
+
+    view.ball(leftPole[0], leftPole[1], 0.18, 'green');
+    view.ball(rightPole[0], rightPole[1], 0.18, 'green');
+    view.label(leftPole[0], -0.55, 'полюс');
+    view.label(rightPole[0], -0.55, 'полюс');
+
+    if (o.phaseIndex <= 2) {
+      var N = Math.max(2, Math.round(o.chromosomeIdentityCount));
+      for (var i = 0; i < N; i++) {
+        var yy = (i - (N - 1) / 2) * 0.62;
+        var x = (o.phaseIndex === 2) ? 0 : (Math.sin(i * 1.7) * (1 - sp) * 0.9);
+        view.line(leftPole[0], leftPole[1], x, yy, { color: 'green', width: 1.2, alpha: alpha });
+        view.line(rightPole[0], rightPole[1], x, yy, { color: 'green', width: 1.2, alpha: alpha });
+      }
+    } else {
+      var NL = Math.max(1, Math.round(o.leftGroupChromosomes));
+      var NR = Math.max(1, Math.round(o.rightGroupChromosomes));
+      for (var j = 0; j < NL; j++) {
+        var yL = (j - (NL - 1) / 2) * 0.52;
+        var xL = -3.8 + 3.6 * clamp01v(o.leftGroupPosition);
+        view.line(leftPole[0], leftPole[1], xL, yL, { color: 'green', width: 1.2, alpha: alpha });
+      }
+      for (var k = 0; k < NR; k++) {
+        var yR = (k - (NR - 1) / 2) * 0.52;
+        var xR = -3.8 + 8.0 * clamp01v(o.rightGroupPosition);
+        view.line(rightPole[0], rightPole[1], xR, yR, { color: 'green', width: 1.2, alpha: alpha });
+      }
+    }
+    view.text(0, 3.55, 'веретено деления', { color: 'green', size: 15 });
+  }
+
+  function drawNucleus(o) {
+    var e = clamp01v(o.nuclearEnvelopeIntegrity);
+    if (e <= 0.02 && o.phaseIndex !== 4 && o.phaseIndex !== 5) return;
+
+    if (o.phaseIndex < 4) {
+      view.circle(0, 0, 2.15, { color: 'cyan', fill: 'cyan', alpha: 0.08 + 0.10 * e, width: 2.2, dash: e < 0.5 ? [0.12, 0.12] : [] });
+      view.text(0, 2.55, 'ядро', { color: 'cyan', size: 15 });
+    } else {
+      var r = 1.28 + 0.25 * e;
+      var c1 = -2.45, c2 = 2.45;
+      view.circle(c1, 0, r, { color: 'cyan', fill: 'cyan', alpha: 0.05 + 0.12 * e, width: 2.2, dash: e < 0.5 ? [0.12, 0.12] : [] });
+      view.circle(c2, 0, r, { color: 'cyan', fill: 'cyan', alpha: 0.05 + 0.12 * e, width: 2.2, dash: e < 0.5 ? [0.12, 0.12] : [] });
+      if (e > 0.15) {
+        view.text(c1, 1.95, 'новое ядро', { color: 'cyan', size: 13 });
+        view.text(c2, 1.95, 'новое ядро', { color: 'cyan', size: 13 });
+      }
+    }
+  }
+
+  function drawCell(o) {
+    var c = clamp01v(o.cleavage);
+    var ptsL = [], ptsR = [], n = 90, i, a;
+    for (i = 0; i <= n; i++) {
+      a = Math.PI / 2 + i * Math.PI / n;
+      ptsL.push(cellBoundaryPoint(a, c, -1));
+    }
+    for (i = 0; i <= n; i++) {
+      a = -Math.PI / 2 + i * Math.PI / n;
+      ptsR.push(cellBoundaryPoint(a, c, 1));
+    }
+    var all = ptsL.concat(ptsR);
+    view.polygon(all, { color: 'gray', fill: 'gray', alpha: 0.16, width: 3 });
+
+    if (c > 0.02) {
+      var pinch = 1.8 * c;
+      view.line(-0.18 - pinch * 0.08, 2.2, -0.05, 0, { color: 'orange', width: 3, alpha: 0.35 + 0.55 * c });
+      view.line(0.18 + pinch * 0.08, 2.2, 0.05, 0, { color: 'orange', width: 3, alpha: 0.35 + 0.55 * c });
+      view.line(-0.18 - pinch * 0.08, -2.2, -0.05, 0, { color: 'orange', width: 3, alpha: 0.35 + 0.55 * c });
+      view.line(0.18 + pinch * 0.08, -2.2, 0.05, 0, { color: 'orange', width: 3, alpha: 0.35 + 0.55 * c });
+      view.text(0, -3.55, 'борозда деления', { color: 'orange', size: 15 });
+    }
+
+    if (o.daughterCellCount >= 2) {
+      view.label(-2.6, -3.95, 'дочерняя клетка 1');
+      view.label(2.6, -3.95, 'дочерняя клетка 2');
+    } else {
+      view.label(0, -3.95, 'материнская клетка');
+    }
+  }
+
+  function drawChromosomes(o, P) {
+    var q = clamp01v(o.condensation);
+    var N = Math.max(2, Math.round(o.chromosomeIdentityCount));
+    var contrast = Math.max(0.5, Math.min(1.5, isFinite(P.condensationContrast) ? P.condensationContrast : 1));
+    var baseLen = 0.24 + 0.72 * q * contrast;
+    var phase = o.phaseIndex;
+    var colA = 'purple';
+    var colB = 'blue';
+
+    if (phase <= 2) {
+      for (var i = 0; i < N; i++) {
+        var yy = (i - (N - 1) / 2) * (0.62 - 0.08 * q);
+        var xx = 0;
+        if (phase === 0) xx = Math.sin(i * 1.8) * (1 - q) * 1.1;
+        if (phase === 1) xx = Math.sin(i * 1.5) * 0.22;
+        if (phase === 2) xx = 0;
+        var ang = (phase === 2) ? Math.PI / 2 : (Math.PI / 3 + 0.35 * Math.sin(i * 2.1));
+        drawChromosome(xx, yy, baseLen, q, ang, i % 2 ? colA : colB, contrast);
+      }
+      if (phase === 2) view.line(0, -2.7, 0, 2.7, { color: 'white', width: 1.2, dash: [0.12, 0.12], alpha: 0.55 });
+      if (phase === 2) view.text(0.55, 2.95, 'экватор клетки', { color: 'white', size: 14 });
+    } else {
+      var NL = Math.max(1, Math.round(o.leftGroupChromosomes));
+      var NR = Math.max(1, Math.round(o.rightGroupChromosomes));
+      var xL = -3.8 + 8.0 * clamp01v(o.leftGroupPosition);
+      var xR = -3.8 + 8.0 * clamp01v(o.rightGroupPosition);
+
+      for (var j = 0; j < NL; j++) {
+        var yL = (j - (NL - 1) / 2) * 0.52;
+        drawSingleChromatid(xL, yL, baseLen * 0.95, Math.PI * 0.82, j % 2 ? colA : colB, contrast);
+      }
+      for (var k = 0; k < NR; k++) {
+        var yR = (k - (NR - 1) / 2) * 0.52;
+        drawSingleChromatid(xR, yR, baseLen * 0.95, Math.PI * 0.18, k % 2 ? colA : colB, contrast);
+      }
+
+      leftTrail.push(xL, 0);
+      rightTrail.push(xR, 0);
+      leftTrail.draw({ color: 'cyan', alpha: 0.5 });
+      rightTrail.draw({ color: 'cyan', alpha: 0.5 });
+
+      if (phase === 3) {
+        view.arrow(-0.2, 2.85, xL + 0.25, 2.85, { color: 'cyan', label: 'к левому полюсу' });
+        view.arrow(0.2, 2.85, xR - 0.25, 2.85, { color: 'cyan', label: 'к правому полюсу' });
+        view.tex(0, 3.45, '\\text{Сестринские хроматиды расходятся}', { color: 'cyan' });
+      }
+      if (phase >= 4) {
+        view.label(xL, 1.45, 'набор хромосом');
+        view.label(xR, 1.45, 'набор хромосом');
+      }
+    }
+  }
+
+  function drawStatus(o) {
+    var phaseNames = ['Профаза', 'Прометафаза', 'Метафаза', 'Анафаза', 'Телофаза', 'Цитокинез'];
+    var phaseTexts = [
+      'конденсация растёт',
+      'оболочка распадается',
+      'хромосомы на экваторе',
+      'хроматиды расходятся',
+      'ядра восстанавливаются',
+      'клетка перетягивается'
+    ];
+    var y0 = 4.1;
+    view.label(0, y0, phaseNames[Math.max(0, Math.min(5, Math.round(o.phaseIndex)))]);
+    view.text(0, y0 - 0.45, phaseTexts[Math.max(0, Math.min(5, Math.round(o.phaseIndex)))], { color: 'white', size: 14 });
+
+    var bx = -5.55, by = 3.6, w = 2.1, h = 0.18, gap = 0.62;
+    var vals = [
+      ['Конденсация', o.condensation, 'purple'],
+      ['Оболочка ядра', o.nuclearEnvelopeIntegrity, 'cyan'],
+      ['Веретено', o.spindleFormation, 'green'],
+      ['Перетяжка', o.cleavage, 'orange']
+    ];
+    for (var i = 0; i < vals.length; i++) {
+      var y = by - i * gap;
+      view.text(bx + w * 0.5, y + 0.24, vals[i][0], { color: 'white', size: 12 });
+      view.rect(bx, y - 0.03, w, h, { color: 'gray', fill: 'gray', alpha: 0.18 });
+      view.rect(bx, y - 0.03, w * clamp01v(vals[i][1]), h, { color: vals[i][2], fill: vals[i][2], alpha: 0.85 });
+    }
+
+    view.label(4.85, 3.65, 'Хромосом: ' + Math.round(o.chromosomeIdentityCount));
+    view.label(4.85, 3.05, 'Хроматид: ' + Math.round(o.chromatidCount));
+    view.label(4.85, 2.45, 'Дочерних клеток: ' + Math.round(o.daughterCellCount));
+
+    if (o.phaseIndex >= 3) {
+      view.label(4.85, 1.75, 'Слева: ' + Math.round(o.leftGroupChromosomes));
+      view.label(4.85, 1.15, 'Справа: ' + Math.round(o.rightGroupChromosomes));
+    } else if (o.phaseIndex === 2) {
+      view.label(4.85, 1.45, 'Выстроены у экватора');
+    }
+  }
+
+  function draw(o, P, S, dt) {
+    view.clear();
+
+    var phase = Math.round(o.phaseIndex);
+    if (phase !== lastPhase) {
+      if (phase === 3 && o.t - lastToastTime > 3) {
+        SimUI.toast('Анафаза: сестринские хроматиды расходятся к противоположным полюсам!', { color: 'cyan' });
+        lastToastTime = o.t;
+      }
+      lastPhase = phase;
+      if (phase !== 3) {
+        leftTrail.clear();
+        rightTrail.clear();
+      }
+    }
+
+    drawCell(o);
+    drawSpindle(o);
+    drawNucleus(o);
+    drawChromosomes(o, P);
+    drawStatus(o);
+
+    view.text(-5.35, -4.35, '1 клетка', { color: 'white', size: 15 });
+    view.arrow(-4.25, -4.28, 4.15, -4.28, { color: 'white' });
+    view.text(5.0, -4.35, Math.round(o.daughterCellCount) === 2 ? '2 клетки' : 'подготовка к 2 клеткам', { color: 'white', size: 15 });
+  }
+  // ==== @end scene ====
+
+  // ==== @section controls ====
+  SimUI.title("Митоз: стадии деления клетки");
+  SimUI.goals(["Понять последовательность стадий митоза и их характерные признаки","Увидеть, как хромосомы конденсируются, выстраиваются и расходятся к полюсам","Связать деление ядра с образованием двух генетически сходных дочерних клеток"]);
+  SimUI.params(P, [
+    {name: "phaseDuration",label: "Длительность фазы",min: 0.5,max: 3,step: 0.1,value: 1.3,unit: "с",group: "Время"},
+    {name: "chromosomeCount",label: "Число хромосом до деления",min: 2,max: 8,step: 2,value: 4,unit: "",group: "Клетка"},
+    {name: "condensationContrast",label: "Выраженность конденсации",min: 0.5,max: 1.5,step: 0.1,value: 1,unit: "",group: "Визуальная биология"},
+    {name: "spindleAssemblyRate",label: "Скорость формирования веретена",min: 0.5,max: 1.5,step: 0.1,value: 1,unit: "",group: "Визуальная биология"},
+  ]);
+  SimUI.presets([{"label":"Базовый показ","values":{"phaseDuration":1.3,"chromosomeCount":4,"condensationContrast":1,"spindleAssemblyRate":1}},{"label":"Медленный разбор","values":{"phaseDuration":2.2,"chromosomeCount":4,"condensationContrast":1.1,"spindleAssemblyRate":0.8}},{"label":"Больше хромосом","values":{"phaseDuration":1.5,"chromosomeCount":8,"condensationContrast":1,"spindleAssemblyRate":1}}]);
+  // ==== @end controls ====
+
+  // ==== @section instruments ====
+  SimUI.readouts({"phaseIndex":{"label":"Номер фазы","unit":""},"condensation":{"label":"Степень конденсации хромосом","unit":""},"nuclearEnvelopeIntegrity":{"label":"Целостность ядерной оболочки","unit":""},"spindleFormation":{"label":"Сформированность веретена","unit":""},"daughterCellCount":{"label":"Число дочерних клеток","unit":""}});
+  SimUI.chart({"title":"Номер фазы от времени","x":"t","y":["phaseIndex"],"series":[{"name":"Номер фазы","color":"blue"}],"xLabel":"t, с","yLabel":"Номер фазы"});
+  SimUI.phases({"key":"phase","mode":"step","items":[{"name":"Профаза","text":"Хромосомы становятся короткими и заметными, а веретено деления начинает формироваться. Ядро ещё различимо.","color":"blue"},{"name":"Прометафаза","text":"Ядерная оболочка разрушается, и хромосомы получают связь с нитями веретена деления.","color":"yellow"},{"name":"Метафаза","text":"Все хромосомы выстраиваются по экватору клетки. Это удобный момент для проверки правильности их подготовки к разделению.","color":"purple"},{"name":"Анафаза","text":"Сестринские хроматиды разделяются и расходятся к противоположным полюсам клетки.","color":"cyan"},{"name":"Телофаза","text":"У полюсов формируются два ядра, а хромосомы начинают раскручиваться обратно.","color":"orange"},{"name":"Цитокинез","text":"Цитоплазма разделяется перетяжкой, и образуются две дочерние клетки.","color":"gray"}]});
+  SimUI.formula({
+    title: 'Схема процесса',
+    tex: 'q(t)=\\frac{t}{\\tau},\\; e(t)=1-\\frac{t}{\\tau}\\ \\text{или}\\ \\frac{t}{\\tau},\\; x_L(t)=0.5-0.5\\frac{t}{\\tau},\\; x_R(t)=0.5+0.5\\frac{t}{\\tau},\\; 1\\ \\text{клетка}\\rightarrow 2\\ \\text{клетки}',
+    vars: {
+      phaseDuration: { label: '\\tau', unit: 'с' },
+      condensation: { label: 'q' },
+      nuclearEnvelopeIntegrity: { label: 'e' },
+      spindleFormation: { label: 's' },
+      leftGroupPosition: { label: 'x_L' },
+      rightGroupPosition: { label: 'x_R' },
+      daughterCellCount: { label: 'n_{\\text{клеток}}' }
+    },
+    note: 'Модель показывает морфологические признаки митоза: конденсацию хромосом, распад и восстановление ядерной оболочки, работу веретена и расхождение хроматид.',
+    corner: 'tl'
+  });
+  // ==== @end instruments ====
+
+  // ==== @section main ====
+  var app = SimUI.run({ physics: PHYS, P: P, S: S, draw: draw, hooks: hooks });
+  // ==== @end main ====
+})();
+</script>
+</body>
+</html>

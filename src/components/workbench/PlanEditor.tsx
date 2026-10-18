@@ -46,6 +46,8 @@ export default function PlanEditor({
     set({ parameters: spec.parameters.map((p, k) => (k === i ? { ...p, ...patch } : p)) });
   const setStep = (i: number, patch: Partial<PlanStep>) =>
     set({ scenario: (spec.scenario ?? []).map((s, k) => (k === i ? { ...s, ...patch } : s)) });
+  const setPhase = (i: number, patch: Partial<{ name: string; text: string }>) =>
+    set({ phases: (spec.phases ?? []).map((p, k) => (k === i ? { ...p, ...patch } : p)) });
 
   function numberField(v: string, fallback: number): number {
     const n = Number(v.replace(',', '.'));
@@ -154,6 +156,28 @@ export default function PlanEditor({
           <button type="button" className="btn btn-sm btn-ghost" disabled={disabled}
             onClick={() => set({ scenario: [...(spec.scenario ?? []), { title: t('newStepTitle'), task: t('newStepTask') }] })}>
             <IconPlus size={15} />{t('addStep')}
+          </button>
+        </div>
+      )}
+
+      {spec.presentation === 'phases' && (
+        <div className="plan-section">
+          <div className="plan-section-title">{t('planPhases')} <span className="muted">{t('planPhasesHint')}</span></div>
+          <ol className="plan-steps">
+            {(spec.phases ?? []).map((ph, i) => (
+              <li key={i}>
+                <input className="plan-step-title" value={ph.name} disabled={disabled} aria-label={t('phaseAria')}
+                  onChange={(e) => setPhase(i, { name: e.target.value })} />
+                <textarea rows={2} value={ph.text} disabled={disabled} aria-label={t('phaseTextAria')}
+                  onChange={(e) => setPhase(i, { text: e.target.value })} />
+                <button type="button" className="icon-btn" disabled={disabled || (spec.phases ?? []).length <= 2} aria-label={t('removePhase')}
+                  onClick={() => set({ phases: (spec.phases ?? []).filter((_, k) => k !== i) })}><IconTrash size={15} /></button>
+              </li>
+            ))}
+          </ol>
+          <button type="button" className="btn btn-sm btn-ghost" disabled={disabled || (spec.phases ?? []).length >= 8}
+            onClick={() => set({ phases: [...(spec.phases ?? []), { name: t('newPhaseName'), text: '' }] })}>
+            <IconPlus size={15} />{t('addPhase')}
           </button>
         </div>
       )}

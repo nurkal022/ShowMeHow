@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Нейросеть учится на глазах</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
+  canvas.scene { position: fixed; top: 0; left: 0; display: block; }
+  #bg { z-index: 0; cursor: crosshair; }
+</style>
+</head>
+<body>
+<canvas id="bg" class="scene"></canvas>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- Холст ----------
+  var cv = document.getElementById('bg');
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0;
+  // Область сцены: панели кита стоят по углам (слева — формула и показания,
+  // справа — параметры и график), поэтому схема и карта живут в центральной колонке.
+  var area = { x: 0, y: 0, w: 0, h: 0 };
+  var net = { x: 0, y: 0, w: 0, h: 0 };   // схема сети
+  var map = { x: 0, y: 0, s: 0 };         // квадрат тепловой карты
+
+  function layout() {
+    var left = W > 900 ? 300 : 12;
+    var right = W > 900 ? W - 286 : W - 12;
+    area = { x: left, y: 12, w: Math.max(200, right - left), h: H - 24 };
+    var netH = Math.max(150, Math.min(250, area.h * 0.3));
+    var nx = W > 900 ? area.x + 80 : area.x + 10;
+    net = { x: nx, y: area.y + 6, w: area.x + area.w - 10 - nx, h: netH };
+    var s = Math.min(area.w - 20, area.h - netH - 34);
+    map = { x: area.x + (area.w - s) / 2, y: net.y + netH + 22, s: Math.max(120, s) };
+  }
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    draw();
+  }
+
+  // ---------- Случайные числа с зерном: данные воспроизводимы ----------
+  function rng(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(r) {
+    var u = 1 - r(), v = r();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  // ---------- Наборы данных на плоскости [-1, 1]² ----------
+  var DATASETS = [
+    { value: 'circle', label: 'Круги' },
+    { value: 'xor', label: 'XOR' },
+    { value: 'spiral', label: 'Спираль' },
+    { value: 'gauss', label: 'Два облака' },
+  ];
+  var dataset = 'circle';
+  var noise = 0.1;
+  var N_POINTS = 240;
+  var train = [], test = [];
+
+  function makeData() {
+    var r = rng(7 + DATASETS.map(function (d) { return d.value; }).indexOf(dataset) * 101);
+    var pts = [], i, n = N_POINTS;
+    if (dataset === 'circle') {
+      for (i = 0; i < n; i++) {
+        var inner = i % 2 === 0;
+        var rad = inner ? r() * 0.42 : 0.62 + r() * 0.33;
+        var a = r() * Math.PI * 2;
+        pts.push({ x: rad * Math.cos(a), y: rad * Math.sin(a), c: inner ? 1 : 0 });
+      }
+    } else if (dataset === 'xor') {
+      for (i = 0; i < n; i++) {
+        var px = r() * 1.8 - 0.9, py = r() * 1.8 - 0.9;
+        px += px > 0 ? 0.05 : -0.05; py += py > 0 ? 0.05 : -0.05;
+        pts.push({ x: px, y: py, c: px * py > 0 ? 1 : 0 });
+      }
+    } else if (dataset === 'spiral') {
+      var half = n / 2;
+      for (i = 0; i < half; i++) {
+        var rr = 0.08 + 0.86 * i / half;
+        var t = 1.75 * i / half * 2 * Math.PI;
+        pts.push({ x: rr * Math.sin(t), y: rr * Math.cos(t), c: 1 });
+        pts.push({ x: rr * Math.sin(t + Math.PI), y: rr * Math.cos(t + Math.PI), c: 0 });
+      }
+    } else {
+      for (i = 0; i < n; i++) {
+        var cls = i % 2;
+        var cx = cls ? 0.45 : -0.45;
+        pts.push({ x: cx + gauss(r) * 0.22, y: cx + gauss(r) * 0.22, c: cls });
+      }
+    }
+    // шум — смещение координат: при сильном шуме классы перекрываются
+    for (i = 0; i < pts.length; i++) {
+      pts[i].x = Math.max(-1, Math.min(1, pts[i].x + gauss(r) * noise * 0.5));
+      pts[i].y = Math.max(-1, Math.min(1, pts[i].y + gauss(r) * noise * 0.5));
+    }
+    // перемешиваем и делим пополам: обучающая и тестовая выборки
+    for (i = pts.length - 1; i > 0; i--) {
+      var j = Math.floor(r() * (i + 1)), tmp = pts[i]; pts[i] = pts[j]; pts[j] = tmp;
+    }
+    train = pts.slice(0, pts.length / 2);
+    test = pts.slice(pts.length / 2);
+  }
+
+  // ---------- Сеть: 2 → [h × L] → 1 ----------
+  var nHidden = 5, nLayers = 2;
+  var lr = 0.03;
+  var actName = 'tanh';
+  var MOMENTUM = 0.9, BATCH = 10;
+  var sizes = [];
+  var Wt = [], B = [], vW = [], vB = [];   // веса, смещения и «скорости» импульса
+  var weightSeed = 1;
+
+  var ACTS = {
+    tanh: { f: function (z) { return Math.tanh(z); }, d: function (a) { return 1 - a * a; } },
+    relu: { f: function (z) { return z > 0 ? z : 0; }, d: function (a) { return a > 0 ? 1 : 0; } },
+    sigmoid: { f: function (z) { return 1 / (1 + Math.exp(-z)); }, d: function (a) { return a * (1 - a); } },
+  };
+
+  function buildNet() {
+    sizes = [2];
+    for (var l = 0; l < nLayers; l++) sizes.push(nHidden);
+    sizes.push(1);
+    var r = rng(1000 + weightSeed * 7919);
+    Wt = []; B = []; vW = []; vB = [];
+    for (var k = 1; k < sizes.length; k++) {
+      var nin = sizes[k - 1], nout = sizes[k], w = [], b = [], vw = [], vb = [];
+      var sc = Math.sqrt(2 / (nin + nout)); // инициализация Ксавье
+      for (var j = 0; j < nout; j++) {
+        var row = [], vrow = [];
+        for (var i = 0; i < nin; i++) { row.push(gauss(r) * sc * 1.4); vrow.push(0); }
+        w.push(row); vw.push(vrow); b.push(0.05 * gauss(r)); vb.push(0);
+      }
+      Wt.push(w); B.push(b); vW.push(vw); vB.push(vb);
+    }
+  }
+
+  /** Прямой проход: активации всех слоёв (последний — логит и вероятность). */
+  function forward(x, y, acts) {
+    var A = acts.f;
+    var cur = [x, y], all = [cur], z = 0;
+    for (var k = 0; k < Wt.length; k++) {
+      var last = k === Wt.length - 1, w = Wt[k], b = B[k], out = new Array(w.length);
+      for (var j = 0; j < w.length; j++) {
+        var s = b[j], row = w[j];
+        for (var i = 0; i < row.length; i++) s += row[i] * cur[i];
+        if (last) { z = s; out[j] = 1 / (1 + Math.exp(-s)); } else out[j] = A(s);
+      }
+      all.push(out);
+      cur = out;
+    }
+    return { a: all, z: z, p: cur[0] };
+  }
+
+  /** Перекрёстная энтропия в численно устойчивой форме через логит z. */
+  function bce(z, c) { return Math.max(z, 0) - z * c + Math.log(1 + Math.exp(-Math.abs(z))); }
+
+  function lossOf(set) {
+    if (!set.length) return 0;
+    var s = 0, ok = 0, acts = ACTS[actName];
+    for (var i = 0; i < set.length; i++) {
+      var f = forward(set[i].x, set[i].y, acts);
+      s += bce(f.z, set[i].c);
+      if ((f.p > 0.5 ? 1 : 0) === set[i].c) ok++;
+    }
+    return { loss: s / set.length, acc: ok / set.length };
+  }
+
+  var order = [], cursor = 0;
+  var steps = 0;          // шагов градиентного спуска
+  var epoch = 0;          // эпох (полных проходов по обучающей выборке)
+  var diverged = false;
+
+  /** Один шаг SGD с импульсом по мини-батчу: обратное распространение ошибки. */
+  function sgdStep() {
+    var acts = ACTS[actName], L = Wt.length, k, j, i;
+    var gW = [], gB = [];
+    for (k = 0; k < L; k++) {
+      gW.push(Wt[k].map(function (row) { return row.map(function () { return 0; }); }));
+      gB.push(B[k].map(function () { return 0; }));
+    }
+    if (cursor === 0 || order.length !== train.length) {
+      order = train.map(function (_, idx) { return idx; });
+      for (i = order.length - 1; i > 0; i--) {
+        var jj = Math.floor(Math.random() * (i + 1)), t = order[i]; order[i] = order[jj]; order[jj] = t;
+      }
+    }
+    var bs = Math.min(BATCH, train.length);
+    for (var n = 0; n < bs; n++) {
+      var pnt = train[order[cursor]];
+      cursor = (cursor + 1) % train.length;
+      var f = forward(pnt.x, pnt.y, acts);
+      // dL/dz выхода для сигмоиды + перекрёстной энтропии — просто (p − y)
+      var delta = [f.p - pnt.c];
+      for (k = L - 1; k >= 0; k--) {
+        var ain = f.a[k];
+        for (j = 0; j < delta.length; j++) {
+          gB[k][j] += delta[j];
+          for (i = 0; i < ain.length; i++) gW[k][j][i] += delta[j] * ain[i];
+        }
+        if (k > 0) {
+          var nd = new Array(ain.length);
+          for (i = 0; i < ain.length; i++) {
+            var s = 0;
+            for (j = 0; j < delta.length; j++) s += Wt[k][j][i] * delta[j];
+            nd[i] = s * acts.d(ain[i]);
+          }
+          delta = nd;
+        }
+      }
+    }
+    for (k = 0; k < L; k++) {
+      for (j = 0; j < Wt[k].length; j++) {
+        for (i = 0; i < Wt[k][j].length; i++) {
+          var g = Math.max(-5, Math.min(5, gW[k][j][i] / bs));
+          vW[k][j][i] = MOMENTUM * vW[k][j][i] - lr * g;
+          Wt[k][j][i] += vW[k][j][i];
+        }
+        var gb = Math.max(-5, Math.min(5, gB[k][j] / bs));
+        vB[k][j] = MOMENTUM * vB[k][j] - lr * gb;
+        B[k][j] += vB[k][j];
+      }
+    }
+    steps++;
+    epoch = steps * bs / Math.max(1, train.length);
+  }
+
+  // ---------- Сетка для тепловой карты и мини-карт нейронов ----------
+  var GRID = 64;
+  var gridAct = [];         // gridAct[layer][neuron] — Float32Array(GRID²)
+  var off = document.createElement('canvas');
+  off.width = GRID; off.height = GRID;
+  var offCtx = off.getContext('2d');
+  var offImg = offCtx.createImageData(GRID, GRID);
+  var TILE = 16;
+  var tileCv = document.createElement('canvas');
+  tileCv.width = TILE; tileCv.height = TILE;
+  var tileCtx = tileCv.getContext('2d');
+  var tileImg = tileCtx.createImageData(TILE, TILE);
+
+  function evalGrid() {
+    var acts = ACTS[actName];
+    gridAct = sizes.map(function (n) {
+      var arr = [];
+      for (var j = 0; j < n; j++) arr.push(new Float32Array(GRID * GRID));
+      return arr;
+    });
+    for (var gy = 0; gy < GRID; gy++) {
+      for (var gx = 0; gx < GRID; gx++) {
+        var x = -1.1 + 2.2 * (gx + 0.5) / GRID, y = 1.1 - 2.2 * (gy + 0.5) / GRID;
+        var f = forward(x, y, acts), idx = gy * GRID + gx;
+        for (var l = 0; l < f.a.length; l++) {
+          for (var j = 0; j < f.a[l].length; j++) gridAct[l][j][idx] = f.a[l][j];
+        }
+      }
+    }
+  }
+
+  // Цвет: −1 → оранжевый (класс 0), +1 → синий (класс 1), 0 → фон.
+  var BG = [26, 32, 41], BLUE = [64, 150, 235], ORANGE = [245, 147, 34];
+  function shade(v, out, o) {
+    var t = Math.max(-1, Math.min(1, v)), c = t >= 0 ? BLUE : ORANGE, k = Math.pow(Math.abs(t), 0.85) * 0.9;
+    out[o] = BG[0] + (c[0] - BG[0]) * k;
+    out[o + 1] = BG[1] + (c[1] - BG[1]) * k;
+    out[o + 2] = BG[2] + (c[2] - BG[2]) * k;
+    out[o + 3] = 255;
+  }
+  /** Активация нейрона приводится к [-1, 1] для раскраски. */
+  function norm(l, v) {
+    if (l === 0) return v;
+    if (l === sizes.length - 1 || actName === 'sigmoid') return 2 * v - 1;
+    if (actName === 'relu') return Math.tanh(v);
+    return v;
+  }
+
+  // ---------- Отрисовка ----------
+  function nodePos(l, j) {
+    var cols = sizes.length;
+    var x = net.x + 40 + (net.w - 80) * l / (cols - 1);
+    var n = sizes[l];
+    var gap = Math.min(34, (net.h - 30) / Math.max(1, n));
+    var y = net.y + 18 + (net.h - 30) / 2 + (j - (n - 1) / 2) * gap;
+    return { x: x, y: y, s: Math.max(12, Math.min(26, gap - 6)) };
+  }
+
+  function drawNet() {
+    ctx.fillStyle = '#151a22';
+    roundRect(net.x, net.y, net.w, net.h, 12); ctx.fill();
+    ctx.fillStyle = '#8b95a3';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('Схема сети: цвет связи — знак веса, толщина — модуль', net.x + 12, net.y + 6);
+    var maxW = 0, k, j, i;
+    for (k = 0; k < Wt.length; k++) for (j = 0; j < Wt[k].length; j++) for (i = 0; i < Wt[k][j].length; i++) {
+      maxW = Math.max(maxW, Math.abs(Wt[k][j][i]));
+    }
+    // связи
+    for (k = 0; k < Wt.length; k++) {
+      for (j = 0; j < Wt[k].length; j++) {
+        for (i = 0; i < Wt[k][j].length; i++) {
+          var w = Wt[k][j][i], a = nodePos(k, i), b = nodePos(k + 1, j);
+          var m = Math.min(1, Math.abs(w) / Math.max(1, maxW));
+          ctx.strokeStyle = w >= 0 ? 'rgba(64,150,235,' + (0.25 + 0.7 * m) + ')' : 'rgba(245,147,34,' + (0.25 + 0.7 * m) + ')';
+          ctx.lineWidth = 0.6 + 5 * m;
+          var mx = (a.x + b.x) / 2;
+          ctx.beginPath();
+          ctx.moveTo(a.x + a.s / 2, a.y);
+          ctx.bezierCurveTo(mx, a.y, mx, b.y, b.x - b.s / 2, b.y);
+          ctx.stroke();
+        }
+      }
+    }
+    // нейроны с мини-картами «на что реагирует»
+    for (var l = 0; l < sizes.length; l++) {
+      for (j = 0; j < sizes[l]; j++) {
+        var p = nodePos(l, j), arr = gridAct[l] && gridAct[l][j];
+        if (arr) {
+          var step = GRID / TILE;
+          for (var ty = 0; ty < TILE; ty++) for (var tx = 0; tx < TILE; tx++) {
+            shade(norm(l, arr[(ty * step + step / 2) * GRID + tx * step + step / 2]), tileImg.data, (ty * TILE + tx) * 4);
+          }
+          tileCtx.putImageData(tileImg, 0, 0);
+          ctx.imageSmoothingEnabled = true;
+          ctx.drawImage(tileCv, p.x - p.s / 2, p.y - p.s / 2, p.s, p.s);
+        }
+        ctx.strokeStyle = l === sizes.length - 1 ? '#e8ecf1' : '#5c6675';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s);
+      }
+    }
+    ctx.fillStyle = '#8b95a3';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    var p0 = nodePos(0, 0), p1 = nodePos(0, 1);
+    ctx.fillText('x₁', p0.x - p0.s / 2 - 5, p0.y);
+    ctx.fillText('x₂', p1.x - p1.s / 2 - 5, p1.y);
+    var po = nodePos(sizes.length - 1, 0);
+    ctx.textAlign = 'left';
+    ctx.fillText('p', po.x + po.s / 2 + 6, po.y);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    for (l = 1; l < sizes.length - 1; l++) {
+      ctx.fillText('слой ' + l, nodePos(l, 0).x, net.y + net.h - 2);
+    }
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  function toPx(x, y) {
+    return { x: map.x + (x + 1.1) / 2.2 * map.s, y: map.y + (1.1 - y) / 2.2 * map.s };
+  }
+
+  /** Граница решения p = 0,5 методом «бегущих квадратов» по сетке вероятностей. */
+  function drawBoundary(P) {
+    var cell = map.s / GRID;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (var gy = 0; gy < GRID - 1; gy++) {
+      for (var gx = 0; gx < GRID - 1; gx++) {
+        var v0 = P[gy * GRID + gx] - 0.5, v1 = P[gy * GRID + gx + 1] - 0.5;
+        var v2 = P[(gy + 1) * GRID + gx + 1] - 0.5, v3 = P[(gy + 1) * GRID + gx] - 0.5;
+        var pts = [];
+        var x0 = map.x + (gx + 0.5) * cell, y0 = map.y + (gy + 0.5) * cell;
+        if ((v0 > 0) !== (v1 > 0)) pts.push([x0 + cell * v0 / (v0 - v1), y0]);
+        if ((v1 > 0) !== (v2 > 0)) pts.push([x0 + cell, y0 + cell * v1 / (v1 - v2)]);
+        if ((v3 > 0) !== (v2 > 0)) pts.push([x0 + cell * v3 / (v3 - v2), y0 + cell]);
+        if ((v0 > 0) !== (v3 > 0)) pts.push([x0, y0 + cell * v0 / (v0 - v3)]);
+        if (pts.length >= 2) { ctx.moveTo(pts[0][0], pts[0][1]); ctx.lineTo(pts[1][0], pts[1][1]); }
+        if (pts.length === 4) { ctx.moveTo(pts[2][0], pts[2][1]); ctx.lineTo(pts[3][0], pts[3][1]); }
+      }
+    }
+    ctx.stroke();
+  }
+
+  function drawMap() {
+    var P = gridAct[sizes.length - 1][0];
+    for (var i = 0; i < GRID * GRID; i++) shade(2 * P[i] - 1, offImg.data, i * 4);
+    offCtx.putImageData(offImg, 0, 0);
+    ctx.save();
+    roundRect(map.x, map.y, map.s, map.s, 10); ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(off, map.x, map.y, map.s, map.s);
+    // оси
+    ctx.strokeStyle = 'rgba(232,236,241,0.12)'; ctx.lineWidth = 1;
+    var c = toPx(0, 0);
+    ctx.beginPath(); ctx.moveTo(map.x, c.y); ctx.lineTo(map.x + map.s, c.y);
+    ctx.moveTo(c.x, map.y); ctx.lineTo(c.x, map.y + map.s); ctx.stroke();
+    drawBoundary(P);
+    // точки: обучающие — с белой обводкой, тестовые — с тёмной
+    var rad = Math.max(3, map.s / 120);
+    function dot(pt, isTest) {
+      var q = toPx(pt.x, pt.y);
+      ctx.beginPath(); ctx.arc(q.x, q.y, rad, 0, Math.PI * 2);
+      ctx.fillStyle = pt.c ? '#4096eb' : '#f59322';
+      ctx.fill();
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = isTest ? '#0b0e12' : '#ffffff';
+      ctx.stroke();
+    }
+    for (i = 0; i < test.length; i++) dot(test[i], true);
+    for (i = 0; i < train.length; i++) dot(train[i], false);
+    ctx.restore();
+    ctx.strokeStyle = '#2a3341'; ctx.lineWidth = 1.5;
+    roundRect(map.x, map.y, map.s, map.s, 10); ctx.stroke();
+    ctx.fillStyle = '#8b95a3'; ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('Карта решения: синее — p → 1, оранжевое — p → 0, белая линия — p = 0,5', map.x, map.y - 4);
+    ctx.textBaseline = 'top';
+    ctx.fillText('клик — синяя точка, Shift+клик — оранжевая', map.x, map.y + map.s + 4);
+    if (diverged) {
+      ctx.fillStyle = '#ff6a6a'; ctx.textAlign = 'center';
+      ctx.fillText('Обучение разошлось — веса сброшены. Уменьшите шаг обучения.', map.x + map.s / 2, map.y + 8);
+    }
+  }
+
+  function draw() {
+    if (!W || !sizes.length) return;
+    ctx.fillStyle = '#101318';
+    ctx.fillRect(0, 0, W, H);
+    evalGrid();
+    drawNet();
+    drawMap();
+  }
+
+  // ---------- Метрики ----------
+  var lossTrain = 0, lossTest = 0, accTest = 0, accTrain = 0;
+  function measure() {
+    var a = lossOf(train), b = lossOf(test);
+    lossTrain = a.loss; accTrain = a.acc;
+    lossTest = b.loss; accTest = b.acc;
+    if (!isFinite(lossTrain) || !isFinite(lossTest)) {
+      diverged = true;
+      weightSeed++; buildNet();
+      a = lossOf(train); b = lossOf(test);
+      lossTrain = a.loss; lossTest = b.loss; accTrain = a.acc; accTest = b.acc;
+    }
+  }
+  function paramCount() {
+    var n = 0;
+    for (var k = 0; k < Wt.length; k++) n += Wt[k].length * (Wt[k][0].length + 1);
+    return n;
+  }
+  function weightNorm() {
+    var s = 0;
+    for (var k = 0; k < Wt.length; k++) for (var j = 0; j < Wt[k].length; j++) {
+      for (var i = 0; i < Wt[k][j].length; i++) s += Wt[k][j][i] * Wt[k][j][i];
+    }
+    return Math.sqrt(s);
+  }
+
+  function updateReadouts() {
+    rEpoch.set(epoch);
+    rLoss.set(lossTrain);
+    rLossT.set(lossTest);
+    rAcc.set(accTest * 100);
+    rParams.set(paramCount());
+    rLr.set(lr);
+    formulaW.set({ eta: lr, L: lossTrain, n: train.length });
+  }
+
+  // ---------- Главный цикл ----------
+  var running = true;
+  var lastFrame = null;
+  var stepAcc = 0;
+  var STEPS_PER_SEC = 60;      // шагов SGD в секунду при скорости 1×
+  var lastChartEpoch = -1;
+
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000) * speedCtl.get();
+    lastFrame = now;
+    if (running && train.length) {
+      stepAcc += dt * STEPS_PER_SEC;
+      var n = Math.min(80, Math.floor(stepAcc));
+      stepAcc -= n;
+      if (n > 0) {
+        diverged = false;
+        for (var i = 0; i < n; i++) sgdStep();
+        measure();
+        if (epoch - lastChartEpoch >= 0.5) {
+          lastChartEpoch = epoch;
+          lossChart.push(epoch, [lossTrain, lossTest]);
+        }
+        updateReadouts();
+        draw();
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  /** Перестроение сети (архитектура/веса) с перерисовкой — работает и на паузе. */
+  function rebuild() {
+    buildNet();
+    steps = 0; epoch = 0; cursor = 0; stepAcc = 0; lastChartEpoch = -1;
+    diverged = false;
+    lossChart.clear();
+    measure();
+    lossChart.push(0, [lossTrain, lossTest]);
+    updateReadouts();
+    draw();
+  }
+
+  function resetSim() {
+    weightSeed++;
+    lastFrame = null;
+    rebuild();
+  }
+
+  // ---------- Клик по карте добавляет точку ----------
+  cv.addEventListener('click', function (e) {
+    var x = (e.clientX - map.x) / map.s * 2.2 - 1.1;
+    var y = 1.1 - (e.clientY - map.y) / map.s * 2.2;
+    if (Math.abs(x) > 1.1 || Math.abs(y) > 1.1) return;
+    train.push({ x: x, y: y, c: e.shiftKey ? 0 : 1 });
+    measure(); updateReadouts(); draw();
+  });
+
+  // ---------- SimUI ----------
+  SimUI.title('Нейросеть учится');
+  SimUI.goals([
+    'Как градиентный спуск шаг за шагом двигает границу решения',
+    'Почему XOR и спираль не разделить одним нейроном',
+    'Что такое переобучение: потери на тесте перестают падать',
+    'Как слишком большой шаг обучения ломает обучение',
+  ]);
+  SimUI.select({
+    name: 'dataset', label: 'Набор данных', options: DATASETS, value: dataset,
+    onChange: function (v) { dataset = v; makeData(); resetSim(); },
+  });
+  SimUI.select({
+    name: 'activation', label: 'Функция активации',
+    options: [{ value: 'tanh', label: 'tanh' }, { value: 'relu', label: 'ReLU' },
+      { value: 'sigmoid', label: 'сигмоида' }],
+    value: actName,
+    onChange: function (v) { actName = v; resetSim(); },
+  });
+  SimUI.slider({
+    name: 'lr', label: 'Шаг обучения η', min: 0.001, max: 0.5, step: 0.001, value: lr, unit: '',
+    onChange: function (v) { lr = v; updateReadouts(); },
+  });
+  SimUI.slider({
+    name: 'layers', label: 'Скрытых слоёв', min: 1, max: 3, step: 1, value: nLayers, unit: '',
+    onChange: function (v) { nLayers = Math.round(v); rebuild(); },
+  });
+  SimUI.slider({
+    name: 'neurons', label: 'Нейронов в слое', min: 1, max: 8, step: 1, value: nHidden, unit: '',
+    onChange: function (v) { nHidden = Math.round(v); rebuild(); },
+  });
+  SimUI.slider({
+    name: 'noise', label: 'Шум в данных', min: 0, max: 0.6, step: 0.01, value: noise, unit: '',
+    onChange: function (v) { noise = v; makeData(); measure(); updateReadouts(); draw(); },
+  });
+  SimUI.presets({ items: [
+    { label: 'Один нейрон', values: { layers: 1, neurons: 1 } },
+    { label: 'Сбалансировано', values: { layers: 2, neurons: 5, lr: 0.03 } },
+    { label: 'Слишком быстрый шаг', values: { lr: 0.5 } },
+  ] });
+  var speedCtl = SimUI.speed({ values: [0.25, 0.5, 1, 2, 4], value: 1 });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: function () { resetSim(); },
+  });
+
+  var formulaW = SimUI.formula({
+    title: 'Градиентный спуск',
+    tex: 'w \\leftarrow w - \\eta\\,\\dfrac{\\partial L}{\\partial w}',
+    vars: { eta: { label: 'η' }, L: { label: 'L' }, n: { label: 'n' } },
+    note: 'L — перекрёстная энтропия: L = −(1/n)·Σ[y·ln p + (1−y)·ln(1−p)]. Градиент ∂L/∂w для всех весов считается обратным распространением ошибки — от выхода к входу.',
+    corner: 'tl',
+  });
+  var rEpoch = SimUI.readout({ label: 'Эпоха', digits: 1, corner: 'bl' });
+  var rLoss = SimUI.readout({ label: 'Потери (обучение)', digits: 3, corner: 'bl' });
+  var rLossT = SimUI.readout({ label: 'Потери (тест)', digits: 3, corner: 'bl' });
+  var rAcc = SimUI.readout({ label: 'Точность на тесте', unit: '%', digits: 1, corner: 'bl' });
+  var rParams = SimUI.readout({ label: 'Параметров сети', digits: 0, corner: 'bl' });
+  var rLr = SimUI.readout({ label: 'Шаг обучения η', digits: 3, corner: 'bl' });
+  var lossChart = SimUI.chart({
+    title: 'Функция потерь', xLabel: 'эпоха', yLabel: 'L',
+    series: [{ name: 'обучение', color: '#4f8ff7' }, { name: 'тест', color: '#ffb27a' }],
+    corner: 'br', maxPoints: 400,
+  });
+
+  SimUI.expose({
+    getState: function () {
+      return { epoch: epoch, steps: steps, lossTrain: lossTrain, lossTest: lossTest,
+        accuracy: accTest, weightNorm: weightNorm(), params: paramCount(),
+        points: train.length + test.length };
+    },
+    reset: resetSim,
+  });
+
+  // ---------- Инициализация ----------
+  window.addEventListener('resize', resize);
+  makeData();
+  buildNet();
+  measure();
+  lossChart.push(0, [lossTrain, lossTest]);
+  updateReadouts();
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

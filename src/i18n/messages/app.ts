@@ -16,7 +16,7 @@ export const app = defineMessages({
     libSections: 'Разделы', libAll: 'Все разделы', libNewest: 'Новые', libAbc: 'По алфавиту',
     libNothing: 'Ничего не нашлось. Попробуйте другой запрос.',
     libOpenSim: 'Открыть тренажёр «{title}»', open: 'Открыть', libInWorkbench: 'В мастерской',
-    libDownload: 'Скачать HTML', delete: 'Удалить',
+    libDownload: 'Скачать HTML', delete: 'Удалить', libViewGrid: 'Плиткой', libViewList: 'Списком', libEdit: 'Изменить', labsAll: 'Все предметы',
 
     // Лаборатории
     labsTitle: 'Лаборатории', labsCreate: 'Создать лабораторию',
@@ -111,7 +111,7 @@ export const app = defineMessages({
     libSections: 'Бөлімдер', libAll: 'Барлық бөлімдер', libNewest: 'Жаңалары', libAbc: 'Әліпби бойынша',
     libNothing: 'Ештеңе табылмады. Басқа сұрау жазып көріңіз.',
     libOpenSim: '«{title}» тренажерін ашу', open: 'Ашу', libInWorkbench: 'Шеберханада',
-    libDownload: 'HTML жүктеп алу', delete: 'Жою',
+    libDownload: 'HTML жүктеп алу', delete: 'Жою', libViewGrid: 'Тақтайша', libViewList: 'Тізім', libEdit: 'Өзгерту', labsAll: 'Барлық пәндер',
 
     labsTitle: 'Зертханалар', labsCreate: 'Зертхана жасау',
     labsLead: 'Үш өлшемді сахналар: браузерде ашылады және тінтуірмен қаралады. Нысанға меңзерді апарыңыз — жазу шығады; нысандарды қолмен алуға болады.',
@@ -196,7 +196,7 @@ export const app = defineMessages({
     libSections: 'Subjects', libAll: 'All subjects', libNewest: 'Newest', libAbc: 'A–Z',
     libNothing: 'Nothing found. Try a different search.',
     libOpenSim: 'Open simulator “{title}”', open: 'Open', libInWorkbench: 'In the workshop',
-    libDownload: 'Download HTML', delete: 'Delete',
+    libDownload: 'Download HTML', delete: 'Delete', libViewGrid: 'Grid', libViewList: 'List', libEdit: 'Edit', labsAll: 'All subjects',
 
     labsTitle: 'Labs', labsCreate: 'Create a lab',
     labsLead: '3D scenes: they open in the browser and you look around with the mouse. Hover over an object to see its label; objects can be picked up.',

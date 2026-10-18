@@ -1,16 +1,18 @@
 import NavLinks from '@/components/NavLinks';
-import { IconLogo } from '@/components/icons';
+import Link from 'next/link';
+import TesseractMark from '@/components/TesseractMark';
 import { currentUserFromCookies } from '@/lib/auth/session';
 import { userContact } from '@/lib/auth/identifier';
 import { listMemberships } from '@/lib/org/access';
 import { GUEST_NAV_SECTIONS, navSections } from '@/lib/org/policy';
+import { getPlatformSettings } from '@/lib/platform-settings';
 
-/** Марка в шапке: одна и та же на сайте, в форме смены пароля и на странице 404. */
+/** Марка в шапке: одна и та же на сайте, в форме смены пароля и на странице 404. Ведёт на главную. */
 export function Brand() {
   return (
-    <span className="brand">
-      <span className="brand-mark"><IconLogo size={15} /></span>Tesseract
-    </span>
+    <Link href="/" className="brand" aria-label="Tesseract">
+      <span className="brand-mark"><TesseractMark size={22} /></span><span className="brand-name">Tesseract</span>
+    </Link>
   );
 }
 
@@ -25,11 +27,12 @@ export default async function SiteChrome({ children }: { children: React.ReactNo
   const memberships = user ? await listMemberships(user.id) : [];
   const sections = user ? navSections(user, memberships) : [...GUEST_NAV_SECTIONS];
   const student = memberships.some((m) => m.role === 'student');
+  const { registrationOpen } = await getPlatformSettings();
   return (
     <>
       <nav className="topnav">
         <Brand />
-        <NavLinks sections={sections} student={student}
+        <NavLinks sections={sections} student={student} registrationOpen={registrationOpen}
           user={user ? { label: userContact(user), role: user.role } : undefined} />
       </nav>
       <main>{children}</main>

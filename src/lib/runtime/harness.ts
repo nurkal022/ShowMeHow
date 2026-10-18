@@ -16,7 +16,7 @@ export const HARNESS_JS = `
         var cs = smh.controls() || [];
         for (var i = 0; i < cs.length; i++) {
           out.controls.push({ name: cs[i].name, label: cs[i].label, kind: cs[i].kind,
-            min: cs[i].min, max: cs[i].max, value: cs[i].value });
+            min: cs[i].min, max: cs[i].max, step: cs[i].step, options: cs[i].options, value: cs[i].value });
         }
         out.state = smh.state();
         out.ok = out.controls.length > 0;
@@ -130,6 +130,17 @@ export const HARNESS_JS = `
     if (d.type === 'sim-reset') window.dispatchEvent(new CustomEvent('sim-reset'));
     if (d.type === 'sim-state-request') replyState(d.id);
     if (d.type === 'sim-apply') applyPreset(d);
+    // Хост рисует кнопки тренажёра у себя (урок, показ) и нажимает их по имени.
+    if (d.type === 'sim-activate' && window.__smh) {
+      var okA = false;
+      try { okA = window.__smh.activate(String(d.name)); } catch (e) {}
+      try { parent.postMessage({ type: 'sim-activated', id: d.id, name: d.name, ok: okA }, '*'); } catch (e2) {}
+    }
+    if (d.type === 'sim-set' && window.__smh) {
+      var okS = false;
+      try { okS = window.__smh.setControl(String(d.name), d.value); } catch (e) {}
+      try { parent.postMessage({ type: 'sim-set-done', id: d.id, name: d.name, ok: okS }, '*'); } catch (e2) {}
+    }
     if (d.type === 'sim-readouts-request') replyReadouts(d.id);
     if (d.type === 'smh-pick-start') startPick();
     if (d.type === 'smh-pick-stop') stopPick();

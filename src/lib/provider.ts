@@ -23,8 +23,26 @@ export function imagePart(dataUrl: string): ContentPart {
   return { type: 'image_url', image_url: { url: dataUrl } };
 }
 
+/**
+ * Таймаут SDK по умолчанию — 10 минут, плюс собственные повторы SDK поверх наших:
+ * повисший запрос держал генерацию четверть часа. Повторы делает chatWithClient.
+ */
 export function makeClient(p: ProviderProfile): OpenAI {
-  return new OpenAI({ baseURL: p.baseURL, apiKey: p.apiKey });
+  return new OpenAI({ baseURL: p.baseURL, apiKey: p.apiKey, timeout: 6 * 60_000, maxRetries: 0 });
+}
+
+/**
+ * Поток молчит дольше этого — провайдер завис: обрываем и повторяем. Первый кусок у
+ * рассуждающих моделей приходит не сразу, поэтому порог щедрый.
+ */
+export const STREAM_IDLE_MS = 120_000;
+
+/** Ответ модели завис (поток долго молчит) — повторяемая ошибка. */
+export class StalledStreamError extends Error {
+  constructor() {
+    super('provider stream stalled');
+    this.name = 'StalledStreamError';
+  }
 }
 
 export interface UsageInfo {
@@ -50,7 +68,7 @@ const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 /** OpenAI для GPT-5 и o-серии принимает только max_completion_tokens; совместимые провайдеры (MaaS) — max_tokens. */
 function tokenLimit(client: OpenAI, maxTokens?: number): Record<string, number> {
   if (!maxTokens) return {};
-  return client.baseURL.includes('api.openai.com') ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens };
+  return (client.baseURL ?? '').includes('api.openai.com') ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens };
 }
 
 const NON_RETRYABLE_STATUSES = new Set([400, 401, 403, 404, 422]);
@@ -135,25 +153,42 @@ async function once(
     try {
       if (onDelta) {
         // Потоковый ответ: текст собирается из кусков, usage приходит последним кадром.
-        const stream = await client.chat.completions.create({
-          model,
-          messages: messages as never,
-          ...tokenLimit(client, maxTokens),
-          ...extraBody,
-          stream: true,
-          stream_options: { include_usage: true },
-        } as never) as unknown as AsyncIterable<{
-          choices?: { delta?: { content?: string | null }; finish_reason?: string | null }[];
-          usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
-        }>;
+        // Сторож молчания: нет кусков STREAM_IDLE_MS — обрываем запрос, и он уходит на повтор.
+        const ctrl = new AbortController();
+        let stalled = false;
+        let idle: ReturnType<typeof setTimeout> | null = null;
+        const arm = () => {
+          if (idle) clearTimeout(idle);
+          idle = setTimeout(() => { stalled = true; ctrl.abort(); }, STREAM_IDLE_MS);
+        };
+        arm();
         let text = '';
         let finish: string | null = null;
         let usage: { prompt_tokens?: number; completion_tokens?: number } | null = null;
-        for await (const chunk of stream) {
-          const piece = chunk.choices?.[0]?.delta?.content;
-          if (piece) { text += piece; onDelta(piece); }
-          finish = chunk.choices?.[0]?.finish_reason ?? finish;
-          if (chunk.usage) usage = chunk.usage;
+        try {
+          const stream = await client.chat.completions.create({
+            model,
+            messages: messages as never,
+            ...tokenLimit(client, maxTokens),
+            ...extraBody,
+            stream: true,
+            stream_options: { include_usage: true },
+          } as never, { signal: ctrl.signal } as never) as unknown as AsyncIterable<{
+            choices?: { delta?: { content?: string | null }; finish_reason?: string | null }[];
+            usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
+          }>;
+          for await (const chunk of stream) {
+            arm();
+            const piece = chunk.choices?.[0]?.delta?.content;
+            if (piece) { text += piece; onDelta(piece); }
+            finish = chunk.choices?.[0]?.finish_reason ?? finish;
+            if (chunk.usage) usage = chunk.usage;
+          }
+        } catch (e) {
+          if (stalled) throw new StalledStreamError();
+          throw e;
+        } finally {
+          if (idle) clearTimeout(idle);
         }
         if (!text) throw new EmptyResponseError();
         onUsage?.({ promptTokens: usage?.prompt_tokens ?? 0, completionTokens: usage?.completion_tokens ?? 0, ms: Date.now() - started });

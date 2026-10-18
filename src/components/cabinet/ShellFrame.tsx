@@ -3,8 +3,11 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  IconAlert, IconBack, IconCourses, IconLogo, IconSpark, IconLogout, IconMonitor, IconMoon, IconOrg, IconPlus, IconSun, IconTeach, IconUser,
+  IconAlert, IconBack, IconCourses, IconSpark, IconLogout, IconMonitor, IconMoon, IconOrg, IconPlus, IconSun, IconTeach, IconUser,
 } from '@/components/icons';
+import TesseractMark from '@/components/TesseractMark';
+import { ICONS as SITE_ICONS, isSectionActive } from '@/components/NavLinks';
+import { nav } from '@/i18n/messages/nav';
 import {
   IconCatalog, IconChart, IconChevronRight, IconDashboard, IconGroup, IconInbox, IconList, IconMenu, IconPeople, IconSettings,
 } from './icons';
@@ -86,7 +89,7 @@ export default function ShellFrame({ menu, user, switchTargets = [], children }:
       <aside className="cab-sidebar no-print" aria-label={t('sidebar')}>
         {/* useSearchParams требует границы Suspense — но только вокруг меню, не вокруг страницы:
             иначе ответ начал бы уходить до того, как страница решит, что она 404. */}
-        <Suspense fallback={<SidebarBrand href="/" />}>
+        <Suspense fallback={<SidebarBrand />}>
           <SidebarMenu menu={menu} pathname={pathname} onNavigate={() => setDrawer(false)} />
         </Suspense>
 
@@ -117,11 +120,12 @@ export default function ShellFrame({ menu, user, switchTargets = [], children }:
   );
 }
 
-function SidebarBrand({ href }: { href: string }) {
+/** Марка в боковой панели кабинета: как и везде, ведёт на главную страницу. */
+function SidebarBrand() {
   const t = useT(cabinet);
   return (
-    <Link href={href} className="cab-brand" title="Tesseract">
-      <span className="brand-mark"><IconLogo size={15} /></span>
+    <Link href="/" className="cab-brand" title="Tesseract">
+      <span className="brand-mark"><TesseractMark size={22} /></span>
       <span className="cab-brand-text">Tesseract<small>{t('brandSub')}</small></span>
     </Link>
   );
@@ -139,6 +143,7 @@ function useMenuState(menu: CabinetMenu, pathname: string) {
 function SidebarMenu({ menu, pathname, onNavigate }: { menu: CabinetMenu; pathname: string; onNavigate: () => void }) {
   const router = useRouter();
   const t = useT(cabinet);
+  const tn = useT(nav);
   const { org, section, groups, roleOfOrg } = useMenuState(menu, pathname);
 
   // Смена организации — тоже переход: выдвижная панель на телефоне закрывается.
@@ -153,7 +158,7 @@ function SidebarMenu({ menu, pathname, onNavigate }: { menu: CabinetMenu; pathna
 
   return (
     <>
-      <SidebarBrand href={groups[0]?.items[0]?.href ?? '/'} />
+      <SidebarBrand />
 
       <SidebarOrg menu={menu} org={org} section={section}
         onPick={(slug, role) => {
@@ -180,6 +185,22 @@ function SidebarMenu({ menu, pathname, onNavigate }: { menu: CabinetMenu; pathna
             })}
           </div>
         ))}
+        {menu.site.length > 0 && (
+          <div className="cab-nav-group">
+            <div className="cab-nav-title">{t('group_site')}</div>
+            {menu.site.map(({ key, href }) => {
+              const Icon = SITE_ICONS[key];
+              const active = isSectionActive(href, pathname);
+              const label = tn(key);
+              return (
+                <Link key={key} href={href} title={label} aria-current={active ? 'page' : undefined}
+                  className={`cab-nav-item${active ? ' active' : ''}`}>
+                  <Icon size={18} /><span>{label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </nav>
     </>
   );

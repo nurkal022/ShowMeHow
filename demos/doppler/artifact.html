@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Эффект Доплера и конус Маха</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #090c11; }
+  #scene { position: fixed; top: 0; left: 0; display: block; z-index: 0; cursor: crosshair; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<script>
+(function () {
+  'use strict';
+
+  var cv = document.getElementById('scene');
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0;
+
+  // ---------- Масштабы ----------
+  // Модель живёт в настоящих единицах (м, с, c = 340 м/с), а на экран идёт
+  // в замедленной съёмке: 1 с экрана = TS с модели, 1 м = PPM пикселей.
+  var C = 340;
+  var PPM = 40;
+  var TS = 1 / 150;
+  var ORX = 0, ORY = 0;        // экранные координаты точки (0, 0) модели
+  var XL = 0, XR = 15;         // участок пути источника, м
+
+  function layout() {
+    var left = W > 900 ? 360 : 10, right = W > 900 ? 300 : 10;
+    var spanPx = W - left - right;
+    PPM = Math.max(22, Math.min(46, spanPx / 15));
+    ORX = left;
+    ORY = H * 0.42;
+    XL = 0; XR = spanPx / PPM;
+  }
+  function sx(x) { return ORX + x * PPM; }
+  function sy(y) { return ORY + y * PPM; }
+
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    if (!listenerSet) { lis.x = XR * 0.62; lis.y = 3; }
+    draw();
+  }
+
+  // ---------- Состояние ----------
+  var M = 0.6;               // число Маха источника
+  var f0 = 300;              // частота источника, Гц
+  var src = { x: 0.5, y: 0 };
+  var lis = { x: 9, y: 3 };
+  var listenerSet = false;
+  var fronts = [];           // {x, y, te, heard}
+  var t = 0;                 // модельное время, с
+  var nextEmit = 0;
+  var running = true, lastFrame = null;
+  var lastHeard = null;      // {f, x, y, cos}
+  var lastArrivalT = null, measuredF = null;
+  var inside = false, booms = 0, boomFlash = 0, earPulse = 0;
+  var passStart = 0;
+
+  function v() { return M * C; }
+  function lambdaAhead() { return M < 1 ? (C - v()) / f0 : 0; }
+  function lambdaBehind() { return (C + v()) / f0; }
+  function coneDeg() { return M > 1 ? Math.asin(1 / M) * 180 / Math.PI : 90; }
+
+  function emit() {
+    fronts.push({ x: src.x, y: src.y, te: t, heard: false });
+  }
+
+  function step(dtModel) {
+    var t1 = t + dtModel;
+    // излучаем фронты строго в моменты k/f₀ и в точках, где источник был в этот момент
+    while (nextEmit <= t1) {
+      var back = t1 - nextEmit;
+      var ex = src.x + v() * (dtModel - back);
+      if (ex > XR + 1) break;
+      fronts.push({ x: ex, y: src.y, te: nextEmit, heard: false });
+      nextEmit += 1 / f0;
+    }
+    t = t1;
+    src.x += v() * dtModel;
+    if (src.x > XR + 1) {          // источник ушёл за край — следующий проход
+      src.x = XL - 1; passStart = t; inside = false;
+      nextEmit = Math.max(nextEmit, t);
+    }
+    // приход фронтов к слушателю: частота, которую несёт фронт, f' = f₀ / |1 − M cosθ|
+    var R = 0;
+    for (var i = fronts.length - 1; i >= 0; i--) {
+      var fr = fronts[i];
+      R = C * (t - fr.te);
+      if (!fr.heard) {
+        var dx = lis.x - fr.x, dy = lis.y - fr.y, dist = Math.hypot(dx, dy);
+        if (R >= dist) {
+          fr.heard = true;
+          var cos = dist > 1e-9 ? dx / dist : 1;
+          var den = 1 - M * cos;
+          var fp = f0 / Math.max(0.02, Math.abs(den));
+          lastHeard = { f: fp, x: fr.x, y: fr.y, cos: cos, reversed: den < 0 };
+          if (lastArrivalT !== null && t > lastArrivalT) {
+            var mf = 1 / (t - lastArrivalT);
+            measuredF = mf;
+          }
+          lastArrivalT = t;
+          earPulse = 1;
+          chartPending = fp;
+        }
+      }
+      if (R > 40) fronts.splice(i, 1);
+    }
+    // звуковой удар: слушатель попадает внутрь конуса Маха
+    if (M > 1) {
+      var ddx = src.x - lis.x, ddy = Math.abs(lis.y - src.y);
+      var inNow = ddx > 0 && ddy <= ddx * Math.tan(Math.asin(1 / M));
+      if (inNow && !inside) { booms++; boomFlash = 1; playBoom(); }
+      inside = inNow;
+    } else {
+      inside = false;
+    }
+  }
+  var chartPending = null;
+
+  // ---------- Рисование ----------
+  function draw() {
+    ctx.fillStyle = '#090c11';
+    ctx.fillRect(0, 0, W, H);
+
+    // сетка «1 м»
+    ctx.strokeStyle = 'rgba(120,140,170,0.06)';
+    ctx.lineWidth = 1;
+    for (var gx = ORX % PPM; gx < W; gx += PPM) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+    for (var gy = ORY % PPM; gy < H; gy += PPM) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+    // путь источника
+    ctx.strokeStyle = 'rgba(120,140,170,0.22)';
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath(); ctx.moveTo(0, ORY); ctx.lineTo(W, ORY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // волновые фронты
+    var i;
+    for (i = 0; i < fronts.length; i++) {
+      var fr = fronts[i];
+      var R = C * (t - fr.te);
+      if (R <= 0) continue;
+      var a = Math.max(0, 0.85 - R / 30);
+      if (a <= 0) continue;
+      ctx.strokeStyle = 'rgba(90,190,255,' + a + ')';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(sx(fr.x), sy(fr.y), R * PPM, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // конус Маха
+    if (M > 1) {
+      var al = Math.asin(1 / M), Lc = 40;
+      ctx.strokeStyle = 'rgba(255,120,80,0.85)';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(sx(src.x - Lc * Math.cos(al)), sy(src.y - Lc * Math.sin(al)));
+      ctx.lineTo(sx(src.x), sy(src.y));
+      ctx.lineTo(sx(src.x - Lc * Math.cos(al)), sy(src.y + Lc * Math.sin(al)));
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,120,80,0.06)';
+      ctx.beginPath();
+      ctx.moveTo(sx(src.x), sy(src.y));
+      ctx.lineTo(sx(src.x - Lc * Math.cos(al)), sy(src.y - Lc * Math.sin(al)));
+      ctx.lineTo(sx(src.x - Lc * Math.cos(al)), sy(src.y + Lc * Math.sin(al)));
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ff9070';
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText('α = ' + coneDeg().toFixed(1) + '°', sx(src.x) - 70, sy(src.y) - 10);
+    }
+
+    // линия «откуда пришёл звук»: точка излучения последнего услышанного фронта
+    if (lastHeard) {
+      ctx.save();
+      ctx.setLineDash([3, 4]);
+      ctx.strokeStyle = 'rgba(255,210,120,0.55)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(sx(lastHeard.x), sy(lastHeard.y)); ctx.lineTo(sx(lis.x), sy(lis.y)); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = 'rgba(255,210,120,0.8)';
+      ctx.beginPath(); ctx.arc(sx(lastHeard.x), sy(lastHeard.y), 3, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // источник
+    var px = sx(src.x), py = sy(src.y);
+    var g = ctx.createRadialGradient(px, py, 0, px, py, 18);
+    g.addColorStop(0, 'rgba(255,230,160,1)');
+    g.addColorStop(1, 'rgba(255,160,60,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(px, py, 18, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffd27a';
+    ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
+    if (M > 0) {
+      ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 2;
+      var ar = 18 + 22 * Math.min(2, M);
+      ctx.beginPath(); ctx.moveTo(px + 8, py); ctx.lineTo(px + ar, py); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(px + ar, py); ctx.lineTo(px + ar - 6, py - 4); ctx.lineTo(px + ar - 6, py + 4); ctx.closePath();
+      ctx.fillStyle = '#ffd27a'; ctx.fill();
+    }
+
+    // слушатель
+    var lx = sx(lis.x), ly = sy(lis.y);
+    if (earPulse > 0) {
+      ctx.strokeStyle = 'rgba(160,255,190,' + earPulse * 0.8 + ')';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(lx, ly, 10 + 14 * (1 - earPulse), 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.fillStyle = '#8affb0';
+    ctx.beginPath(); ctx.arc(lx, ly, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c8d2e0';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('слушатель', lx, ly + 24);
+    if (lastHeard) {
+      ctx.font = 'bold 14px system-ui, sans-serif';
+      ctx.fillStyle = lastHeard.f > f0 * 1.005 ? '#7fc8ff' : (lastHeard.f < f0 * 0.995 ? '#ff9f7a' : '#c8d2e0');
+      ctx.fillText(Math.round(lastHeard.f) + ' Гц' + (lastHeard.reversed ? ' ⟲' : ''), lx, ly + 42);
+    }
+    if (boomFlash > 0) {
+      ctx.strokeStyle = 'rgba(255,90,60,' + boomFlash + ')';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(lx, ly, 20 + 60 * (1 - boomFlash), 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,120,80,' + boomFlash + ')';
+      ctx.font = 'bold 26px system-ui, sans-serif';
+      ctx.fillText('БУМ!', lx, ly - 30);
+    }
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#5c6675';
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText('клетка = 1 м · замедление в ' + Math.round(1 / TS) + ' раз · щёлкните, чтобы переставить слушателя', ORX, H - 16);
+  }
+
+  // ---------- Звук (по желанию) ----------
+  var audio = null, osc = null, gainNode = null, soundOn = false;
+  function ensureAudio() {
+    if (audio) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audio = new AC();
+    osc = audio.createOscillator();
+    gainNode = audio.createGain();
+    gainNode.gain.value = 0;
+    osc.type = 'triangle';
+    osc.frequency.value = f0;
+    osc.connect(gainNode); gainNode.connect(audio.destination);
+    osc.start();
+  }
+  function updateSound() {
+    if (!audio || !gainNode) return;
+    var on = soundOn && running && lastHeard;
+    gainNode.gain.setTargetAtTime(on ? 0.06 : 0, audio.currentTime, 0.05);
+    if (lastHeard) osc.frequency.setTargetAtTime(Math.min(4000, lastHeard.f), audio.currentTime, 0.02);
+  }
+  function playBoom() {
+    if (!soundOn || !audio) return;
+    var len = Math.floor(audio.sampleRate * 0.35);
+    var buf = audio.createBuffer(1, len, audio.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.18));
+    var s = audio.createBufferSource(), gn = audio.createGain();
+    gn.gain.value = 0.5;
+    s.buffer = buf; s.connect(gn); gn.connect(audio.destination); s.start();
+  }
+
+  // ---------- Цикл ----------
+  var lastUi = -1;
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dtv = Math.min(0.05, (now - lastFrame) / 1000) * speedCtl.get();
+    lastFrame = now;
+    if (running) {
+      step(dtv * TS);
+      earPulse = Math.max(0, earPulse - dtv * 3);
+      boomFlash = Math.max(0, boomFlash - dtv * 0.8);
+      if (chartPending !== null) {
+        fChart.push(t * 1000, [chartPending, f0]);
+        chartPending = null;
+      }
+      draw();
+      if (now - lastUi > 120) { lastUi = now; updateUi(); }
+      updateSound();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function regime() {
+    if (M < 0.005) return 0;
+    if (Math.abs(M - 1) < 0.02) return 2;
+    return M < 1 ? 1 : 3;
+  }
+
+  function updateUi() {
+    rV.set(v());
+    rM.set(M);
+    rLa.set(M < 1 ? lambdaAhead().toFixed(2) + ' м' : 'нет — фронты слились');
+    rLb.set(lambdaBehind());
+    rF.set(lastHeard ? Math.round(lastHeard.f) + ' Гц' + (lastHeard.reversed ? ' (обратный порядок)' : '') : 'ещё не дошёл');
+    rFm.set(measuredF !== null && M < 1 ? Math.round(measuredF) + ' Гц' : '—');
+    rFa.set(M < 1 ? Math.round(f0 / (1 - M)) + ' Гц' : 'звук не обгоняет источник');
+    rCone.set(M > 1 ? coneDeg().toFixed(1) + '°' : 'нет конуса');
+    rBoom.set(booms);
+    banner.set(regime());
+    formula.set({ f0: f0 + ' Гц', v: Math.round(v()) + ' м/с', c: C + ' м/с',
+      cos: lastHeard ? lastHeard.cos.toFixed(2) : '—', f: lastHeard ? Math.round(lastHeard.f) + ' Гц' : '—' });
+  }
+
+  function resetSim() {
+    fronts = []; t = 0; nextEmit = 0; src.x = XL + 0.5; passStart = 0;
+    lastHeard = null; lastArrivalT = null; measuredF = null; inside = false; booms = 0;
+    boomFlash = 0; earPulse = 0; lastFrame = null;
+    fChart.clear();
+    updateUi();
+    draw();
+  }
+
+  // Слушатель переставляется щелчком
+  cv.addEventListener('pointerdown', function (e) {
+    lis.x = (e.clientX - ORX) / PPM;
+    lis.y = (e.clientY - ORY) / PPM;
+    listenerSet = true;
+    lastHeard = null; lastArrivalT = null; measuredF = null; inside = false;
+    for (var i = 0; i < fronts.length; i++) {
+      var fr = fronts[i];
+      fr.heard = C * (t - fr.te) >= Math.hypot(lis.x - fr.x, lis.y - fr.y);
+    }
+    fChart.clear();
+    updateUi();
+    draw();
+  });
+
+  // ---------- SimUI ----------
+  SimUI.title('Эффект Доплера');
+  SimUI.goals([
+    'Впереди движущегося источника фронты сжимаются — звук выше',
+    'Позади фронты растянуты — звук ниже',
+    'При v = c фронты сливаются в звуковой барьер',
+    'При v > c возникает конус Маха: sin α = 1/M, слушатель слышит удар',
+  ]);
+  SimUI.slider({ name: 'mach', label: 'Скорость источника, M = v/c', min: 0, max: 2, step: 0.01, value: M, unit: '',
+    onChange: function (val) { M = val; updateUi(); draw(); } });
+  SimUI.slider({ name: 'f0', label: 'Частота источника f₀', min: 100, max: 1000, step: 10, value: f0, unit: 'Гц',
+    onChange: function (val) { f0 = val; nextEmit = Math.max(nextEmit, t); updateUi(); draw(); } });
+  SimUI.presets({ items: [
+    { label: 'Машина', values: { mach: 0.08, f0: 400 } },
+    { label: 'Поезд', values: { mach: 0.25, f0: 300 } },
+    { label: 'Звуковой барьер', values: { mach: 1, f0: 300 } },
+    { label: 'Истребитель M2', values: { mach: 2, f0: 300 } },
+  ] });
+  SimUI.toggle({ name: 'sound', label: 'Звук у слушателя', value: false,
+    onChange: function (on) {
+      soundOn = on;
+      if (on) { ensureAudio(); if (audio && audio.resume) audio.resume(); }
+      updateSound();
+    } });
+  var speedCtl = SimUI.speed({ values: [0.25, 0.5, 1, 2], value: 1 });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; updateSound(); },
+    onReset: resetSim,
+  });
+
+  var banner = SimUI.banner({ items: [
+    { name: 'Покой', sub: 'фронты — концентрические окружности', color: '#8b95a3' },
+    { name: 'Дозвук', sub: 'впереди звук выше, позади — ниже', color: '#4f8ff7' },
+    { name: 'Звуковой барьер', sub: 'v = c: фронты сливаются в ударную волну', color: '#ffcf5a' },
+    { name: 'Сверхзвук', sub: 'конус Маха: звук приходит после самолёта — ударом', color: '#ff7a50' },
+  ] });
+  var formula = SimUI.formula({
+    title: 'Эффект Доплера',
+    tex: "f' = \\frac{f_0}{1 - \\frac{v}{c}\\cos\\theta},\\qquad \\sin\\alpha = \\frac{1}{M}",
+    vars: { f0: { label: 'f₀' }, v: { label: 'v' }, c: { label: 'c' }, cos: { label: 'cos θ' }, f: { label: "f'" } },
+    note: 'θ — угол между скоростью источника и направлением на слушателя в момент излучения (жёлтый пунктир).',
+    corner: 'tl',
+  });
+  var rV = SimUI.readout({ label: 'Скорость источника v', unit: 'м/с', digits: 0, corner: 'bl' });
+  var rM = SimUI.readout({ label: 'Число Маха M', unit: '', digits: 2, corner: 'bl' });
+  var rLa = SimUI.readout({ label: 'λ впереди (c − v)/f₀', unit: '', corner: 'bl' });
+  var rLb = SimUI.readout({ label: 'λ позади (c + v)/f₀', unit: 'м', digits: 2, corner: 'bl' });
+  var rFa = SimUI.readout({ label: "f' прямо по курсу", unit: '', corner: 'bl' });
+  var rF = SimUI.readout({ label: "Слышит слушатель f'", unit: '', corner: 'bl' });
+  var rFm = SimUI.readout({ label: "f' по интервалу фронтов", unit: '', corner: 'bl' });
+  var rCone = SimUI.readout({ label: 'Угол конуса Маха α', unit: '', corner: 'bl' });
+  var rBoom = SimUI.readout({ label: 'Звуковых ударов', unit: '', digits: 0, corner: 'bl' });
+  var fChart = SimUI.chart({
+    title: 'Частота у слушателя', xLabel: 't, мс', yLabel: 'Гц', maxPoints: 400,
+    series: [{ name: "f'", color: '#8affb0' }, { name: 'f₀', color: '#5c6675' }],
+    corner: 'br',
+  });
+
+  SimUI.expose({
+    getState: function () {
+      return { t: t, sourceX: src.x, fronts: fronts.length, lambdaAhead: lambdaAhead(),
+        lambdaBehind: lambdaBehind(), coneDeg: coneDeg(), heardF: lastHeard ? lastHeard.f : 0,
+        booms: booms };
+    },
+    reset: resetSim,
+  });
+
+  // ---------- Старт ----------
+  window.addEventListener('resize', resize);
+  resize();
+  src.x = XL + 0.5;
+  updateUi();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

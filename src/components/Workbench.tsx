@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import type { PipelineEvent, PlanSpec, QualityMode, SimLevel } from '@/lib/types';
+import type { PipelineEvent, PlanSpec, QualityMode, SimLevel, SimPresentation } from '@/lib/types';
 import type { JobKind, JobStatus } from '@/lib/jobs/store';
 import type { UserPrefs } from '@/lib/auth/prefs';
 import { historyLabel } from '@/lib/history-label';
@@ -176,6 +176,7 @@ export default function Workbench() {
   const [mode, setMode] = useState<QualityMode>('standard');
   // Уровень тренажёра: 'auto' — решает планировщик по теме.
   const [level, setLevel] = useState<SimLevel | 'auto'>('auto');
+  const [showMode, setShowMode] = useState<'auto' | SimPresentation>('auto');
   // Карточка плана перед генерацией: в «Быстро» её нет — там важна скорость.
   const [planFirst, setPlanFirst] = useState(true);
   const [draftSpec, setDraftSpec] = useState<PlanSpec | null>(null);
@@ -642,6 +643,7 @@ export default function Workbench() {
     const ticket = ++planTicket.current;
     const res = await callApi<{ spec: PlanSpec }>('/api/plan', 'POST', {
       prompt: text, imageDataUrl: image ?? undefined, level: level === 'auto' ? undefined : level,
+      presentation: showMode === 'auto' ? undefined : showMode,
     });
     if (ticket !== planTicket.current) return;
     setPlanning(false);
@@ -683,6 +685,7 @@ export default function Workbench() {
         body: JSON.stringify({
           prompt: text, imageDataUrl: image ?? undefined, mode, spec,
           level: level === 'auto' ? undefined : level,
+          presentation: showMode === 'auto' ? undefined : showMode,
         }),
       });
       if (isUnauthorized(res)) { loginWithReturnTo('/'); return; }
@@ -982,6 +985,17 @@ export default function Workbench() {
                   <span className="muted">
                     {level === 'auto' ? t('autoHint') : t(LEVEL_OPTIONS.find(([v]) => v === level)?.[2] ?? 'levelDemoHint')}
                   </span>
+                </div>
+                <div className="field">
+                  <span>{t('showMode')}</span>
+                  <div className="segmented segmented-wrap">
+                    {([['auto', 'showAuto'], ['live', 'showLive'], ['phases', 'showPhases']] as const).map(([v, label]) => (
+                      <button key={v} type="button" aria-pressed={showMode === v} disabled={busy}
+                        className={showMode === v ? 'segmented-item active' : 'segmented-item'}
+                        onClick={() => setShowMode(v)}>{t(label)}</button>
+                    ))}
+                  </div>
+                  <span className="muted">{t(showMode === 'auto' ? 'showAutoHint' : showMode === 'live' ? 'showLiveHint' : 'showPhasesHint')}</span>
                 </div>
                 <label className="check-row">
                   <input type="checkbox" checked={planFirst} disabled={busy || mode === 'fast'}

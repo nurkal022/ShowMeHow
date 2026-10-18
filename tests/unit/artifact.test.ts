@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { extractHtml, extractJson, findForbiddenUrls, instrument, stripRuntime, reinstrument } from '@/lib/artifact';
-import { UIKIT_JS, UIKIT_CSS, UIKIT_DOC } from '@/lib/runtime';
+import { UIKIT_JS, UIKIT_CSS, UIKIT_DOC, compact } from '@/lib/runtime';
 import { CDN_WHITELIST } from '@/lib/pipeline/prompts';
 import { openSession, closeBrowser } from '@/lib/renderer';
 
@@ -253,7 +253,7 @@ describe('SimUI.panel', () => {
 describe('SimUI.chart', () => {
   it('KIT_CHART_JS входит в UIKIT_JS и определяет chart', async () => {
     const { KIT_CHART_JS } = await import('@/lib/runtime/kit-chart');
-    expect(UIKIT_JS).toContain(KIT_CHART_JS);
+    expect(UIKIT_JS).toContain(compact(KIT_CHART_JS));
     expect(KIT_CHART_JS).toContain('K.chart = chart');
   });
   it('UIKIT_JS остаётся валидным JS', () => {
@@ -346,7 +346,7 @@ describe('разгон времени в SimUI.speed', () => {
 describe('мост интроспекции __smh', () => {
   it('KIT_EXPOSE_JS входит в UIKIT_JS и определяет window.__smh', async () => {
     const { KIT_EXPOSE_JS } = await import('@/lib/runtime/kit-expose');
-    expect(UIKIT_JS).toContain(KIT_EXPOSE_JS);
+    expect(UIKIT_JS).toContain(compact(KIT_EXPOSE_JS));
     expect(KIT_EXPOSE_JS).toContain('window.__smh');
     expect(KIT_EXPOSE_JS).toContain('SimUI.expose');
   });
@@ -369,7 +369,7 @@ describe('мост интроспекции __smh', () => {
 describe('runtime module layout', () => {
   it('UIKIT_JS собирается из чанков и включает ядро кита', async () => {
     const { KIT_CORE_JS } = await import('@/lib/runtime/kit-core');
-    expect(UIKIT_JS).toContain(KIT_CORE_JS);
+    expect(UIKIT_JS).toContain(compact(KIT_CORE_JS));
   });
   it('HARNESS_JS живёт в отдельном модуле', async () => {
     const { HARNESS_JS } = await import('@/lib/runtime/harness');

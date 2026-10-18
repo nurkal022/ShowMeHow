@@ -29,6 +29,8 @@ export const KIT_LESSON_JS = `
   }
   var origSlider = K.slider;
   K.slider = function (o) {
+    if (!o || typeof o !== 'object') return origSlider.apply(null, arguments);
+    o = K.__norm(o, 'slider');
     var ov = (config().parameters || {})[o.name];
     if (!ov) return origSlider(o);
     var m = {};
@@ -37,7 +39,7 @@ export const KIT_LESSON_JS = `
     for (var i = 0; i < keys.length; i++) if (ov[keys[i]] != null) m[keys[i]] = ov[keys[i]];
     var inp = origSlider(m);
     if (ov.value != null && Number(ov.value) !== Number(o.value)) {
-      later(function () { o.onChange(Number(ov.value)); });
+      later(function () { inp.dispatchEvent(new Event('input')); });
     }
     return inp;
   };
@@ -55,8 +57,13 @@ export const KIT_LESSON_JS = `
 
   // ---------- Шаги урока ----------
   function steps(o) {
+    if (Array.isArray(o)) o = { items: o };
     o = o || {};
-    var items = o.items || [];
+    var items = o.items || o.steps || [];
+    for (var si = 0; si < items.length; si++) {
+      if (typeof items[si] === 'string') items[si] = { title: '', text: items[si] };
+      else if (items[si] && items[si].text == null) items[si].text = items[si].task || items[si].description || '';
+    }
     var body = K.panel({ title: o.title || __simT('lesson'), corner: o.corner || 'tl' });
     var head = document.createElement('div'); head.className = 'sim-step-head';
     var text = document.createElement('div'); text.className = 'sim-step-text';
@@ -82,6 +89,9 @@ export const KIT_LESSON_JS = `
       }
       prev.disabled = i === 0;
       next.disabled = i === items.length - 1;
+      // Шаг может сам выставить параметры: {title, text, values: {L: 2}} — без onStep.
+      var vals = items[i].values || items[i].set || items[i].params;
+      if (vals && typeof vals === 'object') later(function () { for (var k in vals) if (Object.prototype.hasOwnProperty.call(vals, k)) K.__set(k, vals[k]); });
       if (o.onStep) later(function () { o.onStep(i, items[i]); });
     }
     prev.onclick = function () { set(cur - 1); };
@@ -93,9 +103,13 @@ export const KIT_LESSON_JS = `
     return { set: set, get: function () { return cur; }, element: body };
   }
 
+  /** Текущие наблюдаемые величины из SimUI.run (для заданий и таблиц с key). */
+  function current() { return window.__smhRun ? window.__smhRun.observe() : {}; }
+
   // ---------- Задание с проверкой ответа ----------
   function task(o) {
     o = o || {};
+    if (o.correct == null && o.answerIndex != null) o.correct = o.answerIndex;
     var body = K.panel({ title: o.title || __simT('task'), corner: o.corner || 'tl' });
     var q = document.createElement('div'); q.className = 'sim-task-q'; q.textContent = o.question || '';
     body.appendChild(q);
@@ -112,7 +126,8 @@ export const KIT_LESSON_JS = `
     function check() {
       if (typeof o.check === 'function') { try { verdict(!!o.check(value)); } catch (e) { verdict(false); } return; }
       if (o.options) { verdict(Number(value) === Number(o.correct)); return; }
-      var want = typeof o.answer === 'function' ? o.answer() : Number(o.answer);
+      var want = typeof o.answer === 'function' ? o.answer(current(), K.__params || {})
+        : (typeof o.answer === 'string' && isNaN(Number(o.answer)) ? Number(K.__resolve(o.answer, current(), K.__params)) : Number(o.answer));
       var got = Number(value);
       var tol = o.tolerance == null ? 0.05 : Number(o.tolerance);
       verdict(isFinite(got) && isFinite(want) && Math.abs(got - want) <= Math.abs(want) * tol + 1e-9);
@@ -151,6 +166,7 @@ export const KIT_LESSON_JS = `
     var body = K.panel({ title: o.title || __simT('measurements'), corner: o.corner || 'bl' });
     var t = document.createElement('table'); t.className = 'sim-table';
     var thead = document.createElement('tr');
+    for (var ci = 0; ci < cols.length; ci++) if (typeof cols[ci] === 'string') cols[ci] = { label: cols[ci] };
     for (var i = 0; i < cols.length; i++) {
       var th = document.createElement('th');
       th.textContent = cols[i].label + (cols[i].unit ? ', ' + cols[i].unit : '');
@@ -175,6 +191,13 @@ export const KIT_LESSON_JS = `
     function clear() {
       rows = [];
       while (t.children.length > 1) t.removeChild(t.lastChild);
+    }
+    var colKeys = cols.map(function (c) { return c.key || c.name; });
+    if (typeof o.record !== 'function' && colKeys.every(function (k) { return !!k; })) {
+      o.record = function () {
+        var ob = current(), P = K.__params || {};
+        return colKeys.map(function (k) { var v = K.__resolve(k, ob, P); return typeof v === 'number' ? v : (v == null ? '—' : v); });
+      };
     }
     if (typeof o.record === 'function') {
       var btns = document.createElement('div'); btns.className = 'sim-btns';

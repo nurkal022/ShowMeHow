@@ -29,7 +29,7 @@ export function resolveTheme(theme: Theme, prefersDark: boolean): 'light' | 'dar
 /** Скрипт, который выполняется в <head> до отрисовки тела страницы. */
 export const THEME_BOOT_SCRIPT = `(function(){try{
 var t=localStorage.getItem(${JSON.stringify(THEME_KEY)})
-  ||localStorage.getItem(${JSON.stringify(THEME_KEY_LEGACY)})||'light';
+  ||localStorage.getItem(${JSON.stringify(THEME_KEY_LEGACY)})||'system';
 if(t==='system')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
 document.documentElement.setAttribute('data-theme',t);
 }catch(e){document.documentElement.setAttribute('data-theme','light');}})()`;

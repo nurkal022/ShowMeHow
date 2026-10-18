@@ -3,6 +3,9 @@ import { defineMessages } from '../core';
 /** Вход, регистрация и смена временного пароля. */
 export const auth = defineMessages({
   ru: {
+    artLogin: 'Твоя вселенная опытов ждёт', artRegister: 'Наука, которую можно потрогать',
+    artLead: 'Живые тренажёры по физике, химии, биологии и технике — из описания за пару минут. Пошаговый показ, приборы, VR.',
+    artFact1: '2D · 3D · VR', artFact2: 'Показ по фазам', artFact3: 'Рус · Қаз · Eng',
     welcomeBack: 'С возвращением', createAccount: 'Создать аккаунт',
     loginLead: 'Войдите, чтобы открыть свою библиотеку.', registerLead: 'Десять генераций в пробной версии.',
     emailOrLogin: 'Почта или логин', email: 'Почта', password: 'Пароль',
@@ -22,6 +25,9 @@ export const auth = defineMessages({
     logout: 'Выйти',
   },
   kk: {
+    artLogin: 'Тәжірибелер әлемің күтіп тұр', artRegister: 'Ұстап көруге болатын ғылым',
+    artLead: 'Физика, химия, биология және техника бойынша тірі тренажерлер — сипаттамадан бір-екі минутта. Қадамдық көрсету, аспаптар, VR.',
+    artFact1: '2D · 3D · VR', artFact2: 'Кезеңдермен көрсету', artFact3: 'Рус · Қаз · Eng',
     welcomeBack: 'Қайта оралуыңызбен', createAccount: 'Аккаунт жасау',
     loginLead: 'Кітапханаңызды ашу үшін кіріңіз.', registerLead: 'Сынақ нұсқасында он генерация.',
     emailOrLogin: 'Пошта немесе логин', email: 'Пошта', password: 'Құпиясөз',
@@ -40,6 +46,9 @@ export const auth = defineMessages({
     logout: 'Шығу',
   },
   en: {
+    artLogin: 'Your universe of experiments is waiting', artRegister: 'Science you can touch',
+    artLead: 'Live simulators for physics, chemistry, biology and engineering — from a description in minutes. Step-by-step mode, instruments, VR.',
+    artFact1: '2D · 3D · VR', artFact2: 'Phase-by-phase mode', artFact3: 'Рус · Қаз · Eng',
     welcomeBack: 'Welcome back', createAccount: 'Create an account',
     loginLead: 'Sign in to open your library.', registerLead: 'Ten generations in the trial.',
     emailOrLogin: 'Email or username', email: 'Email', password: 'Password',

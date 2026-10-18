@@ -18,7 +18,7 @@ import {
 } from './edits';
 import {
   plan, generateCandidate, verifyCandidate, fixArtifact, codeTicker, buildCore, planLayers, addLayer,
-  coverageFailures, type Ctx, type Brief,
+  coverageFailures, finalize, type Ctx, type Brief,
 } from './stages';
 import { checkCore } from './core';
 import { levelOf } from './spec';
@@ -179,28 +179,32 @@ export async function runPipeline(
   } catch { /* эталон — подсказка, без него генерация идёт как обычно */ }
 
   // Ядро физики: отдельно и с числовой проверкой. Сбой ядра не срывает генерацию —
-  // генератор тогда пишет физику сам, как раньше.
+  // генератор тогда пишет физику сам, как раньше. Пока ядро пишется и проверяется,
+  // генератор уже строит сцену и приборы: они общаются с физикой только через ключи
+  // observe из плана, и проверенное ядро потом встаёт на место секции physics.
   let core: string | undefined = resumed?.core;
+  let corePromise: Promise<string | undefined> | null = null;
   if (mode.core && ctx.checkCore && !core && !resumed?.built) {
     checkCancelled();
     emitStage(ctx, 'physics', 'start');
-    try {
-      const built = await buildCore(ctx, spec);
-      if (built) {
-        core = built.code.core;
-        ctx.checkpoint?.save({ core });
+    corePromise = (async () => {
+      try {
+        const built = await buildCore(ctx, spec);
+        if (!built) return undefined;
+        ctx.checkpoint?.save({ core: built.code.core });
         ctx.emit({ type: 'physics-check', ok: built.report.ok, results: built.report.results });
         if (built.report.hard.length) {
           const msg = 'Ядро физики прошло не все числовые проверки: ' + built.report.hard.slice(0, 2).join('; ');
           warnings.push(msg);
           ctx.emit({ type: 'warning', message: msg });
         }
+        return built.code.core;
+      } catch {
+        return undefined;
+      } finally {
+        emitStage(ctx, 'physics', 'end');
       }
-    } catch (e) {
-      if (e instanceof CancelledError) throw e;
-    } finally {
-      emitStage(ctx, 'physics', 'end');
-    }
+    })();
   }
 
   emitStage(ctx, 'generating', 'start');
@@ -216,11 +220,25 @@ export async function runPipeline(
         ctx.emit({ type: 'candidate', index: 0, status: render.ok ? 'ok' : 'failed' });
         throw RESUMED;
       }
-      const html = await generateCandidate(ctx, spec, exemplarHtml, core, ownExemplar);
-      // Рабочие версии verifyCandidate отдаёт человеку сам — только те, что запустились без ошибок.
-      candidate = await verifyCandidate(ctx, spec, html, 0);
+      if (corePromise) {
+        const [html, built] = await Promise.all([
+          generateCandidate(ctx, spec, exemplarHtml, undefined, ownExemplar, { parallelCore: true }),
+          corePromise,
+        ]);
+        checkCancelled();
+        core = built;
+        const swapped = core && getSection(html, 'physics') !== null ? putSection(html, 'physics', core) : null;
+        // Рабочие версии verifyCandidate отдаёт человеку сам — только те, что запустились без ошибок.
+        candidate = await verifyCandidate(ctx, spec, swapped ?? html, 0);
+        // С проверенным ядром сцена не сошлась — версия с физикой самого генератора тоже годится.
+        if (swapped && !candidate.alive) candidate = await verifyCandidate(ctx, spec, html, 0);
+      } else {
+        const html = await generateCandidate(ctx, spec, exemplarHtml, core, ownExemplar);
+        candidate = await verifyCandidate(ctx, spec, html, 0);
+      }
     } catch (e) {
       if (e !== RESUMED) {
+        if (e instanceof CancelledError) throw e;
         ctx.emit({ type: 'candidate', index: 0, status: 'failed' });
         candidate = null;
       }
@@ -444,9 +462,9 @@ async function refineHtml(
     ], { onDelta: codeTicker(ctx, 'refiner') });
     const edits = parseEdits(out);
     const patched = edits ? applyEdits(base, edits) : null;
-    if (patched) return { html: instrument(patched, ctx.lang), report: parseRefineReport(out) };
+    if (patched) return { html: finalize(patched, ctx.lang), report: parseRefineReport(out) };
     if (!edits && looksLikeHtml(out) && keepsSections(base, extractHtml(out))) {
-      return { html: instrument(extractHtml(out), ctx.lang), report: null };
+      return { html: finalize(extractHtml(out), ctx.lang), report: null };
     }
   } catch { /* ниже — полный файл */ }
   const out = await ctx.chat('refiner', [
@@ -456,7 +474,7 @@ async function refineHtml(
   const whole = extractHtml(out);
   const lost = lostSections(base, whole);
   if (lost.length) throw new Error('Правка выбросила части тренажёра (' + lost.join(', ') + ') — оставил прежнюю версию.');
-  return { html: instrument(whole, ctx.lang), report: null };
+  return { html: finalize(whole, ctx.lang), report: null };
 }
 
 /**
@@ -494,7 +512,7 @@ async function refineSections(
     html = next;
   }
   if (html === base || !keepsSections(base, html)) return null;
-  return { html: instrument(html, ctx.lang), report: parseRefineReport(out) };
+  return { html: finalize(html, ctx.lang), report: parseRefineReport(out) };
 }
 
 async function recheckCore(ctx: Ctx, spec: PlanSpec | null, before: string, after: string): Promise<string[]> {

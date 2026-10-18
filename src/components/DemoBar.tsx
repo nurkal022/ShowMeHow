@@ -17,7 +17,7 @@ export default function DemoBar({ slug, as, viewer }: { slug: string | null; as:
   const path = usePathname();
   // В своём аккаунте роль видна по разделу: кабинеты — руководство, остальное — по адресу.
   const current: DemoView | null = as ?? (path.startsWith('/org') || path.startsWith('/teach') ? 'org'
-    : path.startsWith('/research') ? 'research' : path === '/' ? 'create' : null);
+    : path.startsWith('/research') ? 'research' : path === '/create' ? 'create' : null);
   const [busy, setBusy] = useState<DemoView | 'invite' | null>(null);
   const [error, setError] = useState(false);
 
@@ -38,7 +38,7 @@ export default function DemoBar({ slug, as, viewer }: { slug: string | null; as:
     else {
       // Свой аккаунт: из чужого сначала вернуться, дальше — в нужный раздел.
       next = impersonating ? await call('org') : 'ok';
-      if (next) next = view === 'org' ? `/org?org=${slug}` : view === 'research' ? '/research' : '/';
+      if (next) next = view === 'org' ? `/org?org=${slug}` : view === 'research' ? '/research' : '/create';
     }
     if (next) window.location.assign(next);
     else { setBusy(null); setError(true); }

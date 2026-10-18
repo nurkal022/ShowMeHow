@@ -30,7 +30,7 @@ export function paletteActions(user: AuthUser, memberships: Membership[], locale
     out.push({ id: 'grades', title: t('aGrades'), subtitle: t('aGradesSub'), href: '/learn/grades', keywords: t('aGradesKw') });
   }
   if (!student || memberships.some((m) => m.settings.studentsCanGenerate)) {
-    out.push({ id: 'create', title: t('aNewSim'), subtitle: t('aNewSimSub'), href: '/', keywords: t('aNewSimKw') });
+    out.push({ id: 'create', title: t('aNewSim'), subtitle: t('aNewSimSub'), href: '/create', keywords: t('aNewSimKw') });
     out.push({ id: 'research', title: t('aResearch'), subtitle: t('aResearchSub'), href: '/research', keywords: t('aResearchKw') });
     out.push({ id: 'library', title: t('aLibrary'), subtitle: t('aLibrarySub'), href: '/library', keywords: t('aLibraryKw') });
   }

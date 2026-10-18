@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Аттрактор Лоренца и эффект бабочки</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #07090d; }
+  #scene { position: fixed; top: 0; left: 0; display: block; z-index: 0; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<!--
+  three@0.164.0 подключается ES-модулем через importmap, который вставляет кит
+  (классической сборки build/three.min.js у этой версии нет). См. demos/engine.
+-->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+(function () {
+  'use strict';
+
+  // ---------- Рендерер, сцена, камера ----------
+  var canvas = document.getElementById('scene');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, preserveDrawingBuffer: true });
+  renderer.setClearColor(0x07090d, 1);
+
+  var scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x07090d, 9, 22);
+  var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+  var controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.enablePan = false;
+  controls.minDistance = 4;
+  controls.maxDistance = 25;
+  var autoRotate = true;
+  controls.addEventListener('start', function () { autoRotate = false; });
+
+  function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(w, h, true);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  // ---------- Система Лоренца ----------
+  var sigma = 10, rho = 28, beta = 8 / 3;
+  var log10d0 = -5;              // начальное расстояние между траекториями: 10^log10d0
+  var H = 0.002;                 // шаг RK4 (безразмерное время)
+  var RATE = 0.9;                // единиц модельного времени в секунду при 1×
+
+  function deriv(s, out) {
+    out[0] = sigma * (s[1] - s[0]);
+    out[1] = s[0] * (rho - s[2]) - s[1];
+    out[2] = s[0] * s[1] - beta * s[2];
+  }
+  var k1 = [0, 0, 0], k2 = [0, 0, 0], k3 = [0, 0, 0], k4 = [0, 0, 0], tmp = [0, 0, 0];
+  function rk4(s, h) {
+    deriv(s, k1);
+    for (var i = 0; i < 3; i++) tmp[i] = s[i] + 0.5 * h * k1[i];
+    deriv(tmp, k2);
+    for (i = 0; i < 3; i++) tmp[i] = s[i] + 0.5 * h * k2[i];
+    deriv(tmp, k3);
+    for (i = 0; i < 3; i++) tmp[i] = s[i] + h * k3[i];
+    deriv(tmp, k4);
+    for (i = 0; i < 3; i++) s[i] += h / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]);
+  }
+
+  // ---------- Следы двух траекторий ----------
+  var MAXP = 7000;
+  function makeTrail(base) {
+    var pos = new Float32Array(MAXP * 3);
+    var col = new Float32Array(MAXP * 3);
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setDrawRange(0, 0);
+    var mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 });
+    var line = new THREE.Line(geo, mat);
+    line.frustumCulled = false;
+    return { pos: pos, col: col, geo: geo, line: line, n: 0, base: new THREE.Color(base) };
+  }
+  // Цвет по индексу: старые точки темнее. Индекс растёт с возрастом точки и после
+  // сдвига буфера, поэтому градиент задаётся один раз при заполнении.
+  function paintTrail(tr) {
+    for (var i = 0; i < tr.n; i++) {
+      var f = 0.12 + 0.88 * Math.pow(i / Math.max(1, tr.n - 1), 1.6);
+      tr.col[i * 3] = tr.base.r * f; tr.col[i * 3 + 1] = tr.base.g * f; tr.col[i * 3 + 2] = tr.base.b * f;
+    }
+    tr.geo.attributes.color.needsUpdate = true;
+  }
+  function addPoint(tr, s) {
+    if (tr.n >= MAXP) {
+      var drop = 1000;
+      tr.pos.copyWithin(0, drop * 3, MAXP * 3);
+      tr.n -= drop;
+    }
+    tr.pos[tr.n * 3] = s[0]; tr.pos[tr.n * 3 + 1] = s[1]; tr.pos[tr.n * 3 + 2] = s[2];
+    tr.n++;
+  }
+  function flushTrail(tr) {
+    tr.geo.setDrawRange(0, tr.n);
+    tr.geo.attributes.position.needsUpdate = true;
+    paintTrail(tr);
+  }
+
+  // Лоренцевы координаты (x, y, z) живут в группе; поворот группы ставит ось z вверх.
+  var world = new THREE.Group();
+  world.rotation.x = -Math.PI / 2;
+  scene.add(world);
+
+  var trA = makeTrail(0x46c8ff), trB = makeTrail(0xff8a3d);
+  world.add(trA.line); world.add(trB.line);
+
+  function headMesh(color) {
+    var g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 14), new THREE.MeshBasicMaterial({ color: color })));
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.95, 20, 14),
+      new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.22, depthWrite: false })));
+    return g;
+  }
+  var headA = headMesh(0x9ae6ff), headB = headMesh(0xffc08a);
+  world.add(headA); world.add(headB);
+
+  // Отрезок между головами — это и есть расстояние d(t)
+  var gapGeo = new THREE.BufferGeometry();
+  gapGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  var gapLine = new THREE.Line(gapGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
+  gapLine.frustumCulled = false;
+  world.add(gapLine);
+
+  // Неподвижные точки C± = (±√(β(ρ−1)), ±√(β(ρ−1)), ρ−1)
+  var fpMat = new THREE.MeshBasicMaterial({ color: 0xb9ff7a, wireframe: true });
+  var fpPlus = new THREE.Mesh(new THREE.OctahedronGeometry(0.9), fpMat);
+  var fpMinus = new THREE.Mesh(new THREE.OctahedronGeometry(0.9), fpMat);
+  world.add(fpPlus); world.add(fpMinus);
+  function updateFixedPoints() {
+    var ok = rho > 1;
+    var q = ok ? Math.sqrt(beta * (rho - 1)) : 0;
+    fpPlus.visible = fpMinus.visible = ok;
+    fpPlus.position.set(q, q, rho - 1);
+    fpMinus.position.set(-q, -q, rho - 1);
+  }
+
+  // Оси для ориентира
+  var axes = new THREE.Group();
+  var axMat = new THREE.LineBasicMaterial({ color: 0x2a3341 });
+  [[[-30, 0, 0], [30, 0, 0]], [[0, -30, 0], [0, 30, 0]], [[0, 0, 0], [0, 0, 60]]].forEach(function (seg) {
+    var g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3().fromArray(seg[0]), new THREE.Vector3().fromArray(seg[1])]);
+    axes.add(new THREE.Line(g, axMat));
+  });
+  world.add(axes);
+  var grid = new THREE.PolarGridHelper(30, 12, 6, 64, 0x1a2230, 0x1a2230);
+  grid.rotation.x = Math.PI / 2;
+  world.add(grid);
+
+  // Масштаб и центр кадра подстраиваются под ρ: аттрактор растёт примерно ∝ ρ.
+  var zc = 27, sc = 0.16;
+  function fitTargets() {
+    return { zc: Math.max(2, rho - 1), sc: 6.4 / Math.max(10, rho + 4) };
+  }
+
+  // ---------- Состояние ----------
+  var A = [0, 0, 0], B = [0, 0, 0];
+  var t = 0, running = true, lastFrame = null, acc = 0;
+  var horizon = null;        // момент, когда d впервые превысил 1 (горизонт предсказуемости)
+  var switchesA = 0, wingA = 1;
+  var orbit = 0.6;
+  var lastChartT = -1;
+
+  function d() { return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]); }
+
+  function seedB() {
+    B[0] = A[0] + Math.pow(10, log10d0); B[1] = A[1]; B[2] = A[2];
+    horizon = null;
+    trB.n = 0;
+    addPoint(trB, B);
+    flushTrail(trB);
+    t0B = t;
+    if (distChart) distChart.clear();
+  }
+  var t0B = 0;
+
+  function resetSim() {
+    A[0] = 1; A[1] = 1; A[2] = 1;
+    t = 0; acc = 0; lastFrame = null; switchesA = 0; wingA = 1; lastChartT = -1;
+    // Прогрев: 20 единиц времени без показа — траектория «садится» на аттрактор,
+    // и голубой след сразу рисует его форму.
+    trA.n = 0;
+    for (var i = 0; i < 10000; i++) {
+      rk4(A, H);
+      if (i > 1500 && i % 3 === 0) addPoint(trA, A);
+    }
+    flushTrail(trA);
+    wingA = A[0] >= 0 ? 1 : -1;
+    seedB();
+    updateHeads();
+    refreshUi();
+  }
+
+  function speedNorm() {
+    var v = [0, 0, 0];
+    deriv(A, v);
+    return Math.hypot(v[0], v[1], v[2]);
+  }
+
+  function step(dtReal) {
+    acc += dtReal * RATE;
+    if (acc > 0.2) acc = 0.2;
+    var n = 0;
+    while (acc >= H) {
+      rk4(A, H); rk4(B, H);
+      t += H; acc -= H; n++;
+      if (n % 3 === 0) { addPoint(trA, A); addPoint(trB, B); }
+      var w = A[0] >= 0 ? 1 : -1;
+      if (w !== wingA) { switchesA++; wingA = w; }
+      var dd = d();
+      if (horizon === null && dd > 1) horizon = t - t0B;
+      if (!isFinite(dd)) { resetSim(); return; }
+    }
+    flushTrail(trA); flushTrail(trB);
+    updateHeads();
+  }
+
+  function updateHeads() {
+    headA.position.set(A[0], A[1], A[2]);
+    headB.position.set(B[0], B[1], B[2]);
+    var p = gapGeo.attributes.position.array;
+    p[0] = A[0]; p[1] = A[1]; p[2] = A[2]; p[3] = B[0]; p[4] = B[1]; p[5] = B[2];
+    gapGeo.attributes.position.needsUpdate = true;
+  }
+
+  function applyFit(k) {
+    var tg = fitTargets();
+    zc += (tg.zc - zc) * k; sc += (tg.sc - sc) * k;
+    world.scale.setScalar(sc);
+    world.position.set(0, -zc * sc, 0);
+    // голова ≈ 0.1 единицы сцены независимо от масштаба аттрактора
+    var hs = 0.14 / Math.max(0.02, sc);
+    headA.scale.setScalar(hs); headB.scale.setScalar(hs);
+  }
+
+  function updateCamera(dt) {
+    if (autoRotate) {
+      orbit += dt * 0.18;
+      var R = 15;
+      camera.position.set(R * Math.sin(orbit), 2.2 + 1.2 * Math.sin(orbit * 0.6), R * Math.cos(orbit));
+    }
+    controls.target.set(0, 0, 0);
+    controls.update();
+  }
+
+  function refreshUi() {
+    var dd = d();
+    rT.set(t);
+    rD.set(dd < 1e-3 ? dd.toExponential(2) : dd.toFixed(3));
+    rLg.set(Math.log(Math.max(dd, 1e-300)) / Math.LN10);
+    rH.set(horizon === null ? 'ещё не наступил' : horizon.toFixed(2));
+    rWing.set((A[0] >= 0 ? 'правое' : 'левое') + ' / ' + (B[0] >= 0 ? 'правое' : 'левое'));
+    rSw.set(switchesA);
+    rV.set(speedNorm());
+    var q = rho > 1 ? Math.sqrt(beta * (rho - 1)) : 0;
+    rFp.set(rho > 1 ? '±' + q.toFixed(2) + ', z = ' + (rho - 1).toFixed(1) : 'только начало координат');
+    formula.set({ sigma: sigma, rho: rho, beta: beta });
+  }
+
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var raw = Math.min(0.05, (now - lastFrame) / 1000);
+    var dt = raw * speedCtl.get();
+    lastFrame = now;
+    if (running) {
+      step(dt);
+      applyFit(Math.min(1, raw * 2.5));
+      updateCamera(raw);
+      if (t - lastChartT >= 0.05) {
+        lastChartT = t;
+        var dd = d();
+        var lyap = log10d0 + 0.9056 * (t - t0B) / Math.LN10;
+        distChart.push(t - t0B, [Math.log(Math.max(dd, 1e-300)) / Math.LN10, lyap < 2 ? lyap : NaN]);
+        refreshUi();
+      }
+    } else {
+      controls.update();
+    }
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+
+  // Перерисовать сцену на паузе после изменения параметра
+  function redrawStill() {
+    updateFixedPoints();
+    applyFit(1);
+    refreshUi();
+    renderer.render(scene, camera);
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Аттрактор Лоренца');
+  SimUI.goals([
+    'Детерминированная система ведёт себя непредсказуемо',
+    'Две почти одинаковые траектории расходятся экспоненциально',
+    'Расстояние растёт как e^{λt}, λ ≈ 0.91 для классических параметров',
+    'При ρ < 24.74 хаос исчезает — траектории сваливаются в C±',
+  ]);
+  SimUI.slider({ name: 'sigma', label: 'σ (число Прандтля)', min: 1, max: 20, step: 0.1, value: sigma, unit: '',
+    onChange: function (v) { sigma = v; if (!running) redrawStill(); } });
+  SimUI.slider({ name: 'rho', label: 'ρ (число Рэлея)', min: 0.5, max: 60, step: 0.1, value: rho, unit: '',
+    onChange: function (v) { rho = v; if (!running) redrawStill(); else updateFixedPoints(); } });
+  SimUI.slider({ name: 'beta', label: 'β', min: 0.5, max: 5, step: 0.01, value: 2.67, unit: '',
+    onChange: function (v) { beta = v; if (!running) redrawStill(); else updateFixedPoints(); } });
+  SimUI.slider({ name: 'delta', label: 'Начальный зазор lg d₀', min: -10, max: -1, step: 0.5, value: log10d0, unit: '',
+    onChange: function (v) { log10d0 = v; seedB(); updateHeads(); if (!running) redrawStill(); } });
+  SimUI.presets({ items: [
+    { label: 'Классика', values: { sigma: 10, rho: 28, beta: 2.67 } },
+    { label: 'Фокус ρ=14', values: { sigma: 10, rho: 14, beta: 2.67 } },
+    { label: 'Переходный ρ=22', values: { sigma: 10, rho: 22, beta: 2.67 } },
+  ] });
+  SimUI.button({ label: 'Новый запуск бабочки из текущей точки', onClick: function () { seedB(); updateHeads(); if (!running) redrawStill(); } });
+  var speedCtl = SimUI.speed({ values: [0.25, 0.5, 1, 2, 4], value: 1 });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: function () { resetSim(); if (!running) renderer.render(scene, camera); },
+  });
+
+  var formula = SimUI.formula({
+    title: 'Система Лоренца',
+    tex: '\\dot x = \\sigma(y-x),\\quad \\dot y = x(\\rho - z) - y,\\quad \\dot z = xy - \\beta z',
+    vars: { sigma: { label: 'σ', unit: '' }, rho: { label: 'ρ', unit: '' }, beta: { label: 'β', unit: '' } },
+    note: 'Голубая и оранжевая траектории стартуют на расстоянии d₀. Ошибка растёт ≈ d₀·e^{λt} — поэтому погоду нельзя предсказать надолго.',
+    corner: 'tl',
+  });
+  var rT = SimUI.readout({ label: 'Время t', unit: '', digits: 2, corner: 'bl' });
+  var rD = SimUI.readout({ label: 'Расстояние d', unit: '', digits: 3, corner: 'bl' });
+  var rLg = SimUI.readout({ label: 'lg d', unit: '', digits: 2, corner: 'bl' });
+  var rH = SimUI.readout({ label: 'Горизонт (d > 1) через', unit: '', digits: 2, corner: 'bl' });
+  var rWing = SimUI.readout({ label: 'Крыло: голубая / оранжевая', unit: '', corner: 'bl' });
+  var rSw = SimUI.readout({ label: 'Перескоков между крыльями', unit: '', digits: 0, corner: 'bl' });
+  var rV = SimUI.readout({ label: 'Скорость фазовой точки', unit: '', digits: 1, corner: 'bl' });
+  var rFp = SimUI.readout({ label: 'Неподвижные точки C±', unit: '', corner: 'bl' });
+  var distChart = SimUI.chart({
+    title: 'Расстояние между траекториями (лог. шкала)', xLabel: 't с момента запуска', yLabel: 'lg d',
+    maxPoints: 600,
+    series: [{ name: 'lg d(t)', color: '#ffd166' }, { name: 'наклон λ = 0.906', color: '#5c6675' }],
+    corner: 'br',
+  });
+
+  SimUI.expose({
+    getState: function () {
+      return { t: t, x: A[0], y: A[1], z: A[2], xB: B[0], distance: d(),
+        lgDistance: Math.log(Math.max(d(), 1e-300)) / Math.LN10, phaseSpeed: speedNorm(),
+        fixedPoint: rho > 1 ? Math.sqrt(beta * (rho - 1)) : 0, switches: switchesA };
+    },
+    reset: resetSim,
+  });
+
+  // ---------- Старт ----------
+  window.addEventListener('resize', resize);
+  resize();
+  resetSim();
+  updateFixedPoints();
+  var fit = fitTargets(); zc = fit.zc; sc = fit.sc; applyFit(1);
+  updateCamera(0);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

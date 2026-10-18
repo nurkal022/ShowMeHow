@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Кристаллические решётки в 3D</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
+  #scene { position: fixed; top: 0; left: 0; display: block; z-index: 0; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<!--
+  three@0.164.0 подключается ES-модулем через importmap, который вставляет кит:
+  голые имена 'three' и 'three/addons/...' резолвятся в разрешённые адреса CDN
+  (классической сборки build/three.min.js у этой версии нет).
+-->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+(function () {
+  'use strict';
+
+  // ---------- Рендерер, сцена, камера ----------
+  var canvas = document.getElementById('scene');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, preserveDrawingBuffer: true });
+  renderer.setClearColor(0x101318, 1);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+  var controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.enablePan = false;
+
+  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x20242c, 1.1));
+  var key = new THREE.DirectionalLight(0xffffff, 2.0);
+  key.position.set(5, 8, 6);
+  scene.add(key);
+  var rim = new THREE.DirectionalLight(0x88aaff, 0.8);
+  rim.position.set(-6, -2, -5);
+  scene.add(rim);
+
+  var crystal = new THREE.Group();   // вращается целиком
+  scene.add(crystal);
+
+  // ---------- Структуры ----------
+  // Координаты — доли параметра решётки a в кубической ячейке. r — радиус (Å),
+  // для металлов это половина расстояния до ближайшего соседа (шары касаются),
+  // для ионных кристаллов — ионные радиусы Шеннона (катион + анион = d).
+  var FCC = [[0, 0, 0], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]];
+  function shift(list, d) { return list.map(function (p) { return [p[0] + d[0], p[1] + d[1], p[2] + d[2]]; }); }
+  var STRUCTS = {
+    sc: { name: 'Простая кубическая', ex: 'α-полоний Po', a: 3.359, M: 208.98, formula: 'атомов',
+      species: [{ label: 'Po', color: 0x9aa7b8, r: 3.359 / 2, basis: [[0, 0, 0]] }] },
+    bcc: { name: 'Объёмно-центрированная (ОЦК)', ex: 'α-железо Fe', a: 2.866, M: 55.845, formula: 'атомов',
+      species: [{ label: 'Fe', color: 0xb8c2cf, r: 2.866 * Math.sqrt(3) / 4, basis: [[0, 0, 0], [0.5, 0.5, 0.5]] }] },
+    fcc: { name: 'Гранецентрированная (ГЦК)', ex: 'медь Cu', a: 3.615, M: 63.546, formula: 'атомов',
+      species: [{ label: 'Cu', color: 0xd9874a, r: 3.615 * Math.sqrt(2) / 4, basis: FCC }] },
+    nacl: { name: 'Хлорид натрия', ex: 'поваренная соль NaCl', a: 5.640, M: 58.443, formula: 'формульных единиц NaCl',
+      species: [
+        { label: 'Na⁺', color: 0x9b6bff, r: 1.02, basis: FCC },
+        { label: 'Cl⁻', color: 0x4fd18b, r: 1.81, basis: shift(FCC, [0.5, 0, 0]) },
+      ] },
+    cscl: { name: 'Хлорид цезия', ex: 'CsCl', a: 4.123, M: 168.36, formula: 'формульных единиц CsCl',
+      species: [
+        { label: 'Cs⁺', color: 0xf2c14e, r: 1.74, basis: [[0.5, 0.5, 0.5]] },
+        { label: 'Cl⁻', color: 0x4fd18b, r: 1.81, basis: [[0, 0, 0]] },
+      ] },
+    diamond: { name: 'Алмаз', ex: 'углерод C (алмаз)', a: 3.567, M: 12.011, formula: 'атомов',
+      species: [{ label: 'C', color: 0x8c9bb0, r: 3.567 * Math.sqrt(3) / 8,
+        basis: FCC.concat(shift(FCC, [0.25, 0.25, 0.25])) }] },
+  };
+  var N_A = 6.02214e23;
+
+  var structKey = 'fcc';
+  var cells = 2;
+  var radiusPct = 40;
+  var showBonds = true;
+  var showCoord = false;
+  var showEdges = true;
+  var spin = 0.5;              // рад/с
+
+  // ---------- Генерация атомов ----------
+  var EPS = 1e-6;
+  function wrap01(v) { var w = v - Math.floor(v + EPS); return w < -EPS ? w + 1 : w; }
+  /** Все атомы в блоке n×n×n ячеек, включая те, что лежат на его гранях. */
+  function buildAtoms(st, n) {
+    var atoms = [];
+    for (var s = 0; s < st.species.length; s++) {
+      var bas = st.species[s].basis.map(function (p) { return [wrap01(p[0]), wrap01(p[1]), wrap01(p[2])]; });
+      for (var i = -1; i <= n; i++) for (var j = -1; j <= n; j++) for (var k = -1; k <= n; k++) {
+        for (var b = 0; b < bas.length; b++) {
+          var x = i + bas[b][0], y = j + bas[b][1], z = k + bas[b][2];
+          if (x < -EPS || y < -EPS || z < -EPS || x > n + EPS || y > n + EPS || z > n + EPS) continue;
+          atoms.push({ s: s, p: [x, y, z] });
+        }
+      }
+    }
+    // убираем дубликаты (одна и та же точка из соседних ячеек)
+    var seen = {}, out = [];
+    for (var q = 0; q < atoms.length; q++) {
+      var kk = atoms[q].s + ':' + atoms[q].p.map(function (v) { return Math.round(v * 1000); }).join(',');
+      if (!seen[kk]) { seen[kk] = 1; out.push(atoms[q]); }
+    }
+    return out;
+  }
+
+  /** Подсчёт Z по одной ячейке: вершина ⅛, ребро ¼, грань ½, внутри 1. */
+  var FRAC = { 8: '⅛', 4: '¼', 2: '½', 1: '' };
+  function cellCount(st) {
+    var atoms = buildAtoms(st, 1), per = [];
+    for (var s = 0; s < st.species.length; s++) per.push({ 8: 0, 4: 0, 2: 0, 1: 0, z: 0 });
+    for (var i = 0; i < atoms.length; i++) {
+      var onB = 0;
+      for (var c = 0; c < 3; c++) {
+        var v = atoms[i].p[c];
+        if (Math.abs(v) < EPS || Math.abs(v - 1) < EPS) onB++;
+      }
+      var share = Math.pow(2, onB);
+      per[atoms[i].s][share]++;
+      per[atoms[i].s].z += 1 / share;
+    }
+    var texts = per.map(function (c, s) {
+      var parts = [];
+      [8, 4, 2, 1].forEach(function (k) {
+        if (c[k]) parts.push(k === 1 ? String(c[k]) : c[k] + '×' + FRAC[k]);
+      });
+      return (st.species.length > 1 ? st.species[s].label + ': ' : '') + parts.join(' + ') + ' = ' + Math.round(c.z);
+    });
+    return { z: Math.round(per[0].z), text: texts.join('; ') };
+  }
+
+  function nnDistance(st) {
+    // минимальное расстояние между атомами разных узлов (в Å)
+    var atoms = buildAtoms(st, 2), best = Infinity;
+    for (var i = 0; i < atoms.length; i++) for (var j = i + 1; j < atoms.length; j++) {
+      var dx = atoms[i].p[0] - atoms[j].p[0], dy = atoms[i].p[1] - atoms[j].p[1], dz = atoms[i].p[2] - atoms[j].p[2];
+      var d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (d > EPS && d < best) best = d;
+    }
+    return best * st.a;
+  }
+
+  function coordination(st) {
+    var atoms = buildAtoms(st, 3), dmin = nnDistance(st) / st.a;
+    var c = null, best = Infinity;
+    for (var i = 0; i < atoms.length; i++) {
+      var d = Math.abs(atoms[i].p[0] - 1.5) + Math.abs(atoms[i].p[1] - 1.5) + Math.abs(atoms[i].p[2] - 1.5);
+      if (atoms[i].s === 0 && d < best) { best = d; c = atoms[i]; }
+    }
+    var n = 0;
+    for (i = 0; i < atoms.length; i++) {
+      var dx = atoms[i].p[0] - c.p[0], dy = atoms[i].p[1] - c.p[1], dz = atoms[i].p[2] - c.p[2];
+      var dd = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dd > EPS && dd < dmin * 1.02) n++;
+    }
+    return n;
+  }
+
+  function packing(st, z) {
+    var v = 0;
+    for (var s = 0; s < st.species.length; s++) v += z * 4 / 3 * Math.PI * Math.pow(st.species[s].r, 3);
+    return v / Math.pow(st.a, 3);
+  }
+  function density(st, z) { return z * st.M / (N_A * Math.pow(st.a * 1e-8, 3)); }
+
+  // ---------- Построение 3D-модели ----------
+  var built = [];        // объекты для освобождения
+  var atomsNow = [];
+  var centerIdx = -1, neighbours = {};
+  var sphereGeo = new THREE.SphereGeometry(1, 36, 18);
+  var bondGeo = new THREE.CylinderGeometry(1, 1, 1, 12, 1, false);
+
+  function clearBuilt() {
+    for (var i = 0; i < built.length; i++) {
+      crystal.remove(built[i]);
+      if (built[i].material) built[i].material.dispose();
+      if (built[i].geometry && built[i].geometry !== sphereGeo && built[i].geometry !== bondGeo) built[i].geometry.dispose();
+    }
+    built = [];
+  }
+
+  function rebuild() {
+    clearBuilt();
+    var st = STRUCTS[structKey], n = cells, S = 1 / n * 4;   // весь блок — куб со стороной 4 ед.
+    var half = 2;
+    atomsNow = buildAtoms(st, n);
+    var dmin = nnDistance(st) / st.a;
+    // центральный атом и его соседи (для подсветки координационной сферы)
+    centerIdx = -1; neighbours = {};
+    var best = Infinity, i, j;
+    for (i = 0; i < atomsNow.length; i++) {
+      var dc = Math.abs(atomsNow[i].p[0] - n / 2) + Math.abs(atomsNow[i].p[1] - n / 2) + Math.abs(atomsNow[i].p[2] - n / 2);
+      if (atomsNow[i].s === 0 && dc < best - 1e-9) { best = dc; centerIdx = i; }
+    }
+    for (i = 0; i < atomsNow.length; i++) {
+      var c = atomsNow[centerIdx].p, q = atomsNow[i].p;
+      var dd = Math.hypot(q[0] - c[0], q[1] - c[1], q[2] - c[2]);
+      if (dd > EPS && dd < dmin * 1.02) neighbours[i] = 1;
+    }
+    function pos(p) { return new THREE.Vector3(p[0] * S - half, p[1] * S - half, p[2] * S - half); }
+    var m4 = new THREE.Matrix4(), col = new THREE.Color();
+    // атомы: по одному InstancedMesh на сорт
+    for (var s = 0; s < st.species.length; s++) {
+      var list = [];
+      for (i = 0; i < atomsNow.length; i++) if (atomsNow[i].s === s) list.push(i);
+      var mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: st.species.length > 1 ? 0.05 : 0.45,
+        });
+      var mesh = new THREE.InstancedMesh(sphereGeo, mat, list.length);
+      var rr = st.species[s].r / st.a * S * radiusPct / 100;
+      for (j = 0; j < list.length; j++) {
+        var idx = list[j], p = pos(atomsNow[idx].p);
+        var hl = showCoord && (idx === centerIdx || neighbours[idx]);
+        var sc = rr * (!showCoord ? 1 : idx === centerIdx ? 1.15 : hl ? 1 : 0.4);
+        m4.makeScale(sc, sc, sc); m4.setPosition(p);
+        mesh.setMatrixAt(j, m4);
+        col.setHex(st.species[s].color);
+        if (showCoord) {
+          if (idx === centerIdx) col.setHex(0xffffff);
+          else if (hl) col.offsetHSL(0, 0.15, 0.12);
+          else col.multiplyScalar(0.3);
+        }
+        mesh.setColorAt(j, col);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      crystal.add(mesh); built.push(mesh);
+    }
+    // связи с ближайшими соседями
+    if (showBonds) {
+      var pairs = [];
+      for (i = 0; i < atomsNow.length; i++) for (j = i + 1; j < atomsNow.length; j++) {
+        var a = atomsNow[i].p, b = atomsNow[j].p;
+        var d = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+        if (d < dmin * 1.02) pairs.push([i, j]);
+      }
+      var bm = new THREE.MeshStandardMaterial({ color: 0xcfd6df, roughness: 0.5, metalness: 0.1 });
+      var bonds = new THREE.InstancedMesh(bondGeo, bm, Math.max(1, pairs.length));
+      bonds.count = pairs.length;
+      var up = new THREE.Vector3(0, 1, 0), quat = new THREE.Quaternion(), br = 0.028 * S * Math.min(1, 1.5 * dmin);
+      for (j = 0; j < pairs.length; j++) {
+        var pa = pos(atomsNow[pairs[j][0]].p), pb = pos(atomsNow[pairs[j][1]].p);
+        var dir = pb.clone().sub(pa), len = dir.length();
+        quat.setFromUnitVectors(up, dir.normalize());
+        var lit = showCoord && ((pairs[j][0] === centerIdx) || (pairs[j][1] === centerIdx));
+        var bw = showCoord ? (lit ? br * 1.6 : br * 0.5) : br;
+        m4.compose(pa.clone().add(pb).multiplyScalar(0.5), quat, new THREE.Vector3(bw, len, bw));
+        bonds.setMatrixAt(j, m4);
+        bonds.setColorAt(j, col.setHex(showCoord ? (lit ? 0xffe28a : 0x3a414c) : 0xcfd6df));
+      }
+      bonds.instanceMatrix.needsUpdate = true;
+      if (bonds.instanceColor) bonds.instanceColor.needsUpdate = true;
+      crystal.add(bonds); built.push(bonds);
+    }
+    // рёбра ячеек: внешний куб ярче, внутренняя сетка бледнее
+    if (showEdges) {
+      var inner = [], outer = [];
+      for (var u = 0; u <= n; u++) for (var v = 0; v <= n; v++) {
+        var isOut = (u === 0 || u === n) && (v === 0 || v === n);
+        var arr = isOut ? outer : inner;
+        arr.push(-half, u * S - half, v * S - half, half, u * S - half, v * S - half);
+        arr.push(u * S - half, -half, v * S - half, u * S - half, half, v * S - half);
+        arr.push(u * S - half, v * S - half, -half, u * S - half, v * S - half, half);
+      }
+      [[outer, 0x8fb4ff, 0.9], [inner, 0x5c6675, 0.35]].forEach(function (e) {
+        if (!e[0].length) return;
+        var g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(e[0], 3));
+        var l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: e[1], transparent: true, opacity: e[2] }));
+        crystal.add(l); built.push(l);
+      });
+    }
+    updateInfo();
+  }
+
+  // ---------- Камера ----------
+  function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(w, h, true);
+    camera.aspect = w / h;
+    // сцена немного смещена вправо от левых панелей кита
+    camera.setViewOffset(w, h, w > 1100 ? -w * 0.03 : 0, 0, w, h);
+    camera.updateProjectionMatrix();
+  }
+  camera.position.set(7.5, 5.2, 9.5);
+  controls.target.set(0, 0, 0);
+
+  // ---------- Показания ----------
+  var info = {};
+  function updateInfo() {
+    var st = STRUCTS[structKey];
+    var cnt = cellCount(st);
+    var z = cnt.z, eta = packing(st, z);
+    info = { z: z, cn: coordination(st), eta: eta, d: nnDistance(st), rho: density(st, z), text: cnt.text };
+    rName.set(st.ex);
+    rZ.set(cnt.text);
+    rCN.set(info.cn);
+    rEta.set(eta * 100);
+    rA.set(st.a);
+    rD.set(info.d);
+    rRho.set(info.rho);
+    rAtoms.set(atomsNow.length);
+    var rEff = st.species.length > 1 ? Math.cbrt((Math.pow(st.species[0].r, 3) + Math.pow(st.species[1].r, 3))) : st.species[0].r;
+    packF.set({ Z: z, r: rEff, a: st.a, eta: eta * 100 });
+    // легенда сортов атомов
+    legendWrap.textContent = '';
+    st.species.forEach(function (sp) {
+      var span = document.createElement('span');
+      var sw = document.createElement('i');
+      sw.style.background = '#' + sp.color.toString(16).padStart(6, '0');
+      span.appendChild(sw);
+      span.appendChild(document.createTextNode(sp.label + ' (r = ' + sp.r.toFixed(2) + ' Å)'));
+      legendWrap.appendChild(span);
+    });
+  }
+
+  // ---------- Главный цикл ----------
+  var running = true, lastFrame = null, angle = 0;
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000) * speedCtl.get();
+    lastFrame = now;
+    if (running) angle += spin * dt;
+    crystal.rotation.y = angle;
+    controls.update();
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+
+  function resetSim() {
+    angle = 0; lastFrame = null;
+    camera.position.set(7.5, 5.2, 9.5);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Кристаллические решётки');
+  SimUI.goals([
+    'Сколько атомов на самом деле принадлежит одной элементарной ячейке',
+    'Почему ГЦК упакована плотнее всех (74 %), а алмаз — рыхло (34 %)',
+    'Что такое координационное число и как его увидеть',
+    'Как из параметра решётки получить плотность вещества',
+  ]);
+  SimUI.select({
+    name: 'structure', label: 'Структура',
+    options: Object.keys(STRUCTS).map(function (k) { return { value: k, label: STRUCTS[k].name }; }),
+    value: structKey,
+    onChange: function (v) { structKey = v; rebuild(); },
+  });
+  SimUI.slider({
+    name: 'cells', label: 'Сверхъячейка n×n×n', min: 1, max: 4, step: 1, value: cells, unit: '',
+    onChange: function (v) { cells = Math.round(v); rebuild(); },
+  });
+  SimUI.slider({
+    name: 'radius', label: 'Радиус атомов (от касания)', min: 15, max: 100, step: 1, value: radiusPct, unit: '%',
+    onChange: function (v) { radiusPct = v; rebuild(); },
+  });
+  SimUI.slider({
+    name: 'spin', label: 'Скорость вращения', min: 0, max: 2, step: 0.05, value: spin, unit: 'рад/с',
+    onChange: function (v) { spin = v; },
+  });
+  SimUI.toggle({ name: 'bonds', label: 'Связи с ближайшими соседями', value: showBonds,
+    onChange: function (on) { showBonds = on; rebuild(); } });
+  SimUI.toggle({ name: 'coord', label: 'Координационная сфера', value: showCoord,
+    onChange: function (on) { showCoord = on; rebuild(); } });
+  SimUI.toggle({ name: 'edges', label: 'Рёбра ячеек', value: showEdges,
+    onChange: function (on) { showEdges = on; rebuild(); } });
+  SimUI.presets({ items: [
+    { label: 'Шаростержневая', values: { radius: 30, bonds: true } },
+    { label: 'Плотная упаковка', values: { radius: 100, bonds: false } },
+  ] });
+  var speedCtl = SimUI.speed({ values: [0.25, 0.5, 1, 2], value: 1 });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: resetSim,
+  });
+
+  var packF = SimUI.formula({
+    title: 'Коэффициент упаковки',
+    tex: '\\eta = \\frac{Z\\cdot\\frac{4}{3}\\pi r^3}{a^3}',
+    vars: { Z: { label: 'Z' }, r: { label: 'r', unit: 'Å' }, a: { label: 'a', unit: 'Å' }, eta: { label: 'η', unit: '%' } },
+    note: 'Для ионных кристаллов r³ — сумма кубов радиусов катиона и аниона. Плотность: ρ = Z·M / (N_A·a³).',
+    corner: 'tl',
+  });
+  var legendBody = SimUI.panel({ title: 'Атомы', corner: 'tl' });
+  var legendWrap = document.createElement('div');
+  legendWrap.className = 'sim-legend';
+  legendBody.appendChild(legendWrap);
+
+  var rName = SimUI.readout({ label: 'Пример', corner: 'bl' });
+  var rZ = SimUI.readout({ label: 'Z на ячейку', corner: 'bl' });
+  var rCN = SimUI.readout({ label: 'Координационное число', digits: 0, corner: 'bl' });
+  var rEta = SimUI.readout({ label: 'Коэффициент упаковки η', unit: '%', digits: 1, corner: 'bl' });
+  var rA = SimUI.readout({ label: 'Параметр решётки a', unit: 'Å', digits: 3, corner: 'bl' });
+  var rD = SimUI.readout({ label: 'Ближайший сосед d', unit: 'Å', digits: 3, corner: 'bl' });
+  var rRho = SimUI.readout({ label: 'Плотность ρ', unit: 'г/см³', digits: 2, corner: 'bl' });
+  var rAtoms = SimUI.readout({ label: 'Атомов в модели', digits: 0, corner: 'bl' });
+
+  SimUI.expose({
+    getState: function () {
+      return { angle: angle, atoms: atomsNow.length, Z: info.z, coordination: info.cn,
+        packing: info.eta, nearest: info.d, density: info.rho,
+        atomRadius: STRUCTS[structKey].species[0].r * radiusPct / 100 };
+    },
+    reset: resetSim,
+  });
+
+  window.addEventListener('resize', resize);
+  resize();
+  rebuild();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -41,9 +41,20 @@ export function pickExemplar(demos: DemoEntry[], spec: PlanSpec): DemoEntry | nu
     const ds = scoreExemplar(d, spec);
     const bs = scoreExemplar(best, spec);
     if (ds > bs) return d;
-    if (ds === bs && d.slug < best.slug) return d;
+    if (ds === bs && tieRank(d) < tieRank(best)) return d;
     return best;
   });
+}
+
+/**
+ * При равном счёте побеждают проверенные эталоны (двигатель для 3D, маятник для 2D),
+ * а не первая по алфавиту демка: новых эталонов много, и выбор «по умолчанию» не должен
+ * зависеть от того, как назвали очередную.
+ */
+const DEFAULT_EXEMPLARS = ['engine', 'pendulum'];
+function tieRank(d: DemoEntry): string {
+  const i = DEFAULT_EXEMPLARS.indexOf(d.slug);
+  return i >= 0 ? `0${i}` : `1${d.slug}`;
 }
 
 /** Сколько кода образца-из-своих кладём в промпт: только приборы, виды и урок. */

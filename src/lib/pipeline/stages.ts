@@ -1,4 +1,4 @@
-import type { CandidateResult, CriticIssue, PipelineEvent, PlanSpec, RenderReport, Role, SimLang, SimLevel } from '../types';
+import type { CandidateResult, CriticIssue, PipelineEvent, PlanSpec, RenderReport, Role, SimLang, SimLevel, SimPresentation } from '../types';
 import type { ChatCallOpts, ChatMessage } from '../provider';
 import { textPart, imagePart } from '../provider';
 import type { RenderFn } from '../renderer';
@@ -6,12 +6,19 @@ import { extractHtml, extractJson, findForbiddenUrls, instrument, stripRuntime }
 import { applyEdits, looksLikeHtml, parseEdits } from './edits';
 import {
   PLANNER_SYSTEM, REPLANNER_SYSTEM, generatorSystem, FIXER_SYSTEM, CRITIC_SYSTEM, REFINER_SYSTEM, CDN_WHITELIST,
-  FIXER_EDITS_SYSTEM, REFINER_EDITS_SYSTEM, LAYER_SYSTEM, coreBrief, ownExemplarBrief,
+  FIXER_EDITS_SYSTEM, REFINER_EDITS_SYSTEM, LAYER_SYSTEM, coreBrief, ownExemplarBrief, parallelCoreBrief,
 } from './prompts';
 import { normalizeSpec, levelOf } from './spec';
 import { PHYSICS_SYSTEM, PHYSICS_FIX_SYSTEM, parseCoreReply, type CoreCode, type CoreReport } from './core';
 import type { Checkpoint } from '../jobs/checkpoints';
 import { putSection, sectionsFromReply, getSection, keepsSections, lostSections } from './sections';
+import { scaffold, scaffoldBrief } from './blocks';
+import { repairArtifact } from './repair';
+
+/** Ответ модели → артефакт: механическая починка частых ошибок, затем рантайм кита. */
+export function finalize(html: string, lang?: SimLang): string {
+  return instrument(repairArtifact(html).html, lang);
+}
 
 export interface Ctx {
   /** Один вход в модель для всех ролей: конфиг роли резолвится в provider-слое. */
@@ -40,7 +47,7 @@ export interface Ctx {
 }
 
 /** Что человек сказал о тренажёре до плана: уровень и аудитория. Пустое — решает планировщик. */
-export interface Brief { level?: SimLevel; audience?: string }
+export interface Brief { level?: SimLevel; audience?: string; presentation?: SimPresentation }
 
 /** План помнит свой язык: доработка и генерация по карточке идут на нём же. Русский не пишем — как раньше. */
 function withLang(spec: PlanSpec, lang: SimLang | undefined): PlanSpec {
@@ -53,6 +60,13 @@ function briefText(brief?: Brief): string {
   const lines: string[] = [];
   if (brief.level) lines.push(`Уровень тренажёра (level): ${brief.level}.`);
   if (brief.audience) lines.push(`Аудитория: ${brief.audience}.`);
+  if (brief.presentation === 'phases') {
+    lines.push('Показ ПО ФАЗАМ (presentation: "phases"): преподаватель объясняет процесс по шагам. Разбей процесс на ' +
+      '3-8 последовательных фаз (phases) с коротким пояснением каждой, а в physics опиши, по какому признаку ' +
+      'наступает каждая фаза. Каждая фаза должна длиться заметное время (не меньше 0.5 с при начальных значениях).');
+  } else if (brief.presentation === 'live') {
+    lines.push('Показ непрерывный (presentation: "live"), без остановок по фазам.');
+  }
   return lines.length ? '\n\n' + lines.join('\n') : '';
 }
 
@@ -70,8 +84,22 @@ export async function plan(
     { role: 'system', content: PLANNER_SYSTEM },
     { role: 'user', content },
   ];
-  const out = await ctx.chat('planner', messages);
-  const first = normalizeSpec(extractJson<unknown>(out), { level: brief?.level });
+  let out = await ctx.chat('planner', messages);
+  let raw: unknown;
+  try {
+    raw = extractJson<unknown>(out);
+  } catch (e) {
+    // Слабые модели иногда ломают JSON (кавычка в тексте физики, лишняя запятая): переспрашиваем
+    // один раз с текстом ошибки, а не роняем всю генерацию на этапе плана.
+    const retry = await ctx.chat('planner', [
+      ...messages,
+      { role: 'assistant', content: out },
+      { role: 'user', content: `Ответ не разбирается как JSON (${e instanceof Error ? e.message : String(e)}). Пришли исправленный JSON целиком, без текста вокруг. Кавычки внутри строк экранируй.` },
+    ]);
+    out = retry;
+    raw = extractJson<unknown>(retry);
+  }
+  const first = normalizeSpec(raw, { level: brief?.level, presentation: brief?.presentation });
   if (brief?.level) first.spec.level = brief.level;
   withLang(first.spec, ctx.lang);
   if (first.problems.length === 0) return first.spec;
@@ -81,7 +109,7 @@ export async function plan(
       { role: 'assistant', content: out },
       { role: 'user', content: 'В спецификации проблемы, исправь и пришли JSON целиком:\n- ' + first.problems.join('\n- ') },
     ]);
-    const second = normalizeSpec(extractJson<unknown>(again), { level: first.spec.level });
+    const second = normalizeSpec(extractJson<unknown>(again), { level: first.spec.level, presentation: brief?.presentation });
     if (brief?.level) second.spec.level = brief.level;
     withLang(second.spec, ctx.lang);
     return second.problems.length <= first.problems.length ? second.spec : first.spec;
@@ -98,7 +126,7 @@ export async function replan(ctx: Ctx, spec: PlanSpec, correction: string): Prom
     { role: 'system', content: REPLANNER_SYSTEM },
     { role: 'user', content: `Спецификация:\n${JSON.stringify(spec, null, 2)}\n\nПоправка: ${correction}` },
   ]);
-  return withLang(normalizeSpec(extractJson<unknown>(out), { level: levelOf(spec) }).spec, spec.lang ?? ctx.lang);
+  return withLang(normalizeSpec(extractJson<unknown>(out), { level: levelOf(spec), presentation: spec.presentation }).spec, spec.lang ?? ctx.lang);
 }
 
 /**
@@ -139,16 +167,24 @@ export async function buildCore(ctx: Ctx, spec: PlanSpec): Promise<{ code: CoreC
 
 export async function generateCandidate(
   ctx: Ctx, spec: PlanSpec, exemplar?: string, core?: string, ownExemplar?: string,
+  /** Ядро пишется параллельно: сцена общается с физикой только через ключи observe. */
+  opts: { parallelCore?: boolean } = {},
 ): Promise<string> {
-  const layered = !!core && levelOf(spec) !== 'demo';
+  const layered = (!!core || !!opts.parallelCore) && levelOf(spec) !== 'demo';
+  const brief = core ? coreBrief(core, layered) : opts.parallelCore ? parallelCoreBrief(scaffold(spec).keys, layered) : '';
   const out = await ctx.chat('generator', [
     { role: 'system', content: generatorSystem(ownExemplar ? undefined : exemplar) + (ownExemplar ? ownExemplarBrief(ownExemplar) : '') },
-    { role: 'user', content: 'Спецификация:\n' + JSON.stringify(spec, null, 2) + (core ? coreBrief(core, layered) : '') },
+    { role: 'user', content: 'Спецификация:\n' + JSON.stringify(spec, null, 2) + brief + scaffoldBrief(spec) },
   ], { onDelta: codeTicker(ctx, 'generator') });
   let html = extractHtml(out);
   // Проверенное ядро возвращаем на место дословно: модель любит «чуть поправить» физику.
   if (core && getSection(html, 'physics') !== null) html = putSection(html, 'physics', core) ?? html;
-  return instrument(html, ctx.lang);
+  // Панель параметров собрана кодом из плана; потеряла модель параметр — возвращаем собранную.
+  const controls = getSection(html, 'controls');
+  if (controls !== null && spec.parameters.some((p) => !new RegExp(`['"]${p.name}['"]|\\b${p.name}\\s*:`).test(controls))) {
+    html = putSection(html, 'controls', scaffold(spec).controls) ?? html;
+  }
+  return finalize(html, ctx.lang);
 }
 
 export interface Layer { name: string; title: string; task: string }
@@ -162,10 +198,11 @@ export function planLayers(spec: PlanSpec): Layer[] {
     layers.push({
       name: 'views', title: 'Дополнительные виды и измерения',
       task: 'Добавь секцию views — дополнительные виды из плана:\n' +
-        extra.map((v) => `- ${v.title} (${v.kind}): ${v.what}`).join('\n') +
-        '\nФазовые диаграммы — SimUI.chart с mode:\'xy\'; таблица измерений — SimUI.table с record; ' +
-        'разрез или вид сверху — отдельный canvas внутри SimUI.panel. Приборы не должны закрывать сцену: ' +
-        'раскладывай по разным углам, лишнее сворачивай.',
+        extra.map((v) => `- ${v.title} (${v.kind}): ${v.what}${v.y?.length ? ` [x: ${v.x ?? 't'}, y: ${v.y.join(', ')}]` : ''}`).join('\n') +
+        '\nГрафики — SimUI.chart({x, y}) с ключами observe, фазовые диаграммы — mode:\'xy\'; таблица измерений — ' +
+        'SimUI.table({columns: [{label, unit, key}]}); распределение — SimUI.chart({mode:\'bars\', data}); разрез или ' +
+        'вид сверху — отдельный canvas внутри SimUI.panel. Приборы не должны закрывать сцену: раскладывай по разным ' +
+        'углам, лишнее сворачивай (collapsed: true).',
     });
   }
   if (spec.scenario?.length) {
@@ -173,8 +210,8 @@ export function planLayers(spec: PlanSpec): Layer[] {
       name: 'scenario', title: 'Сценарий урока',
       task: 'Добавь секцию scenario — сценарий урока через SimUI.steps по шагам плана:\n' +
         spec.scenario.map((s, i) => `${i + 1}. ${s.title}: ${s.task}${s.expect ? ` (ожидаем: ${s.expect})` : ''}`).join('\n') +
-        '\nВ onStep выставляй нужные значения через SimUI.set(name, value). Для шагов, где студент должен ' +
-        'ответить, добавь SimUI.task: answer считай из ядра (PHYS.observe или прогон PHYS.step), а не константой.',
+        '\nЗначения параметров шага — в values шага ({title, text, values: {L: 2}}), кит выставит их сам. Для шагов, ' +
+        'где студент должен ответить, добавь SimUI.task: answer — ключ observe или function (o, P), а не константа.',
     });
   }
   return layers;
@@ -196,7 +233,7 @@ export async function addLayer(ctx: Ctx, spec: PlanSpec, html: string, layer: La
     next = putSection(next, name, body);
     if (next === null) return null;
   }
-  return instrument(next, ctx.lang);
+  return finalize(next, ctx.lang);
 }
 
 /** Лента «модель пишет код»: не чаще раза в две секунды, с хвостом последних строк. */
@@ -227,8 +264,8 @@ export async function fixArtifact(ctx: Ctx, html: string, errors: string[]): Pro
     ], { onDelta: codeTicker(ctx, 'fixer') });
     const edits = parseEdits(out);
     const patched = edits ? applyEdits(base, edits) : null;
-    if (patched) return instrument(patched, ctx.lang);
-    if (!edits && looksLikeHtml(out) && keepsSections(base, extractHtml(out))) return instrument(extractHtml(out), ctx.lang);
+    if (patched) return finalize(patched, ctx.lang);
+    if (!edits && looksLikeHtml(out) && keepsSections(base, extractHtml(out))) return finalize(extractHtml(out), ctx.lang);
   } catch { /* точечная починка не удалась — ниже полный файл */ }
   const out = await ctx.chat('fixer', [
     { role: 'system', content: FIXER_SYSTEM },
@@ -238,7 +275,7 @@ export async function fixArtifact(ctx: Ctx, html: string, errors: string[]): Pro
   const lost = lostSections(base, whole);
   // Починка, выбросившая слои, хуже поломки: вызывающий оставит лучшую из виденных версий.
   if (lost.length) throw new Error('починка потеряла секции: ' + lost.join(', '));
-  return instrument(whole, ctx.lang);
+  return finalize(whole, ctx.lang);
 }
 
 function toDataUrl(png: Buffer): string {
@@ -411,7 +448,7 @@ export async function verifyCandidate(
       const whole = rewritten && keepsSections(base, rewritten) ? rewritten : null;
       // Правки не легли — целевая починка пропускается: кандидат уже рабочий.
       if (!patched && !whole) throw new Error('правки рецензента не применились');
-      const fixed = instrument(patched ?? whole!, ctx.lang);
+      const fixed = finalize(patched ?? whole!, ctx.lang);
       const fixedReport = withCoverage(spec, await ctx.render(fixed, { probes: true }));
       if (rank(fixed, fixedReport) >= rank(current, report)) {
         current = fixed;

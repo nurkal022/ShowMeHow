@@ -6,12 +6,12 @@ import { SESSION_COOKIE } from '@/lib/auth/session-cookie';
 // Список лабораторий (/labs без файла) тоже открыт — на него ссылаются те же
 // сцены и очки, и список без входа не раскрывает ничего личного.
 // /api/health — для мониторинга; отдаёт только счётчики очереди.
-// /r/ — опубликованные исследователем графики и проекты (по токену в ссылке).
+// /landing/ — картинки лендинга. /r/ — опубликованные исследователем графики и проекты (по токену в ссылке).
 // /api/public/ — встроенные демо для лендинга; «/» — сам лендинг гостю (вошедшему — мастерская).
-const PUBLIC_PREFIXES = ['/login', '/register', '/api/auth/', '/api/health', '/api/public/', '/tg/', '/api/tg/', '/lab/', '/labs/', '/r/'];
+const PUBLIC_PREFIXES = ['/login', '/register', '/api/auth/', '/api/health', '/api/public/', '/tg/', '/api/tg/', '/lab/', '/labs/', '/landing/', '/r/'];
 // Ровно «/labs» без хвоста: префикс '/labs/' его не ловит (нет слэша), а прибавлять
 // его в PUBLIC_PREFIXES опасно опечаткой вида '/labs' — та поймала бы и '/labsxyz'.
-const PUBLIC_EXACT = new Set(['/labs', '/']);
+const PUBLIC_EXACT = new Set(['/labs', '/', '/icon.svg', '/showcase', '/opengraph-image.jpg', '/twitter-image.jpg']);
 
 /**
  * Публичен ли путь — чистая функция без cookie и Request, чтобы решение можно

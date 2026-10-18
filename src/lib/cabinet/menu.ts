@@ -1,5 +1,5 @@
 import type { AuthUser } from '../auth/users';
-import { isPlatformAdmin, roleSatisfies } from '../org/policy';
+import { isPlatformAdmin, navSections, roleSatisfies, type NavSectionKey } from '../org/policy';
 import type { Membership, OrgRole } from '../org/types';
 
 /**
@@ -51,6 +51,11 @@ export interface CabinetMenu {
   groups: CabinetMenuGroup[];
   /** Организации, где человек преподаватель или админ: переключатель в боковой панели. */
   orgs: CabinetOrgChoice[];
+  /**
+   * Разделы сайта из шапки («Создать», «Исследования», «Лаборатории»…): меню одно на весь сайт,
+   * поэтому в кабинете они тоже есть. Преподавание, организация и админка — уже группы выше.
+   */
+  site: { key: NavSectionKey; href: string }[];
 }
 
 const PLATFORM_ITEMS: CabinetMenuItem[] = [
@@ -91,7 +96,10 @@ export function buildCabinetMenu(user: Pick<AuthUser, 'role'>, memberships: Memb
   const orgs = memberships
     .filter((m) => roleSatisfies(m.role, ['teacher']))
     .map((m) => ({ slug: m.orgSlug, name: m.orgName, role: m.role }));
-  return { groups, orgs };
+  const site = navSections(user, memberships)
+    .filter((s) => s.key !== 'teach' && s.key !== 'org' && s.key !== 'admin')
+    .map(({ key, href }) => ({ key, href }));
+  return { groups, orgs, site };
 }
 
 /** Какая роль нужна разделу: в «Организацию» преподавателя не пускают. */

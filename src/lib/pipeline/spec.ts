@@ -1,5 +1,5 @@
 import type {
-  PlanSpec, SimLevel, SimParameter, PlanView, PlanStep, PlanPreset, PlanObservable, PlanEntity,
+  PlanSpec, SimLevel, SimParameter, PlanView, PlanStep, PlanPreset, PlanObservable, PlanEntity, PlanPhase, SimPresentation,
 } from '../types';
 
 /**
@@ -105,7 +105,7 @@ export interface NormalizedSpec {
   problems: string[];
 }
 
-export function normalizeSpec(raw: unknown, fallback: { level?: SimLevel } = {}): NormalizedSpec {
+export function normalizeSpec(raw: unknown, fallback: { level?: SimLevel; presentation?: SimPresentation } = {}): NormalizedSpec {
   const o = obj(raw) ?? {};
   const problems: string[] = [];
   const level: SimLevel = isLevel(o.level) ? o.level : (fallback.level ?? 'demo');
@@ -152,10 +152,19 @@ export function normalizeSpec(raw: unknown, fallback: { level?: SimLevel } = {})
   })).filter((e) => e.label).slice(0, 10);
   if (observables.length) spec.observables = observables;
 
-  const views = arr(o.views).map(obj).filter(Boolean).map((v): PlanView => ({
-    kind: (VIEW_KINDS as string[]).includes(str(v!.kind)) ? str(v!.kind) as PlanView['kind'] : 'chart',
-    title: str(v!.title, 80), what: str(v!.what, 300),
-  })).filter((v) => v.title).slice(0, budget.views + 2);
+  // Оси графиков — только известные имена: по ним кит привязывает приборы к PHYS.observe().
+  const known = new Set(['t', ...parameters.map((p) => p.name), ...(spec.observables ?? []).map((x) => x.name)]);
+  const views = arr(o.views).map(obj).filter(Boolean).map((v): PlanView => {
+    const view: PlanView = {
+      kind: (VIEW_KINDS as string[]).includes(str(v!.kind)) ? str(v!.kind) as PlanView['kind'] : 'chart',
+      title: str(v!.title, 80), what: str(v!.what, 300),
+    };
+    const x = str(v!.x, 40);
+    if (x && known.has(x)) view.x = x;
+    const y = (Array.isArray(v!.y) ? v!.y : (typeof v!.y === 'string' ? [v!.y] : [])).map((k) => str(k, 40)).filter((k) => known.has(k)).slice(0, 4);
+    if (y.length) view.y = y;
+    return view;
+  }).filter((v) => v.title).slice(0, budget.views + 2);
   if (views.length) spec.views = views;
 
   const invariants = arr(o.invariants).map((v) => {
@@ -182,9 +191,24 @@ export function normalizeSpec(raw: unknown, fallback: { level?: SimLevel } = {})
     const label = str(p!.label, 40);
     return label && Object.keys(values).length ? { label, values } : null;
   }).filter((p): p is PlanPreset => p !== null).slice(0, 6);
-  if (presets.length) spec.presets = presets;
+  // Пресет, совпадающий с начальными значениями, ничего не меняет; если таковы все — кнопки бесполезны.
+  const changes = (pr: PlanPreset) => Object.entries(pr.values).some(([k, v]) => parameters.find((p) => p.name === k)?.value !== v);
+  if (presets.some(changes)) spec.presets = presets;
 
   if (level !== 'demo' && !spec.scenario?.length) problems.push('для лаборатории и исследования нужен сценарий (scenario)');
+
+  // Показ по фазам: 2–8 фаз с названиями. Выбор автора важнее мнения планировщика.
+  const phases = arr(o.phases).map((p): PlanPhase | null => {
+    if (typeof p === 'string') return str(p, 60) ? { name: str(p, 60), text: '' } : null;
+    const r = obj(p);
+    const name = str(r?.name ?? r?.title, 60);
+    return name ? { name, text: str(r?.text ?? r?.description ?? r?.what, 300) } : null;
+  }).filter((p): p is PlanPhase => p !== null).slice(0, 8);
+  const wanted: SimPresentation | undefined = fallback.presentation ?? (o.presentation === 'phases' ? 'phases' : undefined);
+  if (wanted === 'phases') {
+    if (phases.length >= 2) { spec.presentation = 'phases'; spec.phases = phases; }
+    else problems.push('для показа по фазам нужен список phases из 2-8 фаз с пояснениями');
+  }
 
   return { spec, problems };
 }

@@ -60,6 +60,7 @@ async function runPlan(body: Record<string, unknown>, lang: Locale): Promise<Nex
     const spec = await plan(ctx, prompt, image, {
       level: isLevel(body.level) ? body.level : undefined,
       audience: typeof body.audience === 'string' ? body.audience.trim().slice(0, 80) || undefined : undefined,
+      presentation: body.presentation === 'phases' || body.presentation === 'live' ? body.presentation : undefined,
     });
     return NextResponse.json({ spec });
   } catch (e) {

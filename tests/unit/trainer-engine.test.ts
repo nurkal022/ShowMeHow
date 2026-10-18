@@ -287,7 +287,7 @@ describe('доводка обязана улучшать', () => {
   it('доводка, снизившая оценки, откатывается: в библиотеке версия до неё', async () => {
     const events: PipelineEvent[] = [];
     let judged = 0;
-    const base = EXAMPLE_SKELETON.replace('Название симуляции</title>', 'ОСНОВА</title>');
+    const base = EXAMPLE_SKELETON.replace('Прыгающий мяч</title>', 'ОСНОВА</title>');
     const chat = vi.fn(async (role: Role) => {
       if (role === 'planner') return JSON.stringify({ ...PENDULUM, level: 'demo', scenario: undefined });
       if (role === 'critic') return '{"physicsOk":true,"issues":[]}';
@@ -295,7 +295,7 @@ describe('доводка обязана улучшать', () => {
         const s = judged++ === 0 ? { physics: 6, clarity: 6, interactivity: 6, aesthetics: 6 } : { physics: 3, clarity: 3, interactivity: 3, aesthetics: 3 };
         return JSON.stringify({ winnerIndex: 0, scores: [s], feedback: 'улучшить' });
       }
-      if (role === 'refiner') return '```html\n' + EXAMPLE_SKELETON.replace('Название симуляции</title>', 'ХУЖЕ</title>') + '\n```';
+      if (role === 'refiner') return '```html\n' + EXAMPLE_SKELETON.replace('Прыгающий мяч</title>', 'ХУЖЕ</title>') + '\n```';
       return '```html\n' + base + '\n```';
     });
     const ctx: Ctx = { chat: chat as unknown as Ctx['chat'], hasVision: true, emit: (e) => events.push(e), render: vi.fn(async () => okRender) };
@@ -340,8 +340,9 @@ describe('проба «сцена видна»', () => {
   it('холст внутри холста — провал с подсказкой для three.js; обычная сцена проходит', async () => {
     const { runProbes } = await import('@/lib/pipeline/probes');
     const broken = instrument(EXAMPLE_SKELETON.replace(
-      "var ctx2d = canvas.getContext('2d');",
-      "var inner = document.createElement('canvas'); canvas.appendChild(inner); var ctx2d = inner.getContext('2d');"));
+      'var view = SimUI.view2d({ x: [-2, 2], y: [-0.5, 7] });',
+      "var inner = document.createElement('canvas'); document.getElementById('scene').appendChild(inner);" +
+      ' var view = SimUI.view2d({ canvas: inner, x: [-2, 2], y: [-0.5, 7] });'));
     const s1 = await openSession(broken);
     try {
       const r = await runProbes(s1);

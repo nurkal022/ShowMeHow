@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import AuthForm from '@/components/AuthForm';
+import AuthShell from '@/components/AuthShell';
 import { getPlatformSettings, REGISTRATION_CLOSED_MESSAGE } from '@/lib/platform-settings';
 import { getLocale } from '@/i18n/server';
 import { translator } from '@/i18n/core';
@@ -12,7 +13,7 @@ export default async function RegisterPage() {
   const locale = await getLocale();
   const t = translator(auth, locale);
   return (
-    <div className="auth-page">
+    <AuthShell mode="register">
       {registrationOpen
         ? <Suspense><AuthForm mode="register" /></Suspense>
         : (
@@ -22,6 +23,6 @@ export default async function RegisterPage() {
             <Link className="btn btn-primary" href="/login">{t('login')}</Link>
           </div>
         )}
-    </div>
+    </AuthShell>
   );
 }

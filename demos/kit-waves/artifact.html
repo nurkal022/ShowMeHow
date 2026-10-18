@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Интерференция волн</title>
+<style>html, body { margin: 0; height: 100%; overflow: hidden; }</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<script>
+(function () {
+  // ==== @section physics ====
+  // Две точечные волны на воде: η = A·cos(k r₁ − ωt) + A·cos(k r₂ − ωt + φ); затухание ~ 1/√r.
+  var PHYS = (function () {
+    function init(p) { return { t: 0, s1: { x: -p.d / 2, y: 0 }, s2: { x: p.d / 2, y: 0 } }; }
+    function step(s, p, dt) { s.t += dt; }
+    function eta(s, p, x, y) {
+      var k = 2 * Math.PI / p.lambda, w = 2 * Math.PI * p.f;
+      var r1 = Math.hypot(x - s.s1.x, y - s.s1.y) + 0.05, r2 = Math.hypot(x - s.s2.x, y - s.s2.y) + 0.05;
+      return Math.cos(k * r1 - w * s.t) / Math.sqrt(r1) + Math.cos(k * r2 - w * s.t + p.phi) / Math.sqrt(r2);
+    }
+    // Амплитуда суммы (без времени): яркость полос на экране.
+    function amp(s, p, x, y) {
+      var k = 2 * Math.PI / p.lambda;
+      var r1 = Math.hypot(x - s.s1.x, y - s.s1.y) + 0.05, r2 = Math.hypot(x - s.s2.x, y - s.s2.y) + 0.05;
+      var a1 = 1 / Math.sqrt(r1), a2 = 1 / Math.sqrt(r2), dphi = k * (r2 - r1) - p.phi;
+      return Math.sqrt(a1 * a1 + a2 * a2 + 2 * a1 * a2 * Math.cos(dphi));
+    }
+    function observe(s, p) {
+      var d = Math.hypot(s.s2.x - s.s1.x, s.s2.y - s.s1.y);
+      var px = 0.6, py = 2.4;   // точка наблюдения на экране
+      var dr = Math.hypot(px - s.s2.x, py - s.s2.y) - Math.hypot(px - s.s1.x, py - s.s1.y);
+      return { t: s.t, d: d, v: p.lambda * p.f, dr: dr, m: dr / p.lambda, eta: eta(s, p, px, py), A: amp(s, p, px, py), maxima: Math.floor(d / p.lambda) * 2 + 1 };
+    }
+    return { init: init, step: step, observe: observe, eta: eta, amp: amp };
+  })();
+  // ==== @end physics ====
+
+  // ==== @section state ====
+  var P = { lambda: 0.5, f: 1.2, d: 1.5, phi: 0 };
+  var S = PHYS.init(P);
+  var hooks = { frame: [], reset: [] };
+  // ==== @end state ====
+
+  // ==== @section scene ====
+  var view = SimUI.view2d({ x: [-3, 3], y: [-1.2, 2.8] });
+  // Источники перетаскиваются мышью — картина полос меняется на глазах.
+  [S.s1, S.s2].forEach(function (_, i) {
+    view.drag({
+      hit: { x: function () { return (i ? S.s2 : S.s1).x; }, y: function () { return (i ? S.s2 : S.s1).y; }, r: 0.15 },
+      onDrag: function (x, y) { var src = i ? S.s2 : S.s1; src.x = SimPhys.clamp(x, -2.8, 2.8); src.y = SimPhys.clamp(y, -1, 1.5); },
+    });
+  });
+  hooks.reset.push(function () { S.s1.x = -P.d / 2; S.s1.y = 0; S.s2.x = P.d / 2; S.s2.y = 0; });
+  function draw(o, P, S) {
+    view.clear();
+    view.heatmap(function (x, y) { return PHYS.eta(S, P, x, y); }, { x: [-3, 3], y: [-1.2, 2.8], nx: 150, min: -2.2, max: 2.2,
+      color: function (k) { return k < 0.5 ? 'rgb(' + Math.round(10 + 30 * k) + ',' + Math.round(30 + 120 * k) + ',' + Math.round(70 + 220 * k) + ')'
+        : 'rgb(' + Math.round(25 + 420 * (k - 0.5)) + ',' + Math.round(90 + 330 * (k - 0.5)) + ',' + Math.round(180 + 150 * (k - 0.5)) + ')'; } });
+    view.line(-3, 2.4, 3, 2.4, { color: 'white', width: 2, alpha: 0.7 });
+    view.text(-2.9, 2.55, 'экран наблюдения', { size: 12, align: 'left', color: 'white' });
+    view.line(S.s1.x, S.s1.y, 0.6, 2.4, { color: 'yellow', dash: true, width: 1.2, alpha: 0.8 });
+    view.line(S.s2.x, S.s2.y, 0.6, 2.4, { color: 'yellow', dash: true, width: 1.2, alpha: 0.8 });
+    view.dot(0.6, 2.4, { color: 'yellow', r: 6 });
+    view.tex(0.6, 2.68, '\\Delta r = ' + o.m.toFixed(2) + '\\,\\lambda', { color: 'yellow', id: 'dr' });
+    view.ball(S.s1.x, S.s1.y, 0.11, 'orange', { label: 'S₁' });
+    view.ball(S.s2.x, S.s2.y, 0.11, 'orange', { label: 'S₂' });
+  }
+  // ==== @end scene ====
+
+  // ==== @section controls ====
+  SimUI.title('Интерференция волн на воде');
+  SimUI.goals(['Максимум там, где разность хода — целое число длин волн', 'Чем ближе источники и длиннее волна, тем реже полосы']);
+  SimUI.params(P, [
+    { name: 'lambda', label: 'Длина волны λ', min: 0.2, max: 1.2, step: 0.05, unit: 'м', group: 'Волна' },
+    { name: 'f', label: 'Частота', min: 0.3, max: 3, step: 0.1, unit: 'Гц', group: 'Волна' },
+    { name: 'd', label: 'Расстояние между источниками', min: 0.3, max: 4, step: 0.1, unit: 'м', group: 'Источники' },
+    { name: 'phi', label: 'Разность фаз φ', min: 0, max: 6.28, step: 0.05, unit: 'рад', group: 'Источники' },
+  ]);
+  SimUI.presets([{ label: 'Противофаза', values: { phi: 3.14 } }, { label: 'Длинные волны', values: { lambda: 1 } }, { label: 'Далеко', values: { d: 3.5 } }]);
+  // ==== @end controls ====
+
+  // ==== @section instruments ====
+  SimUI.readouts({ dr: { label: 'Разность хода Δr', unit: 'м' }, m: { label: 'Δr в длинах волн', digits: 2 }, v: { label: 'Скорость волны', unit: 'м/с' } });
+  SimUI.chart({ title: 'Яркость полос на экране', mode: 'curve', xLabel: 'x, м', yLabel: 'A', height: 140,
+    series: [{ name: 'амплитуда', color: 'cyan' }],
+    data: function (o, P) { var xs = [], ys = []; for (var i = 0; i <= 160; i++) { var x = -3 + 6 * i / 160; xs.push(x); ys.push(PHYS.amp(S, P, x, 2.4)); } return { x: xs, y: ys }; } });
+  SimUI.chart({ title: 'Колебание в жёлтой точке', x: 't', y: ['eta'], xLabel: 't, с', series: [{ name: 'η', color: 'yellow' }], collapsed: true });
+  SimUI.formula({ tex: '\\Delta r = m\\lambda \\quad\\Rightarrow\\quad \\text{максимум}', corner: 'tl',
+    vars: { lambda: { label: 'λ', unit: 'м' }, d: { label: 'd', unit: 'м' } },
+    note: 'Перетащи источники S₁ и S₂ мышью — полосы повернутся вслед.' });
+  // ==== @end instruments ====
+
+  // ==== @section main ====
+  var app = SimUI.run({ physics: PHYS, P: P, S: S, draw: draw, hooks: hooks });
+  // ==== @end main ====
+})();
+</script>
+</body>
+</html>

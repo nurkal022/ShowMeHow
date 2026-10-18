@@ -26,7 +26,7 @@ export const ALL_NAV_SECTIONS: readonly NavSection[] = [
   { key: 'learn', href: '/learn', label: 'Моё обучение' },
   { key: 'catalog', href: '/learn/catalog', label: 'Каталог курсов' },
   { key: 'teach', href: '/teach', label: 'Преподавание' },
-  { key: 'create', href: '/', label: 'Создать' },
+  { key: 'create', href: '/create', label: 'Создать' },
   { key: 'research', href: '/research', label: 'Исследования' },
   { key: 'library', href: '/library', label: 'Библиотека' },
   { key: 'labs', href: '/labs', label: 'Лаборатории' },
@@ -35,10 +35,12 @@ export const ALL_NAV_SECTIONS: readonly NavSection[] = [
 ];
 
 /**
- * Гостю (без сессии) видна только «Лаборатории» — их список открыт без входа.
- * «Создать» и «Библиотека» ведут на страницы, закрытые логином.
+ * Гость видит то же меню, что и новый пользователь: меню одно на весь сайт.
+ * «Лаборатории» открыты без входа; остальное middleware уводит на /login с ?next=,
+ * и после входа человек попадает ровно туда, куда нажал.
  */
-export const GUEST_NAV_SECTIONS: readonly NavSection[] = ALL_NAV_SECTIONS.filter((s) => s.key === 'labs');
+// Гостю — только то, что открывается без входа: «Создать», «Исследования» и «Библиотека» лишь перекидывали бы на вход.
+export const GUEST_NAV_SECTIONS: readonly NavSection[] = ALL_NAV_SECTIONS.filter((s) => ['labs'].includes(s.key));
 
 type PolicyUser = Pick<AuthUser, 'role'>;
 

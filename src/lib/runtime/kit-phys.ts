@@ -16,8 +16,32 @@ var SimPhys = (function () {
     for (var i = 0; i < n; i++) fn(h);
     return n;
   }
-  /** Классический RK4 для массива состояния: deriv(y, t) -> dy/dt той же длины. */
+  /**
+   * Классический RK4 для массива состояния: deriv(y, t) -> dy/dt той же длины.
+   * Порядок аргументов модели путают — функцию, массив и числа узнаём по типу:
+   * rk4(deriv, y, t, dt), rk4(y, dt, deriv) тоже работают. Объект {x, v} — тоже.
+   */
   function rk4(y, t, dt, deriv) {
+    var args = Array.prototype.slice.call(arguments), f = null, arr = null, nums = [];
+    for (var a = 0; a < args.length; a++) {
+      if (typeof args[a] === 'function' && !f) f = args[a];
+      else if (args[a] && typeof args[a] === 'object' && !arr) arr = args[a];
+      else if (typeof args[a] === 'number') nums.push(args[a]);
+    }
+    if (!f || !arr) throw new Error('SimPhys.rk4(y, t, dt, deriv): нужны массив состояния и функция производных');
+    if (!Array.isArray(arr)) { // объект состояния: ключи → массив → обратно
+      var keys = Object.keys(arr).filter(function (k) { return typeof arr[k] === 'number'; });
+      var yv = keys.map(function (k) { return arr[k]; });
+      var res = rk4(yv, nums.length > 1 ? nums[0] : 0, nums.length > 1 ? nums[1] : nums[0], function (yy, tt) {
+        var o = {}; for (var q = 0; q < keys.length; q++) o[keys[q]] = yy[q];
+        var d = f(o, tt);
+        return Array.isArray(d) ? d : keys.map(function (k) { return Number(d[k]) || 0; });
+      });
+      var outObj = {}; for (var q2 = 0; q2 < keys.length; q2++) outObj[keys[q2]] = res[q2];
+      return outObj;
+    }
+    y = arr; deriv = f;
+    if (nums.length >= 2) { t = nums[0]; dt = nums[1]; } else { t = 0; dt = nums[0]; }
     var n = y.length, k1 = deriv(y, t), tmp = new Array(n), i;
     for (i = 0; i < n; i++) tmp[i] = y[i] + k1[i] * dt / 2;
     var k2 = deriv(tmp, t + dt / 2);
@@ -119,34 +143,51 @@ export const KIT_THREE_JS = `
 (function () {
   var K = window.SimUI;
   K.scene3d = function (THREE, OrbitControls, o) {
+    if (THREE && THREE.THREE && !THREE.Scene) THREE = THREE.THREE;
+    if (OrbitControls && typeof OrbitControls === 'object' && !OrbitControls.prototype) { o = OrbitControls; OrbitControls = o.OrbitControls || null; }
     o = o || {};
     var canvas = document.getElementById(o.canvas || 'scene');
-    if (!canvas) {
+    if (!canvas || canvas.tagName !== 'CANVAS') {
       canvas = document.createElement('canvas'); canvas.id = 'scene';
       canvas.style.cssText = 'position:fixed;inset:0;display:block';
-      document.body.appendChild(canvas);
+      document.body.insertBefore(canvas, document.body.firstChild);
     }
+    canvas.style.touchAction = 'none';
     var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     var scene = new THREE.Scene();
-    scene.background = new THREE.Color(o.background == null ? 0x101318 : o.background);
+    scene.background = new THREE.Color(o.background == null ? 0x0d1117 : o.background);
     var camera = new THREE.PerspectiveCamera(o.fov || 45, 1, 0.01, 1000);
     scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 0.9));
     var sun = new THREE.DirectionalLight(0xffffff, 0.9); sun.position.set(4, 8, 6); scene.add(sun);
+    var rim = new THREE.DirectionalLight(0x88aaff, 0.35); rim.position.set(-6, 3, -5); scene.add(rim);
     var controls = OrbitControls ? new OrbitControls(camera, canvas) : null;
     if (controls) { controls.enableDamping = true; controls.enablePan = false; }
     var radius = o.radius || 3, target = new THREE.Vector3(0, 0, 0);
+    if (o.grid) {
+      var gr = new THREE.GridHelper(radius * 4, 20, 0x3a4658, 0x232b36);
+      gr.position.y = typeof o.grid === 'number' ? o.grid : -radius * 0.6;
+      gr.material.transparent = true; gr.material.opacity = 0.6;
+      scene.add(gr);
+    }
     // Дистанция по соотношению сторон: объект целиком в кадре и на узком экране.
     function fit(r, center) {
       if (r) radius = r;
       if (center) target.copy(center);
-      var aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
+      var ins = K.__insets ? K.__insets() : { l: 0, r: 0, t: 0, b: 0 };
+      var w = Math.max(1, innerWidth - ins.l - ins.r), h = Math.max(1, innerHeight - ins.t - ins.b);
+      var aspect = w / h;
       var vfov = camera.fov * Math.PI / 180;
       var hfov = 2 * Math.atan(Math.tan(vfov / 2) * aspect);
       var dist = radius / Math.sin(Math.min(vfov, hfov) / 2) * 1.1;
       var dir = new THREE.Vector3(o.view ? o.view[0] : 0.6, o.view ? o.view[1] : 0.45, o.view ? o.view[2] : 1).normalize();
       camera.position.copy(target).addScaledVector(dir, dist);
-      camera.near = dist / 100; camera.far = dist * 20; camera.updateProjectionMatrix();
+      camera.near = dist / 100; camera.far = dist * 20;
+      // Центр кадра — в свободной части экрана, а не под панелью параметров.
+      var dx = (ins.r - ins.l) / 2, dy = (ins.b - ins.t) / 2;
+      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) camera.setViewOffset(innerWidth, innerHeight, dx, dy, innerWidth, innerHeight);
+      else if (camera.clearViewOffset) camera.clearViewOffset();
+      camera.updateProjectionMatrix();
       if (controls) { controls.target.copy(target); controls.update(); } else camera.lookAt(target);
     }
     function resize() {
@@ -158,10 +199,63 @@ export const KIT_THREE_JS = `
     }
     window.addEventListener('resize', resize);
     resize();
-    return {
-      renderer: renderer, scene: scene, camera: camera, controls: controls, fit: fit, resize: resize,
-      render: function () { if (controls) controls.update(); renderer.render(scene, camera); },
+    setTimeout(resize, 60); setTimeout(resize, 900);
+
+    // Подписи поверх 3D: HTML-баллон следует за точкой или объектом сцены.
+    var labels = [], overlay = null, tmp = new THREE.Vector3();
+    function label(text, at, lo) {
+      lo = lo || {};
+      if (!overlay) { overlay = document.createElement('div'); overlay.className = 'sim-overlay'; document.body.appendChild(overlay); }
+      var el = document.createElement('div');
+      el.className = 'sim-tag' + (lo.tex ? ' sim-tag-tex' : '');
+      if (lo.color) el.style.setProperty('--sim-tag-color', K.color ? K.color(lo.color) : lo.color);
+      if (lo.tex && K.tex) K.tex(el, text, false); else el.textContent = text;
+      overlay.appendChild(el);
+      var rec = { el: el, at: at, off: lo.offset || [0, 0, 0] };
+      labels.push(rec);
+      return {
+        set: function (t) { if (lo.tex && K.tex) K.tex(el, t, false); else el.textContent = t; },
+        move: function (p) { rec.at = p; },
+        hide: function () { el.style.display = 'none'; rec.hidden = true; },
+        show: function () { el.style.display = ''; rec.hidden = false; },
+        element: el,
+      };
+    }
+    function placeLabels() {
+      for (var i = 0; i < labels.length; i++) {
+        var l = labels[i];
+        if (l.hidden) continue;
+        if (l.at && l.at.isObject3D) l.at.getWorldPosition(tmp);
+        else if (Array.isArray(l.at)) tmp.set(l.at[0], l.at[1], l.at[2]);
+        else if (l.at) tmp.copy(l.at);
+        tmp.x += l.off[0]; tmp.y += l.off[1]; tmp.z += l.off[2];
+        tmp.project(camera);
+        var behind = tmp.z > 1;
+        var x = (tmp.x * 0.5 + 0.5) * innerWidth, y = (-tmp.y * 0.5 + 0.5) * innerHeight;
+        l.el.style.visibility = behind ? 'hidden' : '';
+        l.el.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px) translate(-50%,-50%)';
+      }
+    }
+    function arrow(from, to, color) {
+      var a = Array.isArray(from) ? new THREE.Vector3(from[0], from[1], from[2]) : from.clone();
+      var b = Array.isArray(to) ? new THREE.Vector3(to[0], to[1], to[2]) : to.clone();
+      var d = b.clone().sub(a), len = d.length() || 1e-6;
+      var h = new THREE.ArrowHelper(d.normalize(), a, len, new THREE.Color(K.color ? K.color(color || 'yellow') : (color || 0xffcc00)).getHex(), Math.min(len * 0.25, radius * 0.12), Math.min(len * 0.15, radius * 0.07));
+      scene.add(h);
+      h.update = function (f, t2) {
+        var A = Array.isArray(f) ? new THREE.Vector3(f[0], f[1], f[2]) : f, B = Array.isArray(t2) ? new THREE.Vector3(t2[0], t2[1], t2[2]) : t2;
+        var D = B.clone().sub(A), L = D.length() || 1e-6;
+        h.position.copy(A); h.setDirection(D.normalize()); h.setLength(L, Math.min(L * 0.25, radius * 0.12), Math.min(L * 0.15, radius * 0.07));
+      };
+      return h;
+    }
+    var api = {
+      THREE: THREE, renderer: renderer, scene: scene, camera: camera, controls: controls, fit: fit, resize: resize,
+      label: label, arrow: arrow,
+      render: function () { if (controls) controls.update(); renderer.render(scene, camera); if (labels.length) placeLabels(); },
     };
+    K.__view3d = api;
+    return api;
   };
 })();
 `;

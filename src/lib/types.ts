@@ -76,11 +76,22 @@ export type SimLang = 'ru' | 'kk' | 'en';
 
 export interface PlanEntity { name: string; role: string }
 export interface PlanObservable { name: string; label: string; unit: string }
-export interface PlanView { kind: 'scene' | 'chart' | 'phase' | 'table' | 'formula' | 'section'; title: string; what: string }
+export interface PlanView {
+  kind: 'scene' | 'chart' | 'phase' | 'table' | 'formula' | 'section'; title: string; what: string;
+  /** Что на графике: имена величин observables/parameters. x — ось абсцисс (по умолчанию время t). */
+  x?: string; y?: string[];
+}
 /** Проверяемое утверждение о физике: оно уходит в числовую проверку ядра. */
 export interface PlanInvariant { text: string }
 export interface PlanStep { title: string; task: string; /** Что студент должен заметить или ответить. */ expect?: string }
 export interface PlanPreset { label: string; values: Record<string, number> }
+/** Фаза процесса для показа по шагам: такт двигателя, стадия митоза. */
+export interface PlanPhase { name: string; text: string }
+/**
+ * Как показывать: live — непрерывная симуляция; phases — по фазам, с остановкой на каждой
+ * («Далее» проигрывает следующую), чтобы преподаватель объяснял по шагам.
+ */
+export type SimPresentation = 'live' | 'phases';
 
 export interface PlanSpec {
   title: string;
@@ -100,6 +111,9 @@ export interface PlanSpec {
   scenario?: PlanStep[];
   presets?: PlanPreset[];
   wowMoment?: string;
+  /** Показ по фазам: тренажёр останавливается в начале каждой фазы из phases. Нет — непрерывный. */
+  presentation?: SimPresentation;
+  phases?: PlanPhase[];
   /** Язык всего текста тренажёра (подписи, шаги, задания). Нет — русский. */
   lang?: SimLang;
 }

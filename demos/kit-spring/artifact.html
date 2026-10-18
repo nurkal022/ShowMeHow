@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пружинный маятник</title>
+<style>html, body { margin: 0; height: 100%; overflow: hidden; }</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<script>
+(function () {
+  // ==== @section physics ====
+  var PHYS = (function () {
+    function init(p) { return { t: 0, x: p.x0, v: 0 }; }               // x, м; v, м/с
+    function step(s, p, dt) {
+      SimPhys.substep(dt, 0.002, function (h) {
+        var a = (-p.k * s.x - p.b * s.v) / p.m;                           // второй закон Ньютона
+        s.v += a * h; s.x += s.v * h; s.t += h;                           // полунеявный Эйлер
+      });
+    }
+    function observe(s, p) {
+      var Ek = p.m * s.v * s.v / 2, Ep = p.k * s.x * s.x / 2;
+      return { t: s.t, x: s.x, v: s.v, a: (-p.k * s.x - p.b * s.v) / p.m,
+        Ek: Ek, Ep: Ep, E: Ek + Ep, T: 2 * Math.PI * Math.sqrt(p.m / p.k), phase: s.v >= 0 ? 0 : 1 };
+    }
+    return { init: init, step: step, observe: observe };
+  })();
+  // ==== @end physics ====
+
+  // ==== @section state ====
+  var P = { m: 1, k: 20, b: 0.05, x0: 0.35 };
+  var S = PHYS.init(P);
+  var hooks = { frame: [], reset: [] };
+  // ==== @end state ====
+
+  // ==== @section scene ====
+  var view = SimUI.view2d({ x: [-0.25, 1.75], y: [-0.55, 0.6] });
+  var trail = view.trail(90);
+  hooks.reset.push(function () { trail.clear(); });
+  var X0 = 1;  // положение равновесия груза, м
+  // Груз можно схватить мышью и оттянуть: отпустил — колебания с новой амплитудой.
+  view.drag({
+    hit: { x: function () { return X0 + S.x; }, y: function () { return 0; }, r: 0.13 },
+    onDrag: function (x) { S.x = SimPhys.clamp(x - X0, -0.6, 0.6); S.v = 0; },
+  });
+  function draw(o, P) {
+    view.clear();
+    view.ground(-0.15);
+    view.support(-0.12, 0.32, 0.02);
+    view.line(-0.05, -0.15, -0.05, 0.32, { color: 'gray', width: 4 });
+    var xb = X0 + o.x;
+    view.line(X0, -0.45, X0, 0.45, { color: 'gray', dash: true, width: 1, alpha: 0.6 });
+    view.text(X0, -0.5, 'равновесие', { size: 11, color: 'muted' });
+    // Пружина краснеет при сильном растяжении — видно, где сила больше.
+    view.spring(-0.05, 0, xb - 0.13, 0, { color: SimUI.heat(Math.min(1, Math.abs(o.x) / 0.5) * 0.9 + 0.1), coils: 14, width: 2.5 });
+    view.box(xb, 0, 0.26, 0.26, 0, { color: 'orange', label: P.m.toFixed(1) + ' кг', radius: 6 });
+    trail.push(xb, 0.24);
+    trail.draw({ color: 'orange', width: 3, alpha: 0.6 });
+    view.vector(xb, 0.18, o.v * 0.18, 0, { color: 'green', label: 'v' });
+    view.vector(xb, -0.2, o.a * 0.012, 0, { color: 'red', label: 'F' });
+    view.tex(xb, 0.42, 'x = ' + o.x.toFixed(2) + '\\,\\text{м}', { color: 'orange', id: 'x' });
+    view.button(xb, -0.36, 'Толкнуть →', function () { S.v += 1; }, { color: 'green' });
+  }
+  // ==== @end scene ====
+
+  // ==== @section controls ====
+  SimUI.title('Пружинный маятник');
+  SimUI.goals(['Период зависит от массы и жёсткости, но не от амплитуды', 'Энергия переходит из потенциальной в кинетическую и обратно', 'Трение уносит полную энергию']);
+  SimUI.params(P, [
+    { name: 'm', label: 'Масса груза', min: 0.2, max: 5, step: 0.1, unit: 'кг', group: 'Груз' },
+    { name: 'x0', label: 'Начальное смещение', min: -0.5, max: 0.5, step: 0.01, unit: 'м', group: 'Груз' },
+    { name: 'k', label: 'Жёсткость пружины', min: 5, max: 100, step: 1, unit: 'Н/м', group: 'Пружина' },
+    { name: 'b', label: 'Трение', min: 0, max: 2, step: 0.05, unit: 'кг/с', group: 'Среда' },
+  ]);
+  SimUI.presets([{ label: 'Лёгкий груз', values: { m: 0.3 } }, { label: 'Тяжёлый', values: { m: 4 } }, { label: 'Вязкая среда', values: { b: 1.2 } }]);
+  // ==== @end controls ====
+
+  // ==== @section instruments ====
+  SimUI.readouts({ x: { label: 'Смещение', unit: 'м', color: 'orange' }, v: { label: 'Скорость', unit: 'м/с', color: 'green' },
+    T: { label: 'Период', unit: 'с' } });
+  SimUI.meter({ key: 'E', label: 'Полная энергия', min: 0, max: 2, unit: 'Дж', corner: 'bl',
+    zones: [{ to: 0.6, color: 'cyan' }, { to: 1.3, color: 'yellow' }, { to: 99, color: 'red' }] });
+  SimUI.chart({ title: 'Энергия', x: 't', y: ['Ek', 'Ep', 'E'], xLabel: 't, с', yLabel: 'E, Дж',
+    series: [{ name: 'кинетическая', color: 'blue' }, { name: 'потенциальная', color: 'orange' }, { name: 'полная', color: 'gray', dash: true }] });
+  SimUI.sweep({ title: 'Период от массы', param: 'm', y: 'T', xLabel: 'm, кг', yLabel: 'T, с', corner: 'br', height: 130, collapsed: true });
+  SimUI.formula({ tex: 'T = 2\\pi\\sqrt{\\dfrac{m}{k}}', corner: 'tl',
+    vars: { m: { label: 'm', unit: 'кг' }, k: { label: 'k', unit: 'Н/м' }, T: { label: 'T', unit: 'с', digits: 2 } },
+    note: 'Оттяни груз мышью — период не изменится, изменится только размах.' });
+  SimUI.banner({ items: [{ name: 'Движение вправо', color: 'green' }, { name: 'Движение влево', color: 'orange' }], phase: 'phase' });
+  SimUI.actions([
+    { label: '⚡ Удар по грузу', primary: true, onClick: function () { S.v += 1.5; SimUI.toast('Удар! Энергия выросла', { color: 'yellow' }); } },
+    { label: '✋ Остановить', onClick: function () { S.v = 0; S.x = 0; } },
+  ]);
+  // ==== @end instruments ====
+
+  // ==== @section main ====
+  var app = SimUI.run({ physics: PHYS, P: P, S: S, draw: draw, hooks: hooks });
+  // ==== @end main ====
+})();
+</script>
+</body>
+</html>

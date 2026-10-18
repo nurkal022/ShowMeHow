@@ -23,11 +23,14 @@ export const PLANNER_SYSTEM = `Ты — методист и физик. По з�
                   "step": 1, "value": 20, "unit": "°C", "group": "Газ"}, ...],
   "observables": [{"name": "pressure", "label": "Давление", "unit": "кПа"}, ...],
   "views": [{"kind": "scene"|"chart"|"phase"|"table"|"formula"|"section",
-             "title": "p-V диаграмма", "what": "что показывает и зачем"}, ...],
+             "title": "p-V диаграмма", "what": "что показывает и зачем",
+             "x": "volume", "y": ["pressure"]}, ...],  // x, y — имена из observables/parameters; у chart x обычно "t"
   "invariants": ["проверяемое числом утверждение: «при трении 0 полная энергия постоянна с точностью 1%»", ...],
   "scenario": [{"title": "Наблюдай", "task": "что сделать студенту", "expect": "что он должен заметить или ответить"}, ...],
   "presets": [{"label": "Холостой ход", "values": {"temperature": 20}}, ...],
   "wowMoment": "один запоминающийся момент, ради которого тренажёр показывают на занятии",
+  "presentation": "live" | "phases",  // phases — показ по шагам с остановкой на каждой фазе
+  "phases": [{"name": "Впуск", "text": "что происходит в этой фазе — 1-2 предложения для студента"}, ...],
   "visualPlan": "что рисуем, композиция экрана, цветовое кодирование, какие графики величин"
 }
 Уровень (level) — объём тренажёра. Если преподаватель уровень назвал — бери его, иначе выбирай сам:
@@ -41,9 +44,15 @@ export const PLANNER_SYSTEM = `Ты — методист и физик. По з�
 покажи её устройство целиком — несколько объектов (entities), их связи и несколько видов.
 invariants — 2-4 утверждения, которые можно проверить расчётом: законы сохранения,
 пропорциональности («период не зависит от массы»), предельные случаи («при k=0 сила 0»).
-Имена parameters[].name и observables[].name — латиницей в camelCase, уникальные.
+Имена parameters[].name и observables[].name — латиницей в camelCase, уникальные. По этим именам
+к ядру физики привязываются показания и графики: всё, что студент должен видеть числом или на графике,
+перечисли в observables (3-6 величин, с единицами).
 parameters — только ФИЗИЧЕСКИЕ величины модели (длина, масса, температура). Настройки опыта
 (число колебаний для замера, шаг таблицы) — не параметры: их место в scenario или views.
+presentation "phases" выбирай, если преподаватель просит показ по шагам/фазам/поэтапно ИЛИ процесс по природе
+состоит из чётких последовательных этапов (такты двигателя, стадии митоза, цикл Карно, этапы реакции):
+тогда тренажёр останавливается в начале каждой фазы и ждёт «Далее». phases — 3-8 фаз по порядку; в physics
+укажи, по какому признаку наступает каждая фаза. Обычные непрерывные явления (маятник, волны) — "live", phases пустой.
 Скорость времени — НЕ параметр: её даёт прибор кита (SimUI.speed), в parameters её не включай.
 Требования: физика должна быть корректной и наблюдаемой в симуляции; параметры — те,
 изменение которых наглядно меняет картину. Если приложена картинка — учитывай её.
@@ -72,17 +81,19 @@ ${cdnList}
   Всё это — примитивы SimUI (см. описание кита ниже). Центр экрана — только сцена.
 - НЕ подключай библиотеки графиков (chart.js и любые другие) — используй SimUI.chart.
 - НЕ подключай KaTeX вручную — используй SimUI.formula, кит грузит KaTeX сам.
+- Цикл, пауза, сброс, скорость времени и самопроверка — SimUI.run({physics: PHYS, P, S, draw, hooks}).
+  Свой requestAnimationFrame-цикл, playPause, speed и expose в новом коде НЕ пиши: run делает их сам
+  (в старом коде без run сохраняй его цикл и SimUI.expose({getState, reset}) — он обязателен).
+- 2D-сцена — SimUI.view2d в мировых координатах (метры, ось y вверх): пиксели, масштаб и место под
+  панелями кит считает сам. Рисуй её примитивами (line, ball, arrow, spring, label, fn, field…).
 - three.js: глобальной сборки нет. В \`<script type="module">\` пиши
   \`import * as THREE from 'three';\` и \`import { OrbitControls } from 'three/addons/controls/OrbitControls.js';\`
-  — importmap уже вставлен китом. Проще всего — SimUI.scene3d(THREE, OrbitControls, {radius}) (см. кит).
-  Если собираешь рендер сам — только в СУЩЕСТВУЮЩИЙ холст сцены:
-  renderer = new THREE.WebGLRenderer({canvas: document.getElementById('scene'), antialias:true, preserveDrawingBuffer:true}).
-  НИКОГДА не делай appendChild(renderer.domElement) внутрь <canvas> — холст в холсте не отображается.
+  — importmap уже вставлен китом. Сцена — SimUI.scene3d(THREE, OrbitControls, {radius}) (см. кит), рендер в
+  СУЩЕСТВУЮЩИЙ холст #scene; если собираешь рендер сам: new THREE.WebGLRenderer({canvas: document.getElementById('scene'),
+  antialias:true, preserveDrawingBuffer:true}). НИКОГДА не делай appendChild(renderer.domElement) внутрь <canvas>.
 - Фон страницы и панелей задаёт кит (тёмный); не перекрашивай body и не делай сцену светлой под тёмные панели.
-- Анимация через requestAnimationFrame с dt-шагом и клампом (Math.min(0.05, dt)); от FPS не зависеть.
-- Пауза обязана останавливать И физику, И картинку; сброс — возвращать начальное состояние.
-- Каждый параметр из spec.parameters — SimUI.slider с тем же name/label/min/max/step/value/unit.
-- SimUI.expose({getState, reset}) ОБЯЗАТЕЛЕН: getState возвращает простой объект с числами.
+- Каждый параметр из spec.parameters — слайдер с тем же name/label/min/max/step/value/unit
+  (SimUI.params(P, [...]) создаёт их все сразу).
 - Никаких NaN и Infinity в подписях и состоянии: делить на ноль и брать корень из
   отрицательного — через Math.max(0, ...) и проверки.
 - Физика обязана следовать spec.physics: те же уравнения, разумные величины, единицы.
@@ -94,10 +105,8 @@ ${cdnList}
   Полный период, цикл или проход укладывается примерно в 1-10 с. Если естественная
   величина быстрая (рабочие обороты двигателя, частота волны), по умолчанию ставь
   ДЕМОНСТРАЦИОННОЕ значение, а реальное оставь достижимым слайдером и пресетами.
-- SimUI.speed обязателен, и dt каждый кадр умножается на speed.get(): кит через него
-  плавно разгоняет симуляцию при открытии.
-- КОМПОЗИЦИЯ: объект целиком помещается в кадр и на широком экране, и на узком.
-  Для 3D дистанцию камеры считай от соотношения сторон, не фиксируй числом.
+- КОМПОЗИЦИЯ: объект целиком помещается в кадр и на широком экране, и на узком: в view2d задай
+  область мира с запасом вокруг объекта; в 3D — radius по размеру объекта.
 - Русский язык во всех подписях, единицы измерения у всех величин.
 - Никаких заглушек и TODO: всё работает сразу.`;
 
@@ -111,11 +120,8 @@ export const EXAMPLE_SKELETON = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Название симуляции</title>
-<style>
-  html, body { margin: 0; height: 100%; overflow: hidden; }
-  canvas#scene { position: fixed; top: 0; left: 0; display: block; }
-</style>
+<title>Прыгающий мяч</title>
+<style>html, body { margin: 0; height: 100%; overflow: hidden; }</style>
 </head>
 <body>
 <canvas id="scene"></canvas>
@@ -124,113 +130,66 @@ export const EXAMPLE_SKELETON = `<!DOCTYPE html>
   // ==== @section physics ====
   // Ядро: чистые функции без DOM. p — параметры по именам spec.parameters.
   var PHYS = (function () {
-    function init(p) { return { t: 0, h: 6, v: 0 }; }            // h, м; v, м/с
+    function init(p) { return { t: 0, h: p.h0, v: 0 }; }             // h, м; v, м/с
     function step(s, p, dt) {
-      s.v += -p.g * dt;                                           // полунеявный Эйлер
-      s.h += s.v * dt;
-      if (s.h < 0) { s.h = -s.h * p.e; s.v = -s.v * p.e; }       // удар с коэффициентом упругости
-      s.t += dt;
+      SimPhys.substep(dt, 0.005, function (h) {
+        s.v += -p.g * h;                                            // полунеявный Эйлер
+        s.h += s.v * h;
+        if (s.h < 0) { s.h = -s.h * p.e; s.v = -s.v * p.e; }        // удар с коэффициентом упругости
+        s.t += h;
+      });
     }
-    function observe(s, p) {
-      return { t: s.t, h: s.h, v: s.v, E: p.g * s.h + s.v * s.v / 2 }; // E — энергия на кг, Дж/кг
+    function observe(s, p) {                                         // всё, что показывают приборы
+      return { t: s.t, h: s.h, v: s.v, E: p.g * s.h + s.v * s.v / 2, phase: s.v >= 0 ? 0 : 1 };
     }
     return { init: init, step: step, observe: observe };
   })();
   // ==== @end physics ====
 
   // ==== @section state ====
-  var P = { g: 9.8, e: 0.8 };          // текущие значения параметров
-  var S = null;                        // состояние ядра
-  var hooks = { frame: [], reset: [] }; // сюда подписываются слои (виды, сценарий урока)
-  function resetSim() {                // вызывается ниже, когда приборы уже созданы
-    S = PHYS.init(P);
-    chart.clear();
-    for (var i = 0; i < hooks.reset.length; i++) hooks.reset[i]();
-  }
+  var P = { g: 9.8, e: 0.8, h0: 6 };     // параметры по именам spec.parameters
+  var S = PHYS.init(P);                  // состояние ядра; сброс делает SimUI.run
+  var hooks = { frame: [], reset: [] };  // сюда подписываются слои (виды, сценарий урока)
   // ==== @end state ====
 
   // ==== @section scene ====
-  var canvas = document.getElementById('scene');
-  var ctx2d = canvas.getContext('2d');
-  function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
-  function draw(o) {
-    ctx2d.fillStyle = '#101318';
-    ctx2d.fillRect(0, 0, canvas.width, canvas.height);
-    var ground = canvas.height * 0.85, scale = canvas.height * 0.1;
-    ctx2d.fillStyle = '#2a3341';
-    ctx2d.fillRect(0, ground, canvas.width, 4);
-    ctx2d.fillStyle = o.v >= 0 ? '#4f8ff7' : '#f79f4f';
-    ctx2d.beginPath();
-    ctx2d.arc(canvas.width * 0.4, ground - 18 - o.h * scale, 18, 0, Math.PI * 2);
-    ctx2d.fill();
+  var view = SimUI.view2d({ x: [-2, 2], y: [-0.5, 7] });  // видимая область мира, м
+  var trail = view.trail(150);
+  hooks.reset.push(function () { trail.clear(); });
+  function draw(o, P) {
+    view.clear();
+    view.ground(0);
+    trail.push(0, o.h + 0.3);
+    trail.draw({ color: 'blue' });
+    view.ball(0, o.h + 0.3, 0.3, o.v >= 0 ? 'blue' : 'orange');
+    view.vector(0.45, o.h + 0.3, 0, o.v * 0.15, { color: 'green', label: 'v' });
+    view.label(-1.1, o.h + 0.3, o.h.toFixed(1) + ' м', { color: 'blue' });
   }
   // ==== @end scene ====
 
   // ==== @section controls ====
-  SimUI.title('Название симуляции');
-  SimUI.goals(['что должен понять студент']);
-  SimUI.slider({ name: 'g', label: 'Ускорение свободного падения', min: 1, max: 25, step: 0.1,
-    value: P.g, unit: 'м/с²', onChange: function (v) { P.g = v; } });
-  SimUI.slider({ name: 'e', label: 'Упругость удара', min: 0, max: 1, step: 0.05,
-    value: P.e, unit: '', onChange: function (v) { P.e = v; } });
-  SimUI.presets({ items: [{ label: 'Земля', values: { g: 9.8 } },
-    { label: 'Луна', values: { g: 1.6 } }] });
-  var speed = SimUI.speed({ values: [0.25, 0.5, 1, 2], value: 1 });
-  SimUI.playPause({
-    onPlay: function () { running = true; lastFrame = null; },
-    onPause: function () { running = false; },
-    onReset: function () { resetSim(); },
-  });
+  SimUI.title('Прыгающий мяч');
+  SimUI.goals(['Энергия переходит из потенциальной в кинетическую', 'При ударе часть энергии теряется']);
+  SimUI.params(P, [
+    { name: 'g', label: 'Ускорение свободного падения', min: 1, max: 25, step: 0.1, value: 9.8, unit: 'м/с²' },
+    { name: 'e', label: 'Упругость удара', min: 0, max: 1, step: 0.05, value: 0.8, unit: '' },
+    { name: 'h0', label: 'Начальная высота', min: 1, max: 6.5, step: 0.1, value: 6, unit: 'м' },
+  ]);
+  SimUI.presets([{ label: 'Земля', values: { g: 9.8 } }, { label: 'Луна', values: { g: 1.6 } }]);
   // ==== @end controls ====
 
   // ==== @section instruments ====
-  var banner = SimUI.banner({ items: [
-    { name: 'Подъём', sub: 'скорость направлена вверх', color: '#4f8ff7' },
-    { name: 'Падение', sub: 'скорость направлена вниз', color: '#f79f4f' }] });
-  var rT = SimUI.readout({ label: 'Время', unit: 'с', digits: 2, corner: 'bl' });
-  var rH = SimUI.readout({ label: 'Высота', unit: 'м', digits: 2, corner: 'bl' });
-  var chart = SimUI.chart({ title: 'Высота от времени', xLabel: 't, с', yLabel: 'h, м',
-    series: [{ name: 'h', color: '#4f8ff7' }], corner: 'br' });
-  var formula = SimUI.formula({ title: 'Как это работает',
-    tex: 'E = g h + \\\\frac{v^2}{2}',
-    vars: { g: { label: 'g', unit: 'м/с²' }, h: { label: 'h', unit: 'м' } }, corner: 'tl' });
-  function updateInstruments(o) {
-    chart.push(o.t, [o.h]);
-    rT.set(o.t); rH.set(o.h);
-    formula.set({ g: P.g, h: o.h });
-    banner.set(o.v >= 0 ? 0 : 1); // фаза процесса обязана меняться по ходу симуляции
-  }
+  SimUI.readouts({ h: { label: 'Высота', unit: 'м' }, v: { label: 'Скорость', unit: 'м/с' }, E: { label: 'Энергия', unit: 'Дж/кг' } });
+  SimUI.chart({ title: 'Высота от времени', x: 't', y: ['h'], series: [{ name: 'Высота', color: 'blue' }],
+    xLabel: 't, с', yLabel: 'h, м' });
+  SimUI.formula({ title: 'Как это работает', tex: 'E = g h + \\\\frac{v^2}{2}',
+    vars: { g: { label: 'g', unit: 'м/с²' }, h: { label: 'h', unit: 'м' }, E: { label: 'E', unit: 'Дж/кг' } }, corner: 'tl' });
+  SimUI.banner({ items: [{ name: 'Подъём', sub: 'скорость направлена вверх', color: 'blue' },
+    { name: 'Падение', sub: 'скорость направлена вниз', color: 'orange' }], phase: 'phase' });
   // ==== @end instruments ====
 
   // ==== @section main ====
-  SimUI.expose({
-    getState: function () {
-      var o = PHYS.observe(S, P), out = {};
-      for (var k in o) out[k] = o[k];
-      for (var q in P) out[q] = P[q];
-      return out;
-    },
-    reset: resetSim,
-  });
-  var running = true, lastFrame = null;
-  function loop(now) {
-    if (lastFrame == null) lastFrame = now;
-    var dt = Math.min(0.05, (now - lastFrame) / 1000) * speed.get();
-    lastFrame = now;
-    var o = PHYS.observe(S, P);
-    if (running) {
-      PHYS.step(S, P, dt);
-      o = PHYS.observe(S, P);
-      updateInstruments(o);
-      for (var i = 0; i < hooks.frame.length; i++) hooks.frame[i](o, dt);
-    }
-    draw(o);
-    requestAnimationFrame(loop);
-  }
-  window.addEventListener('resize', resize);
-  resize();
-  resetSim(); // приборы (chart и т.п.) уже созданы выше — теперь можно
-  requestAnimationFrame(loop);
+  var app = SimUI.run({ physics: PHYS, P: P, S: S, draw: draw, hooks: hooks });
   // ==== @end main ====
 })();
 </script>
@@ -244,13 +203,14 @@ controls, instruments, main. Маркеры не удаляй и не переи
 - physics — только \`var PHYS = { init(p), step(s, p, dt), observe(s, p) }\`: чистые функции без DOM,
   canvas и SimUI. Вся физика живёт здесь; сцена и приборы берут величины только из observe().
   Ядро проверяют численно отдельно от страницы: NaN, влияние каждого параметра, инварианты.
-- state — объект P с текущими параметрами (по именам spec.parameters), состояние S = PHYS.init(P),
-  hooks = {frame: [], reset: []} и resetSim().
-- main — SimUI.expose, цикл: PHYS.step(S, P, dt) → observe → приборы → hooks.frame.
-- Физические величины для приборов (графики, показания, задания) берутся ТОЛЬКО из o = PHYS.observe(S, P).
-  Не пересчитывай физику в сцене и слоях. Если величина — производная по времени (скорость заметания
-  площади, мощность, поток), считай её по разности значений за окно не короче 0.2 с, а не по одному
-  кадру: dt кадра неровный, и покадровая производная скачет, хотя физика верна.`;
+- state — объект P с текущими параметрами (по именам spec.parameters), S = PHYS.init(P),
+  hooks = {frame: [], reset: []}.
+- scene — сцена (SimUI.view2d или SimUI.scene3d) и function draw(o, P, S) — рисует кадр по o.
+- main — одна строка: var app = SimUI.run({physics: PHYS, P: P, S: S, draw: draw, hooks: hooks}).
+- Физические величины для приборов (графики, показания, задания) берутся ТОЛЬКО из o = PHYS.observe(S, P):
+  приборы с key ('h') обновляются сами. Не пересчитывай физику в сцене и слоях. Если величина — производная
+  по времени (скорость заметания площади, мощность, поток), считай её по разности значений за окно не короче
+  0.2 с, а не по одному кадру: dt кадра неровный, и покадровая производная скачет, хотя физика верна.`;
 
 /**
  * Образец из собственных эталонов автора: только приборы, виды и урок, уже в секциях.
@@ -273,8 +233,9 @@ export function generatorSystem(exemplar?: string): string {
 
 ЭТАЛОН КАЧЕСТВА — реальная одобренная симуляция на ДРУГУЮ тему. Копируй уровень
 проработки сцены и приборов и приёмы (баннер фазы, показания, график, формула с живыми
-числами, пресеты). Структуру кода бери из каркаса выше — с секциями и ядром PHYS, даже если
-в эталоне их нет. Тему и физику эталона НЕ копируй:
+числами, пресеты). Структуру кода и API бери из каркаса выше — секции, ядро PHYS, SimUI.run,
+view2d и приборы с key, даже если эталон написан по-старому (свой цикл, ручные push/set).
+Тему и физику эталона НЕ копируй:
 \`\`\`html
 ${exemplar}
 \`\`\``
@@ -288,7 +249,8 @@ ${SECTION_RULES}
 
 Планка качества: у симуляции обязаны быть сцена, приборы (показания и хотя бы один
 живой график), формула с подстановкой текущих значений, пресеты режимов и один
-запоминающийся момент, ради которого её показывают на занятии.
+запоминающийся момент, ради которого её показывают на занятии. Сцена — не схема из
+квадратиков: подписи объектов, векторы сил и скоростей, цветовое кодирование, след движения.
 
 ${UIKIT_DOC}
 
@@ -409,6 +371,24 @@ ${core}
 урока (scenario) в этот проход НЕ пиши — их добавят следующими шагами в свои секции.` : ''}`;
 }
 
+/**
+ * Генерация параллельно с ядром: ядро физики пишется и проверяется числами в то же время,
+ * а потом встаёт на место секции physics. Сцена и приборы поэтому обязаны общаться с физикой
+ * только через ключи observe из плана — внутренности состояния у ядра будут свои.
+ */
+export function parallelCoreBrief(keys: string[], layered: boolean): string {
+  return `
+
+Ядро физики пишется ПАРАЛЛЕЛЬНО и проверяется числами отдельно: после проверки оно заменит твою секцию
+physics. Секцию physics всё равно напиши (рабочую, по spec.physics), но сцена, приборы и слои берут
+величины ТОЛЬКО из o = PHYS.observe(S, P) по ключам: ${keys.join(', ')}, и параметры — из P. Поля S и другие
+ключи o не используй: у проверенного ядра внутреннее состояние будет своим.${layered ? `
+
+Этот проход — ОСНОВА тренажёра: сцена со всеми объектами плана, все параметры и пресеты, показания
+главных величин, один главный график, формула и баннер фазы. Дополнительные виды (views) и сценарий
+урока (scenario) в этот проход НЕ пиши — их добавят следующими шагами в свои секции.` : ''}`;
+}
+
 /** Слой: новая секция поверх работающего тренажёра. */
 export const LAYER_SYSTEM = `Ты достраиваешь работающий учебный тренажёр новым слоем. Тебе дают спецификацию,
 текущий HTML (код размечен секциями) и задачу слоя. Напиши ТОЛЬКО новый код слоя.
@@ -419,8 +399,10 @@ ${SECTION_RULES}
 - Ответ — один блок \`\`\`js\`\`\` с секцией в маркерах: \`// ==== @section имя ====\` … \`// ==== @end имя ====\`.
   Секция вставится перед main и исполнится до запуска цикла, в той же области видимости:
   доступны PHYS, P, S, hooks, приборы и функции других секций.
-- Обновление каждый кадр — hooks.frame.push(function (o, dt) { ... }), где o = PHYS.observe(S, P).
-  Очистка при сбросе — hooks.reset.push(function () { ... }).
+- Новые приборы — с key или value: function (o, P) (обновятся сами: SimUI.chart({x:'t', y:['E']}),
+  SimUI.table({columns:[{label, unit, key}]}), SimUI.task({answer: function (o, P) {...}})).
+  Своё покадровое — hooks.frame.push(function (o, dt) { ... }), где o = PHYS.observe(S, P).
+  Очистка при сбросе — hooks.reset.push(function () { ... }). Сброс опыта из кода — app.reset().
 - Если слою нужно поменять существующую секцию (кроме physics), пришли её тоже, ЦЕЛИКОМ в маркерах.
   physics не трогай никогда.
 - Только примитивы SimUI, никаких своих position:fixed панелей. Русский язык, единицы у величин.

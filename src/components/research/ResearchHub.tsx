@@ -92,7 +92,7 @@ export default function ResearchHub({ projects, items, sims, articles }: {
     }
   }
 
-  const generate = (text: string, lvl: string) => router.push(`/?brief=${encodeURIComponent(text)}&level=${lvl}`);
+  const generate = (text: string, lvl: string) => router.push(`/create?brief=${encodeURIComponent(text)}&level=${lvl}`);
   const loose = items.filter((i) => i.projectTitle === null);
   const looseArticles = articles.filter((a) => !a.projectId);
 

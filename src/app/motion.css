@@ -135,8 +135,8 @@ input[type='checkbox']:active, input[type='radio']:active { transform: scale(.85
 .auth-card > * { animation: m-rise-sm .5s var(--ease-out) backwards; }
 .auth-card > :nth-child(2) { animation-delay: 60ms; } .auth-card > :nth-child(3) { animation-delay: 110ms; }
 .auth-card > :nth-child(4) { animation-delay: 160ms; } .auth-card > :nth-child(n+5) { animation-delay: 210ms; }
-.brand-mark { transition: transform .5s var(--ease-spring); }
-.brand:hover .brand-mark, .cab-brand:hover .brand-mark { transform: rotate(90deg) scale(1.08); }
+.brand-mark { transition: box-shadow .4s ease, background .4s ease; }
+.brand:hover .brand-mark, .cab-brand:hover .brand-mark { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent); }
 
 /* ------------------------------ уважение ------------------------------- */
 @media (prefers-reduced-motion: reduce) {

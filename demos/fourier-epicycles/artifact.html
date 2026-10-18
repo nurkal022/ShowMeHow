@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ряд Фурье: эпициклы рисуют фигуру</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0f14; }
+  #scene { position: fixed; top: 0; left: 0; display: block; z-index: 0; cursor: crosshair; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------- Холст ----------
+  var cv = document.getElementById('scene');
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0, CX = 0, CY = 0, S = 200;
+
+  // Панель управления справа (≈284 px), панели кита слева — центр сцены между ними.
+  function layout() {
+    var left = W > 900 ? 330 : 0, right = W > 900 ? 290 : 0;
+    CX = (left + W - right) / 2;
+    CY = H * 0.5;
+    S = Math.max(80, Math.min((W - left - right) / 2, H / 2) * 0.72);
+  }
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    rebuildApprox();
+    draw();
+  }
+
+  // ---------- Фигуры: замкнутые ломаные в координатах «y вверх» ----------
+  var N = 512; // число отсчётов контура = число коэффициентов ДПФ
+
+  function starPts() {
+    var p = [];
+    for (var i = 0; i < 10; i++) {
+      var r = i % 2 === 0 ? 1 : 0.42, a = Math.PI / 2 + i * Math.PI / 5;
+      p.push([r * Math.cos(a), r * Math.sin(a)]);
+    }
+    return p;
+  }
+  function heartPts() {
+    var p = [];
+    for (var i = 0; i < 400; i++) {
+      var t = i / 400 * Math.PI * 2, s = Math.sin(t);
+      p.push([16 * s * s * s, 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)]);
+    }
+    return p;
+  }
+  function notePts() {
+    // Восьмая нота: овальная головка, штиль и флажок — одним замкнутым контуром.
+    var p = [], rot = -0.35, i, a;
+    var attach = 0.18; // угол на головке, где начинается штиль (правый верх)
+    for (i = 0; i <= 60; i++) {
+      a = attach + 0.35 + i / 60 * (Math.PI * 2 - 0.7);
+      var ex = 1.0 * Math.cos(a), ey = 0.68 * Math.sin(a);
+      p.push([ex * Math.cos(rot) - ey * Math.sin(rot), ex * Math.sin(rot) + ey * Math.cos(rot)]);
+    }
+    p.push([0.98, 0.1]); p.push([0.98, 3.6]);
+    // флажок
+    var flag = [[1.25, 3.25], [1.75, 2.85], [2.15, 2.3], [2.2, 1.7], [2.0, 1.15], [1.85, 1.0],
+      [1.95, 1.5], [1.9, 2.0], [1.6, 2.45], [1.15, 2.75]];
+    for (i = 0; i < flag.length; i++) p.push(flag[i]);
+    p.push([0.78, 2.9]); p.push([0.78, 0.42]);
+    return p;
+  }
+  function squarePts() { return [[-1, -1], [1, -1], [1, 1], [-1, 1]]; }
+  function infinityPts() {
+    var p = [];
+    for (var i = 0; i < 400; i++) {
+      var t = i / 400 * Math.PI * 2, d = 1 + Math.sin(t) * Math.sin(t);
+      p.push([Math.cos(t) / d * 1.4, Math.sin(t) * Math.cos(t) / d * 1.4]);
+    }
+    return p;
+  }
+  var SHAPES = { star: starPts, heart: heartPts, note: notePts, square: squarePts, inf: infinityPts };
+
+  /** Равномерная по длине дуги выборка N точек замкнутой ломаной, центр в 0, max|z| = 1. */
+  function resample(pts) {
+    var n = pts.length, cum = [0], i;
+    for (i = 0; i < n; i++) {
+      var a = pts[i], b = pts[(i + 1) % n];
+      cum.push(cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1]));
+    }
+    var total = cum[n], out = [], seg = 0;
+    for (i = 0; i < N; i++) {
+      var s = total * i / N;
+      while (seg < n - 1 && cum[seg + 1] < s) seg++;
+      var p0 = pts[seg], p1 = pts[(seg + 1) % n];
+      var u = (cum[seg + 1] - cum[seg]) > 0 ? (s - cum[seg]) / (cum[seg + 1] - cum[seg]) : 0;
+      out.push([p0[0] + (p1[0] - p0[0]) * u, p0[1] + (p1[1] - p0[1]) * u]);
+    }
+    var mx = 0, my = 0;
+    for (i = 0; i < N; i++) { mx += out[i][0]; my += out[i][1]; }
+    mx /= N; my /= N;
+    var r = 1e-9;
+    for (i = 0; i < N; i++) { out[i][0] -= mx; out[i][1] -= my; r = Math.max(r, Math.hypot(out[i][0], out[i][1])); }
+    for (i = 0; i < N; i++) { out[i][0] /= r; out[i][1] /= r; }
+    return out;
+  }
+
+  // ---------- ДПФ: c_k = (1/N) Σ z_n e^{-i k 2π n / N} ----------
+  var target = [];   // отсчёты исходной фигуры
+  var coeffs = [];   // {k, re, im, amp, ph}, отсортированы по убыванию |c_k|, c_0 исключён
+  var c0 = { re: 0, im: 0 };
+  var totalPower = 1;
+
+  function dft(z) {
+    var out = [];
+    for (var k = -N / 2; k < N / 2; k++) {
+      var re = 0, im = 0;
+      for (var n = 0; n < N; n++) {
+        var ph = -2 * Math.PI * k * n / N;
+        var c = Math.cos(ph), s = Math.sin(ph);
+        re += z[n][0] * c - z[n][1] * s;
+        im += z[n][0] * s + z[n][1] * c;
+      }
+      re /= N; im /= N;
+      out.push({ k: k, re: re, im: im, amp: Math.hypot(re, im), ph: Math.atan2(im, re) });
+    }
+    return out;
+  }
+
+  function setShape(pts) {
+    target = resample(pts);
+    var all = dft(target);
+    coeffs = [];
+    totalPower = 0;
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].k === 0) { c0 = all[i]; continue; }
+      coeffs.push(all[i]);
+      totalPower += all[i].amp * all[i].amp;
+    }
+    coeffs.sort(function (a, b) { return b.amp - a.amp; });
+    trace = [];
+    rebuildApprox();
+    pushSpectrum();
+  }
+
+  // ---------- Частичная сумма из K крупнейших гармоник ----------
+  var K = 12;
+  var approx = [];   // контур частичной суммы, M точек
+  var errPct = 0, powerPct = 0;
+  var M = 400;
+
+  function partial(t, k) {
+    var x = c0.re, y = c0.im;
+    for (var i = 0; i < k && i < coeffs.length; i++) {
+      var c = coeffs[i], a = c.k * t + c.ph;
+      x += c.amp * Math.cos(a); y += c.amp * Math.sin(a);
+    }
+    return [x, y];
+  }
+
+  function rebuildApprox() {
+    if (!coeffs.length) return;
+    approx = [];
+    for (var j = 0; j < M; j++) approx.push(partial(j / M * Math.PI * 2, K));
+    // Среднеквадратичная ошибка по отсчётам исходной фигуры (в % от размера фигуры)
+    var e = 0;
+    for (var n = 0; n < N; n += 2) {
+      var p = partial(2 * Math.PI * n / N, K);
+      var dx = p[0] - target[n][0], dy = p[1] - target[n][1];
+      e += dx * dx + dy * dy;
+    }
+    errPct = Math.sqrt(e / (N / 2)) * 100;
+    var pw = 0;
+    for (var i = 0; i < K && i < coeffs.length; i++) pw += coeffs[i].amp * coeffs[i].amp;
+    powerPct = totalPower > 0 ? pw / totalPower * 100 : 100;
+  }
+
+  // ---------- Состояние анимации ----------
+  var phase = 0;            // параметр t ∈ [0, 2π)
+  var turns = 0;
+  var period = 8;           // с на полный обход
+  var running = true;
+  var lastFrame = null;
+  var trace = [];           // след кончика: [x, y, фаза] в нормированных координатах
+  var showTarget = true, showCircles = true, autoGrow = false;
+  var GROW = [1, 2, 3, 5, 8, 12, 20, 32, 50, 80, 128];
+
+  function toScreen(p) { return [CX + p[0] * S, CY - p[1] * S]; }
+
+  // ---------- Рисование ----------
+  function draw() {
+    ctx.fillStyle = '#0c0f14';
+    ctx.fillRect(0, 0, W, H);
+
+    // лёгкая сетка
+    ctx.strokeStyle = 'rgba(120,140,170,0.07)';
+    ctx.lineWidth = 1;
+    var step = S / 4;
+    for (var gx = CX % step; gx < W; gx += step) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+    for (var gy = CY % step; gy < H; gy += step) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(120,140,170,0.16)';
+    ctx.beginPath(); ctx.moveTo(0, CY); ctx.lineTo(W, CY); ctx.moveTo(CX, 0); ctx.lineTo(CX, H); ctx.stroke();
+
+    var i, p;
+    // исходная фигура — пунктир
+    if (showTarget && target.length) {
+      ctx.save();
+      ctx.setLineDash([4, 6]);
+      ctx.strokeStyle = 'rgba(200,210,225,0.28)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      for (i = 0; i <= N; i++) { p = toScreen(target[i % N]); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // контур частичной суммы — бледный, чтобы сходимость была видна сразу
+    if (approx.length) {
+      ctx.strokeStyle = 'rgba(255,190,90,0.18)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (i = 0; i <= M; i++) { p = toScreen(approx[i % M]); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
+      ctx.stroke();
+    }
+
+    // эпициклы
+    var x = c0.re, y = c0.im, kk = Math.min(K, coeffs.length);
+    for (i = 0; i < kk; i++) {
+      var c = coeffs[i], a = c.k * phase + c.ph;
+      var nx = x + c.amp * Math.cos(a), ny = y + c.amp * Math.sin(a);
+      if (showCircles) {
+        var sc = toScreen([x, y]), r = c.amp * S;
+        var fade = Math.max(0.08, 0.55 * Math.pow(0.93, i));
+        if (r > 0.6) {
+          ctx.strokeStyle = 'rgba(110,160,255,' + fade + ')';
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(sc[0], sc[1], r, 0, Math.PI * 2); ctx.stroke();
+        }
+        var ec = toScreen([nx, ny]);
+        ctx.strokeStyle = 'rgba(200,220,255,' + Math.min(0.9, fade + 0.25) + ')';
+        ctx.beginPath(); ctx.moveTo(sc[0], sc[1]); ctx.lineTo(ec[0], ec[1]); ctx.stroke();
+      }
+      x = nx; y = ny;
+    }
+
+    // след: от старого к новому, ярче к концу
+    if (trace.length > 1) {
+      ctx.lineCap = 'round';
+      for (i = 1; i < trace.length; i++) {
+        var age = (phase + turns * 2 * Math.PI) - trace[i][2];
+        var alpha = Math.max(0, 1 - age / (2 * Math.PI));
+        if (alpha <= 0) continue;
+        var a0 = toScreen(trace[i - 1]), a1 = toScreen(trace[i]);
+        ctx.strokeStyle = 'rgba(255,196,92,' + (0.15 + 0.85 * alpha) + ')';
+        ctx.lineWidth = 1.2 + 2.2 * alpha;
+        ctx.beginPath(); ctx.moveTo(a0[0], a0[1]); ctx.lineTo(a1[0], a1[1]); ctx.stroke();
+      }
+    }
+
+    // кончик цепочки
+    var tip = toScreen([x, y]);
+    var g = ctx.createRadialGradient(tip[0], tip[1], 0, tip[0], tip[1], 14);
+    g.addColorStop(0, 'rgba(255,220,140,0.95)');
+    g.addColorStop(1, 'rgba(255,170,60,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(tip[0], tip[1], 14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff3d6';
+    ctx.beginPath(); ctx.arc(tip[0], tip[1], 3.2, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = 'rgba(160,175,195,0.75)';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Гармоник: ' + kk + '  ·  ошибка ' + errPct.toFixed(1) + ' %', CX, H - 18);
+    ctx.textAlign = 'left';
+    if (drawing) {
+      ctx.fillStyle = '#ffd27a';
+      ctx.fillText('Рисуйте, отпустите кнопку — фигура замкнётся', CX - 150, 28);
+    }
+  }
+
+  // ---------- Свой рисунок мышью/пальцем ----------
+  var drawing = false, userPts = [];
+  cv.addEventListener('pointerdown', function (e) {
+    drawing = true; userPts = [[e.clientX, e.clientY]];
+    cv.setPointerCapture && cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!drawing) return;
+    userPts.push([e.clientX, e.clientY]);
+    draw();
+    ctx.strokeStyle = '#ffd27a'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i < userPts.length; i++) {
+      if (i) ctx.lineTo(userPts[i][0], userPts[i][1]); else ctx.moveTo(userPts[i][0], userPts[i][1]);
+    }
+    ctx.stroke();
+  });
+  cv.addEventListener('pointerup', function () {
+    if (!drawing) return;
+    drawing = false;
+    if (userPts.length > 15) {
+      var pts = userPts.map(function (q) { return [q[0], -q[1]]; });
+      shapeName = 'Свой рисунок';
+      setShape(pts);
+      phase = 0; turns = 0;
+      updateReadouts();
+    }
+    draw();
+  });
+
+  // ---------- Спектр: столбики |c_k| для k = −30…30 ----------
+  var KMAX = 30, FLOOR = -4;
+  function pushSpectrum() {
+    if (!spectrum) return;
+    spectrum.clear();
+    var used = {};
+    for (var i = 0; i < K && i < coeffs.length; i++) used[coeffs[i].k] = true;
+    var byK = {};
+    for (var j = 0; j < coeffs.length; j++) byK[coeffs[j].k] = coeffs[j].amp;
+    for (var k = -KMAX; k <= KMAX; k++) {
+      // логарифмическая шкала: иначе всё, кроме k = 1, сливается с нулём
+      var a = k === 0 ? FLOOR : Math.max(FLOOR, Math.log(byK[k] || 1e-12) / Math.LN10);
+      var u = used[k] ? a : NaN;
+      spectrum.push(k, [FLOOR, used[k] ? FLOOR : NaN]);
+      spectrum.push(k, [a, u]);
+      spectrum.push(k, [FLOOR, used[k] ? FLOOR : NaN]);
+    }
+  }
+
+  // ---------- Цикл ----------
+  function step(dt) {
+    var prev = phase;
+    phase += dt * 2 * Math.PI / period;
+    if (phase >= 2 * Math.PI) {
+      phase -= 2 * Math.PI;
+      turns++;
+      if (autoGrow) {
+        var idx = GROW.indexOf(K);
+        var next = GROW[(idx + 1) % GROW.length] || 1;
+        SimUI.__set('harmonics', next);
+      }
+    }
+    if (prev !== phase) {
+      var p = partial(phase, K);
+      trace.push([p[0], p[1], phase + turns * 2 * Math.PI]);
+      var now = phase + turns * 2 * Math.PI;
+      while (trace.length > 2 && now - trace[0][2] > 2 * Math.PI) trace.shift();
+    }
+  }
+
+  var lastUi = -1;
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000) * speedCtl.get();
+    lastFrame = now;
+    if (running) {
+      step(dt);
+      draw();
+      if (now - lastUi > 120) { lastUi = now; updateReadouts(); }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  var shapeName = 'Звезда';
+  function updateReadouts() {
+    rK.set(Math.min(K, coeffs.length));
+    rErr.set(errPct);
+    rPow.set(powerPct);
+    rPhase.set(phase * 180 / Math.PI);
+    rTurns.set(turns);
+    var maxK = 0;
+    for (var i = 0; i < K && i < coeffs.length; i++) maxK = Math.max(maxK, Math.abs(coeffs[i].k));
+    rMaxK.set(maxK);
+    formula.set({ K: Math.min(K, coeffs.length), err: errPct.toFixed(2) + ' %' });
+  }
+
+  function onParam() {
+    trace = [];
+    rebuildApprox();
+    pushSpectrum();
+    updateReadouts();
+    draw();
+  }
+
+  function resetSim() {
+    phase = 0; turns = 0; trace = []; lastFrame = null;
+    updateReadouts();
+    draw();
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Ряд Фурье: эпициклы');
+  SimUI.goals([
+    'Любой замкнутый контур — сумма вращающихся векторов c·e^{ikt}',
+    'Чем больше гармоник, тем точнее рисунок (сходимость ряда)',
+    'Острые углы требуют многих высоких гармоник',
+    'Нарисуйте свою фигуру мышью прямо на сцене',
+  ]);
+  SimUI.select({
+    name: 'shape', label: 'Фигура',
+    options: [{ value: 'star', label: 'Звезда' }, { value: 'heart', label: 'Сердце' },
+      { value: 'note', label: 'Нота ♪' }, { value: 'square', label: 'Квадрат' },
+      { value: 'inf', label: 'Бесконечность ∞' }],
+    value: 'star',
+    onChange: function (v) {
+      shapeName = v;
+      setShape(SHAPES[v]());
+      phase = 0; turns = 0;
+      updateReadouts(); draw();
+    },
+  });
+  SimUI.slider({
+    name: 'harmonics', label: 'Число гармоник K', min: 1, max: 150, step: 1, value: K, unit: '',
+    onChange: function (v) { K = Math.round(v); onParam(); },
+  });
+  SimUI.slider({
+    name: 'period', label: 'Время обхода', min: 2, max: 30, step: 0.5, value: period, unit: 'с',
+    onChange: function (v) { period = v; },
+  });
+  SimUI.toggle({ name: 'circles', label: 'Окружности', value: true,
+    onChange: function (on) { showCircles = on; draw(); } });
+  SimUI.toggle({ name: 'grow', label: 'Наращивать K каждый оборот', value: false,
+    onChange: function (on) { autoGrow = on; } });
+  SimUI.presets({ items: [
+    { label: 'K=1', values: { harmonics: 1 } },
+    { label: 'K=5', values: { harmonics: 5 } },
+    { label: 'K=30', values: { harmonics: 30 } },
+    { label: 'K=150', values: { harmonics: 150 } },
+  ] });
+  var speedCtl = SimUI.speed({ values: [0.25, 0.5, 1, 2, 4], value: 1 });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: resetSim,
+  });
+
+  var formula = SimUI.formula({
+    title: 'Комплексный ряд Фурье',
+    tex: 'z(t) \\approx \\sum_{k} c_k\\, e^{ikt},\\quad c_k = \\frac{1}{N}\\sum_{n=0}^{N-1} z_n e^{-2\\pi i kn/N}',
+    vars: { K: { label: 'K', unit: '' }, err: { label: 'ошибка', unit: '' } },
+    note: 'Каждое слагаемое — вектор длины |c_k|, вращающийся с частотой k. Векторы складываются «голова к хвосту».',
+    corner: 'tl',
+  });
+  var rK = SimUI.readout({ label: 'Гармоник в сумме', unit: '', digits: 0, corner: 'bl' });
+  var rMaxK = SimUI.readout({ label: 'Старшая частота |k|', unit: '', digits: 0, corner: 'bl' });
+  var rErr = SimUI.readout({ label: 'Ошибка (СКО)', unit: '%', digits: 2, corner: 'bl' });
+  var rPow = SimUI.readout({ label: 'Доля «энергии» контура', unit: '%', digits: 3, corner: 'bl' });
+  var rPhase = SimUI.readout({ label: 'Параметр t', unit: '°', digits: 0, corner: 'bl' });
+  var rTurns = SimUI.readout({ label: 'Оборотов', unit: '', digits: 0, corner: 'bl' });
+  var spectrum = SimUI.chart({
+    title: 'Спектр амплитуд, lg|c_k|', xLabel: 'k', yLabel: 'lg|c_k|', maxPoints: 400,
+    yRange: [FLOOR, 0],
+    xRange: [-KMAX, KMAX],
+    series: [{ name: 'все гармоники', color: '#5c6675' }, { name: 'в сумме', color: '#ffb84d' }],
+    corner: 'br',
+  });
+
+  SimUI.expose({
+    getState: function () {
+      var p = partial(phase, K);
+      return { t: phase, turns: turns, harmonics: K, tipX: p[0], tipY: p[1],
+        errorPct: errPct, powerPct: powerPct, traceLen: trace.length };
+    },
+    reset: resetSim,
+  });
+
+  // ---------- Старт ----------
+  setShape(starPts());
+  window.addEventListener('resize', resize);
+  resize();
+  updateReadouts();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

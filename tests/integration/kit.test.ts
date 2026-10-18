@@ -83,7 +83,8 @@ describe('SimUI 2.0 kit smoke', () => {
           banner: document.querySelectorAll('.sim-banner').length,
           chart: document.querySelectorAll('canvas.sim-chart').length,
           readout: document.querySelectorAll('.sim-readout').length,
-          select: document.querySelectorAll('.sim-select').length,
+          // До четырёх коротких вариантов select рисуется сегментами, длиннее — выпадающим списком.
+          select: window.__smh.controls().filter(function (c) { return c.kind === 'select'; }).length,
           presets: document.querySelectorAll('.sim-presets button').length,
         };
       })()`);

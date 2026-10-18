@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Четырёхтактный двигатель по фазам</title>
+<style>html, body { margin: 0; height: 100%; overflow: hidden; }</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<script>
+(function () {
+  // ==== @section physics ====
+  // Кривошипно-шатунный механизм и цикл Отто по углу коленвала θ (полный цикл — 720°).
+  // Фазы по углу: впуск 0–150°, впрыск 150–200°, сжатие 200–345°, искра 345–375°,
+  // рабочий ход 375–540°, выпуск 540–720°. Газ — адиабаты с показателем γ, сгорание мгновенное у ВМТ.
+  var PHYS = (function () {
+    var R = 0.3, L = 0.9, BORDER = [150, 200, 345, 375, 540, 720];
+    function pistonY(th) { var a = th * Math.PI / 180; return R * Math.cos(a) + Math.sqrt(L * L - R * R * Math.sin(a) * Math.sin(a)); }
+    function phaseOf(deg) { for (var i = 0; i < BORDER.length; i++) if (deg < BORDER[i]) return i; return 0; }
+    function init(p) { return { t: 0, theta: 0, fuel: 0, burned: 0 }; }
+    function step(s, p, dt) {
+      s.theta += p.rpm * 6 * dt;                     // об/мин → градусы в секунду
+      s.t += dt;
+      var deg = s.theta % 720;
+      if (deg < 5) { s.fuel = 0; s.burned = 0; }     // новый цикл
+      if (deg >= 150 && deg < 200) s.fuel = Math.min(1, (deg - 150) / 50);
+      if (deg >= 350 && deg < 540) s.burned = Math.min(1, (deg - 350) / 15);
+    }
+    function observe(s, p) {
+      var deg = s.theta % 720, top = R + L, y = pistonY(deg);
+      var Vc = 1 / (p.eps - 1), V = Vc + (top - y) / (2 * R);           // объём в долях рабочего, 1 — ход поршня
+      var Vmax = Vc + 1, gam = 1.35, pr;
+      var ph = phaseOf(deg);
+      if (ph <= 1) pr = 1;                                                  // впуск — атмосферное
+      else if (ph === 2 || (ph === 3 && deg < 350)) pr = Math.pow(Vmax / V, gam);  // сжатие
+      else if (ph === 3 || ph === 4) pr = Math.pow(Vmax / Vc, gam) * p.heat * Math.pow(Vc / V, gam); // после искры
+      else pr = 1.1;                                                        // выпуск
+      var T = 300 * pr * V / Vmax * (ph >= 3 && ph <= 4 ? 1 : 1);
+      return { t: s.t, theta: deg, phase: ph, y: y, V: V, p: pr, T: Math.max(300, T), fuel: s.fuel, burned: s.burned,
+        eff: 1 - Math.pow(p.eps, 1 - gam) };
+    }
+    return { init: init, step: step, observe: observe, pistonY: pistonY, R: R, L: L };
+  })();
+  // ==== @end physics ====
+
+  // ==== @section state ====
+  var P = { rpm: 6, eps: 9, heat: 3 };
+  var S = PHYS.init(P);
+  var hooks = { frame: [], reset: [] };
+  // ==== @end state ====
+
+  // ==== @section scene ====
+  // Рисунок «как в хорошем учебнике»: металл с бликами, рёбра охлаждения, клапаны с пружинами,
+  // свеча, форсунка, поток воздуха, капли топлива, вспышка, выхлоп. Мир — в условных метрах,
+  // градиенты и частицы — прямо на холсте view.ctx в пикселях (view.toPx).
+  var view = SimUI.view2d({ x: [-1.25, 1.25], y: [-1.42, 1.32], pad: 16 });
+  var CY = -0.95, TOP = 0.6, W = 0.42, HEAD = 0.26;
+  var parts = [];                 // частицы: {x, y, vx, vy, life, max, kind}
+  var dialAngles = [0, 150, 200, 345, 375, 540, 720];
+  var PH_COL = ['#5b9cff', '#facc15', '#a78bfa', '#22d3ee', '#ff8a3d', '#9aa5b5'];
+  function P2(x, y) { return view.toPx(x, y); }
+  function lin(x0, y0, x1, y1, stops) {
+    var a = P2(x0, y0), b = P2(x1, y1), g = view.ctx.createLinearGradient(a[0], a[1], b[0], b[1]);
+    for (var i = 0; i < stops.length; i++) g.addColorStop(stops[i][0], stops[i][1]);
+    return g;
+  }
+  function rrect(x, y, w, h, r, fill, stroke) {
+    var c = view.ctx, a = P2(x, y + h), k = view.scale;
+    c.beginPath(); if (c.roundRect) c.roundRect(a[0], a[1], w * k, h * k, r * k); else c.rect(a[0], a[1], w * k, h * k);
+    if (fill) { c.fillStyle = fill; c.fill(); }
+    if (stroke) { c.strokeStyle = stroke; c.lineWidth = 1; c.stroke(); }
+  }
+  function steel(x0, x1) { return lin(x0, 0, x1, 0, [[0, '#4a5568'], [0.35, '#c9d2df'], [0.55, '#eef2f7'], [1, '#56607a']]); }
+  function spawn(kind, n, x, y, vx, vy, spread, life) {
+    for (var i = 0; i < n; i++) parts.push({ kind: kind, x: x + (Math.random() - 0.5) * spread, y: y + (Math.random() - 0.5) * spread * 0.4,
+      vx: vx + (Math.random() - 0.5) * 0.25, vy: vy + (Math.random() - 0.5) * 0.25, life: 0, max: life * (0.7 + Math.random() * 0.6) });
+  }
+  hooks.reset.push(function () { parts = []; });
+  function label(x, y, tx, ty, text, on) {
+    var c = view.ctx, a = P2(x, y), b = P2(tx, ty);
+    c.save(); c.globalAlpha = on ? 1 : 0.45; c.strokeStyle = on ? '#cfe0ff' : '#6b7a99'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+    c.fillStyle = on ? '#ffffff' : '#9aa5b5'; c.beginPath(); c.arc(a[0], a[1], 2.5, 0, 6.283); c.fill(); c.restore();
+    view.text(tx + (tx < x ? -0.02 : 0.02), ty, text, { size: 12, align: tx < x ? 'right' : 'left', color: on ? 'white' : 'muted', bold: on });
+  }
+
+  function draw(o, P, S, dt) {
+    var c = view.ctx, k = view.scale, ph = o.phase, deg = o.theta;
+    var pin = CY + o.y, pTop = pin + 0.14;
+    var intake = ph <= 1, exhaust = ph === 5, spark = ph === 3 && deg < 362, burning = ph === 3 || (ph === 4 && deg < 430);
+    view.clear();
+
+    // ---- частицы (обновляются только когда симуляция идёт: на паузе кадр стоит) ----
+    if (dt > 0) {
+      if (ph === 0) spawn('air', 3, -W - 0.45, TOP + 0.15, 1.3, 0, 0.06, 0.9);
+      if (ph === 1) spawn('fuel', 4, -W + 0.03, TOP - 0.08, 0.95, -0.3, 0.02, 0.55);
+      if (burning) spawn('ember', 2, 0, TOP - 0.06, 0, -0.4, 0.4, 0.5);
+      if (ph === 5) spawn('smoke', 3, 0.22, TOP + 0.08, 0.2, 0.9, 0.05, 1.3);
+      for (var i = parts.length - 1; i >= 0; i--) {
+        var q = parts[i]; q.life += dt;
+        if (q.kind === 'air' && q.x > -0.26 && q.vy === 0) { q.vx = 0.1; q.vy = -1.1; }
+        if (q.kind === 'air' && q.y < TOP) { q.vx = (Math.random() - 0.5) * 0.5; q.vy = -0.5; }
+        if (q.kind === 'smoke' && q.y > TOP + 0.15) { q.vy = 0.02; q.vx = 1.1; }
+        q.x += q.vx * dt; q.y += q.vy * dt;
+        // внутри цилиндра частицы не проходят сквозь поршень и стенки
+        if (q.kind !== 'smoke' && q.y < TOP && q.y < pTop + 0.02) q.y = pTop + 0.02 + Math.random() * 0.03;
+        if (q.kind !== 'smoke' && q.kind !== 'air' && Math.abs(q.x) > W - 0.02) q.vx *= -0.6, q.x = Math.sign(q.x) * (W - 0.02);
+        if (q.life > q.max || parts.length > 420) parts.splice(i, 1);
+      }
+    }
+
+    // ---- блок двигателя и картер ----
+    rrect(-W - 0.16, -0.48, 2 * (W + 0.16), TOP + 0.5, 0.05, lin(-W - 0.16, 0, W + 0.16, 0, [[0, '#1b2333'], [0.5, '#2a3447'], [1, '#161d2b']]), 'rgba(160,190,255,.18)');
+    for (var f = 0; f < 9; f++) {          // рёбра охлаждения
+      var fy = -0.38 + f * 0.11;
+      rrect(-W - 0.3, fy, 0.14, 0.035, 0.01, '#2f3a50'); rrect(W + 0.16, fy, 0.14, 0.035, 0.01, '#2f3a50');
+    }
+    var cc = P2(0, CY);
+    var crankG = c.createRadialGradient(cc[0], cc[1], 0, cc[0], cc[1], (PHYS.R + 0.3) * k);
+    crankG.addColorStop(0, '#2a3447'); crankG.addColorStop(1, '#151b28');
+    c.beginPath(); c.arc(cc[0], cc[1], (PHYS.R + 0.26) * k, 0, 6.283); c.fillStyle = crankG; c.fill();
+    c.strokeStyle = 'rgba(160,190,255,.18)'; c.lineWidth = 1; c.stroke();
+
+    // ---- полость цилиндра и газ ----
+    rrect(-W, pTop, 2 * W, TOP - pTop, 0, '#070a12');
+    var gasTop, gasBot;
+    if (ph <= 1) { gasTop = 'rgba(91,156,255,.45)'; gasBot = 'rgba(40,80,170,.25)'; }
+    else if (ph === 2) { var w2 = Math.min(1, (o.p - 1) / 14); gasTop = 'rgba(' + Math.round(110 + 80 * w2) + ',' + Math.round(110 - 40 * w2) + ',255,.5)'; gasBot = 'rgba(80,60,180,.3)'; }
+    else if (ph === 5) { gasTop = 'rgba(150,135,120,.5)'; gasBot = 'rgba(80,70,65,.35)'; }
+    else { var heat = Math.max(0, 1 - (deg - 350) / 190); gasTop = 'rgba(255,' + Math.round(120 + 100 * heat) + ',60,' + (0.45 + 0.4 * heat) + ')'; gasBot = 'rgba(200,60,30,.35)'; }
+    rrect(-W, pTop, 2 * W, TOP - pTop, 0, lin(0, TOP, 0, pTop, [[0, gasTop], [1, gasBot]]));
+    if (burning) {                      // вспышка у свечи
+      var fl = ph === 3 ? Math.min(1, (deg - 350) / 15) : Math.max(0, 1 - (deg - 375) / 55);
+      var sc = P2(0, TOP - 0.03), rg = c.createRadialGradient(sc[0], sc[1], 0, sc[0], sc[1], (0.12 + 0.45 * fl) * k);
+      rg.addColorStop(0, 'rgba(255,255,230,' + (0.95 * fl) + ')'); rg.addColorStop(0.35, 'rgba(255,190,80,' + (0.7 * fl) + ')'); rg.addColorStop(1, 'rgba(255,90,40,0)');
+      c.save(); c.beginPath(); var bl = P2(-W, TOP); c.rect(bl[0], bl[1], 2 * W * k, (TOP - pTop) * k); c.clip();
+      c.fillStyle = rg; c.fillRect(sc[0] - k, sc[1] - k, 2 * k, 2 * k); c.restore();
+    }
+    // стенки цилиндра — полированный металл
+    rrect(-W - 0.05, -0.44, 0.05, TOP + 0.44, 0, steel(-W - 0.05, -W));
+    rrect(W, -0.44, 0.05, TOP + 0.44, 0, steel(W, W + 0.05));
+
+    // ---- частицы поверх газа ----
+    for (var j = 0; j < parts.length; j++) {
+      var p = parts[j], a = 1 - p.life / p.max, pp = P2(p.x, p.y);
+      if (p.kind === 'air') { c.strokeStyle = 'rgba(140,190,255,' + (0.7 * a) + ')'; c.lineWidth = 1.6; c.beginPath(); c.moveTo(pp[0], pp[1]); c.lineTo(pp[0] - p.vx * 12, pp[1] + p.vy * 12); c.stroke(); }
+      else if (p.kind === 'fuel') { c.fillStyle = 'rgba(255,214,90,' + a + ')'; c.beginPath(); c.arc(pp[0], pp[1], 2.4, 0, 6.283); c.fill(); }
+      else if (p.kind === 'ember') { c.fillStyle = 'rgba(255,' + Math.round(150 + 100 * a) + ',80,' + a + ')'; c.beginPath(); c.arc(pp[0], pp[1], 1.8, 0, 6.283); c.fill(); }
+      else { var r = (0.03 + 0.08 * (1 - a)) * k; c.fillStyle = 'rgba(130,125,120,' + (0.35 * a) + ')'; c.beginPath(); c.arc(pp[0], pp[1], r, 0, 6.283); c.fill(); }
+    }
+
+    // ---- головка цилиндра: каналы, клапаны, пружины ----
+    rrect(-W - 0.16, TOP, 2 * (W + 0.16), HEAD, 0.04, lin(0, TOP + HEAD, 0, TOP, [[0, '#3a4660'], [1, '#232c3e']]), 'rgba(160,190,255,.2)');
+    c.save(); c.lineCap = 'round';
+    // Каналы: вверх от клапана и вбок, к впускному и выпускному коллекторам. Открыт — внутри цветной поток.
+    function port(x0, dir, col, open) {
+      var y0 = TOP + 0.02, yc = TOP + 0.15, xe = dir * (W + 0.5), h = 0.12;
+      var g = lin(0, yc + h / 2, 0, yc - h / 2, [[0, '#55617a'], [0.45, '#9aa6bc'], [1, '#3c465c']]);
+      rrect(Math.min(x0, xe) - 0.06, yc - h / 2, Math.abs(xe - x0) + 0.06, h, 0.05, g);     // труба коллектора
+      rrect(x0 - 0.07, y0, 0.14, yc - y0, 0.02, g);                                         // колено к клапану
+      var inner = open ? col : '#0e1422';
+      c.globalAlpha = open ? 0.55 : 1;
+      rrect(Math.min(x0, xe) - 0.03, yc - h / 2 + 0.025, Math.abs(xe - x0) + 0.0, h - 0.05, 0.03, inner);
+      rrect(x0 - 0.045, y0, 0.09, yc - y0, 0.015, inner);
+      c.globalAlpha = 1;
+    }
+    port(-0.22, -1, '#5b9cff', intake); port(0.22, 1, '#ff8a3d', exhaust);
+    c.restore();
+    function valve(x, lift, col, on) {
+      var stemTop = TOP + HEAD + 0.22;
+      view.spring(x, stemTop, x, TOP + HEAD - 0.02 - lift, { color: on ? col : '#5c6880', coils: 6, amp: 0.035, width: 2 });
+      view.line(x, stemTop, x, TOP - lift, { color: '#c9d2df', width: 4 });
+      var h0 = P2(x - 0.085, TOP - lift), h1 = P2(x + 0.085, TOP - lift), hs = P2(x, TOP - lift + 0.04);
+      c.beginPath(); c.moveTo(h0[0], h0[1]); c.lineTo(h1[0], h1[1]); c.lineTo(hs[0] + 3, hs[1]); c.lineTo(hs[0] - 3, hs[1]); c.closePath();
+      c.fillStyle = on ? col : '#9aa5b5'; c.fill();
+      rrect(x - 0.05, stemTop, 0.1, 0.035, 0.01, '#6b7790');      // коромысло
+    }
+    valve(-0.22, intake ? 0.07 : 0, '#5b9cff', intake);
+    valve(0.22, exhaust ? 0.07 : 0, '#ff8a3d', exhaust);
+    // свеча: шестигранник, керамика, электрод, искра
+    rrect(-0.04, TOP + HEAD - 0.02, 0.08, 0.1, 0.01, steel(-0.04, 0.04));
+    rrect(-0.025, TOP + HEAD + 0.08, 0.05, 0.16, 0.02, lin(-0.025, 0, 0.025, 0, [[0, '#cfd6e0'], [0.5, '#ffffff'], [1, '#aab3c2']]));
+    view.line(0, TOP + 0.02, 0, TOP - 0.03, { color: '#c9d2df', width: 3 });
+    if (spark) {
+      var sp = P2(0, TOP - 0.04), sg = c.createRadialGradient(sp[0], sp[1], 0, sp[0], sp[1], 0.16 * k);
+      sg.addColorStop(0, 'rgba(255,255,255,1)'); sg.addColorStop(0.3, 'rgba(160,230,255,.8)'); sg.addColorStop(1, 'rgba(80,160,255,0)');
+      c.fillStyle = sg; c.beginPath(); c.arc(sp[0], sp[1], 0.16 * k, 0, 6.283); c.fill();
+      c.strokeStyle = '#e6fbff'; c.lineWidth = 1.4;
+      for (var z = 0; z < 7; z++) { var an = z / 7 * 6.283 + deg * 0.2; c.beginPath(); c.moveTo(sp[0], sp[1]); c.lineTo(sp[0] + Math.cos(an) * 0.11 * k, sp[1] + Math.sin(an) * 0.11 * k); c.stroke(); }
+    }
+    // форсунка: вкручена в стенку цилиндра под головкой, смотрит в камеру сгорания
+    c.save(); var inj = P2(-W - 0.04, TOP - 0.07); c.translate(inj[0], inj[1]); c.rotate(-0.35);
+    var ig = c.createLinearGradient(0, -0.032 * k, 0, 0.032 * k); ig.addColorStop(0, '#d9dee6'); ig.addColorStop(1, '#5d677d');
+    c.fillStyle = ig; c.fillRect(-0.26 * k, -0.032 * k, 0.28 * k, 0.064 * k);
+    c.fillStyle = ph === 1 ? '#facc15' : '#3a4458'; c.fillRect(-0.38 * k, -0.048 * k, 0.13 * k, 0.096 * k);
+    c.restore();
+    // ---- поршень, шатун, коленвал ----
+    var an2 = deg * Math.PI / 180, cx = PHYS.R * Math.sin(an2), cy = CY + PHYS.R * Math.cos(an2);
+    var cw = P2(0, CY), cwR = (PHYS.R + 0.1) * k;          // противовес — напротив шатунной шейки
+    c.save(); c.translate(cw[0], cw[1]); c.rotate(an2);
+    c.beginPath(); c.arc(0, 0, cwR, 0.15 * Math.PI, 0.85 * Math.PI); c.closePath();
+    c.fillStyle = lin(-0.4, 0, 0.4, 0, [[0, '#3c475e'], [0.5, '#76839c'], [1, '#3c475e']]); c.fill();
+    c.restore();
+    view.line(0, CY, cx, cy, { color: '#8995ad', width: 0.14 * k });          // щека
+    // шатун — сужающийся металлический стержень
+    var A = P2(cx, cy), B = P2(0, pin), dx = B[0] - A[0], dy = B[1] - A[1], dl = Math.hypot(dx, dy) || 1, nx = -dy / dl, ny = dx / dl;
+    var w1 = 0.055 * k, w2 = 0.035 * k;
+    c.beginPath(); c.moveTo(A[0] + nx * w1, A[1] + ny * w1); c.lineTo(B[0] + nx * w2, B[1] + ny * w2); c.lineTo(B[0] - nx * w2, B[1] - ny * w2); c.lineTo(A[0] - nx * w1, A[1] - ny * w1); c.closePath();
+    var rodG = c.createLinearGradient(A[0] + nx * w1, A[1] + ny * w1, A[0] - nx * w1, A[1] - ny * w1);
+    rodG.addColorStop(0, '#5d677d'); rodG.addColorStop(0.5, '#dfe5ee'); rodG.addColorStop(1, '#4d566b');
+    c.fillStyle = rodG; c.fill();
+    c.fillStyle = '#c9d2df'; c.beginPath(); c.arc(A[0], A[1], 0.075 * k, 0, 6.283); c.fill();
+    c.fillStyle = '#2a3346'; c.beginPath(); c.arc(A[0], A[1], 0.035 * k, 0, 6.283); c.fill();
+    c.fillStyle = steel(-0.06, 0.06); c.beginPath(); c.arc(cw[0], cw[1], 0.07 * k, 0, 6.283); c.fill();
+    // поршень с кольцами
+    rrect(-W + 0.008, pin - 0.07, 2 * W - 0.016, 0.21, 0.02, steel(-W, W));
+    for (var rI = 0; rI < 3; rI++) view.line(-W + 0.01, pTop - 0.03 - rI * 0.035, W - 0.01, pTop - 0.03 - rI * 0.035, { color: '#4a5568', width: 1.5 });
+    c.fillStyle = '#2a3346'; c.beginPath(); c.arc(B[0], B[1], 0.03 * k, 0, 6.283); c.fill();
+
+    // ---- циферблат угла коленвала с цветом фаз ----
+    var dc = P2(-0.98, -0.95), dR = 0.21 * k;
+    for (var s2 = 0; s2 < 6; s2++) {
+      var a0 = -Math.PI / 2 + dialAngles[s2] / 720 * 6.283, a1 = -Math.PI / 2 + dialAngles[s2 + 1] / 720 * 6.283;
+      c.strokeStyle = PH_COL[s2]; c.globalAlpha = s2 === ph ? 1 : 0.28; c.lineWidth = s2 === ph ? 7 : 5;
+      c.beginPath(); c.arc(dc[0], dc[1], dR, a0 + 0.02, a1 - 0.02); c.stroke();
+    }
+    c.globalAlpha = 1;
+    var na = -Math.PI / 2 + deg / 720 * 6.283;
+    c.strokeStyle = '#ffffff'; c.lineWidth = 2; c.beginPath(); c.moveTo(dc[0], dc[1]); c.lineTo(dc[0] + Math.cos(na) * dR * 0.85, dc[1] + Math.sin(na) * dR * 0.85); c.stroke();
+    c.fillStyle = '#ffffff'; c.beginPath(); c.arc(dc[0], dc[1], 3, 0, 6.283); c.fill();
+    view.text(-0.98, -0.95 - 0.33, Math.round(deg) + '° / 720°', { size: 12, color: 'white', bold: true });
+    view.text(-0.98, -0.95 + 0.31, P.rpm + ' об/мин', { size: 11, color: 'muted' });
+
+    // ---- подписи деталей (активная в этой фазе — ярче) ----
+    label(-0.22, TOP + HEAD + 0.24, -0.75, TOP + HEAD + 0.36, 'впускной клапан', intake);
+    label(0.22, TOP + HEAD + 0.24, 0.75, TOP + HEAD + 0.36, 'выпускной клапан', exhaust);
+    label(0, TOP + HEAD + 0.24, 0.42, TOP + HEAD + 0.52, 'свеча зажигания', ph === 3);
+    label(-W - 0.2, TOP - 0.03, -0.92, TOP - 0.25, 'форсунка', ph === 1);
+    label(W - 0.05, pin + 0.04, 0.82, pin + 0.04, 'поршень', ph === 2 || ph === 4);
+    label((cx + 0) / 2, (cy + pin) / 2, 0.8, (cy + pin) / 2 - 0.1, 'шатун', false);
+    label(0.12, CY - 0.05, 0.8, CY - 0.25, 'коленвал', false);
+  }
+  // ==== @end scene ====
+
+  // ==== @section controls ====
+  SimUI.title('Двигатель внутреннего сгорания');
+  SimUI.goals(['За один цикл коленвал делает два оборота: впуск, сжатие, рабочий ход, выпуск', 'Работу совершает только рабочий ход — после искры', 'КПД растёт со степенью сжатия']);
+  SimUI.params(P, [
+    { name: 'rpm', label: 'Обороты (демонстрационные)', min: 2, max: 60, step: 1, unit: 'об/мин' },
+    { name: 'eps', label: 'Степень сжатия ε', min: 4, max: 14, step: 0.5, unit: '' },
+    { name: 'heat', label: 'Рост давления при сгорании', min: 1.5, max: 5, step: 0.1, unit: 'раз' },
+  ]);
+  // ==== @end controls ====
+
+  // ==== @section instruments ====
+  SimUI.phases({ key: 'phase', mode: 'step', items: [
+    { name: 'Впуск', color: 'blue', text: 'Впускной клапан открыт, поршень идёт вниз и засасывает в цилиндр свежий воздух.' },
+    { name: 'Впрыск топлива', color: 'yellow', text: 'Форсунка распыляет топливо — в цилиндре образуется горючая смесь. Впускной клапан закрывается.' },
+    { name: 'Сжатие', color: 'purple', text: 'Оба клапана закрыты. Поршень идёт вверх и сжимает смесь — давление и температура растут.' },
+    { name: 'Искра', color: 'cyan', text: 'В верхней точке свеча даёт искру — смесь воспламеняется, давление резко подскакивает.' },
+    { name: 'Рабочий ход', color: 'orange', text: 'Горячие газы толкают поршень вниз. Только в этой фазе двигатель совершает работу.' },
+    { name: 'Выпуск', color: 'gray', text: 'Выпускной клапан открыт, поршень идёт вверх и выталкивает отработавшие газы.' },
+  ] });
+  SimUI.readouts({ theta: { label: 'Угол коленвала', unit: '°', digits: 0 }, p: { label: 'Давление', unit: 'атм', digits: 1 },
+    T: { label: 'Температура газа', unit: 'К', digits: 0 }, eff: { label: 'КПД цикла (идеал)', digits: 2 } });
+  SimUI.chart({ title: 'Индикаторная диаграмма p–V', mode: 'xy', x: 'V', y: ['p'], xLabel: 'V', yLabel: 'p, атм',
+    series: [{ name: 'цикл', color: 'orange' }], maxPoints: 1400 });
+  SimUI.formula({ tex: '\\eta = 1 - \\varepsilon^{\\,1-\\gamma}', corner: 'tl',
+    vars: { eps: { label: 'ε' }, eff: { label: 'η', digits: 2 } }, note: 'Пошаговый показ: «Далее» или → проигрывает фазу, ← — назад.' });
+  // ==== @end instruments ====
+
+  // ==== @section main ====
+  var app = SimUI.run({ physics: PHYS, P: P, S: S, draw: draw, hooks: hooks });
+  // ==== @end main ====
+})();
+</script>
+</body>
+</html>

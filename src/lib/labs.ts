@@ -103,6 +103,91 @@ export const LABS: LabEntry[] = [
       },
     },
   },
+  {
+    slug: 'climate', title: 'Климатическая станция', subject: 'Экология · климат',
+    blurb: 'Под стеклянным куполом солнечный свет греет землю, а молекулы CO₂ и пара возвращают тепло: добавляйте газ из баллонов и смотрите на термометр и график. Рядом — ледник тает от рычага, море поднимается и затапливает прибрежный город.',
+    stations: ['Парниковый эффект', 'Ледник и океан'],
+    i18n: {
+      kk: {
+        title: 'Климаттық станция', subject: 'Экология · климат',
+        blurb: 'Шыны күмбездің астында күн сәулесі жерді жылытады, ал CO₂ және бу молекулалары жылуды кері қайтарады: баллондардан газ қосып, термометр мен графикті бақылаңыз. Қасында — тұтқаны бұрасаңыз, мұздық ериді, теңіз деңгейі көтеріліп, жағалаудағы қаланы су басады.',
+        stations: ['Парниктік әсер', 'Мұздық және мұхит'],
+      },
+      en: {
+        title: 'Climate station', subject: 'Ecology · climate',
+        blurb: 'Under a glass dome sunlight warms the ground while CO₂ and water vapour molecules send heat back: add gas from the canisters and watch the thermometer and chart. Next to it a lever melts the glacier, the sea rises and floods a coastal town.',
+        stations: ['Greenhouse effect', 'Glacier and ocean'],
+      },
+    },
+  },
+  {
+    slug: 'astronomy', title: 'Солнечная система', subject: 'Астрономия',
+    blurb: 'Настольный планетарий: восемь планет идут по орбитам с настоящими периодами, время можно ускорить или остановить, а любую планету — взять в руку и узнать её радиус, год и расстояние. Рядом — стенд затмений: ведите Луну и смотрите, как её тень падает на Землю.',
+    stations: ['Планетарий', 'Затмения'],
+    i18n: {
+      kk: {
+        title: 'Күн жүйесі', subject: 'Астрономия',
+        blurb: 'Үстел үстіндегі планетарий: сегіз планета нақты периодтарымен орбита бойынша жүреді, уақытты жылдамдатуға немесе тоқтатуға болады, ал кез келген планетаны қолға алып, оның радиусын, жылын және қашықтығын білуге болады. Қасында — тұтылу стенді: Айды жылжытып, оның көлеңкесі Жерге қалай түсетінін көріңіз.',
+        stations: ['Планетарий', 'Тұтылулар'],
+      },
+      en: {
+        title: 'Solar system', subject: 'Astronomy',
+        blurb: 'A tabletop orrery: eight planets travel their orbits with real periods, time can be sped up or paused, and any planet can be picked up to reveal its radius, year and distance. Next to it is an eclipse rig: move the Moon and watch its shadow fall on the Earth.',
+        stations: ['Orrery', 'Eclipses'],
+      },
+    },
+  },
+  {
+    slug: 'electricity', title: 'Электрический стол', subject: 'Физика · электричество',
+    blurb: 'Соберите цепь руками: батарейка, лампы, резисторы, ключ и провода встают в гнёзда платы, лампы горят по мощности, по проводам бегут электроны, мультиметр показывает U и I. Во второй комнате магнит проходит сквозь катушку — стрелка гальванометра отклоняется.',
+    stations: ['Электрический стол', 'Индукция'],
+    i18n: {
+      kk: {
+        title: 'Электр үстелі', subject: 'Физика · электр',
+        blurb: 'Тізбекті қолмен құрастырыңыз: батарея, шамдар, резисторлар, кілт және сымдар тақта ұяларына орнатылады, шамдар қуатына қарай жанады, сымдармен электрондар жүгіреді, мультиметр U мен I көрсетеді. Екінші бөлмеде магнит катушка арқылы өтеді — гальванометр тілі ауытқиды.',
+        stations: ['Электр үстелі', 'Индукция'],
+      },
+      en: {
+        title: 'Circuit bench', subject: 'Physics · electricity',
+        blurb: 'Build a circuit by hand: the battery, bulbs, resistors, switch and wires snap into the breadboard, bulbs glow by their power, electrons run along the wires, and a multimeter shows U and I. In the second room a magnet passes through a coil and the galvanometer needle swings.',
+        stations: ['Circuit bench', 'Induction'],
+      },
+    },
+  },
+  {
+    slug: 'anatomy', title: 'Сердце и кровоток', subject: 'Анатомия',
+    blurb: 'Бьющееся сердце в руках: поверните его, откройте разрез — камеры сжимаются, клапаны хлопают, кровь течёт, а ЭКГ идёт в такт. Рядом — малый и большой круги: кровь краснеет в лёгких и синеет в органах.',
+    stations: ['Сердце', 'Круги кровообращения'],
+    i18n: {
+      kk: {
+        title: 'Жүрек және қан айналымы', subject: 'Анатомия',
+        blurb: 'Соғып тұрған жүрек қолыңызда: оны бұрап, кесіндісін ашыңыз — қуыстар жиырылады, қақпақшалар жабылады, қан ағады, ал ЭКГ ырғақпен жүреді. Қасында — кіші және үлкен қан айналым шеңберлері: қан өкпеде қызарып, ағзаларда көгереді.',
+        stations: ['Жүрек', 'Қан айналым шеңберлері'],
+      },
+      en: {
+        title: 'Heart and circulation', subject: 'Anatomy',
+        blurb: 'A beating heart in your hands: turn it, open the cutaway — chambers contract, valves snap shut, blood flows and the ECG keeps time. Next to it are the pulmonary and systemic circuits: blood turns red in the lungs and blue in the organs.',
+        stations: ['Heart', 'Circulatory circuits'],
+      },
+    },
+  },
+  {
+    slug: 'geology', title: 'Недра Земли', subject: 'География · геология',
+    blurb: 'Метровый глобус раскрывается в разрезе: кора, мантия с конвекцией, жидкое и твёрдое ядро с глубинами и температурами. Рычаг двигает плиты — растут горы, раскрывается рифт с лавой, сдвиг срывается землетрясением на сейсмографе. Вулкан извергается, когда давление в очаге дойдёт до предела.',
+    stations: ['Недра Земли', 'Тектоника', 'Вулкан'],
+    i18n: {
+      kk: {
+        title: 'Жер қойнауы', subject: 'География · геология',
+        blurb: 'Метрлік глобус қимада ашылады: қыртыс, конвекциясы бар мантия, сұйық және қатты ядро — тереңдігі мен температурасы көрсетілген. Тұтқа плиталарды қозғайды: таулар өседі, лавасы бар рифт ашылады, жылжу сейсмографта жер сілкінісіне айналады. Ошақтағы қысым шегіне жеткенде жанартау атқылайды.',
+        stations: ['Жер қойнауы', 'Тектоника', 'Жанартау'],
+      },
+      en: {
+        title: 'Inside the Earth', subject: 'Geography · geology',
+        blurb: 'A one-metre globe opens in a cutaway: crust, a convecting mantle, the liquid and solid core with depths and temperatures. A lever moves the plates — mountains rise, a rift opens with lava, a fault slips into an earthquake on the seismograph. The volcano erupts when pressure in the chamber peaks.',
+        stations: ['Inside the Earth', 'Tectonics', 'Volcano'],
+      },
+    },
+  },
 ];
 
 /** Лаборатория с подписями на языке интерфейса (русский — по умолчанию и запасной). */

@@ -78,7 +78,7 @@ export async function searchEverything(user: AuthUser, raw: string, locale: Loca
       kind: 'student', title: s.name, subtitle: s.login ? t('sStudentLogin', { group: s.group_title, login: s.login }) : t('sStudent', { group: s.group_title }), href: `/org/groups/${s.group_id}`,
     })),
     ...groups.rows.map((g): SearchHit => ({ kind: 'group', title: t('sGroup', { title: g.title }), subtitle: g.org, href: `/org/groups/${g.id}` })),
-    ...sims.rows.map((s): SearchHit => ({ kind: 'simulation', title: s.title, subtitle: t('sSimulation', { subject: s.subject }), href: `/?id=${s.id}` })),
+    ...sims.rows.map((s): SearchHit => ({ kind: 'simulation', title: s.title, subtitle: t('sSimulation', { subject: s.subject }), href: `/create?id=${s.id}` })),
     ...users.rows.map((u): SearchHit => ({ kind: 'user', title: u.name, subtitle: t('sUser', { contact: u.contact }), href: `/admin/users/${u.id}` })),
   ];
 }

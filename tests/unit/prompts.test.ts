@@ -17,19 +17,21 @@ describe('prompts', () => {
     for (const url of Object.values(P.CDN_WHITELIST)) expect(g).toContain(url);
   });
 
-  it('скелет не только создаёт баннер, но и переключает его из цикла', () => {
+  it('скелет не только создаёт баннер, но и переключает его по фазе из observe', () => {
     expect(P.EXAMPLE_SKELETON).toContain('SimUI.banner');
-    expect(P.EXAMPLE_SKELETON).toContain('banner.set(');
+    expect(P.EXAMPLE_SKELETON).toContain("phase: 'phase'");
+    expect(P.EXAMPLE_SKELETON).toMatch(/phase: s\.v >= 0 \? 0 : 1/);
     // Один пункт нечего переключать — нужно минимум два состояния.
     expect((P.EXAMPLE_SKELETON.match(/\{ name: '/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 
   it('EXAMPLE_SKELETON covers the required structural elements', () => {
-    expect(P.EXAMPLE_SKELETON).toContain('resetSim');
-    expect(P.EXAMPLE_SKELETON).toContain('SimUI.playPause');
-    expect(P.EXAMPLE_SKELETON).toContain('SimUI.slider');
-    expect(P.EXAMPLE_SKELETON).toContain('requestAnimationFrame(loop)');
-    expect(P.EXAMPLE_SKELETON).toContain("addEventListener('resize'");
+    // Цикл, пауза, сброс и expose — в SimUI.run; сцена — view2d в мировых координатах.
+    expect(P.EXAMPLE_SKELETON).toContain('SimUI.run({ physics: PHYS, P: P, S: S, draw: draw, hooks: hooks })');
+    expect(P.EXAMPLE_SKELETON).toContain('SimUI.params(P, [');
+    expect(P.EXAMPLE_SKELETON).toContain('SimUI.view2d(');
+    expect(P.EXAMPLE_SKELETON).toContain('function draw(o, P)');
+    expect(P.EXAMPLE_SKELETON).not.toContain('requestAnimationFrame');
   });
 
   it('generator prompt includes the quality skeleton marker and content', () => {
@@ -64,7 +66,7 @@ describe('generator prompt layout rules', () => {
     expect(P.EXAMPLE_SKELETON).toContain('SimUI.readout');
     expect(P.EXAMPLE_SKELETON).toContain('SimUI.chart');
     expect(P.EXAMPLE_SKELETON).toContain('SimUI.formula');
-    expect(P.EXAMPLE_SKELETON).toContain('SimUI.expose');
+    expect(P.EXAMPLE_SKELETON).toContain("x: 't', y: ['h']");
     expect(P.EXAMPLE_SKELETON).not.toContain('#info { position: fixed');
   });
 });
@@ -92,8 +94,9 @@ describe('демонстрационные начальные значения',
     expect(P.PLANNER_SYSTEM).toContain('1-10');
     expect(P.PLANNER_SYSTEM.toLowerCase()).toContain('демонстрац');
   });
-  it('правила генерации требуют наблюдаемости и обязательного SimUI.speed', () => {
-    expect(P.GENERATION_RULES).toContain('SimUI.speed');
+  it('правила генерации требуют наблюдаемости и цикла через SimUI.run (в нём скорость времени)', () => {
+    expect(P.GENERATION_RULES).toContain('SimUI.run');
+    expect(P.GENERATION_RULES).toContain('скорость времени');
     expect(P.GENERATION_RULES).toContain('1-10');
   });
   it('правила требуют всех четырёх качеств сразу, а не одного акцента', () => {
@@ -106,8 +109,9 @@ describe('демонстрационные начальные значения',
     expect(P).not.toHaveProperty('STYLE_HINTS');
     expect(P).not.toHaveProperty('STYLE_NAMES');
   });
-  it('каркас демонстрирует разгон через speed.get()', () => {
-    expect(P.EXAMPLE_SKELETON).toContain('speed.get()');
+  it('каркас не пишет своего цикла: разгон скорости делает SimUI.run', () => {
+    expect(P.EXAMPLE_SKELETON).toContain('SimUI.run(');
+    expect(P.EXAMPLE_SKELETON).not.toContain('speed.get()');
   });
 });
 

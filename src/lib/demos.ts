@@ -18,6 +18,8 @@ export interface DemoEntry {
   keywords?: string[];
   /** Эталон уровня SimUI 2.0 — к нему применяется строгий гейт качества. */
   exemplar?: boolean;
+  /** Дата появления в поставке (ГГГГ-ММ-ДД): по ней демка доезжает к уже заходившим пользователям. */
+  added?: string;
 }
 
 interface DemoMetaFile {
@@ -28,6 +30,7 @@ interface DemoMetaFile {
   mode?: '2d' | '3d';
   keywords?: string[];
   exemplar?: boolean;
+  added?: string;
 }
 
 /** Имя файла с заранее снятым превью внутри каталога демки. */
@@ -73,7 +76,7 @@ export function listBundledDemos(): DemoEntry[] {
     const html = fs.readFileSync(artifactPath, 'utf8');
     demos.push({
       slug, title: meta.title, prompt: meta.prompt, subject: meta.subject, tags: meta.tags,
-      mode: meta.mode, keywords: meta.keywords, exemplar: meta.exemplar, html,
+      mode: meta.mode, keywords: meta.keywords, exemplar: meta.exemplar, added: meta.added, html,
     });
   }
   return demos;
@@ -90,11 +93,13 @@ const installPromises = new Map<string, Promise<{ installed: string[]; skipped: 
 export function installDemos(
   ownerId: string,
   render: RenderFn = renderArtifact,
+  only?: string[],
 ): Promise<{ installed: string[]; skipped: string[] }> {
-  let pending = installPromises.get(ownerId);
+  const key = only ? `${ownerId}:${only.join(',')}` : ownerId;
+  let pending = installPromises.get(key);
   if (!pending) {
-    pending = runInstallDemos(ownerId, render).finally(() => { installPromises.delete(ownerId); });
-    installPromises.set(ownerId, pending);
+    pending = runInstallDemos(ownerId, render, only).finally(() => { installPromises.delete(key); });
+    installPromises.set(key, pending);
   }
   return pending;
 }
@@ -102,10 +107,12 @@ export function installDemos(
 async function runInstallDemos(
   ownerId: string,
   render: RenderFn,
+  only?: string[],
 ): Promise<{ installed: string[]; skipped: string[] }> {
   const installed: string[] = [];
   const skipped: string[] = [];
   for (const demo of listBundledDemos()) {
+    if (only && !only.includes(demo.slug)) continue;
     if (await getRepo().hasDemo(ownerId, demo.slug)) {
       skipped.push(demo.slug);
       continue;
@@ -137,16 +144,42 @@ async function runInstallDemos(
  * следующий заход попробует снова.
  *
  * Повторно примеры не возвращаются: удалил их пользователь — значит, не нужны.
+ * Но демки, добавленные в поставку позже прошлой раскладки (поле added в meta.json),
+ * доезжают и к уже заходившим: их человеку ещё не предлагали.
  */
 export async function ensureDemosForUser(userId: string): Promise<boolean> {
   const claimed = await db().query(
     'UPDATE users SET demos_seeded_at = now() WHERE id = $1 AND demos_seeded_at IS NULL', [userId]);
-  if (!claimed.rowCount) return false;
+  if (!claimed.rowCount) return installAddedSince(userId);
   try {
     await installDemos(userId);
     return true;
   } catch (e) {
     await db().query('UPDATE users SET demos_seeded_at = NULL WHERE id = $1', [userId]);
+    throw e;
+  }
+}
+
+/**
+ * Новые демки для того, кто уже получал раскладку. Отметка сдвигается условным
+ * UPDATE «была раньше самой новой демки» — второй параллельный запрос увидит
+ * свежую отметку и ничего не поставит. Сорвалась установка — отметка возвращается.
+ */
+async function installAddedSince(userId: string): Promise<boolean> {
+  const { rows } = await db().query<{ at: Date | null }>('SELECT demos_seeded_at AS at FROM users WHERE id = $1', [userId]);
+  const at = rows[0]?.at;
+  if (!at) return false;
+  const fresh = listBundledDemos().filter((d) => d.added && new Date(d.added) > at);
+  if (fresh.length === 0) return false;
+  const newest = new Date(Math.max(...fresh.map((d) => new Date(d.added!).getTime())));
+  const moved = await db().query(
+    'UPDATE users SET demos_seeded_at = now() WHERE id = $1 AND demos_seeded_at < $2', [userId, newest]);
+  if (!moved.rowCount) return false;
+  try {
+    await installDemos(userId, renderArtifact, fresh.map((d) => d.slug));
+    return true;
+  } catch (e) {
+    await db().query('UPDATE users SET demos_seeded_at = $2 WHERE id = $1', [userId, at]);
     throw e;
   }
 }

@@ -94,7 +94,7 @@ function SimView({ simulationId }: { simulationId: string }) {
   return (
     <div className="rs-sim">
       <div className="rs-row">
-        <Link className="btn btn-sm btn-secondary" href={`/?id=${simulationId}`}><IconWand size={14} />{t('refineInWorkshop')}</Link>
+        <Link className="btn btn-sm btn-secondary" href={`/create?id=${simulationId}`}><IconWand size={14} />{t('refineInWorkshop')}</Link>
         <Link className="btn btn-sm btn-secondary" href={`/present/${simulationId}`}><IconExpand size={14} />{t('fullScreen')}</Link>
       </div>
       {html ? <iframe className="rs-sim-frame" sandbox="allow-scripts" srcDoc={html} title={t('simulator')} /> : <div className="rs-sim-frame rs-skeleton" />}

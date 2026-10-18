@@ -14,3 +14,10 @@ playwright-report/
 shot-tmp.mjs
 certificates/
 CLAUDE.local.md
+
+# Локальные материалы: презентации, отчёты, документы.
+materials/
+.DS_Store
+presentation/
+*.zip
+.claude/

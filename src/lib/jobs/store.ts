@@ -1,4 +1,4 @@
-import type { PipelineEvent, PlanSpec, QualityMode, SimLang, SimLevel } from '../types';
+import type { PipelineEvent, PlanSpec, QualityMode, SimLang, SimLevel, SimPresentation } from '../types';
 import type { ReapDecision } from './policy';
 
 export type JobKind = 'generate' | 'refine';
@@ -10,6 +10,8 @@ export interface GenerateRequest {
   spec?: PlanSpec;
   level?: SimLevel;
   audience?: string;
+  /** Показ по фазам — выбор автора до плана. */
+  presentation?: SimPresentation;
   /** Язык интерфейса автора: на нём пишутся план и подписи тренажёра. Нет — русский. */
   lang?: SimLang;
 }

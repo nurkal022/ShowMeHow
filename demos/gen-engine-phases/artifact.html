@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Четырёхтактный ДВС по фазам</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<script>
+(function () {
+// ==== @section physics ====
+var PHYS = (function () {
+  // Геометрия демонстрационного цилиндра
+  var BORE = 0.08; // [m] диаметр цилиндра
+  var STROKE = 0.08; // [m] ход поршня
+  var AREA = Math.PI * BORE * BORE / 4; // [m^2] площадь поршня
+
+  // Газ
+  var R = 8.314; // [J/(mol*K)] универсальная газовая постоянная
+  var GAMMA = 1.35; // [-] показатель адиабаты
+  var CV = R / (GAMMA - 1); // [J/(mol*K)] молярная теплоёмкость при V=const
+
+  // Демонстрация фаз
+  var MIN_SPARK_TIME = 0.8; // [s] минимальная длительность фазы "Искра" для показа
+  var MAX_SUBSTEP = 0.02; // [s]
+
+  function clamp01(x) {
+    return x < 0 ? 0 : (x > 1 ? 1 : x);
+  }
+
+  function safePositive(x, fallback) {
+    return (typeof x === 'number' && isFinite(x) && x > 1e-12) ? x : fallback;
+  }
+
+  function params(p) {
+    var rpm = safePositive(p && p.rpm, 120);
+    var compressionRatio = safePositive(p && p.compressionRatio, 8);
+    if (compressionRatio <= 1.01) compressionRatio = 1.01;
+    var intakePressure = safePositive(p && p.intakePressure, 101); // [kPa]
+    var intakeTemperature = safePositive(p && p.intakeTemperature, 293); // [K]
+    var heatRelease = safePositive(p && p.heatRelease, 600); // [J]
+
+    var omegaPhys = 2 * Math.PI * rpm / 60; // [rad/s]
+    var cycleTimePhys = 4 * Math.PI / omegaPhys; // [s]
+    var dThetaSpark = omegaPhys * MIN_SPARK_TIME; // [rad]
+    if (dThetaSpark > Math.PI * 0.98) dThetaSpark = Math.PI * 0.98;
+    if (dThetaSpark < 0.02) dThetaSpark = 0.02;
+
+    var thetaSparkStart = 2 * Math.PI - dThetaSpark / 2;
+    var thetaSparkEnd = 2 * Math.PI + dThetaSpark / 2;
+
+    var Vc = AREA * STROKE / (compressionRatio - 1); // [m^3]
+    var Vmin = Vc; // [m^3]
+    var Vmax = Vc + AREA * STROKE; // [m^3]
+
+    return {
+      rpm: rpm,
+      compressionRatio: compressionRatio,
+      intakePressure_kPa: intakePressure,
+      intakePressure_Pa: intakePressure * 1000,
+      intakeTemperature: intakeTemperature,
+      heatRelease: heatRelease,
+      omegaPhys: omegaPhys,
+      cycleTimePhys: cycleTimePhys,
+      dThetaSpark: dThetaSpark,
+      thetaSparkStart: thetaSparkStart,
+      thetaSparkEnd: thetaSparkEnd,
+      Vc: Vc,
+      Vmin: Vmin,
+      Vmax: Vmax
+    };
+  }
+
+  function pistonX(theta) {
+    return 0.5 * STROKE * (1 - Math.cos(theta));
+  }
+
+  function volumeByTheta(P, theta) {
+    var x = pistonX(theta);
+    return P.Vc + AREA * x;
+  }
+
+  function phaseOfTheta(P, theta) {
+    if (theta < Math.PI) return 0; // Впуск
+    if (theta < 1.5 * Math.PI) return 1; // Впрыск топлива
+    if (theta < P.thetaSparkStart) return 2; // Сжатие
+    if (theta < P.thetaSparkEnd) return 3; // Искра
+    if (theta < 3 * Math.PI) return 4; // Рабочий ход
+    return 5; // Выпуск
+  }
+
+  function stateAtTheta(P, theta) {
+    var V = volumeByTheta(P, theta);
+    var pPa, T, nMol, phase;
+    var pInt = P.intakePressure_Pa;
+    var TInt = P.intakeTemperature;
+
+    phase = phaseOfTheta(P, theta);
+
+    if (theta < Math.PI) {
+      pPa = pInt * (1 - 0.06 * Math.sin(theta));
+      if (pPa < 0.5 * pInt) pPa = 0.5 * pInt;
+      T = TInt * (1 + 0.02 * Math.sin(0.5 * theta));
+      nMol = pPa * V / (R * T);
+    } else if (theta < 1.5 * Math.PI) {
+      pPa = pInt;
+      T = TInt;
+      nMol = pPa * V / (R * T);
+    } else if (theta < P.thetaSparkStart) {
+      nMol = pInt * P.Vmax / (R * TInt);
+      T = TInt * Math.pow(P.Vmax / safePositive(V, P.Vmin), GAMMA - 1);
+      pPa = nMol * R * T / safePositive(V, P.Vmin);
+    } else if (theta < P.thetaSparkEnd) {
+      nMol = pInt * P.Vmax / (R * TInt);
+
+      var theta0 = P.thetaSparkStart;
+      var V2 = volumeByTheta(P, theta0);
+      V2 = safePositive(V2, P.Vmin);
+      var T2 = TInt * Math.pow(P.Vmax / V2, GAMMA - 1);
+      var alpha = clamp01((theta - theta0) / safePositive(P.dThetaSpark, 1));
+      var T3 = T2 + P.heatRelease / safePositive(nMol * CV, 1e-9);
+
+      T = T2 + (T3 - T2) * alpha;
+      pPa = nMol * R * T / safePositive(V, P.Vmin);
+    } else if (theta < 3 * Math.PI) {
+      nMol = pInt * P.Vmax / (R * TInt);
+
+      var Vs = volumeByTheta(P, P.thetaSparkStart);
+      Vs = safePositive(Vs, P.Vmin);
+      var T2s = TInt * Math.pow(P.Vmax / Vs, GAMMA - 1);
+      var T3s = T2s + P.heatRelease / safePositive(nMol * CV, 1e-9);
+      var VendSpark = volumeByTheta(P, P.thetaSparkEnd);
+      VendSpark = safePositive(VendSpark, P.Vmin);
+
+      T = T3s * Math.pow(VendSpark / safePositive(V, P.Vmin), GAMMA - 1);
+      pPa = nMol * R * T / safePositive(V, P.Vmin);
+    } else {
+      pPa = pInt * (1 + 0.08 * Math.sin(theta - 3 * Math.PI));
+      if (pPa < 0.5 * pInt) pPa = 0.5 * pInt;
+      T = TInt * (1 + 0.15 * (1 - (theta - 3 * Math.PI) / Math.PI));
+      nMol = pPa * V / (R * T);
+    }
+
+    if (!(isFinite(pPa) && pPa > 0)) pPa = pInt;
+    if (!(isFinite(T) && T > 0)) T = TInt;
+    if (!(isFinite(nMol) && nMol > 0)) nMol = pInt * V / (R * T);
+
+    return {
+      phase: phase,
+      V: V,
+      pPa: pPa,
+      T: T,
+      nMol: nMol
+    };
+  }
+
+  function init(p) {
+    var P = params(p);
+    var g = stateAtTheta(P, 0);
+    return {
+      t: 0,
+      thetaView: 0,
+      thetaPhys: 0,
+      phase: 0,
+      sparkStartedCycle: -1,
+      volume: g.V,
+      pressurePa: g.pPa,
+      temperature: g.T,
+      moles: g.nMol
+    };
+  }
+
+  function step(s, p, dt) {
+    var P = params(p);
+    if (!(isFinite(dt) && dt > 0)) {
+      return;
+    }
+
+    SimPhys.substep(dt, MAX_SUBSTEP, function (h) {
+      var cycleIndex = Math.floor(s.thetaView / (4 * Math.PI));
+      var thetaCycle = s.thetaView - cycleIndex * 4 * Math.PI;
+      var phase = phaseOfTheta(P, thetaCycle);
+
+      if (phase !== s.phase) {
+        if (phase === 3) {
+          s.sparkStartedCycle = cycleIndex;
+        }
+        s.phase = phase;
+      }
+
+      var dTheta = 0;
+      if (phase === 3) {
+        dTheta = P.dThetaSpark / MIN_SPARK_TIME * h;
+      } else {
+        var left;
+        if (phase === 0) left = Math.PI - thetaCycle;
+        else if (phase === 1) left = 1.5 * Math.PI - thetaCycle;
+        else if (phase === 2) left = P.thetaSparkStart - thetaCycle;
+        else if (phase === 4) left = 3 * Math.PI - thetaCycle;
+        else left = 4 * Math.PI - thetaCycle;
+
+        var remTime = h;
+        if (left < 0) left = 0;
+        dTheta = P.omegaPhys * remTime;
+        if (dTheta > left + 1e-12) dTheta = left;
+        if (dTheta < 0) dTheta = 0;
+      }
+
+      s.thetaView += dTheta;
+      s.thetaPhys = s.thetaView;
+
+      var newCycleIndex = Math.floor(s.thetaView / (4 * Math.PI));
+      var thetaMod = s.thetaView - newCycleIndex * 4 * Math.PI;
+      var g = stateAtTheta(P, thetaMod);
+
+      s.phase = g.phase;
+      s.volume = g.V;
+      s.pressurePa = g.pPa;
+      s.temperature = g.T;
+      s.moles = g.nMol;
+      s.t += h;
+    });
+  }
+
+  function observe(s, p) {
+    var P = params(p);
+    var thetaMod = s.thetaView % (4 * Math.PI);
+    if (thetaMod < 0) thetaMod += 4 * Math.PI;
+
+    var g = stateAtTheta(P, thetaMod);
+    var x = pistonX(thetaMod);
+
+    return {
+      t: s.t,
+      phase: g.phase,
+      crankAngle: thetaMod,
+      cylinderVolume: g.V * 1e6,
+      cylinderPressure: g.pPa / 1000,
+      gasTemperature: g.T,
+      pistonPosition: x * 1000,
+
+      volumeMin: P.Vmin * 1e6,
+      volumeMax: P.Vmax * 1e6,
+      volumeRatio: P.Vmax / safePositive(P.Vmin, 1e-12),
+      gasMoles: g.nMol,
+      sparkVolumeDeviation: Math.abs(g.V - P.Vmin) / safePositive(P.Vmin, 1e-12),
+      compressionRatioTarget: P.compressionRatio
+    };
+  }
+
+  return { init: init, step: step, observe: observe };
+})();
+// ==== @end physics ====
+
+  // ==== @section state ====
+  var P = {
+    rpm: 120,
+    compressionRatio: 8,
+    intakePressure: 101,
+    intakeTemperature: 293,
+    heatRelease: 600
+  };
+  var S = PHYS.init(P);
+  var hooks = { frame: [], reset: [] };
+  // ==== @end state ====
+
+  // ==== @section scene ====
+  var view = SimUI.view2d({ x: [-1.4, 1.9], y: [-1.35, 1.95], grid: true });
+  var pTrail = view.trail(220);
+  var lastPhase = -1;
+  var lastSparkToastT = -100;
+
+  hooks.reset.push(function () {
+    if (pTrail.clear) pTrail.clear();
+    lastPhase = -1;
+    lastSparkToastT = -100;
+  });
+
+  hooks.frame.push(function (o, dt) {
+    if (o.phase !== lastPhase) {
+      if (o.phase === 3 && o.t - lastSparkToastT > 3) {
+        SimUI.toast("Искра: объём почти не меняется, а давление резко растёт!", { color: "yellow" });
+        lastSparkToastT = o.t;
+      }
+      lastPhase = o.phase;
+    }
+  });
+
+  function clamp01(x) {
+    return x < 0 ? 0 : (x > 1 ? 1 : x);
+  }
+
+  function mixColor(a, b, t) {
+    var ca = SimUI.color(a), cb = SimUI.color(b);
+    function hexToRgb(h) {
+      h = String(h || "#000000").replace("#", "");
+      if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    }
+    var A = hexToRgb(ca), B = hexToRgb(cb), u = clamp01(t);
+    var r = Math.round(A[0] + (B[0] - A[0]) * u);
+    var g = Math.round(A[1] + (B[1] - A[1]) * u);
+    var bl = Math.round(A[2] + (B[2] - A[2]) * u);
+    return "rgb(" + r + "," + g + "," + bl + ")";
+  }
+
+  function gasColor(o) {
+    var p = clamp01((o.cylinderPressure - 80) / (3000 - 80));
+    var Tn = clamp01((o.gasTemperature - 250) / (2500 - 250));
+    var h = 0.45 * p + 0.55 * Tn;
+    if (o.phase === 0) return mixColor("cyan", "blue", 0.35 + 0.2 * h);
+    if (o.phase === 1) return mixColor("yellow", "green", 0.3);
+    if (o.phase === 2) return mixColor("purple", "orange", 0.35 + 0.35 * h);
+    if (o.phase === 3) return mixColor("yellow", "red", 0.65 + 0.25 * h);
+    if (o.phase === 4) return mixColor("orange", "red", 0.35 + 0.45 * h);
+    return mixColor("gray", "orange", 0.2 + 0.2 * h);
+  }
+
+  function phaseName(k) {
+    return ["Впуск", "Впрыск топлива", "Сжатие", "Искра", "Рабочий ход", "Выпуск"][k] || "";
+  }
+
+  function drawValve(x, y, open, side, label) {
+    var lift = open ? 0.11 : 0.015;
+    view.line(x, y + 0.24, x, y + 0.06 + lift, { color: open ? "green" : "gray", width: 5 });
+    view.polygon([[x - 0.08, y + 0.06 + lift], [x + 0.08, y + 0.06 + lift], [x, y - 0.01 + lift]], {
+      fill: open ? "green" : "gray",
+      color: open ? "green" : "gray",
+      alpha: open ? 0.95 : 0.75
+    });
+    view.label(x + (side === "left" ? -0.2 : 0.2), y + 0.32, label);
+  }
+
+  function flowArrows(pts, color) {
+    for (var i = 0; i < pts.length - 1; i++) {
+      view.arrow(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], { color: color, width: 3 });
+    }
+  }
+
+  function draw(o, P, S, dt) {
+    view.clear();
+
+    var cylLeft = -0.35, cylRight = 0.35;
+    var cylBottom = 0.12, cylTop = 1.45;
+    var cylHeight = cylTop - cylBottom;
+    var strokeMeters = 80;
+    var xNorm = clamp01(o.pistonPosition / strokeMeters);
+    var pistonTop = cylTop - 0.18 - xNorm * (cylHeight - 0.28);
+    var pistonH = 0.14;
+    var pistonY = pistonTop - pistonH / 2;
+    var pinY = pistonY;
+    var pinX = 0;
+
+    var crankC = { x: 0, y: -0.72 };
+    var crankR = 0.32;
+    var theta = o.crankAngle || 0;
+    var crankPin = {
+      x: crankC.x + crankR * Math.sin(theta),
+      y: crankC.y + crankR * Math.cos(theta)
+    };
+
+    var intakeOpen = (o.phase === 0);
+    var exhaustOpen = (o.phase === 5);
+    var injectorOn = (o.phase === 1);
+    var sparkOn = (o.phase === 3);
+
+    var gasTop = cylTop - 0.02;
+    var gasBottom = pistonTop + pistonH / 2;
+    if (gasBottom > gasTop - 0.02) gasBottom = gasTop - 0.02;
+
+    var gc = gasColor(o);
+    var heatLevel = clamp01((o.gasTemperature - 250) / 2200);
+
+    view.ground(-1.08);
+
+    view.rect(cylLeft - 0.06, cylBottom - 0.02, 0.06, cylHeight + 0.16, { fill: "gray", color: "gray", alpha: 0.45 });
+    view.rect(cylRight, cylBottom - 0.02, 0.06, cylHeight + 0.16, { fill: "gray", color: "gray", alpha: 0.45 });
+    view.rect(cylLeft, cylTop, cylRight - cylLeft, 0.12, { fill: "gray", color: "gray", alpha: 0.55 });
+    view.rect(cylLeft, cylBottom - 0.08, cylRight - cylLeft, 0.08, { fill: "gray", color: "gray", alpha: 0.55 });
+
+    view.rect(cylLeft + 0.02, gasBottom, (cylRight - cylLeft) - 0.04, Math.max(0.02, gasTop - gasBottom), {
+      fill: gc, color: gc, alpha: 0.72 + 0.12 * heatLevel
+    });
+
+    if (o.phase === 4 || o.phase === 3) {
+      view.rect(cylLeft + 0.02, gasBottom, (cylRight - cylLeft) - 0.04, Math.max(0.02, gasTop - gasBottom), {
+        fill: gc, color: gc, alpha: 0.18 + 0.14 * heatLevel, glow: true
+      });
+    }
+
+    view.rect(0.58, 0.88, 0.18, 0.06, { fill: "gray", color: "gray", alpha: 0.8 });
+    view.line(0.58, 0.91, 0.38, 0.91, { color: "gray", width: 4 });
+    view.label(0.85, 0.91, "форсунка");
+    if (injectorOn) {
+      flowArrows([[0.47, 0.89], [0.34, 0.85], [0.22, 0.79]], "yellow");
+      flowArrows([[0.44, 0.95], [0.30, 0.89], [0.19, 0.84]], "yellow");
+    }
+
+    view.line(0, 1.66, 0, 1.53, { color: sparkOn ? "cyan" : "gray", width: 5 });
+    view.circle(0, 1.505, 0.018, { fill: sparkOn ? "cyan" : "gray", color: sparkOn ? "cyan" : "gray" });
+    view.label(0.34, 1.64, "свеча");
+
+    if (sparkOn) {
+      var z = 0.1 + 0.05 * Math.sin(o.t * 20);
+      view.path([[0,1.50],[0.03,1.46],[-0.01,1.42],[0.04,1.38],[-0.02,1.34],[0.02,1.29]], {
+        color: "cyan", width: 3 + 5 * z, glow: true
+      });
+      view.circle(0, 1.42, 0.12 + 0.03 * Math.sin(o.t * 18), { color: "yellow", alpha: 0.35, glow: true });
+      view.tex(0.78, 1.22, "Q\\uparrow,\\; p\\uparrow\\uparrow\\; \\text{при почти постоянном }V", { color: "yellow" });
+    }
+
+    drawValve(-0.17, 1.43, intakeOpen, "left", "впуск");
+    drawValve(0.17, 1.43, exhaustOpen, "right", "выпуск");
+
+    view.line(-0.9, 1.52, -0.17, 1.52, { color: intakeOpen ? "green" : "gray", width: 6 });
+    view.line(0.17, 1.52, 0.92, 1.52, { color: exhaustOpen ? "green" : "gray", width: 6 });
+
+    if (intakeOpen) {
+      flowArrows([[-0.9,1.52],[-0.65,1.52],[-0.42,1.52],[-0.22,1.49],[-0.12,1.35]], "green");
+      view.text(-1.18, 1.60, "смесь входит", { color: "green", size: 15 });
+    }
+    if (exhaustOpen) {
+      flowArrows([[0.12,1.35],[0.23,1.49],[0.43,1.52],[0.69,1.52],[0.92,1.52]], "gray");
+      view.text(0.78, 1.60, "газы выходят", { color: "gray", size: 15 });
+    }
+
+    view.rect(cylLeft + 0.03, pistonY - pistonH / 2, (cylRight - cylLeft) - 0.06, pistonH, {
+      fill: "white", color: "white", alpha: 0.95
+    });
+    view.label(-0.78, pistonY, "поршень");
+
+    pTrail.push(pinX, pinY);
+    pTrail.draw({ color: "white", alpha: 0.25 });
+
+    view.line(pinX, pinY, crankPin.x, crankPin.y, { color: "orange", width: 6, label: "шатун" });
+    view.circle(crankC.x, crankC.y, crankR, { color: "gray", alpha: 0.35 });
+    view.line(crankC.x, crankC.y, crankPin.x, crankPin.y, { color: "red", width: 6 });
+    view.circle(crankC.x, crankC.y, 0.045, { fill: "white", color: "white" });
+    view.circle(crankPin.x, crankPin.y, 0.04, { fill: "red", color: "red" });
+    view.label(0.7, -0.72, "коленвал");
+
+    view.angle(crankC.x, crankC.y, 0.22, Math.PI/2, Math.PI/2 - theta, { label: "θ" });
+
+    var velDir = Math.sin(theta);
+    var pistonVy = -velDir * 0.42;
+    view.vector(cylRight + 0.25, pistonY, 0, pistonVy, { color: "blue", label: "ход поршня" });
+
+    view.label(-1.18, 1.82, "фаза: " + phaseName(o.phase));
+    view.label(-1.18, 1.66, "клапаны: " + (intakeOpen ? "впуск открыт" : "впуск закрыт") + ", " + (exhaustOpen ? "выпуск открыт" : "выпуск закрыт"));
+
+    view.text(-1.18, -0.96, "ВМТ", { color: "white", size: 14 });
+    view.text(-1.18, 0.12, "НМТ", { color: "white", size: 14 });
+    view.line(-0.95, cylTop - 0.18, -0.55, cylTop - 0.18, { color: "white", dash: [5,4] });
+    view.line(-0.95, cylBottom + 0.02, -0.55, cylBottom + 0.02, { color: "white", dash: [5,4] });
+
+    view.text(0.92, -0.08, "цвет газа: холодный → горячий", { color: gc, size: 14 });
+
+    if (o.phase === 2) {
+      view.arrow(0.95, 0.95, 0.62, 0.95, { color: "purple", label: "объём уменьшается" });
+    }
+    if (o.phase === 4) {
+      view.arrow(0.62, 0.78, 0.95, 0.78, { color: "orange", label: "газы толкают поршень" });
+    }
+
+    view.label(1.14, 1.36, "p = " + o.cylinderPressure.toFixed(0) + " кПа");
+    view.label(1.14, 1.18, "T = " + o.gasTemperature.toFixed(0) + " K");
+    view.label(1.14, 1.00, "V = " + o.cylinderVolume.toFixed(0) + " см³");
+    view.label(1.14, 0.82, "x = " + o.pistonPosition.toFixed(0) + " мм");
+  }
+  // ==== @end scene ====
+
+  // ==== @section controls ====
+  SimUI.title("Четырёхтактный ДВС по фазам");
+  SimUI.goals(["Понять последовательность фаз четырёхтактного бензинового двигателя: впуск, сжатие, зажигание, рабочий ход, выпуск","Связать движение поршня с открытием клапанов и вращением коленчатого вала","Увидеть, как меняются объём, давление и температура газа в цилиндре по ходу цикла"]);
+  SimUI.params(P, [
+    {name: "rpm",label: "Частота вращения",min: 60,max: 600,step: 10,value: 120,unit: "об/мин",group: "Механика"},
+    {name: "compressionRatio",label: "Степень сжатия",min: 6,max: 12,step: 0.5,value: 8,unit: "",group: "Геометрия"},
+    {name: "intakePressure",label: "Давление на впуске",min: 80,max: 120,step: 1,value: 101,unit: "кПа",group: "Газ"},
+    {name: "intakeTemperature",label: "Температура на впуске",min: 250,max: 330,step: 1,value: 293,unit: "K",group: "Газ"},
+    {name: "heatRelease",label: "Теплота сгорания в модели",min: 200,max: 1200,step: 50,value: 600,unit: "Дж",group: "Сгорание"},
+  ]);
+  SimUI.presets([{"label":"Медленный показ","values":{"rpm":60,"compressionRatio":8,"intakePressure":101,"intakeTemperature":293,"heatRelease":600}},{"label":"Обычный бензиновый двигатель","values":{"rpm":120,"compressionRatio":9,"intakePressure":101,"intakeTemperature":293,"heatRelease":700}},{"label":"Высокая степень сжатия","values":{"rpm":120,"compressionRatio":12,"intakePressure":101,"intakeTemperature":293,"heatRelease":700}}]);
+  // ==== @end controls ====
+
+  // ==== @section instruments ====
+  SimUI.readouts({"crankAngle":{"label":"Угол коленвала","unit":"рад"},"cylinderVolume":{"label":"Объём цилиндра","unit":"см³"},"cylinderPressure":{"label":"Давление в цилиндре","unit":"кПа"},"gasTemperature":{"label":"Температура газа","unit":"K"},"pistonPosition":{"label":"Положение поршня","unit":"мм"}});
+  SimUI.chart({"title":"Давление и температура по фазам","x":"t","y":["cylinderPressure","gasTemperature"],"series":[{"name":"Давление в цилиндре","color":"blue"},{"name":"Температура газа","color":"orange"}],"xLabel":"t, с","yLabel":"кПа"});
+  SimUI.phases({"key":"phase","mode":"step","items":[{"name":"Впуск","text":"Поршень идёт вниз, открыт впускной клапан. В цилиндр засасывается воздух или горючая смесь, объём растёт.","color":"blue"},{"name":"Впрыск топлива","text":"Форсунка подаёт топливо, которое смешивается с воздухом. Подготавливается рабочая смесь для сгорания.","color":"yellow"},{"name":"Сжатие","text":"Оба клапана закрыты, поршень идёт вверх. Объём уменьшается, а давление и температура смеси растут.","color":"purple"},{"name":"Искра","text":"У верхней мёртвой точки свеча даёт искру. Смесь быстро воспламеняется, давление резко возрастает.","color":"cyan"},{"name":"Рабочий ход","text":"Расширяющиеся горячие газы толкают поршень вниз. Эта фаза совершает полезную работу.","color":"orange"},{"name":"Выпуск","text":"Открывается выпускной клапан, поршень идёт вверх и выталкивает отработавшие газы из цилиндра.","color":"gray"}]});
+  SimUI.formula({
+    title: "Основные соотношения",
+    tex: "V(x)=V_c+A x,\\quad x(\\theta)=\\frac{S}{2}(1-\\cos\\theta),\\\\ pV=nRT,\\quad pV^{\\gamma}=\\mathrm{const},\\quad \\frac{p_3}{p_2}=\\frac{T_3}{T_2}\\;(V\\approx const)",
+    vars: {
+      compressionRatio: { label: "r", unit: "" },
+      crankAngle: { label: "\\theta", unit: "рад" },
+      cylinderVolume: { label: "V", unit: "см^3" },
+      cylinderPressure: { label: "p", unit: "кПа" },
+      gasTemperature: { label: "T", unit: "K" },
+      pistonPosition: { label: "x", unit: "мм" },
+      heatRelease: { label: "Q", unit: "Дж" }
+    },
+    note: "На сжатии и рабочем ходе клапаны закрыты, поэтому смесь моделируется адиабатой. Во время искры объём почти не меняется, зато давление растёт очень резко.",
+    corner: "tl"
+  });
+  // ==== @end instruments ====
+
+  // ==== @section main ====
+  var app = SimUI.run({ physics: PHYS, P: P, S: S, draw: draw, hooks: hooks });
+  // ==== @end main ====
+})();
+</script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import { renderPlot } from '@/lib/research/plot';
 import { formatWithError } from '@/lib/research/fit';
 import { doiHref, webCitation, type CitationSet } from '@/lib/research/present';
 import { IconBook, IconCode, IconExpand, IconFormula, IconLab, IconLogo, IconQuote, IconSend, IconTable } from '@/components/icons';
+import TesseractMark from '@/components/TesseractMark';
 import ModelEditor from './ModelEditor';
 import { CopyButton, ExportBar } from './shared';
 import { useLocale, useT } from '@/i18n/client';
@@ -71,7 +72,7 @@ export default function PublicResearch({ token, embed, author, cover, items, isP
   return (
     <div className="rs-pub">
       <header className="rs-pub-bar">
-        <a href="/" className="brand"><span className="brand-mark"><IconLogo size={15} /></span>Tesseract</a>
+        <a href="/" className="brand"><span className="brand-mark"><TesseractMark size={22} /></span>Tesseract</a>
         <span className="rs-pub-bar-note">{isProject ? t('barProject') : t('barItem')}</span>
       </header>
 

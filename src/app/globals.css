@@ -1,23 +1,24 @@
 /* =========================================================================
-   Tesseract — светлая минималистичная система.
-   Один акцент, мягкие тени, крупные радиусы, ноль декоративного шума.
+   Tesseract — единая система «Космос»: светлая «научная бумага с небом»
+   (голубовато-серый фон, белые карточки, тёмно-синий текст) и тёмный глубокий космос.
+   Один акцент, мягкие тени, крупные радиусы, кнопки-таблетки.
    Тёмная тема — вариант тех же токенов, выбирается атрибутом data-theme
    на <html> (значение пишет ThemeScript до первой отрисовки).
    ========================================================================= */
 :root {
-  --bg: #ffffff;
-  --bg-subtle: #f7f7f5;
+  --bg: #f4f6fb;
+  --bg-subtle: #edf1f9;
   --surface: #ffffff;
-  --surface-2: #f1f1ee;
-  --surface-3: #e7e7e3;
-  --border: #e7e6e2;
-  --border-strong: #d4d3cd;
-  --text: #1a1a1e;
-  --text-2: #45454d;
-  --muted: #73737d;
+  --surface-2: #eef2f9;
+  --surface-3: #e2e8f3;
+  --border: rgba(22, 40, 96, .11);
+  --border-strong: rgba(22, 40, 96, .2);
+  --text: #0e1531;
+  --text-2: #3b4667;
+  --muted: #687493;
   --accent: #3457e6;
   --accent-hover: #2946c9;
-  --accent-soft: #ecf0ff;
+  --accent-soft: #e8eeff;
   --accent-ink: #ffffff;
   --success: #1e8e3e;
   --success-soft: #e6f4ea;
@@ -28,14 +29,14 @@
 
   --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .05);
-  --shadow-md: 0 4px 16px rgba(16, 24, 40, .08);
-  --shadow-lg: 0 12px 40px rgba(16, 24, 40, .12);
+  --shadow-sm: 0 1px 2px rgba(20, 34, 80, .06);
+  --shadow-md: 0 10px 30px rgba(20, 34, 80, .08);
+  --shadow-lg: 0 24px 60px rgba(20, 34, 80, .14);
 
-  --r-sm: 10px;
-  --r-btn: 10px;
-  --r: 14px;
-  --r-lg: 20px;
+  --r-sm: 12px;
+  --r-btn: 999px;
+  --r: 18px;
+  --r-lg: 24px;
   --r-pill: 999px;
 
   --nav-h: 60px;
@@ -43,47 +44,53 @@
   --panel: var(--surface);
   --radius: var(--r-sm);
 
-  font-family: 'Onest', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: Manrope, 'Onest', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 16px;
   color-scheme: light;
 }
 
 html[data-theme='dark'] {
-  --bg: #131417;
-  --bg-subtle: #17181c;
-  --surface: #1b1d21;
-  --surface-2: #24262b;
-  --surface-3: #2e3137;
-  --border: #2a2d33;
-  --border-strong: #3a3e45;
-  --text: #eceef1;
-  --text-2: #c3c7cd;
-  --muted: #949aa3;
-  --accent: #9db0ff;
-  --accent-hover: #b7c5ff;
-  --accent-soft: #20274a;
-  --accent-ink: #0e1433;
-  --success: #81c995;
-  --success-soft: #1a2b1f;
-  --danger: #f28b82;
-  --danger-soft: #33201e;
-  --warn: #fdd663;
-  --warn-soft: #33290f;
+  /* Поверхности непрозрачные: меню, модалки и выпадающие списки читаются поверх чего угодно. */
+  --bg: #05070f;
+  --bg-subtle: #0a0f20;
+  --surface: #0e1430;
+  --surface-2: #161d3c;
+  --surface-3: #222a4d;
+  --border: rgba(160, 190, 255, .14);
+  --border-strong: rgba(160, 190, 255, .26);
+  --text: #eef1fb;
+  --text-2: #c6cde4;
+  --muted: #8f9bc0;
+  --accent: #6e93ff;
+  --accent-hover: #8fadff;
+  --accent-soft: rgba(61, 107, 255, .18);
+  --accent-ink: #ffffff;
+  --success: #6fdc9a;
+  --success-soft: rgba(60, 200, 120, .14);
+  --danger: #ff8a80;
+  --danger-soft: rgba(255, 90, 80, .14);
+  --warn: #ffd166;
+  --warn-soft: rgba(255, 200, 80, .14);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, .45);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, .55);
+  --shadow-md: 0 8px 30px rgba(0, 0, 0, .45);
+  --shadow-lg: 0 24px 70px rgba(0, 0, 0, .55);
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: var(--bg);
+  background-color: var(--bg);
+  /* Мягкое «небо» на всех страницах; неподвижное — прокрутка не перерисовывает фон. */
+  background-image:
+    radial-gradient(1100px 600px at 90% -10%, rgba(110, 140, 255, .14), transparent 60%),
+    radial-gradient(900px 600px at -10% 25%, rgba(160, 120, 255, .08), transparent 60%);
+  background-attachment: fixed;
   color: var(--text);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
-h1, h2, h3, h4 { line-height: 1.22; font-weight: 650; letter-spacing: -.02em; margin: 0; }
+h1, h2, h3, h4 { line-height: 1.2; font-weight: 750; letter-spacing: -.025em; margin: 0; }
 h1 { font-size: 26px; }
 h2 { font-size: 19px; }
 h3 { font-size: 15px; }
@@ -112,11 +119,24 @@ svg { flex-shrink: 0; }
   font-size: 16px; font-weight: 600; letter-spacing: -.02em; color: var(--text);
   margin-right: 12px;
 }
+.brand:hover { text-decoration: none; color: var(--text); }
 .brand-mark {
-  width: 26px; height: 26px; border-radius: 8px;
-  background: var(--accent); color: var(--accent-ink);
+  width: 30px; height: 30px; border-radius: 9px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 88%, #8b5cf6), var(--accent)); color: var(--accent-ink);
   display: grid; place-items: center;
 }
+
+/* Логотип-тессеракт (components/TesseractMark): толщина линий не зависит от размера марки. */
+.tmark { overflow: visible; }
+.tmark line { vector-effect: non-scaling-stroke; fill: none; transition: stroke .4s ease, opacity .4s ease; }
+.tmark-current .tmark-outer { stroke: currentColor; stroke-width: 1.5px; }
+.tmark-current .tmark-inner { stroke: currentColor; stroke-width: 1.1px; }
+.tmark-current .tmark-link { stroke: currentColor; stroke-width: 1px; opacity: .5; }
+.tmark-current[data-hov] .tmark-link { opacity: .85; }
+.tmark-glow .tmark-outer { stroke: #7FA2FF; stroke-width: 3px; }
+.tmark-glow .tmark-inner { stroke: #FFFFFF; stroke-width: 1.9px; }
+.tmark-glow .tmark-link { stroke: rgba(170,198,255,.55); stroke-width: 2px; }
+.tmark-glow[data-hov] .tmark-link { stroke: #C3A8FF; }
 .navlinks { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
 .navlinks > a {
   display: inline-flex; align-items: center; height: 36px; padding: 0 14px;
@@ -1373,10 +1393,14 @@ html[data-theme='dark'] .lb-callout.tone-definition { --tone: #c0a8ff; --tone-so
 /* демо-режим: личный демо-университет и переключатель ролей */
 .demo-bar {
   position: sticky; top: 0; z-index: 60;
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px;
-  padding: 7px 16px; font-size: 13.5px;
+  display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 12px;
+  height: var(--bar-h); padding: 0 16px; font-size: 13.5px; white-space: nowrap; box-sizing: border-box;
   background: color-mix(in srgb, var(--accent) 10%, var(--bg)); border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  overflow-x: auto; scrollbar-width: none;
 }
+.demo-bar::-webkit-scrollbar { display: none; }
+/* Полоса закреплена сверху; шапка сайта и кабинета встают под ней, а не прячутся за ней. */
+body:has(.demo-bar) { --bar-h: 44px; }
 .demo-bar .btn { padding: 4px 12px; font-size: 13px; }
 .demo-bar-label { color: var(--accent); }
 .demo-bar-look, .demo-bar-hint { color: var(--muted); }
@@ -1390,4 +1414,4 @@ html[data-theme='dark'] .lb-callout.tone-definition { --tone: #c0a8ff; --tone-so
 .demo-bar-views button:hover:not(:disabled) { background: var(--bg-subtle); }
 .demo-bar-views button.on { background: var(--accent); color: #fff; }
 .demo-bar-views button:disabled { cursor: progress; }
-@media (max-width: 720px) { .demo-bar-hint, .demo-bar-look { display: none; } .demo-bar-views { overflow-x: auto; max-width: 100%; } }
+@media (max-width: 720px) { .demo-bar { justify-content: flex-start; } .demo-bar-hint, .demo-bar-look, .demo-bar-who { display: none; } .demo-bar-views { flex: none; } }

@@ -3,6 +3,8 @@
  * поэтому иконка наследует цвет и состояние кнопки, в которую вложена.
  * Эмодзи в интерфейсе не используются: они разные в каждой ОС и ломают ритм строки.
  */
+import { TESSERACT_EDGES, TESSERACT_REST, edgeKind } from '@/lib/tesseract';
+
 interface IconProps { size?: number; className?: string }
 
 function svg(path: React.ReactNode, extra?: { fill?: boolean }) {
@@ -19,10 +21,19 @@ function svg(path: React.ReactNode, extra?: { fill?: boolean }) {
   };
 }
 
-export const IconLogo = svg(<>
-  <path d="M12 2.6 20.5 7v10L12 21.4 3.5 17V7z" />
-  <path d="M12 12.2 20.5 7M12 12.2 3.5 7M12 12.2v9.2" opacity=".55" />
-</>);
+/** Логотип — статичный тессеракт; анимированная марка в шапках — components/TesseractMark. */
+export function IconLogo({ size = 20, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="-1.2 -1.2 2.4 2.4" className={className} fill="none" stroke="currentColor"
+      strokeLinecap="round" aria-hidden="true" focusable="false">
+      {TESSERACT_EDGES.map((e, n) => {
+        const [i, j] = e, kind = edgeKind(e);
+        return <line key={n} x1={TESSERACT_REST[i][0]} y1={TESSERACT_REST[i][1]} x2={TESSERACT_REST[j][0]} y2={TESSERACT_REST[j][1]}
+          strokeWidth={kind === 'outer' ? 0.15 : 0.1} opacity={kind === 'link' ? 0.55 : 1} />;
+      })}
+    </svg>
+  );
+}
 
 export const IconPlus = svg(<><path d="M12 5v14M5 12h14" /></>);
 export const IconLibrary = svg(<>

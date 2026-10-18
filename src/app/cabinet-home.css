@@ -25,15 +25,14 @@
   position: relative; overflow: hidden; isolation: isolate;
   display: flex; align-items: center; justify-content: space-between; gap: 32px; flex-wrap: wrap;
   padding: 32px 36px; border-radius: 22px; color: #fff;
-  background: linear-gradient(120deg, #3457e6, #5b3fd6 45%, #8b3fd6 70%, #3457e6);
-  background-size: 260% 260%; animation: h-pan 18s ease-in-out infinite alternate;
-  box-shadow: 0 18px 40px -18px rgba(52, 87, 230, .55);
+  /* Как первый экран главной: реальный снимок, тёмная вуаль слева под текстом. */
+  background: linear-gradient(100deg, rgba(5, 8, 22, .95) 0%, rgba(8, 14, 40, .86) 42%, rgba(14, 26, 80, .35) 100%),
+    url(/landing/auth-register.webp) right 30% center / cover;
+  box-shadow: 0 24px 50px -24px rgba(10, 20, 70, .6);
 }
-.hero-org { background-image: linear-gradient(120deg, #0c8f7f, #1b6fd6 50%, #3457e6 75%, #0c8f7f); box-shadow: 0 18px 40px -18px rgba(12, 143, 127, .5); }
-.hero-band::before, .hero-band::after {
-  content: ''; position: absolute; z-index: -1; border-radius: 50%; filter: blur(40px); opacity: .45; pointer-events: none;
-  animation: h-float 14s ease-in-out infinite;
-}
+.hero-org { background-image: linear-gradient(100deg, rgba(5, 8, 22, .95) 0%, rgba(8, 14, 40, .84) 42%, rgba(14, 26, 80, .2) 100%),
+  url(/landing/bg-space.webp); background-position: center, right center; background-size: cover, cover; }
+.hero-band::before, .hero-band::after { display: none; }
 .hero-band::before { width: 320px; height: 320px; right: 8%; top: -140px; background: #ff9ecf; }
 .hero-band::after { width: 260px; height: 260px; right: 34%; bottom: -170px; background: #6ee7d8; animation-delay: -7s; }
 .hero-org::before { background: #8ef0c4; }
@@ -580,8 +579,8 @@ html[data-theme='dark'] .avatar-chip { color: color-mix(in srgb, var(--av) 55%, 
 .week-nav { display: inline-flex; gap: 6px; }
 .report-hero {
   display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 24px 28px; border-radius: 20px;
-  color: #fff; background: linear-gradient(120deg, #1b6fd6, #5b3fd6 60%, #8b3fd6); background-size: 200% 200%;
-  animation: h-pan 16s ease-in-out infinite alternate; box-shadow: 0 16px 36px -18px rgba(52, 87, 230, .55);
+  color: #fff; background: linear-gradient(100deg, rgba(5, 8, 22, .95) 0%, rgba(8, 14, 40, .85) 45%, rgba(14, 26, 80, .3) 100%),
+    url(/landing/bg-math.webp) right center / cover; box-shadow: 0 20px 44px -22px rgba(10, 20, 70, .6);
 }
 .report-hero.empty { background: var(--surface); color: var(--text); border: 1px dashed var(--border-strong); box-shadow: none; animation: none; }
 .report-hero > div { flex: 1 1 420px; display: flex; flex-direction: column; gap: 6px; }
@@ -997,10 +996,11 @@ html[data-theme='dark'] .avatar-chip { color: color-mix(in srgb, var(--av) 55%, 
 .acc { display: flex; flex-direction: column; gap: 22px; }
 .acc-hero {
   position: relative; overflow: hidden; display: flex; align-items: center; gap: 22px; flex-wrap: wrap; padding: 28px 30px; border-radius: 22px; color: #fff;
-  background: linear-gradient(120deg, #3457e6, #5b3fd6 55%, #8b3fd6); background-size: 200% 200%; animation: h-pan 18s ease-in-out infinite alternate;
-  box-shadow: 0 18px 40px -18px rgba(52, 87, 230, .55);
+  background: linear-gradient(100deg, rgba(5, 8, 22, .95) 0%, rgba(8, 14, 40, .85) 45%, rgba(14, 26, 80, .3) 100%),
+    url(/landing/auth-login.webp) right center / cover;
+  box-shadow: 0 20px 44px -22px rgba(10, 20, 70, .6);
 }
-.acc-hero::after { content: ''; position: absolute; width: 300px; height: 300px; right: -60px; top: -150px; border-radius: 50%; background: #ff9ecf; filter: blur(50px); opacity: .45; animation: h-float 14s ease-in-out infinite; }
+.acc-hero::after { display: none; }
 .acc-avatar {
   position: relative; z-index: 1; width: 88px; height: 88px; border-radius: 28px; display: grid; place-items: center; flex-shrink: 0;
   font-size: 32px; font-weight: 750; letter-spacing: -.02em; background: rgba(255, 255, 255, .18); border: 2px solid rgba(255, 255, 255, .4);

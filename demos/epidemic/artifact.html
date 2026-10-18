@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Эпидемия: агентная модель SIR</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101318; }
+  canvas.scene { position: fixed; top: 0; left: 0; display: block; }
+  #bg { z-index: 0; }
+</style>
+</head>
+<body>
+<canvas id="bg" class="scene"></canvas>
+
+<script>
+(function () {
+  'use strict';
+
+  var cv = document.getElementById('bg');
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0;
+  var field = { x: 0, y: 0, s: 0 };      // квадрат поля в пикселях
+  var stack = { x: 0, y: 0, w: 0, h: 0 }; // накопительный график S/I/R/V
+
+  function layout() {
+    var left = W > 1100 ? 392 : W > 900 ? 300 : 12;
+    var right = W > 900 ? W - 296 : W - 12;
+    var aw = Math.max(200, right - left);
+    var stackH = Math.max(90, Math.min(150, H * 0.18));
+    var s = Math.max(150, Math.min(aw - 10, H - stackH - 84));
+    field = { x: left + (aw - s) / 2, y: 22, s: s };
+    stack = { x: field.x, y: field.y + s + 30, w: s, h: stackH };
+  }
+  function resize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+    draw();
+  }
+
+  // ---------- Модель ----------
+  // Поле L×L условных метров, N человек. Состояния: 0 — S, 1 — I, 2 — R, 3 — V.
+  var L = 100, N = 500, I0 = 5;
+  var AREA = L * L;
+  var SPEED = 15;          // м/день у тех, кто перемещается
+  var DT = 0.05;           // шаг модели, дней
+  var DAYS_PER_SEC = 2.5;   // дней модели в секунду при скорости 1×
+
+  var pInf = 0.4;          // вероятность заразиться за день непрерывного контакта
+  var radius = 2;          // радиус контакта, м
+  var mobility = 0.9;      // доля людей, которые продолжают перемещаться
+  var Dur = 10;            // средняя длительность болезни, дней
+  var vacc = 0;            // доля привитых
+
+  var people = [];
+  var day = 0;
+  var links = [];          // свежие передачи инфекции для подсветки
+  var peakI = 0, peakDay = 0;
+  var recentR = [];        // число заражённых каждым из недавно выздоровевших
+
+  function lambda() { return -Math.log(1 - Math.min(0.999, pInf)); }
+  /** β = λ·πr²·n — среднее число заражений, которое один больной вызывает за день. */
+  function beta() { return lambda() * Math.PI * radius * radius * N / AREA; }
+  function R0() { return beta() * Dur; }
+
+  function counts() {
+    var c = [0, 0, 0, 0];
+    for (var i = 0; i < people.length; i++) c[people[i].st]++;
+    return c;
+  }
+
+  function seedPeople() {
+    people = [];
+    for (var i = 0; i < N; i++) {
+      var a = Math.random() * Math.PI * 2;
+      people.push({ x: Math.random() * L, y: Math.random() * L, vx: Math.cos(a), vy: Math.sin(a),
+        u: Math.random(), st: 0, caused: 0, tInf: 0 });
+    }
+    for (i = 0; i < I0; i++) { people[i].st = 1; }
+    applyVaccination();
+  }
+
+  /** Прививаем (или «отменяем» прививку) случайных восприимчивых до нужной доли. */
+  function applyVaccination() {
+    var c = counts(), target = Math.round(vacc * N), i, idx;
+    var order = people.map(function (_, k) { return k; }).sort(function (a, b) { return people[a].u - people[b].u; });
+    if (c[3] < target) {
+      for (i = 0; i < order.length && c[3] < target; i++) {
+        idx = order[i];
+        if (people[idx].st === 0) { people[idx].st = 3; c[3]++; }
+      }
+    } else if (c[3] > target) {
+      for (i = order.length - 1; i >= 0 && c[3] > target; i--) {
+        idx = order[i];
+        if (people[idx].st === 3) { people[idx].st = 0; c[3]--; }
+      }
+    }
+  }
+
+  // Пространственная сетка для поиска соседей
+  var CELL = 4, GN = Math.ceil(L / CELL);
+  var grid = [];
+  function rebuildGrid() {
+    grid = new Array(GN * GN);
+    for (var g = 0; g < grid.length; g++) grid[g] = [];
+    for (var i = 0; i < people.length; i++) {
+      var p = people[i];
+      var gx = Math.min(GN - 1, Math.floor(p.x / CELL)), gy = Math.min(GN - 1, Math.floor(p.y / CELL));
+      grid[gy * GN + gx].push(i);
+    }
+  }
+
+  function step() {
+    var i, p;
+    // 1) движение: отражение от стенок и лёгкое случайное блуждание направления
+    for (i = 0; i < people.length; i++) {
+      p = people[i];
+      if (p.u >= mobility) continue;
+      var turn = (Math.random() - 0.5) * 0.6;
+      var c = Math.cos(turn), s = Math.sin(turn);
+      var vx = p.vx * c - p.vy * s, vy = p.vx * s + p.vy * c;
+      p.vx = vx; p.vy = vy;
+      p.x += p.vx * SPEED * DT; p.y += p.vy * SPEED * DT;
+      if (p.x < 0) { p.x = -p.x; p.vx = Math.abs(p.vx); }
+      if (p.x > L) { p.x = 2 * L - p.x; p.vx = -Math.abs(p.vx); }
+      if (p.y < 0) { p.y = -p.y; p.vy = Math.abs(p.vy); }
+      if (p.y > L) { p.y = 2 * L - p.y; p.vy = -Math.abs(p.vy); }
+    }
+    // 2) заражение: каждый контакт S–I в радиусе r за шаг даёт шанс 1 − e^(−λ·dt)
+    rebuildGrid();
+    var pStep = 1 - Math.exp(-lambda() * DT), r2 = radius * radius;
+    var reach = Math.ceil(radius / CELL);
+    var newly = [];
+    for (i = 0; i < people.length; i++) {
+      p = people[i];
+      if (p.st !== 1) continue;
+      var gx = Math.floor(p.x / CELL), gy = Math.floor(p.y / CELL);
+      for (var oy = -reach; oy <= reach; oy++) for (var ox = -reach; ox <= reach; ox++) {
+        var cx = gx + ox, cy = gy + oy;
+        if (cx < 0 || cy < 0 || cx >= GN || cy >= GN) continue;
+        var cell = grid[cy * GN + cx];
+        for (var k = 0; k < cell.length; k++) {
+          var q = people[cell[k]];
+          if (q.st !== 0) continue;
+          var dx = q.x - p.x, dy = q.y - p.y;
+          if (dx * dx + dy * dy <= r2 && Math.random() < pStep) newly.push([i, cell[k]]);
+        }
+      }
+    }
+    // 3) выздоровление: экспоненциальное время болезни со средним D
+    var pRec = 1 - Math.exp(-DT / Dur);
+    for (i = 0; i < people.length; i++) {
+      p = people[i];
+      if (p.st === 1 && Math.random() < pRec) {
+        p.st = 2;
+        recentR.push(p.caused);
+        if (recentR.length > 40) recentR.shift();
+      }
+    }
+    for (i = 0; i < newly.length; i++) {
+      var tgt = people[newly[i][1]];
+      if (tgt.st !== 0) continue;
+      tgt.st = 1; tgt.tInf = day; tgt.caused = 0;
+      people[newly[i][0]].caused++;
+      links.push({ a: newly[i][0], b: newly[i][1], t: day });
+    }
+    day += DT;
+    links = links.filter(function (l) { return day - l.t < 0.8; });
+    stepOde(DT);
+    var cnt = counts();
+    if (cnt[1] > peakI) { peakI = cnt[1]; peakDay = day; }
+  }
+
+  // ---------- ОДУ SIR с тем же β (среднее поле) ----------
+  // dS/dt = −βSI/N, dI/dt = βSI/N − I/D, dR/dt = I/D; привитые выбывают из S.
+  var ode = [0, 0, 0];
+  function seedOde() {
+    var c = counts();
+    ode = [c[0], c[1], c[2]];
+  }
+  function deriv(y) {
+    var b = beta(), inf = b * y[0] * y[1] / N, rec = y[1] / Dur;
+    return [-inf, inf - rec, rec];
+  }
+  function stepOde(dt) {
+    var y = ode, k1 = deriv(y);
+    var k2 = deriv(y.map(function (v, i) { return v + k1[i] * dt / 2; }));
+    var k3 = deriv(y.map(function (v, i) { return v + k2[i] * dt / 2; }));
+    var k4 = deriv(y.map(function (v, i) { return v + k3[i] * dt; }));
+    ode = y.map(function (v, i) { return Math.max(0, v + dt / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])); });
+  }
+
+  // ---------- История для накопительного графика ----------
+  var hist = [];
+  var lastHist = -1;
+  function record() {
+    var c = counts();
+    hist.push({ t: day, c: c });
+    if (hist.length > 1200) hist.shift();
+    lineChart.push(day, [100 * c[1] / N, 100 * ode[1] / N]);
+  }
+
+  // ---------- Отрисовка ----------
+  var COL = ['#4f8ff7', '#ff5a5a', '#8b95a3', '#3ecf8e'];
+
+  function draw() {
+    if (!W) return;
+    ctx.fillStyle = '#101318';
+    ctx.fillRect(0, 0, W, H);
+    var k = field.s / L;
+    ctx.fillStyle = '#151a22';
+    ctx.fillRect(field.x, field.y, field.s, field.s);
+    ctx.strokeStyle = '#2a3341'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(field.x, field.y, field.s, field.s);
+    ctx.fillStyle = '#8b95a3'; ctx.font = '12px system-ui, sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('День ' + day.toFixed(1) + ' · поле ' + L + '×' + L + ' м, ' + N + ' человек', field.x, field.y - 5);
+
+    var i, p;
+    // зона заражения вокруг больных
+    ctx.fillStyle = 'rgba(255,90,90,0.10)';
+    for (i = 0; i < people.length; i++) {
+      p = people[i];
+      if (p.st !== 1) continue;
+      ctx.beginPath();
+      ctx.arc(field.x + p.x * k, field.y + p.y * k, Math.max(2, radius * k), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // свежие передачи инфекции
+    ctx.lineWidth = 1.4;
+    for (i = 0; i < links.length; i++) {
+      var a = people[links[i].a], b = people[links[i].b], al = 1 - (day - links[i].t) / 0.8;
+      ctx.strokeStyle = 'rgba(255,140,120,' + (0.9 * al) + ')';
+      ctx.beginPath();
+      ctx.moveTo(field.x + a.x * k, field.y + a.y * k);
+      ctx.lineTo(field.x + b.x * k, field.y + b.y * k);
+      ctx.stroke();
+    }
+    var rr = Math.max(2.2, field.s / 190);
+    for (var st = 0; st < 4; st++) {
+      ctx.fillStyle = COL[st];
+      ctx.beginPath();
+      for (i = 0; i < people.length; i++) {
+        p = people[i];
+        if (p.st !== st) continue;
+        var px = field.x + p.x * k, py = field.y + p.y * k;
+        ctx.moveTo(px + rr, py);
+        ctx.arc(px, py, rr, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    }
+    // неподвижные (соблюдают дистанцию) — тёмная точка в центре
+    ctx.fillStyle = 'rgba(16,19,24,0.75)';
+    ctx.beginPath();
+    for (i = 0; i < people.length; i++) {
+      p = people[i];
+      if (p.u < mobility) continue;
+      ctx.moveTo(field.x + p.x * k + rr * 0.4, field.y + p.y * k);
+      ctx.arc(field.x + p.x * k, field.y + p.y * k, rr * 0.4, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    drawStack();
+  }
+
+  function drawStack() {
+    var s = stack;
+    ctx.fillStyle = '#151a22';
+    ctx.fillRect(s.x, s.y, s.w, s.h);
+    var tMax = Math.max(60, day);
+    var order = [1, 2, 3, 0]; // снизу вверх: I, R, V, S
+    if (hist.length > 1) {
+      var base = new Float32Array(hist.length);
+      for (var oi = 0; oi < order.length; oi++) {
+        var st = order[oi];
+        ctx.fillStyle = COL[st];
+        ctx.globalAlpha = st === 0 ? 0.55 : 0.85;
+        ctx.beginPath();
+        var j, x, y;
+        for (j = 0; j < hist.length; j++) {
+          x = s.x + s.w * hist[j].t / tMax;
+          y = s.y + s.h * (1 - (base[j] + hist[j].c[st]) / N);
+          if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        for (j = hist.length - 1; j >= 0; j--) {
+          x = s.x + s.w * hist[j].t / tMax;
+          ctx.lineTo(x, s.y + s.h * (1 - base[j] / N));
+        }
+        ctx.closePath();
+        ctx.fill();
+        for (j = 0; j < hist.length; j++) base[j] += hist[j].c[st];
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.strokeStyle = '#2a3341'; ctx.lineWidth = 1;
+    ctx.strokeRect(s.x, s.y, s.w, s.h);
+    // порог коллективного иммунитета: доля невосприимчивых 1 − 1/R₀
+    var hit = 1 - 1 / R0();
+    if (hit > 0) {
+      var hy = s.y + s.h * hit;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = 'rgba(232,236,241,0.6)';
+      ctx.beginPath(); ctx.moveTo(s.x, hy); ctx.lineTo(s.x + s.w, hy); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.fillStyle = '#8b95a3'; ctx.font = '11px system-ui, sans-serif';
+    ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
+    ctx.fillText('Доли S/I/R/V по дням · пунктир — порог коллективного иммунитета', s.x, s.y - 3);
+    ctx.textBaseline = 'top';
+    ctx.fillText('0', s.x, s.y + s.h + 2);
+    ctx.textAlign = 'right';
+    ctx.fillText(tMax.toFixed(0) + ' дн.', s.x + s.w, s.y + s.h + 2);
+  }
+
+  // ---------- Показания ----------
+  function measuredR() {
+    if (recentR.length < 5) return '—';
+    var s = 0;
+    for (var i = 0; i < recentR.length; i++) s += recentR[i];
+    return s / recentR.length;
+  }
+  function updateReadouts() {
+    var c = counts();
+    rDay.set(day);
+    rS.set(c[0]); rI.set(c[1]); rR.set(c[2]); rV.set(c[3]);
+    rR0.set(R0());
+    rReff.set(R0() * c[0] / N);
+    rRm.set(measuredR());
+    var hit = 1 - 1 / R0();
+    rHit.set(hit > 0 ? hit * 100 : 0);
+    rPeak.set(peakI + ' (день ' + peakDay.toFixed(0) + ')');
+    formulaR.set({ lam: lambda(), r: radius, n: N / AREA, D: Dur, R0: R0() });
+  }
+
+  /** Параметры изменились: ОДУ перезапускается от текущего состояния агентов. */
+  function paramsChanged() {
+    seedOde();
+    updateReadouts();
+    draw();
+  }
+
+  // ---------- Главный цикл ----------
+  var running = true, lastFrame = null, acc = 0;
+  function loop(now) {
+    if (lastFrame == null) lastFrame = now;
+    var dt = Math.min(0.05, (now - lastFrame) / 1000) * speedCtl.get();
+    lastFrame = now;
+    if (running) {
+      acc += dt * DAYS_PER_SEC;
+      var n = 0;
+      while (acc >= DT && n < 40) { step(); acc -= DT; n++; }
+      if (acc > DT) acc = 0;
+      if (day - lastHist >= 0.25) { lastHist = day; record(); }
+      updateReadouts();
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  function resetSim() {
+    day = 0; acc = 0; lastFrame = null; links = []; hist = []; lastHist = -1;
+    peakI = 0; peakDay = 0; recentR = [];
+    seedPeople();
+    seedOde();
+    lineChart.clear();
+    record(); lastHist = 0;
+    updateReadouts();
+    draw();
+  }
+
+  // ---------- SimUI ----------
+  SimUI.title('Эпидемия SIR');
+  SimUI.goals([
+    'Как R₀ складывается из заразности, плотности контактов и длительности болезни',
+    'Почему дистанцирование сглаживает пик, а не только уменьшает число больных',
+    'Что такое порог коллективного иммунитета 1 − 1/R₀',
+    'Чем агентная модель отличается от уравнений среднего поля',
+  ]);
+  SimUI.slider({
+    name: 'p', label: 'Вероятность заражения за день контакта', min: 0.05, max: 0.95, step: 0.01, value: pInf, unit: '',
+    onChange: function (v) { pInf = v; paramsChanged(); },
+  });
+  SimUI.slider({
+    name: 'radius', label: 'Радиус контакта', min: 0.5, max: 4, step: 0.1, value: radius, unit: 'м',
+    onChange: function (v) { radius = v; paramsChanged(); },
+  });
+  SimUI.slider({
+    name: 'mobility', label: 'Подвижность (доля перемещающихся)', min: 0, max: 1, step: 0.05, value: mobility, unit: '',
+    onChange: function (v) { mobility = v; paramsChanged(); },
+  });
+  SimUI.slider({
+    name: 'duration', label: 'Длительность болезни D', min: 3, max: 20, step: 1, value: Dur, unit: 'дн.',
+    onChange: function (v) { Dur = v; paramsChanged(); },
+  });
+  SimUI.slider({
+    name: 'vaccine', label: 'Доля привитых', min: 0, max: 0.9, step: 0.05, value: vacc, unit: '',
+    onChange: function (v) { vacc = v; applyVaccination(); paramsChanged(); },
+  });
+  SimUI.presets({ items: [
+    { label: 'Без мер', values: { mobility: 0.9, vaccine: 0, p: 0.4 } },
+    { label: 'Дистанцирование', values: { mobility: 0.2, vaccine: 0 } },
+    { label: 'Вакцинация 70%', values: { mobility: 0.9, vaccine: 0.7 } },
+  ] });
+  var speedCtl = SimUI.speed({ values: [0.25, 0.5, 1, 2, 4], value: 1 });
+  SimUI.playPause({
+    onPlay: function () { running = true; lastFrame = null; },
+    onPause: function () { running = false; },
+    onReset: resetSim,
+  });
+
+  var formulaR = SimUI.formula({
+    title: 'Базовое репродуктивное число',
+    tex: 'R_0 = \\beta D = \\lambda\\,\\pi r^2 n\\, D,\\qquad \\lambda = -\\ln(1-p)',
+    vars: { lam: { label: 'λ', unit: '1/день' }, r: { label: 'r', unit: 'м' },
+      n: { label: 'n', unit: 'чел/м²' }, D: { label: 'D', unit: 'дн.' }, R0: { label: 'R₀' } },
+    note: 'Среднее поле: каждый больной за день встречает πr²n человек. Если R₀·S/N < 1, эпидемия затухает.',
+    corner: 'tl',
+  });
+  SimUI.legend({ items: [
+    { label: 'S — восприимчивые', color: COL[0] }, { label: 'I — больные', color: COL[1] },
+    { label: 'R — переболевшие', color: COL[2] }, { label: 'V — привитые', color: COL[3] },
+  ], corner: 'tl' });
+  var rDay = SimUI.readout({ label: 'День', digits: 1, corner: 'bl' });
+  var rS = SimUI.readout({ label: 'S восприимчивые', digits: 0, corner: 'bl' });
+  var rI = SimUI.readout({ label: 'I больные', digits: 0, corner: 'bl' });
+  var rR = SimUI.readout({ label: 'R переболевшие', digits: 0, corner: 'bl' });
+  var rV = SimUI.readout({ label: 'V привитые', digits: 0, corner: 'bl' });
+  var rR0 = SimUI.readout({ label: 'R₀ (расчёт)', digits: 2, corner: 'bl' });
+  var rReff = SimUI.readout({ label: 'R эффективное = R₀·S/N', digits: 2, corner: 'bl' });
+  var rRm = SimUI.readout({ label: 'R измеренное (последние 40)', digits: 2, corner: 'bl' });
+  var rHit = SimUI.readout({ label: 'Порог иммунитета', unit: '%', digits: 0, corner: 'bl' });
+  var rPeak = SimUI.readout({ label: 'Пик больных', digits: 0, corner: 'bl' });
+  var lineChart = SimUI.chart({
+    title: 'Больные: агенты и ОДУ SIR', xLabel: 'день', yLabel: 'I, %',
+    series: [{ name: 'агентная модель', color: '#ff5a5a' }, { name: 'ОДУ SIR', color: '#e8ecf1' }],
+    corner: 'br', maxPoints: 600,
+  });
+
+  SimUI.expose({
+    getState: function () {
+      var c = counts();
+      return { day: day, S: c[0], I: c[1], R: c[2], V: c[3], R0: R0(), Reff: R0() * c[0] / N,
+        odeI: ode[1], odeS: ode[0], peak: peakI };
+    },
+    reset: resetSim,
+  });
+
+  window.addEventListener('resize', resize);
+  seedPeople();
+  seedOde();
+  record(); lastHist = 0;
+  updateReadouts();
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

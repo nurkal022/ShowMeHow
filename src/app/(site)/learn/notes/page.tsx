@@ -13,7 +13,7 @@ export default async function NotesPage() {
   const t = await getT(learnMe);
 
   return (
-    <div className="learn-page">
+    <div className="learn-page notes-page">
       <header className="learn-head">
         <div>
           <h1>{t('notesTitle')}</h1>

@@ -44,7 +44,7 @@ export default function AuthForm({ mode, registrationOpen = true }: { mode: 'log
         // ответы, полученные ДО появления куки сессии, и увёл бы обратно на вход.
         const body = await res.json().catch(() => ({}));
         const own = search.get('next');
-        window.location.assign(!own && typeof body.next === 'string' ? safeNextPath(body.next) : safeNextPath(own));
+        window.location.assign(own ? safeNextPath(own) : typeof body.next === 'string' ? safeNextPath(body.next) : '/create');
         return;
       } else {
         const body = await res.json().catch(() => ({}));

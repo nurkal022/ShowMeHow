@@ -6,7 +6,12 @@
 export const KIT_EXPOSE_JS = `
 (function () {
   var api = {};
-  window.SimUI.expose = function (o) { api = o || {}; };
+  window.SimUI.expose = function (o) {
+    // expose(getState) — частая форма у моделей: функция вместо объекта.
+    if (typeof o === 'function') o = { getState: o };
+    api = o || {};
+    if (typeof api.getState !== 'function' && typeof api.state === 'function') api.getState = api.state;
+  };
 
   function scanBad(v, path, out, depth) {
     if (depth > 4 || v == null) return;
@@ -31,7 +36,10 @@ export const KIT_EXPOSE_JS = `
       if (typeof api.getState === 'function') {
         try { scanBad(api.getState(), '', out, 0); } catch (e) { out.push('getState() бросил: ' + e); }
       }
-      var els = document.querySelectorAll('.sim-value, .sim-readout-value, .sim-formula-nums');
+      // Сторож SimUI.run перезапускает разошедшийся расчёт — для проверки это всё равно NaN.
+      var run = window.__smhRun;
+      if (run && run.diverged) out.push('расчёт разошёлся ' + run.diverged + ' раз(а), сторож перезапускал симуляцию: ' + (run.lastBad || ''));
+      var els = document.querySelectorAll('.sim-value, .sim-readout-value, .sim-formula-nums, .sim-meter b');
       for (var i = 0; i < els.length; i++) {
         var t = els[i].textContent || '';
         if (/NaN|Infinity|undefined/.test(t)) out.push('подпись: ' + t.slice(0, 60));
@@ -45,7 +53,7 @@ export const KIT_EXPOSE_JS = `
         var v = null;
         try { v = cs[i].get ? cs[i].get() : null; } catch (e) { v = null; }
         out.push({ kind: cs[i].kind, name: cs[i].name, label: cs[i].label,
-          min: cs[i].min, max: cs[i].max, value: v });
+          min: cs[i].min, max: cs[i].max, step: cs[i].step, options: cs[i].options, value: v });
       }
       return out;
     },

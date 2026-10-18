@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import type { SimulationMeta } from '@/lib/types';
-import { IconDownload, IconEdit, IconLibrary, IconPlay, IconSearch, IconTrash } from '@/components/icons';
+import { IconDownload, IconEdit, IconLibrary, IconPlay, IconPlus, IconSearch, IconTrash } from '@/components/icons';
 import { isUnauthorized, loginWithReturnTo } from '@/lib/auth/client-session';
 import { useFormat, useLocale, useT } from '@/i18n/client';
 import { app } from '@/i18n/messages/app';
@@ -16,6 +16,10 @@ export default function LibraryView() {
   const [q, setQ] = useState('');
   const [subject, setSubject] = useState('all');
   const [sort, setSort] = useState<Sort>('recent');
+  // Вид запоминается: кому нужен список, тот не листает плитку при каждом заходе.
+  const [view, setView] = useState<'grid' | 'list'>('grid');
+  useEffect(() => { try { const v = localStorage.getItem('lib-view'); if (v === 'list' || v === 'grid') setView(v); } catch { /* приватный режим */ } }, []);
+  function pickView(v: 'grid' | 'list') { setView(v); try { localStorage.setItem('lib-view', v); } catch { /* приватный режим */ } }
   const [error, setError] = useState('');
   const [installing, setInstalling] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -99,31 +103,31 @@ export default function LibraryView() {
   }, [sims]);
 
   return (
-    <div className="library">
-      <div className="library-head">
+    <div className="space lib2">
+      <header className="lib2-head">
         <div>
           <h1>{t('libTitle')}</h1>
-          <p className="muted">{t('libLead')}</p>
+          <p>{t('libLead')}</p>
         </div>
-        <label className="search">
-          <IconSearch size={18} />
-          <input placeholder={t('libSearchPh')} value={q}
-            aria-label={t('searchAria')} onChange={(e) => setQ(e.target.value)} />
-        </label>
-      </div>
+        <div className="lib2-head-actions">
+          <label className="sp-search">
+            <IconSearch size={17} />
+            <input placeholder={t('libSearchPh')} value={q} aria-label={t('searchAria')} onChange={(e) => setQ(e.target.value)} />
+          </label>
+          {canCreate && <a className="sp-btn sp-btn-primary" href="/create"><IconPlus size={17} />{t('libCreate')}</a>}
+        </div>
+      </header>
 
       {error && <p className="error-box" style={{ marginTop: 16 }}>{error}</p>}
 
       {!loading && sims.length === 0 && !error && (
-        <div className="empty-library">
-          <IconLibrary size={34} />
-          <div>
-            <h2>{t('libEmpty')}</h2>
-            <p className="muted">{t('libEmptyText')}</p>
-          </div>
-          <div className="row">
-            {canCreate && <a className="btn btn-primary" href="/">{t('libCreate')}</a>}
-            <button className="btn" onClick={installDemos} disabled={installing}>
+        <div className="lib2-empty sp-glass">
+          <IconLibrary size={40} />
+          <h2>{t('libEmpty')}</h2>
+          <p>{t('libEmptyText')}</p>
+          <div className="lib2-empty-actions">
+            {canCreate && <a className="sp-btn sp-btn-primary" href="/create">{t('libCreate')}</a>}
+            <button className="sp-btn" onClick={installDemos} disabled={installing}>
               {installing ? t('libRestoring') : t('libRestoreDemos')}
             </button>
           </div>
@@ -131,85 +135,72 @@ export default function LibraryView() {
       )}
 
       {(loading || sims.length > 0) && (
-        <div className="lib-layout">
-          <aside className="lib-side" aria-label={t('libSections')}>
-            <button className={subject === 'all' ? 'lib-sub active' : 'lib-sub'} onClick={() => setSubject('all')}>
-              {t('libAll')}<b>{sims.length}</b>
-            </button>
-            {subjects.map((s) => (
-              <button key={s} className={subject === s ? 'lib-sub active' : 'lib-sub'}
-                onClick={() => setSubject(s)}>{s}<b>{counts.get(s)}</b></button>
-            ))}
-          </aside>
-
-          <div className="lib-main">
-            <div className="lib-bar">
-              <span className="count">
-                {subject === 'all' ? t('libAll') : subject} · {shown.length}
-              </span>
-              <div className="segmented">
-                <button className={sort === 'recent' ? 'segmented-item active' : 'segmented-item'}
-                  onClick={() => setSort('recent')}>{t('libNewest')}</button>
-                <button className={sort === 'title' ? 'segmented-item active' : 'segmented-item'}
-                  onClick={() => setSort('title')}>{t('libAbc')}</button>
+        <>
+          <div className="lib2-bar">
+            <div className="sp-chips" role="tablist" aria-label={t('libSections')}>
+              <button className={subject === 'all' ? 'sp-chip on' : 'sp-chip'} onClick={() => setSubject('all')}>
+                {t('libAll')} <b>{sims.length}</b>
+              </button>
+              {subjects.map((s) => (
+                <button key={s} className={subject === s ? 'sp-chip on' : 'sp-chip'} onClick={() => setSubject(s)}>
+                  {s} <b>{counts.get(s)}</b>
+                </button>
+              ))}
+            </div>
+            <div className="lib2-tools">
+              <div className="lib2-seg">
+                <button className={sort === 'recent' ? 'on' : ''} onClick={() => setSort('recent')}>{t('libNewest')}</button>
+                <button className={sort === 'title' ? 'on' : ''} onClick={() => setSort('title')}>{t('libAbc')}</button>
+              </div>
+              <div className="lib2-seg" aria-label={t('libViewGrid')}>
+                <button className={view === 'grid' ? 'on' : ''} onClick={() => pickView('grid')} title={t('libViewGrid')} aria-label={t('libViewGrid')}>▦</button>
+                <button className={view === 'list' ? 'on' : ''} onClick={() => pickView('list')} title={t('libViewList')} aria-label={t('libViewList')}>☰</button>
               </div>
             </div>
-
-            {loading && sims.length === 0
-              ? (
-                <div className="cards">
-                  {Array.from({ length: 8 }, (_, i) => <div key={i} className="sim-card skeleton" />)}
-                </div>
-              )
-              : shown.length === 0
-                ? <p className="muted" style={{ marginTop: 24 }}>{t('libNothing')}</p>
-                : (
-                  <div className="cards">
-                    {shown.map((s) => <SimCard key={s.id} sim={s} onRemove={() => remove(s.id)} />)}
-                  </div>
-                )}
           </div>
-        </div>
+
+          {loading && sims.length === 0
+            ? <div className="lib2-grid">{Array.from({ length: 8 }, (_, i) => <div key={i} className="lib2-card lib2-skel" />)}</div>
+            : shown.length === 0
+              ? <p className="sp-empty">{t('libNothing')}</p>
+              : (
+                <div className={view === 'grid' ? 'lib2-grid' : 'lib2-list'}>
+                  {shown.map((s, i) => <SimCard key={s.id} sim={s} index={i} onRemove={() => remove(s.id)} />)}
+                </div>
+              )}
+        </>
       )}
     </div>
   );
 }
 
 /**
- * Карточка — только картинка: живой предпросмотр при наведении держал в сетке
- * десяток iframe'ов и грузил страницу. Клик открывает сам тренажёр.
+ * Карточка — только снимок: тренажёр запускается целиком лишь на своей странице
+ * (/present), в сетке не крутится ни одной симуляции. Главное действие — «Открыть»,
+ * остальное — рядом, удаление краснеет только при наведении.
  */
-function SimCard({ sim, onRemove }: { sim: SimulationMeta; onRemove: () => void }) {
+function SimCard({ sim, index, onRemove }: { sim: SimulationMeta; index: number; onRemove: () => void }) {
   const t = useT(app);
   const f = useFormat();
   return (
-    <article className="sim-card">
-      <a href={`/present/${sim.id}`} className="card-thumb" aria-label={t('libOpenSim', { title: sim.title })}>
+    <article className="lib2-card" style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}>
+      <a href={`/present/${sim.id}`} className="lib2-thumb" aria-label={t('libOpenSim', { title: sim.title })}>
         <img src={`/api/simulations/${sim.id}/thumbnail`} alt="" loading="lazy" decoding="async"
           onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
-        <span className="card-thumb-hint"><IconPlay size={26} />{t('open')}</span>
+        <span className="lib2-play"><IconPlay size={22} /></span>
       </a>
-      <div className="card-body">
-        <h3><a href={`/present/${sim.id}`}>{sim.title}</a></h3>
-        <div className="card-sub">
-          <span>{sim.subject}</span>
-          <span>·</span>
-          <span>{f.date(sim.updatedAt, { day: 'numeric', month: 'numeric', year: 'numeric' })}</span>
+      <div className="lib2-body">
+        <div className="lib2-meta">
+          {sim.subject && <span className="lib2-subject">{sim.subject}</span>}
+          <span>{f.date(sim.updatedAt, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
         </div>
-        {sim.warning && <p className="warn">{f.message(sim.warning)}</p>}
-        <div className="card-actions">
-          <a className="btn btn-sm btn-ghost" href={`/?id=${sim.id}`}>
-            <IconEdit size={15} />{t('libInWorkbench')}
-          </a>
-          <a className="btn btn-sm btn-ghost" href={`/api/simulations/${sim.id}/export`}
-            title={t('libDownload')} aria-label={t('libDownload')}>
-            <IconDownload size={15} />
-          </a>
-          <span className="spacer" />
-          <button className="btn btn-sm btn-danger" onClick={onRemove}
-            title={t('delete')} aria-label={t('delete')}>
-            <IconTrash size={15} />
-          </button>
+        <h3><a href={`/present/${sim.id}`}>{sim.title}</a></h3>
+        {sim.warning && <p className="lib2-warn">{f.message(sim.warning)}</p>}
+        <div className="lib2-actions">
+          <a className="sp-btn sp-btn-primary lib2-open" href={`/present/${sim.id}`}><IconPlay size={15} />{t('open')}</a>
+          <a className="lib2-icon" href={`/create?id=${sim.id}`} title={t('libInWorkbench')} aria-label={t('libInWorkbench')}><IconEdit size={16} /></a>
+          <a className="lib2-icon" href={`/api/simulations/${sim.id}/export`} title={t('libDownload')} aria-label={t('libDownload')}><IconDownload size={16} /></a>
+          <button className="lib2-icon lib2-danger" onClick={onRemove} title={t('delete')} aria-label={t('delete')}><IconTrash size={16} /></button>
         </div>
       </div>
     </article>

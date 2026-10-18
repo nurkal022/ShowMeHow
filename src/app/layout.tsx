@@ -1,6 +1,9 @@
 import './globals.css';
 import './motion.css';
 import './landing.css';
+import './space.css';
+import './header.css';
+import './system.css';
 import './trainer.css';
 import RevealOnScroll from '@/components/motion/RevealOnScroll';
 import CommandPalette from '@/components/CommandPalette';
@@ -14,13 +17,22 @@ import { sandboxOf } from '@/lib/demo/access';
 import { currentUserAllowingPasswordChangeFromCookies, impersonatorFromCookies } from '@/lib/auth/session';
 import { userLabel } from '@/lib/auth/identifier';
 import { THEME_BOOT_SCRIPT } from '@/lib/theme';
+import { headers } from 'next/headers';
 import { getLocale } from '@/i18n/server';
 import { LocaleProvider } from '@/i18n/client';
 
 export async function generateMetadata() {
   const locale = await getLocale();
   const description = { ru: 'Интерактивные симуляции по описанию', kk: 'Сипаттама бойынша интерактивті симуляциялар', en: 'Interactive simulations from a description' }[locale];
-  return { title: 'Tesseract', description };
+  // Превью ссылок (Telegram, WhatsApp) требует абсолютный адрес обложки — берём его из запроса, за прокси — из x-forwarded-*.
+  const h = await headers();
+  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
+  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+  return {
+    title: 'Tesseract', description, metadataBase: new URL(`${proto}://${host}`),
+    openGraph: { title: 'Tesseract', description, siteName: 'Tesseract', type: 'website' as const },
+    twitter: { card: 'summary_large_image' as const, title: 'Tesseract', description },
+  };
 }
 
 /**

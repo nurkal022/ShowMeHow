@@ -15,7 +15,11 @@ window.__simT = (function () {
       back: '← Назад', next: 'Далее →', stepOf: 'Шаг {i} из {n}: ', task: 'Задание',
       correct: 'Верно ✓', notYet: 'Пока нет.', hint: ' Подсказка: ', answer: 'ответ', check: 'Проверить',
       measurements: 'Измерения', record: '● Записать', clear: 'Очистить',
-      locked: 'Преподаватель зафиксировал этот параметр'
+      locked: 'Преподаватель зафиксировал этот параметр', panel: 'Панель', note: 'Пояснение', meters: 'Приборы',
+      diverged: 'Расчёт разошёлся — симуляция остановлена. Измените параметры и нажмите «Сброс».',
+      phases: 'Фазы', phaseNext: 'Далее ▶', phasePrev: 'Предыдущая фаза', phaseAgain: 'Повторить фазу',
+      phaseModeStep: 'Пошагово', phaseModeAuto: 'Авто', phaseHintHold: 'Нажмите «Далее» или → — фаза покажется целиком и остановится на следующей',
+      phaseHintPlay: 'Идёт фаза… ← вернуться, ⟲ повторить'
     },
     kk: {
       params: '⚙ Параметрлер', closeParams: 'Параметрлерді жабу', pause: '⏸ Кідірту', play: '▶ Жүргізу',
@@ -25,7 +29,11 @@ window.__simT = (function () {
       back: '← Артқа', next: 'Келесі →', stepOf: '{i}/{n}-қадам: ', task: 'Тапсырма',
       correct: 'Дұрыс ✓', notYet: 'Әзірге дұрыс емес.', hint: ' Кеңес: ', answer: 'жауап', check: 'Тексеру',
       measurements: 'Өлшеулер', record: '● Жазу', clear: 'Тазалау',
-      locked: 'Оқытушы бұл параметрді бекітті'
+      locked: 'Оқытушы бұл параметрді бекітті', panel: 'Панель', note: 'Түсіндірме', meters: 'Аспаптар',
+      diverged: 'Есептеу тұрақсызданды — симуляция тоқтатылды. Параметрлерді өзгертіп, «Басынан» басыңыз.',
+      phases: 'Кезеңдер', phaseNext: 'Келесі ▶', phasePrev: 'Алдыңғы кезең', phaseAgain: 'Кезеңді қайталау',
+      phaseModeStep: 'Қадаммен', phaseModeAuto: 'Авто', phaseHintHold: '«Келесі» немесе → басыңыз — кезең толық көрсетіліп, келесісінде тоқтайды',
+      phaseHintPlay: 'Кезең жүріп жатыр… ← қайту, ⟲ қайталау'
     },
     en: {
       params: '⚙ Parameters', closeParams: 'Close parameters', pause: '⏸ Pause', play: '▶ Play',
@@ -35,7 +43,11 @@ window.__simT = (function () {
       back: '← Back', next: 'Next →', stepOf: 'Step {i} of {n}: ', task: 'Task',
       correct: 'Correct ✓', notYet: 'Not yet.', hint: ' Hint: ', answer: 'answer', check: 'Check',
       measurements: 'Measurements', record: '● Record', clear: 'Clear',
-      locked: 'The teacher locked this parameter'
+      locked: 'The teacher locked this parameter', panel: 'Panel', note: 'Note', meters: 'Gauges',
+      diverged: 'The calculation diverged and the simulation stopped. Change the parameters and press Reset.',
+      phases: 'Phases', phaseNext: 'Next ▶', phasePrev: 'Previous phase', phaseAgain: 'Repeat phase',
+      phaseModeStep: 'Step by step', phaseModeAuto: 'Auto', phaseHintHold: 'Press Next or → to play this phase; it stops at the next one',
+      phaseHintPlay: 'Phase is playing… ← go back, ⟲ repeat'
     }
   };
   function lang() {

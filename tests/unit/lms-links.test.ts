@@ -19,7 +19,7 @@ describe('адреса кабинетов', () => {
     expect(answersHref('c1', 'b1', { pending: true, s: 's1' })).toBe('/teach/courses/c1/answers/b1?pending=1&s=s1');
     expect(learnCourseHref('c1', true)).toBe('/learn/courses/c1?preview=1');
     expect(learnTopicHref('t1', false)).toBe('/learn/topics/t1');
-    expect(generateForBlockHref(ID)).toBe(`/?returnTo=${ID}`);
+    expect(generateForBlockHref(ID)).toBe(`/create?returnTo=${ID}`);
   });
   it('соседи в списке ответов', () => {
     expect(neighbours(['a', 'b', 'c'], 'b')).toEqual({ prev: 'a', next: 'c' });
