@@ -1,12 +1,49 @@
-import { createLab, makeLabel, placeLabel, pulse } from '../common.js';
+import { createLab, makeLabel, placeLabel, pulse, tr } from '../common.js';
 import { REAGENTS, FLAME_SALTS, react, mixState } from './reactions.js';
 
+// Переводы текстов из reactions.js: сам модуль остаётся без зависимостей (его гоняют юнит-тесты).
+const L = {
+  'Соляная кислота': tr('Соляная кислота', 'Тұз қышқылы', 'Hydrochloric acid'),
+  'Гидроксид натрия': tr('Гидроксид натрия', 'Натрий гидроксиді', 'Sodium hydroxide'),
+  'Лакмус': tr('Лакмус', 'Лакмус', 'Litmus'),
+  'индикатор': tr('индикатор', 'индикатор', 'indicator'),
+  'Нитрат серебра': tr('Нитрат серебра', 'Күміс нитраты', 'Silver nitrate'),
+  'Пищевая сода': tr('Пищевая сода', 'Ас содасы', 'Baking soda'),
+  'Пероксид водорода': tr('Пероксид водорода', 'Сутек пероксиді', 'Hydrogen peroxide'),
+  'Иодид калия': tr('Иодид калия', 'Калий иодиді', 'Potassium iodide'),
+  'Медный купорос': tr('Медный купорос', 'Мыс купоросы', 'Copper sulfate'),
+  'Хлорид натрия': tr('Хлорид натрия', 'Натрий хлориді', 'Sodium chloride'),
+  'Хлорид меди': tr('Хлорид меди', 'Мыс хлориді', 'Copper chloride'),
+  'Хлорид калия': tr('Хлорид калия', 'Калий хлориді', 'Potassium chloride'),
+  'Хлорид лития': tr('Хлорид лития', 'Литий хлориді', 'Lithium chloride'),
+  'Хлорид стронция': tr('Хлорид стронция', 'Стронций хлориді', 'Strontium chloride'),
+  'жёлтое — 589 нм': tr('жёлтое — 589 нм', 'сары — 589 нм', 'yellow — 589 nm'),
+  'зелёное': tr('зелёное', 'жасыл', 'green'),
+  'фиолетовое': tr('фиолетовое', 'күлгін', 'violet'),
+  'карминовое': tr('карминовое', 'карминді-қызыл', 'carmine red'),
+  'малиновое': tr('малиновое', 'таңқурай түсті', 'crimson'),
+  'Слоновья зубная паста': tr('Слоновья зубная паста', 'Піл тіс пастасы', 'Elephant toothpaste'),
+  'Лакмус краснеет': tr('Лакмус краснеет', 'Лакмус қызарады', 'Litmus turns red'),
+  'Лакмус синеет': tr('Лакмус синеет', 'Лакмус көгереді', 'Litmus turns blue'),
+  'Белый творожистый осадок': tr('Белый творожистый осадок', 'Ақ ірімшік тәрізді тұнба', 'White curdy precipitate'),
+  'Выделяется углекислый газ': tr('Выделяется углекислый газ', 'Көмірқышқыл газы бөлінеді', 'Carbon dioxide is released'),
+  'Голубой осадок гидроксида меди': tr('Голубой осадок гидроксида меди', 'Мыс гидроксидінің көгілдір тұнбасы', 'Blue precipitate of copper hydroxide'),
+  'Нейтрализация': tr('Нейтрализация', 'Бейтараптану', 'Neutralisation'),
+  'кислая среда, pH < 7': tr('кислая среда, pH < 7', 'қышқылдық орта, pH < 7', 'acidic medium, pH < 7'),
+  'щелочная среда, pH > 7': tr('щелочная среда, pH > 7', 'сілтілік орта, pH > 7', 'alkaline medium, pH > 7'),
+};
+const loc = (s) => L[s] ?? s;
+
+const TITLE = tr('Стол реакций', 'Реакциялар үстелі', 'Reaction bench');
+document.title = TITLE + ' — Tesseract';
 const lab = createLab({
-  title: 'Стол реакций',
-  hint: 'Возьмите бутылку с полки и отпустите над колбой — реагент выльется. Соли из чашек подносите к пламени.',
+  title: TITLE,
+  hint: tr('Возьмите бутылку с полки и отпустите над колбой — реагент выльется. Соли из чашек подносите к пламени.',
+    'Сөреден бөтелкені алып, колбаның үстінде жіберіңіз — реагент құйылады. Тостағандардағы тұздарды жалынға жақындатыңыз.',
+    'Take a bottle from the shelf and release it above the flask to pour the reagent. Bring the salts from the dishes to the flame.'),
   stations: [
-    { name: 'Колба и реагенты', at: [0, 1.65, 1.7], look: [0, 1.05, -0.3] },
-    { name: 'Пламя', at: [22, 1.65, 1.6], look: [22, 1.2, -0.2] },
+    { name: tr('Колба и реагенты', 'Колба және реагенттер', 'Flask and reagents'), at: [0, 1.65, 1.7], look: [0, 1.05, -0.3] },
+    { name: tr('Пламя', 'Жалын', 'Flame'), at: [22, 1.65, 1.6], look: [22, 1.2, -0.2] },
   ],
 });
 const { THREE, scene } = lab;
@@ -37,7 +74,7 @@ const FLASK = new THREE.Vector3(0, TABLE_Y, -0.2);
     new THREE.MeshPhysicalMaterial({ color: 0xd8ecff, transparent: true, opacity: 0.28, roughness: 0.05, side: THREE.DoubleSide }));
   flask.position.copy(FLASK);
   scene.add(flask);
-  lab.hover(flask, 'Колба Эрленмейера\nОтпустите бутылку над ней');
+  lab.hover(flask, tr('Колба Эрленмейера\nОтпустите бутылку над ней', 'Эрленмейер колбасы\nБөтелкені оның үстінде жіберіңіз', 'Erlenmeyer flask\nRelease a bottle above it'));
 }
 const liquidPts = [];
 for (let i = 0; i <= 8; i++) { const t = i / 8; liquidPts.push(new THREE.Vector2(0.155 - t * 0.11 * 0.55, t * 0.2)); }
@@ -47,7 +84,7 @@ liquid.position.copy(FLASK).add(new THREE.Vector3(0, 0.003, 0));
 liquid.scale.y = 0.05;
 scene.add(liquid);
 const state = mixState();
-const productBoard = lab.board('Полка: 8 реагентов. Что смешаем?', [0, 1.95, -0.9], { scale: 0.0026 });
+const productBoard = lab.board(tr('Полка: 8 реагентов. Что смешаем?', 'Сөреде 8 реагент бар. Нені араластырамыз?', 'Shelf: 8 reagents. What shall we mix?'), [0, 1.95, -0.9], { scale: 0.0026 });
 
 // Полка и бутылки
 const shelf = new THREE.Mesh(new THREE.BoxGeometry(3, 0.04, 0.3), new THREE.MeshStandardMaterial({ color: 0x2a3445 }));
@@ -64,7 +101,7 @@ REAGENTS.forEach((r, i) => {
   fill.position.y = 0.075;
   const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 16), new THREE.MeshStandardMaterial({ color: 0x37474f }));
   cap.position.y = 0.22;
-  const tag = makeLabel(r.formula, { scale: 0.0011 });
+  const tag = makeLabel(loc(r.formula), { scale: 0.0011 });
   tag.position.set(0, 0.32, 0);
   g.add(glass, fill, cap, tag);
   const home = new THREE.Vector3(-1.3 + i * 0.37, TABLE_Y + 0.47, -0.85);
@@ -73,7 +110,7 @@ REAGENTS.forEach((r, i) => {
   g.userData.reagent = r;
   scene.add(g);
   bottles.push(g);
-  lab.hover(glass, `${r.name}\n${r.formula}`);
+  lab.hover(glass, `${loc(r.name)}\n${loc(r.formula)}`);
   lab.grab(g, {
     onRelease: (o) => {
       const p = new THREE.Vector3(); o.getWorldPosition(p);
@@ -105,7 +142,7 @@ function finishPour(bottle) {
   const out = react(state, bottle.userData.reagent.id);
   liquid.userData.targetColor = new THREE.Color(out.color);
   liquid.userData.targetVol = 0.05 + state.volume * 0.95;
-  productBoard.set(`${out.title}\n${out.product}`);
+  productBoard.set(`${loc(out.title)}\n${loc(out.product)}`);
   if (out.effect === 'gas') for (let i = 0; i < 60; i++) spawnBubble(i * 0.05);
   if (out.effect === 'foam') for (let i = 0; i < 70; i++) spawnFoam(i * 0.03, out.color);
   if (out.effect === 'precipitate') for (let i = 0; i < 80; i++) spawnPrecip(i * 0.02, out.color);
@@ -170,19 +207,19 @@ function showMolecule(out) {
   molecule.position.set(FLASK.x, FLASK.y + 0.75, FLASK.z);
   molecule.scale.setScalar(2);
   scene.add(molecule);
-  lab.hover(molecule, `Продукт: ${key}`);
+  lab.hover(molecule, tr(`Продукт: ${key}`, `Өнім: ${key}`, `Product: ${key}`));
 }
 function empty() {
   Object.assign(state, mixState());
   liquid.userData.targetColor = new THREE.Color(0x9ecfff);
   liquid.userData.targetVol = 0.05;
-  productBoard.set('Колба вылита. Что смешаем?');
+  productBoard.set(tr('Колба вылита. Что смешаем?', 'Колба босатылды. Нені араластырамыз?', 'Flask emptied. What shall we mix?'));
   for (const arr of [bubbles, foam, precip]) { for (const b of arr) scene.remove(b); arr.length = 0; }
   if (molecule) { scene.remove(molecule); molecule = null; }
 }
-lab.button3d('Вылить', [1.2, TABLE_Y + 0.12, 0.35], empty, { width: 0.5, color: 0x8d6e63 });
-lab.hud.action('Вылить колбу', empty);
-scene.add(placeLabel(makeLabel('Попробуйте: H₂O₂ + KI, AgNO₃ + HCl, NaHCO₃ + HCl, лакмус + кислота', { scale: 0.0016 }), 0, TABLE_Y + 0.2, -0.72));
+lab.button3d(tr('Вылить', 'Төгу', 'Empty'), [1.2, TABLE_Y + 0.12, 0.35], empty, { width: 0.5, color: 0x8d6e63 });
+lab.hud.action(tr('Вылить колбу', 'Колбаны төгу', 'Empty the flask'), empty);
+scene.add(placeLabel(makeLabel(tr('Попробуйте: H₂O₂ + KI, AgNO₃ + HCl, NaHCO₃ + HCl, лакмус + кислота', 'Байқап көріңіз: H₂O₂ + KI, AgNO₃ + HCl, NaHCO₃ + HCl, лакмус + қышқыл', 'Try: H₂O₂ + KI, AgNO₃ + HCl, NaHCO₃ + HCl, litmus + acid'), { scale: 0.0016 }), 0, TABLE_Y + 0.2, -0.72));
 
 // ---------- Станция 2: пламя ----------
 const BURNER = new THREE.Vector3(22, TABLE_Y, -0.3);
@@ -192,7 +229,7 @@ const BURNER = new THREE.Vector3(22, TABLE_Y, -0.3);
   const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.13, 0.03, 24), new THREE.MeshStandardMaterial({ color: 0x37474f }));
   foot.position.copy(BURNER).add(new THREE.Vector3(0, 0.015, 0));
   scene.add(body, foot);
-  lab.hover(body, 'Горелка Бунзена\nПоднесите соль к пламени');
+  lab.hover(body, tr('Горелка Бунзена\nПоднесите соль к пламени', 'Бунзен жанарғысы\nТұзды жалынға жақындатыңыз', 'Bunsen burner\nBring a salt to the flame'));
 }
 const FLAME_N = 160;
 const flameGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(new Array(FLAME_N * 3).fill(0), 3));
@@ -205,7 +242,7 @@ scene.add(flameLight);
 const flameParts = Array.from({ length: FLAME_N }, () => ({ t: Math.random() }));
 const flameColor = new THREE.Color(0x64b5f6);
 let flameTarget = new THREE.Color(0x64b5f6);
-const flameBoard = lab.board('Пламя без примесей — голубое', [22, 2.1, -0.9], { scale: 0.003 });
+const flameBoard = lab.board(tr('Пламя без примесей — голубое', 'Қоспасыз жалын — көгілдір', 'A clean flame is blue'), [22, 2.1, -0.9], { scale: 0.003 });
 const salts = [];
 FLAME_SALTS.forEach((s, i) => {
   const g = new THREE.Group();
@@ -220,7 +257,7 @@ FLAME_SALTS.forEach((s, i) => {
   g.userData.home = home;
   scene.add(g);
   salts.push(g);
-  lab.hover(dish, `${s.name}\n${s.formula}`);
+  lab.hover(dish, `${loc(s.name)}\n${s.formula}`);
   lab.grab(g, {
     onMove: (o) => {
       const p = new THREE.Vector3(); o.getWorldPosition(p);
@@ -234,8 +271,9 @@ function ignite(s) {
   if (flameTarget.getHex() === new THREE.Color(s.flame).getHex()) return;
   flameTarget = new THREE.Color(s.flame);
   flameBoost = 1;
-  flameBoard.set(`${s.name} (${s.formula})\nПламя ${s.note}: светятся атомы ${s.formula.replace(/Cl.*/, '')}`);
-  setTimeout(() => { flameTarget = new THREE.Color(0x64b5f6); flameBoard.set('Пламя остывает — снова голубое'); }, 6000);
+  const el = s.formula.replace(/Cl.*/, '');
+  flameBoard.set(`${loc(s.name)} (${s.formula})\n` + tr(`Пламя ${s.note}: светятся атомы ${el}`, `Жалын ${loc(s.note)}: ${el} атомдары жарқырайды`, `The flame is ${loc(s.note)}: ${el} atoms glow`));
+  setTimeout(() => { flameTarget = new THREE.Color(0x64b5f6); flameBoard.set(tr('Пламя остывает — снова голубое', 'Жалын суып барады — қайтадан көгілдір', 'The flame cools down — blue again')); }, 6000);
 }
 
 // ---------- Цикл ----------

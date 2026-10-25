@@ -2,6 +2,7 @@
 import { state, actions, onChange } from '../state.js';
 import { MODES } from '../scene/sample.js';
 import { fmt } from './panel.js';
+import { tr } from '../i18n.js';
 
 const SPEEDS = [1, 100, 500, 2000, 6000];
 
@@ -9,9 +10,9 @@ export function buildDock({ hooks, onHelp }) {
   const el = document.getElementById('dock');
   el.innerHTML = `
     <div class="grp">
-      <button id="d-run" class="big" title="Пуск / пауза (Пробел)">▶</button>
-      <button id="d-reset" title="Сброс (R)">⟲</button>
-      <select id="d-speed" title="Ускорение времени">${SPEEDS.map((v) => `<option value="${v}">×${v}</option>`).join('')}</select>
+      <button id="d-run" class="big" title="${tr('Пуск / пауза (Пробел)', 'Іске қосу / кідірту (Бос орын)', 'Run / pause (Space)')}">▶</button>
+      <button id="d-reset" title="${tr('Сброс (R)', 'Қайта бастау (R)', 'Reset (R)')}">⟲</button>
+      <select id="d-speed" title="${tr('Ускорение времени', 'Уақытты жеделдету', 'Time acceleration')}">${SPEEDS.map((v) => `<option value="${v}">×${v}</option>`).join('')}</select>
       <span id="d-time" class="time">0:00:00</span>
     </div>
     <div class="grp">
@@ -21,14 +22,14 @@ export function buildDock({ hooks, onHelp }) {
       <datalist id="d-u-l"><option value="0.83"><option value="1.6"><option value="2.7"></datalist>
     </div>
     <div class="grp">
-      <select id="d-mode" title="Режим отображения (1–5)">${MODES.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')}</select>
-      <select id="d-slice" title="Сечение (S)"><option value="none">Без сечения</option><option value="x">Сечение X</option><option value="z">Сечение Z</option><option value="y">Сечение Y</option></select>
-      <input id="d-slicepos" type="range" min="0.05" max="0.95" step="0.01" title="Положение плоскости">
+      <select id="d-mode" title="${tr('Режим отображения (1–5)', 'Көрсету режимі (1–5)', 'Display mode (1–5)')}">${MODES.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')}</select>
+      <select id="d-slice" title="${tr('Сечение (S)', 'Қима (S)', 'Section (S)')}"><option value="none">${tr('Без сечения', 'Қимасыз', 'No section')}</option><option value="x">${tr('Сечение', 'Қима', 'Section')} X</option><option value="z">${tr('Сечение', 'Қима', 'Section')} Z</option><option value="y">${tr('Сечение', 'Қима', 'Section')} Y</option></select>
+      <input id="d-slicepos" type="range" min="0.05" max="0.95" step="0.01" title="${tr('Положение плоскости', 'Жазықтықтың орны', 'Plane position')}">
     </div>
     <div class="grp hist">
-      <label title="Перемотка опыта (← →)">⏪ <input id="d-hist" type="range" min="0" max="0" step="1" value="0"></label>
-      <button id="d-live" title="К текущему моменту (L)">Live</button>
-      <button id="d-help" title="Горячие клавиши (?)">?</button>
+      <label title="${tr('Перемотка опыта (← →)', 'Тәжірибені кері айналдыру (← →)', 'Rewind the run (← →)')}">⏪ <input id="d-hist" type="range" min="0" max="0" step="1" value="0"></label>
+      <button id="d-live" title="${tr('К текущему моменту (L)', 'Ағымдағы сәтке (L)', 'Back to now (L)')}">Live</button>
+      <button id="d-help" title="${tr('Горячие клавиши (?)', 'Жылдам пернелер (?)', 'Keyboard shortcuts (?)')}">?</button>
     </div>`;
   const $ = (id) => document.getElementById(id);
   const run = $('d-run'), speed = $('d-speed'), time = $('d-time'), tf = $('d-tf'), tfv = $('d-tf-v'),
@@ -57,7 +58,7 @@ export function buildDock({ hooks, onHelp }) {
     if (document.activeElement !== tf) tf.value = state.cfg.Tf;
     tfv.textContent = `${state.cfg.Tf.toFixed(0)} °C`;
     if (document.activeElement !== u) u.value = state.cfg.U;
-    uv.textContent = `${state.cfg.U.toFixed(2)} м/с`;
+    uv.textContent = `${state.cfg.U.toFixed(2)} ${tr('м/с', 'м/с', 'm/s')}`;
     mode.value = state.view.mode;
     slice.value = state.view.slice;
     sp.value = state.view.slicePos;
@@ -68,7 +69,7 @@ export function buildDock({ hooks, onHelp }) {
     if (document.activeElement !== hist) hist.value = state.replay ?? Math.max(0, n - 1);
     live.classList.toggle('on', state.replay !== null);
     const t = state.replay !== null ? state.history[state.replay]?.t : state.snap?.t;
-    time.textContent = (state.replay !== null ? 'повтор ' : '') + fmt.t(t ?? 0);
+    time.textContent = (state.replay !== null ? tr('повтор ', 'қайталау ', 'replay ') : '') + fmt.t(t ?? 0);
   };
   onChange(sync);
   hooks.syncDock = sync;

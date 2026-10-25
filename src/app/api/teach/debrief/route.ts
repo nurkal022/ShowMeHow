@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { guardUser } from '@/lib/http/guards';
+import { chargeAi } from '@/lib/quota';
 import { badRequest, INVALID_BODY_MESSAGE, notFound, readBody, withUserErrors } from '@/lib/http/route-kit';
 import { staffTopic } from '@/lib/lms/access';
 import { createDebrief } from '@/lib/lms/debrief';
@@ -25,6 +26,8 @@ export async function POST(req: Request) {
   if (!body) return badRequest(INVALID_BODY_MESSAGE);
   const staff = await staffTopic(user, str(body.topicId));
   if (!staff) return notFound();
+  const over = await chargeAi(user, 'debrief');
+  if (over) return over;
   const locale = localeFromRequest(req);
   const topicTitle = aiDefaults(locale).debriefTopic(staff.topic.title);
   return withUserErrors(async () => {

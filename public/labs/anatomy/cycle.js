@@ -4,14 +4,15 @@
  * При учащении пульса укорачивается в основном диастола — как у живого сердца.
  */
 import * as THREE from 'three';
+import { tr } from '../common.js';
 
 export const PHASES = {
-  atrial: { name: 'Систола предсердий', color: '#ffcc4d',
-    text: 'Предсердия сжимаются и дожимают кровь в желудочки.\nТрёхстворчатый и митральный клапаны открыты.' },
-  ventricular: { name: 'Систола желудочков', color: '#ff5d6c',
-    text: 'Желудочки сжимаются: створчатые клапаны захлопнулись («лаб»),\nаортальный и лёгочный открыты — кровь уходит в артерии.' },
-  diastole: { name: 'Диастола', color: '#6fb6ff',
-    text: 'Сердце расслаблено: полулунные клапаны закрылись («даб»),\nкровь из вен свободно наполняет предсердия и желудочки.' },
+  atrial: { name: tr('Систола предсердий', 'Жүрекшелер систоласы', 'Atrial systole'), color: '#ffcc4d',
+    text: tr('Предсердия сжимаются и дожимают кровь в желудочки.\nТрёхстворчатый и митральный клапаны открыты.', 'Жүрекшелер жиырылып, қанды қарыншаларға толық айдайды.\nҮшжармалы және митралды қақпақшалар ашық.', 'The atria contract and top up the ventricles with blood.\nThe tricuspid and mitral valves are open.') },
+  ventricular: { name: tr('Систола желудочков', 'Қарыншалар систоласы', 'Ventricular systole'), color: '#ff5d6c',
+    text: tr('Желудочки сжимаются: створчатые клапаны захлопнулись («лаб»),\nаортальный и лёгочный открыты — кровь уходит в артерии.', 'Қарыншалар жиырылады: жармалы қақпақшалар жабылды («лаб»),\nқолқа мен өкпе қақпақшалары ашық — қан артерияларға кетеді.', 'The ventricles contract: the AV valves snap shut ("lub"),\nthe aortic and pulmonary valves open — blood leaves into the arteries.') },
+  diastole: { name: tr('Диастола', 'Диастола', 'Diastole'), color: '#6fb6ff',
+    text: tr('Сердце расслаблено: полулунные клапаны закрылись («даб»),\nкровь из вен свободно наполняет предсердия и желудочки.', 'Жүрек босаңсыған: жарты ай тәрізді қақпақшалар жабылды («даб»),\nвеналардан келген қан жүрекшелер мен қарыншаларды еркін толтырады.', 'The heart relaxes: the semilunar valves close ("dub"),\nblood from the veins freely fills the atria and ventricles.') },
 };
 
 export function timing(bpm) {
@@ -133,7 +134,7 @@ export function ecgMonitor() {
     ctx.fillText(`♥ ${Math.round(bpm)}`, 18, TOP / 2);
     ctx.font = "500 18px Inter, system-ui, sans-serif";
     ctx.fillStyle = '#7fae95';
-    ctx.fillText('уд/мин · II отв.', 128, TOP / 2 + 6);
+    ctx.fillText(tr('уд/мин · II отв.', 'соқ/мин · II тіркеме', 'bpm · lead II'), 128, TOP / 2 + 6);
     ctx.font = "700 26px Inter, system-ui, sans-serif";
     ctx.fillStyle = ph.color;
     ctx.textAlign = 'right';
@@ -151,7 +152,7 @@ export function ecgMonitor() {
       ctx.globalAlpha = st.phase === k ? 1 : 0.35;
       ctx.fillStyle = PHASES[k].color; ctx.fillRect(ox, by, w - 2, bh);
       ctx.globalAlpha = 1;
-      if (w > 60) { ctx.fillStyle = '#9fb0c4'; ctx.fillText(k === 'atrial' ? 'предс.' : k === 'ventricular' ? 'систола Ж' : 'диастола', ox + 4, by + 30); }
+      if (w > 60) { ctx.fillStyle = '#9fb0c4'; ctx.fillText(k === 'atrial' ? tr('предс.', 'жүрекш.', 'atria') : k === 'ventricular' ? tr('систола Ж', 'систола Қ', 'V systole') : tr('диастола', 'диастола', 'diastole'), ox + 4, by + 30); }
       ox += w;
     }
     ctx.fillStyle = '#ffffff';

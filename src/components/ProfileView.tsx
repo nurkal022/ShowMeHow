@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { UserProfile } from '@/lib/auth/users';
 import { userContact, userLabel } from '@/lib/auth/identifier';
 import type { UserPrefs } from '@/lib/auth/prefs';
-import type { QuotaStatus } from '@/lib/quota';
+import type { AiAllowance, QuotaStatus } from '@/lib/quota';
 import { applyTheme, storeTheme, readStoredTheme, type Theme } from '@/lib/theme';
 import { isUnauthorized, loginWithReturnTo } from '@/lib/auth/client-session';
 import { IconKey, IconSliders } from './icons';
@@ -13,7 +13,7 @@ import LanguageSwitcher from './LanguageSwitcher';
 
 type AppKey = keyof typeof app.ru;
 
-interface Props { profile: UserProfile; quota: QuotaStatus; orgQuota: boolean }
+interface Props { profile: UserProfile; quota: QuotaStatus; ai: AiAllowance }
 
 const THEME_LABELS: [Theme, AppKey][] = [['light', 'themeLight'], ['dark', 'themeDark'], ['system', 'themeSystem']];
 const QUALITY_LABELS: [NonNullable<UserPrefs['quality']>, AppKey][] =
@@ -38,7 +38,7 @@ function Segmented<T extends string>({ value, options, onChange }: {
   );
 }
 
-export default function ProfileView({ profile, quota, orgQuota }: Props) {
+export default function ProfileView({ profile, quota, ai }: Props) {
   const t = useT(app);
   const [name, setName] = useState(profile.displayName ?? '');
   const [prefs, setPrefs] = useState<UserPrefs>(profile.prefs);
@@ -106,12 +106,20 @@ export default function ProfileView({ profile, quota, orgQuota }: Props) {
             <strong>{t('generations')}</strong>
             <span>{quota.limit === null
               ? t('unlimited')
-              : t(orgQuota ? 'quotaOrg' : 'quotaTrial', { used: quota.used, limit: quota.limit })}</span>
+              : t(quota.source === 'org' ? 'quotaOrg' : quota.source === 'personal' ? 'quotaPersonal' : 'quotaTrial', { used: quota.used, limit: quota.limit })}</span>
           </div>
         </div>
         {quota.limit !== null && (
           <div className="meter">
             <div className={usedPct >= 100 ? 'meter-fill full' : 'meter-fill'} style={{ width: `${usedPct}%` }} />
+          </div>
+        )}
+        {ai.limit !== null && (
+          <div className="row">
+            <div className="row-label">
+              <strong>{t('aiDaily')}</strong>
+              <span>{t('aiDailyHint', { used: Math.min(ai.used, ai.limit), limit: ai.limit })}</span>
+            </div>
           </div>
         )}
       </section>

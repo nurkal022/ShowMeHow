@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { guardUser } from '@/lib/http/guards';
 import { notFound, type IdParams } from '@/lib/http/route-kit';
 import { throttled } from '@/lib/http/throttle';
+import { chargeAi } from '@/lib/quota';
 import { getProject, listItems } from '@/lib/research/store';
 import { getArticle, listArticles } from '@/lib/research/articles-store';
 import { withResearchErrors } from '@/lib/research/http';
@@ -14,6 +15,8 @@ export async function POST(req: Request, { params }: IdParams) {
   if (user instanceof Response) return user;
   const project = await getProject(user.id, (await params).id);
   if (!project) return notFound();
+  const over = await chargeAi(user, 'graphical');
+  if (over) return over;
   return throttled(user.id, 'write', async () => (await withResearchErrors(async () => {
     const [items, articles] = await Promise.all([listItems(user.id, { projectId: project.id }), listArticles(user.id, project.id)]);
     const article = articles[0] ? await getArticle(user.id, articles[0].id) : null;

@@ -4,17 +4,36 @@ import { db, hasDb } from './db/client';
 export interface PlatformSettings {
   /** Можно ли завести аккаунт самому. Закрыта — аккаунты выдают организации и админ. */
   registrationOpen: boolean;
+  /** Сколько тренажёров может создать человек без организации (пробный доступ). */
+  trialGenerations: number;
+  /** ИИ-запросов за сутки на человека: доработки, план, помощники. */
+  aiDailyLimit: number;
 }
 
 export const REGISTRATION_CLOSED_MESSAGE = 'Регистрация закрыта. Аккаунт выдаёт ваш университет или администратор платформы.';
 
-export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = { registrationOpen: true };
+export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = { registrationOpen: true, trialGenerations: 1, aiDailyLimit: 40 };
+
+export const LIMIT_KEYS = ['trialGenerations', 'aiDailyLimit'] as const;
+export type LimitKey = typeof LIMIT_KEYS[number];
+
+const count = (v: unknown, def: number) => (Number.isInteger(v) && (v as number) >= 0 ? (v as number) : def);
 
 export async function getPlatformSettings(): Promise<PlatformSettings> {
   if (!hasDb()) return DEFAULT_PLATFORM_SETTINGS;
   const { rows } = await db().query<{ key: string; value: unknown }>('SELECT key, value FROM platform_settings');
   const map = new Map(rows.map((r) => [r.key, r.value]));
-  return { registrationOpen: map.get('registrationOpen') !== false };
+  return {
+    registrationOpen: map.get('registrationOpen') !== false,
+    trialGenerations: count(map.get('trialGenerations'), DEFAULT_PLATFORM_SETTINGS.trialGenerations),
+    aiDailyLimit: count(map.get('aiDailyLimit'), DEFAULT_PLATFORM_SETTINGS.aiDailyLimit),
+  };
+}
+
+export async function setPlatformLimit(key: LimitKey, value: number): Promise<void> {
+  await db().query(
+    `INSERT INTO platform_settings (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, JSON.stringify(value)]);
 }
 
 export async function setRegistrationOpen(open: boolean): Promise<void> {

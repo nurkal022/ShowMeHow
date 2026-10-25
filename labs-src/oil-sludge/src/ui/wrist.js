@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Panel, THEME, fmt } from './panel.js';
 import { state, actions } from '../state.js';
 import { MODES } from '../scene/sample.js';
+import { tr } from '../i18n.js';
 
 const SPEEDS = [1, 100, 500, 2000, 6000];
 const F = THEME.font;
@@ -15,9 +16,9 @@ export function wristPanel({ hooks, summon }) {
   p.mesh.renderOrder = 30;
   p.mesh.visible = false;
   const lbl = (s) => () => s();
-  p.button(24, 100, 360, 96, lbl(() => (state.running ? '⏸  Пауза' : '▶  Пуск')), () => actions.setRunning(!state.running), { active: () => state.running, color: THEME.ok, size: 36, weight: 700 });
+  p.button(24, 100, 360, 96, lbl(() => (state.running ? tr('⏸  Пауза', '⏸  Кідірту', '⏸  Pause') : tr('▶  Пуск', '▶  Іске қосу', '▶  Run'))), () => actions.setRunning(!state.running), { active: () => state.running, color: THEME.ok, size: 36, weight: 700 });
   p.button(400, 100, 160, 96, '⟲', () => actions.reset(), { size: 44 });
-  p.button(576, 100, 160, 96, 'Панели ↺', () => summon(), { size: 24 });
+  p.button(576, 100, 160, 96, tr('Панели ↺', 'Панельдер ↺', 'Panels ↺'), () => summon(), { size: 24 });
   const stepper = (y, name, get, dec, inc, fmtv) => {
     p.button(150, y, 120, 92, '−', dec, { size: 48 });
     p.button(616, y, 120, 92, '+', inc, { size: 48 });
@@ -29,9 +30,9 @@ export function wristPanel({ hooks, summon }) {
       () => actions.setLive({ Tf: Math.min(650, state.cfg.Tf + 25) }), (v) => `${v.toFixed(0)} °C`),
     stepper(324, 'U₀', () => state.cfg.U,
       () => actions.setLive({ U: stepU(state.cfg.U, -1) }),
-      () => actions.setLive({ U: stepU(state.cfg.U, +1) }), (v) => `${v.toFixed(2)} м/с`),
+      () => actions.setLive({ U: stepU(state.cfg.U, +1) }), (v) => `${v.toFixed(2)} ${tr('м/с', 'м/с', 'm/s')}`),
   ];
-  p.button(24, 434, 400, 92, () => `Вид: ${MODES.find((m) => m.id === state.view.mode)?.name}`, () => {
+  p.button(24, 434, 400, 92, () => `${tr('Вид', 'Көрініс', 'View')}: ${MODES.find((m) => m.id === state.view.mode)?.name}`, () => {
     const i = MODES.findIndex((m) => m.id === state.view.mode);
     state.view.mode = MODES[(i + 1) % MODES.length].id; hooks.mode();
   }, { size: 26 });
@@ -46,7 +47,7 @@ export function wristPanel({ hooks, summon }) {
     c.fillText(s ? fmt.t(s.t) : '0:00:00', 28, 70);
     c.font = `600 26px ${F}`; c.fillStyle = state.replay !== null ? THEME.warn : THEME.dim;
     c.textAlign = 'right';
-    c.fillText(state.replay !== null ? 'ПОВТОР' : state.running ? 'идёт опыт' : 'пауза', 736, 66);
+    c.fillText(state.replay !== null ? tr('ПОВТОР', 'ҚАЙТАЛАУ', 'REPLAY') : state.running ? tr('идёт опыт', 'тәжірибе жүріп жатыр', 'running') : tr('пауза', 'кідіріс', 'paused'), 736, 66);
     c.textAlign = 'left';
     for (const r of rows) {
       c.font = `700 34px ${F}`; c.fillStyle = THEME.dim; c.fillText(r.name, 40, r.y + 58);

@@ -1,6 +1,7 @@
 // Состояние приложения, связь с потоком физики, запись прогонов, газоанализатор.
 import { DataUtils } from 'three';
 import { PRESETS, LIMITS } from './physics/params.js';
+import { tr } from './i18n.js';
 
 export const RUN_COLORS = ['#ff8a3d', '#3dc3ff', '#5bd68a', '#c77dff', '#ffcc4d', '#ff5d8f'];
 
@@ -188,7 +189,7 @@ function record(s) {
 
 export function runLabel(cfg) {
   const p = PRESETS.find((x) => x.id === cfg.presetId);
-  return `${Math.round(cfg.Tf)}°C · ${cfg.U.toFixed(2)} м/с · ${(cfg.L * 100).toFixed(0)} см${cfg.latentHeat ? '' : ' · без L'}${p && p.id !== 'pit' ? ' · ' + p.name.split(' ')[0] : ''}`;
+  return `${Math.round(cfg.Tf)}°C · ${cfg.U.toFixed(2)} ${tr('м/с', 'м/с', 'm/s')} · ${(cfg.L * 100).toFixed(0)} ${tr('см', 'см', 'cm')}${cfg.latentHeat ? '' : tr(' · без L', ' · L-сіз', ' · no L')}${p && p.id !== 'pit' ? ' · ' + p.name.split(' ')[0] : ''}`;
 }
 
 function archiveRun() {
@@ -212,7 +213,7 @@ export function allRuns() {
 
 export function exportCSV() {
   const rows = [['run', 't_s', 'T1', 'T2', 'T3', 'T4', 'T_mean', 'mass_loss_pct', 'water_rem', 'light_rem', 'medium_rem', 'heavy_rem', 'resid_rem', 'drained_ml', 'coke_g', 'Qin_kJ']];
-  const all = [...state.runs.map((r) => [r.label, r.series]), [runLabel(state.cfg) + ' (текущий)', state.series]];
+  const all = [...state.runs.map((r) => [r.label, r.series]), [runLabel(state.cfg) + tr(' (текущий)', ' (ағымдағы)', ' (current)'), state.series]];
   for (const [label, ser] of all) for (const p of ser) {
     rows.push([label, p.t.toFixed(0), ...p.probes.map((v) => v.toFixed(2)), p.meanT.toFixed(2), p.loss.toFixed(3), ...p.removal.map((v) => v.toFixed(2)), p.drainedMl.toFixed(2), p.coke.toFixed(3), p.Qin.toFixed(2)]);
   }

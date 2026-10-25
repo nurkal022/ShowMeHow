@@ -3,7 +3,7 @@
  * в пропорциях настоящей Земли (кора утолщена, иначе её не видно), подписи
  * глубины и температуры, конвекционные ячейки мантии из частиц.
  */
-import { makeLabel } from '../common.js';
+import { makeLabel, tr } from '../common.js';
 import { fbm3, softDot } from './noise.js';
 
 const R = 0.5;
@@ -16,11 +16,11 @@ const LAYERS = [
   { r0: 0, r1: 0.19, color: 0xfff2c4, ei: 1.0 },
 ];
 const LABELS = [
-  { text: 'Земная кора · 5–70 км\nдо 1000 °C (утолщена)', r: 0.975, a: 0.95 },
-  { text: 'Верхняя мантия · до 660 км\n1000–1900 °C', r: 0.915, a: 0.5 },
-  { text: 'Нижняя мантия · до 2900 км\n1900–3700 °C, течёт медленно', r: 0.72, a: 0.12 },
-  { text: 'Внешнее ядро · до 5150 км\nжидкое железо, 4000–5000 °C', r: 0.38, a: -0.35 },
-  { text: 'Внутреннее ядро · 6371 км\nтвёрдое, ≈ 5400 °C', r: 0.09, a: -0.6 },
+  { text: tr('Земная кора · 5–70 км\nдо 1000 °C (утолщена)', 'Жер қыртысы · 5–70 км\n1000 °C-қа дейін (қалыңдатылған)', 'Crust · 5–70 km\nup to 1000 °C (thickened)'), r: 0.975, a: 0.95 },
+  { text: tr('Верхняя мантия · до 660 км\n1000–1900 °C', 'Жоғарғы мантия · 660 км-ге дейін\n1000–1900 °C', 'Upper mantle · to 660 km\n1000–1900 °C'), r: 0.915, a: 0.5 },
+  { text: tr('Нижняя мантия · до 2900 км\n1900–3700 °C, течёт медленно', 'Төменгі мантия · 2900 км-ге дейін\n1900–3700 °C, баяу ағады', 'Lower mantle · to 2900 km\n1900–3700 °C, flows slowly'), r: 0.72, a: 0.12 },
+  { text: tr('Внешнее ядро · до 5150 км\nжидкое железо, 4000–5000 °C', 'Сыртқы ядро · 5150 км-ге дейін\nсұйық темір, 4000–5000 °C', 'Outer core · to 5150 km\nliquid iron, 4000–5000 °C'), r: 0.38, a: -0.35 },
+  { text: tr('Внутреннее ядро · 6371 км\nтвёрдое, ≈ 5400 °C', 'Ішкі ядро · 6371 км\nқатты, ≈ 5400 °C', 'Inner core · 6371 km\nsolid, ≈ 5400 °C'), r: 0.09, a: -0.6 },
 ];
 
 function earthTexture(THREE) {
@@ -177,20 +177,20 @@ export function buildGlobe(lab, origin, stationName) {
   // Открытие разреза
   let open = false, k = 0, returning = false, align = false;
   const lidOut = new THREE.Vector3(-0.92, -0.08, 0.18);
-  const board = lab.board('Недра Земли · радиус 6371 км', [origin[0], 2.25, origin[2] - 0.35], { scale: 0.0026 });
+  const board = lab.board(tr('Недра Земли · радиус 6371 км', 'Жер қойнауы · радиусы 6371 км', 'Earth’s interior · radius 6371 km'), [origin[0], 2.25, origin[2] - 0.35], { scale: 0.0026 });
   function toggle() {
     open = !open;
     align = open;
-    btn.setText(open ? 'Закрыть разрез' : 'Открыть разрез');
-    hudBtn.textContent = open ? 'Закрыть разрез' : 'Открыть разрез';
-    board.set(open ? 'Разрез: глубже — горячее и плотнее\nМантия медленно перемешивается (конвекция)' : 'Недра Земли · радиус 6371 км');
+    btn.setText(open ? tr('Закрыть разрез', 'Кесікті жабу', 'Close section') : tr('Открыть разрез', 'Кесікті ашу', 'Open section'));
+    hudBtn.textContent = open ? tr('Закрыть разрез', 'Кесікті жабу', 'Close section') : tr('Открыть разрез', 'Кесікті ашу', 'Open section');
+    board.set(open ? tr('Разрез: глубже — горячее и плотнее\nМантия медленно перемешивается (конвекция)', 'Кесік: тереңдеген сайын ыстық әрі тығыз\nМантия баяу араласады (конвекция)', 'Section: deeper means hotter and denser\nThe mantle slowly churns (convection)') : tr('Недра Земли · радиус 6371 км', 'Жер қойнауы · радиусы 6371 км', 'Earth’s interior · radius 6371 km'));
   }
-  const btn = lab.button3d('Открыть разрез', [origin[0] - 0.5, 0.95, origin[2] + 0.62], toggle, { width: 0.62, color: 0xe2793a, rotY: 0.35 });
-  const hudBtn = lab.hud.action('Открыть разрез', toggle, stationName);
+  const btn = lab.button3d(tr('Открыть разрез', 'Кесікті ашу', 'Open section'), [origin[0] - 0.5, 0.95, origin[2] + 0.62], toggle, { width: 0.62, color: 0xe2793a, rotY: 0.35 });
+  const hudBtn = lab.hud.action(tr('Открыть разрез', 'Кесікті ашу', 'Open section'), toggle, stationName);
 
   lab.hover(globe, () => (open
-    ? 'Разрез Земли\nПотяните мышью — повернуть'
-    : 'Земля · радиус 6371 км\nПотяните — повернуть; «Открыть разрез» — заглянуть внутрь'));
+    ? tr('Разрез Земли\nПотяните мышью — повернуть', 'Жердің кесігі\nБұру үшін тінтуірмен тартыңыз', 'Cross-section of the Earth\nDrag with the mouse to rotate')
+    : tr('Земля · радиус 6371 км\nПотяните — повернуть; «Открыть разрез» — заглянуть внутрь', 'Жер · радиусы 6371 км\nТартып бұрыңыз; «Кесікті ашу» — ішіне үңілу', 'Earth · radius 6371 km\nDrag to rotate; “Open section” to look inside')));
   lab.grab(globe, {
     onGrab(o) { align = false; o.userData.rot0 = o.rotation.y; o.userData.x0 = null; returning = false; },
     onMove(o) {

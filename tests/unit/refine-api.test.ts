@@ -31,6 +31,11 @@ vi.mock('@/lib/org/access', async (orig) => ({
   ...(await orig<typeof import('@/lib/org/access')>()),
   listMemberships: async () => [],
 }));
+// Суточный лимит ИИ живёт в базе; здесь её нет — доработка всегда в пределах лимита.
+vi.mock('@/lib/quota', async (orig) => ({
+  ...(await orig<typeof import('@/lib/quota')>()),
+  chargeAi: async () => null,
+}));
 
 let store: JobStore;
 let simId = '';

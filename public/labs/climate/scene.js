@@ -1,12 +1,14 @@
-import { createLab, makeLabel, placeLabel, pulse } from '../common.js';
+import { createLab, makeLabel, placeLabel, pulse, tr } from '../common.js';
 import { BASE_CO2, clamp, emissivity, equilibriumC, iceTarget, surfaceAlbedo, albedoFeedback, seaRise } from './model.js';
 import { createPhotons, glowTexture } from './photons.js';
 
-const S1 = 'Парниковый эффект';
-const S2 = 'Ледник и океан';
+const S1 = tr('Парниковый эффект', 'Парниктік әсер', 'Greenhouse Effect');
+const S2 = tr('Ледник и океан', 'Мұздық және мұхит', 'Glacier and Ocean');
 const lab = createLab({
-  title: 'Климатическая станция',
-  hint: 'Возьмите баллон CO₂ или H₂O и отпустите у воронки — газ войдёт под купол, термометр и график покажут потепление. На второй станции рычаг поднимает температуру: ледник тает, море наступает на город.',
+  title: tr('Климатическая станция', 'Климаттық станция', 'Climate Station'),
+  hint: tr('Возьмите баллон CO₂ или H₂O и отпустите у воронки — газ войдёт под купол, термометр и график покажут потепление. На второй станции рычаг поднимает температуру: ледник тает, море наступает на город.',
+    'CO₂ немесе H₂O баллонын алып, шұңғыл жанында жіберіңіз — газ күмбез астына кіреді, термометр мен график жылынуды көрсетеді. Екінші станцияда тұтқа температураны көтереді: мұздық ериді, теңіз қалаға қарай жылжиды.',
+    'Pick up the CO₂ or H₂O canister and release it at the funnel — the gas enters the dome, and the thermometer and chart show the warming. At the second station the lever raises the temperature: the glacier melts and the sea advances on the city.'),
   stations: [
     { name: S1, at: [0, 1.75, 2.5], look: [0, 1.2, -0.6] },
     { name: S2, at: [22, 1.75, 2.4], look: [22, 1.05, -0.4] },
@@ -97,7 +99,7 @@ const GROUND = C.y + 0.01;
   lake.scale.set(1.4, 1, 1);
   lake.position.set(C.x + 0.35, GROUND + 0.003, C.z + 0.35);
   scene.add(land, lake);
-  lab.hover(land, 'Поверхность Земли\nПоглощает видимый свет и излучает тепло — ИК');
+  lab.hover(land, tr('Поверхность Земли\nПоглощает видимый свет и излучает тепло — ИК', 'Жер беті\nКөрінетін жарықты жұтып, жылуды — ИҚ сәулені шығарады', 'Earth’s surface\nAbsorbs visible light and emits heat as IR'));
   const hillMat = std(0x56853f, { flatShading: true });
   for (const [dx, dz, r, h] of [[-0.55, -0.35, 0.38, 0.22], [-0.2, -0.65, 0.3, 0.16], [0.45, -0.5, 0.28, 0.13]]) {
     const hill = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), hillMat);
@@ -134,10 +136,10 @@ const domeWire = new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.Ic
   new THREE.LineBasicMaterial({ color: 0x8ab4f8, transparent: true, opacity: 0.18 }));
 domeWire.position.copy(C);
 scene.add(domeWire);
-lab.hover(dome, () => `Купол — модель атмосферы\nCO₂ ${Math.round(co2)} ppm · ε = ${emissivity(co2, h2o).toFixed(2)}`);
+lab.hover(dome, () => `${tr('Купол — модель атмосферы', 'Күмбез — атмосфера моделі', 'Dome — a model of the atmosphere')}\nCO₂ ${Math.round(co2)} ppm · ε = ${emissivity(co2, h2o).toFixed(2)}`);
 
 const sun1 = sunLamp(C.x, 2.65, C.z, 1.75);
-lab.hover(sun1.bulb, 'Лампа-«Солнце»\nСвет видимый: атмосфера его почти пропускает');
+lab.hover(sun1.bulb, tr('Лампа-«Солнце»\nСвет видимый: атмосфера его почти пропускает', '«Күн» шамы\nЖарығы көрінетін: атмосфера оны түгелге жуық өткізеді', '“Sun” lamp\nVisible light: the atmosphere lets almost all of it through'));
 
 // Воздушный впуск: труба в купол и воронка, к которой подносят баллоны.
 const FUNNEL = v3(1.62, 1.08, -0.6);
@@ -156,8 +158,8 @@ const FUNNEL = v3(1.62, 1.08, -0.6);
   const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 8), std(0x3a4458));
   leg.position.set(1.6, 0.45, -0.6);
   scene.add(pipe, elbow, funnel, ring, leg);
-  scene.add(placeLabel(makeLabel('Впуск газа', { scale: 0.0012 }), FUNNEL.x, FUNNEL.y + 0.25, FUNNEL.z));
-  lab.hover(funnel, 'Впуск газа\nОтпустите здесь баллон CO₂ или H₂O');
+  scene.add(placeLabel(makeLabel(tr('Впуск газа', 'Газ кірісі', 'Gas inlet'), { scale: 0.0012 }), FUNNEL.x, FUNNEL.y + 0.25, FUNNEL.z));
+  lab.hover(funnel, tr('Впуск газа\nОтпустите здесь баллон CO₂ или H₂O', 'Газ кірісі\nCO₂ немесе H₂O баллонын осы жерде жіберіңіз', 'Gas inlet\nRelease the CO₂ or H₂O canister here'));
 }
 const funnelRing = scene.getObjectByName('funnelRing');
 
@@ -249,7 +251,9 @@ const canisters = [];
   g.userData.type = type;
   scene.add(g);
   canisters.push(g);
-  lab.hover(body, type === 'co2' ? `Баллон CO₂ · +${CANISTER_PPM} ppm\nПоднесите к воронке и отпустите` : 'Баллон водяного пара\nПар — тоже парниковый газ');
+  lab.hover(body, type === 'co2'
+    ? tr(`Баллон CO₂ · +${CANISTER_PPM} ppm\nПоднесите к воронке и отпустите`, `CO₂ баллоны · +${CANISTER_PPM} ppm\nШұңғылға апарып, жіберіңіз`, `CO₂ canister · +${CANISTER_PPM} ppm\nBring it to the funnel and let go`)
+    : tr('Баллон водяного пара\nПар — тоже парниковый газ', 'Су буы баллоны\nБу да — парниктік газ', 'Water vapour canister\nVapour is a greenhouse gas too'));
   lab.grab(g, {
     onRelease: (o) => {
       const p = new THREE.Vector3(); o.getWorldPosition(p);
@@ -262,7 +266,7 @@ const canisters = [];
 
 // Термометр, график и табло.
 const thermo1 = thermometer(-1.5, 0.35, 10, 25, [10, 15, 20, 25]);
-lab.hover(thermo1.tube, () => `Средняя температура поверхности\n${T1.toFixed(1)} °C`);
+lab.hover(thermo1.tube, () => `${tr('Средняя температура поверхности', 'Жер бетінің орташа температурасы', 'Mean surface temperature')}\n${T1.toFixed(1)} °C`);
 
 const chartCanvas = document.createElement('canvas');
 chartCanvas.width = 640; chartCanvas.height = 360;
@@ -272,7 +276,7 @@ const chart = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9), new THREE.MeshBa
 chart.position.set(-1.65, 2.3, -1.3);
 chart.rotation.y = 0.45;
 scene.add(chart);
-lab.hover(chart, 'Температура во времени\nПунктир — доиндустриальные 15 °C');
+lab.hover(chart, tr('Температура во времени\nПунктир — доиндустриальные 15 °C', 'Температураның уақыт бойынша өзгерісі\nҮзік сызық — индустрияға дейінгі 15 °C', 'Temperature over time\nDashed line — pre-industrial 15 °C'));
 const samples = [];
 function drawChart() {
   const g = chartCanvas.getContext('2d');
@@ -284,7 +288,7 @@ function drawChart() {
   const yOf = (c) => B - ((clamp(c, 10, 25) - 10) / 15) * (B - T);
   g.font = '600 30px Inter, system-ui, sans-serif';
   g.fillStyle = '#eef2f7';
-  g.fillText('Температура, °C', 24, 40);
+  g.fillText(tr('Температура, °C', 'Температура, °C', 'Temperature, °C'), 24, 40);
   g.font = '700 40px Inter, system-ui, sans-serif';
   g.fillStyle = T1 > 17 ? '#ff8a80' : T1 > 15.5 ? '#ffd54f' : '#81d4fa';
   g.fillText(`${T1.toFixed(1)} °C`, 270, 42);
@@ -298,7 +302,7 @@ function drawChart() {
     g.fillText(String(c), L - 12, yOf(c) + 7);
   }
   g.textAlign = 'left';
-  g.fillText('годы →', L, H - 14);
+  g.fillText(tr('годы →', 'жылдар →', 'years →'), L, H - 14);
   g.setLineDash([8, 8]); g.strokeStyle = 'rgba(255,255,255,0.45)';
   g.beginPath(); g.moveTo(L, yOf(15)); g.lineTo(Rt, yOf(15)); g.stroke();
   g.setLineDash([]);
@@ -320,19 +324,30 @@ function drawChart() {
 
 const gasBoard = lab.board(' ', [0, 0.42, 0.7], { scale: 0.0018 });
 function updateGasBoard() {
-  gasBoard.set(`CO₂ ${Math.round(co2)} ppm · водяной пар ×${h2o.toFixed(1)}\nε атмосферы = ${emissivity(co2, h2o).toFixed(2)} → равновесие ${equilibriumC(co2, h2o).toFixed(1)} °C`);
+  gasBoard.set(tr(
+    `CO₂ ${Math.round(co2)} ppm · водяной пар ×${h2o.toFixed(1)}\nε атмосферы = ${emissivity(co2, h2o).toFixed(2)} → равновесие ${equilibriumC(co2, h2o).toFixed(1)} °C`,
+    `CO₂ ${Math.round(co2)} ppm · су буы ×${h2o.toFixed(1)}\nатмосфераның ε = ${emissivity(co2, h2o).toFixed(2)} → тепе-теңдік ${equilibriumC(co2, h2o).toFixed(1)} °C`,
+    `CO₂ ${Math.round(co2)} ppm · water vapour ×${h2o.toFixed(1)}\natmosphere ε = ${emissivity(co2, h2o).toFixed(2)} → equilibrium ${equilibriumC(co2, h2o).toFixed(1)} °C`));
 }
 updateGasBoard();
-scene.add(placeLabel(makeLabel(
+scene.add(placeLabel(makeLabel(tr(
   'Жёлтые — видимый свет Солнца: проходит сквозь воздух.\n' +
   'Земля нагревается и светит в ИК — красные фотоны.\n' +
   'CO₂ и H₂O поглощают ИК и переизлучают во все стороны:\n' +
-  'часть тепла возвращается вниз — поверхность теплее.', { scale: 0.0019 }), 2.25, 1.9, -1.2));
+  'часть тепла возвращается вниз — поверхность теплее.',
+  'Сарылары — Күннің көрінетін жарығы: ауадан өтеді.\n' +
+  'Жер қызып, ИҚ сәуле шығарады — қызыл фотондар.\n' +
+  'CO₂ мен H₂O ИҚ сәулені жұтып, жан-жаққа қайта шығарады:\n' +
+  'жылудың бір бөлігі төмен қайтады — жер беті жылынады.',
+  'Yellow — visible sunlight: it passes through the air.\n' +
+  'The Earth warms up and glows in IR — red photons.\n' +
+  'CO₂ and H₂O absorb IR and re-emit it in all directions:\n' +
+  'part of the heat returns downward — the surface gets warmer.'), { scale: 0.0019 }), 2.25, 1.9, -1.2));
 
-lab.hud.action('Добавить CO₂', () => addGas('co2'), S1);
-lab.hud.action('Добавить водяной пар', () => addGas('h2o'), S1);
-lab.hud.action('Сбросить атмосферу', resetGas, S1);
-lab.button3d('Сбросить', [1.1, 0.95, 0.75], resetGas, { width: 0.5, color: 0x546e7a, rotY: -0.4 });
+lab.hud.action(tr('Добавить CO₂', 'CO₂ қосу', 'Add CO₂'), () => addGas('co2'), S1);
+lab.hud.action(tr('Добавить водяной пар', 'Су буын қосу', 'Add water vapour'), () => addGas('h2o'), S1);
+lab.hud.action(tr('Сбросить атмосферу', 'Атмосфераны қалпына келтіру', 'Reset atmosphere'), resetGas, S1);
+lab.button3d(tr('Сбросить', 'Қалпына келтіру', 'Reset'), [1.1, 0.95, 0.75], resetGas, { width: 0.5, color: 0x546e7a, rotY: -0.4 });
 
 let T1 = equilibriumC(BASE_CO2, 1);
 let sampleTimer = 0;
@@ -428,8 +443,8 @@ const glacierPivot = new THREE.Group();
 glacierPivot.position.set(X0 - 1.6, F + 0.02 + PLATEAU, Z2);
 glacierPivot.add(glacier);
 scene.add(glacierPivot);
-lab.hover(glacier, () => `Ледник · осталось ${Math.round(ice * 100)} %\nБелый лёд отражает ~80 % света`);
-lab.hover(rock, 'Суша под ледником\nЛёд на суше при таянии поднимает море');
+lab.hover(glacier, () => tr(`Ледник · осталось ${Math.round(ice * 100)} %\nБелый лёд отражает ~80 % света`, `Мұздық · ${Math.round(ice * 100)} % қалды\nАқ мұз жарықтың ~80 %-ын шағылыстырады`, `Glacier · ${Math.round(ice * 100)} % left\nWhite ice reflects ~80 % of light`));
+lab.hover(rock, tr('Суша под ледником\nЛёд на суше при таянии поднимает море', 'Мұздық астындағы құрлық\nҚұрлықтағы мұз еріген кезде теңіз деңгейі көтеріледі', 'Land under the glacier\nLand ice raises the sea as it melts'));
 // Берег справа и город.
 const shore = extrude([[0.5, 0], [1.6, 0], [1.6, SHELF], [0.86, SHELF], [0.74, 0.22], [0.62, 0.09]], TD - 0.02, std(0x8d9f5a, { flatShading: true, roughness: 1 }));
 shore.position.set(X0, F + 0.02, Z2);
@@ -459,7 +474,7 @@ const houses = [];
   lamp.position.set(X0 + 0.88, F + 0.02 + SHELF + 0.3, Z2 + 0.38);
   lamp.name = 'lighthouse';
   scene.add(lh, lamp);
-  lab.hover(houses[4].children[0], () => `Прибрежный город\nЗатоплено домов: ${flooded} из ${houses.length}`);
+  lab.hover(houses[4].children[0], () => tr(`Прибрежный город\nЗатоплено домов: ${flooded} из ${houses.length}`, `Жағалаудағы қала\nСу басқан үйлер: ${houses.length} үйдің ${flooded}`, `Coastal city\nHouses flooded: ${flooded} of ${houses.length}`));
 }
 const lighthouse = scene.getObjectByName('lighthouse');
 // Вода
@@ -471,7 +486,7 @@ water.position.set(X0, F + 0.02, Z2);
 water.scale.y = LEVEL0;
 water.renderOrder = 2;
 scene.add(water);
-lab.hover(water, 'Океан\nТёмная вода поглощает ~94 % света');
+lab.hover(water, tr('Океан\nТёмная вода поглощает ~94 % света', 'Мұхит\nҚараңғы су жарықтың ~94 %-ын жұтады', 'Ocean\nDark water absorbs ~94 % of light'));
 
 // Линейка уровня моря на передней стенке.
 const GAUGE_X = X0 + 0.3, GAUGE_Z = Z2 + TD / 2 + 0.03;
@@ -484,7 +499,7 @@ const GAUGE_X = X0 + 0.3, GAUGE_Z = Z2 + TD / 2 + 0.03;
     const t = new THREE.Mesh(new THREE.BoxGeometry(m % 5 === 0 ? 0.07 : 0.04, 0.004, 0.012), new THREE.MeshBasicMaterial({ color: 0x263238 }));
     t.position.set(GAUGE_X - 0.01, y, GAUGE_Z + 0.002);
     scene.add(t);
-    if (m % 5 === 0) scene.add(placeLabel(makeLabel(`+${m} м`, { scale: 0.0009 }), GAUGE_X + 0.13, y, GAUGE_Z + 0.02));
+    if (m % 5 === 0) scene.add(placeLabel(makeLabel(`+${m} ${tr('м', 'м', 'm')}`, { scale: 0.0009 }), GAUGE_X + 0.13, y, GAUGE_Z + 0.02));
   }
 }
 const gaugeMark = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.05, 3), new THREE.MeshBasicMaterial({ color: 0xff5252 }));
@@ -492,7 +507,7 @@ gaugeMark.rotation.z = -Math.PI / 2;
 scene.add(gaugeMark);
 
 const sun2 = sunLamp(X0, 2.6, Z2, 1.6);
-lab.hover(sun2.bulb, 'Солнце\nОдин и тот же свет: лёд отражает, вода поглощает');
+lab.hover(sun2.bulb, tr('Солнце\nОдин и тот же свет: лёд отражает, вода поглощает', 'Күн\nЖарық бірдей: мұз шағылыстырады, су жұтады', 'Sun\nThe same light: ice reflects it, water absorbs it'));
 
 // Рычаг термостата.
 const PIVOT = v3(X0 - 1.15, TOP + 0.1, Z2 + 0.95);
@@ -521,8 +536,8 @@ const armGroup = new THREE.Group();
   armGroup.add(arm);
   armGroup.position.copy(PIVOT);
   scene.add(base, arc, scale, armGroup);
-  scene.add(placeLabel(makeLabel('холод', { scale: 0.0009, color: '#81d4fa' }), PIVOT.x - 0.42, PIVOT.y + 0.32, PIVOT.z));
-  scene.add(placeLabel(makeLabel('жара', { scale: 0.0009, color: '#ff8a80' }), PIVOT.x + 0.42, PIVOT.y + 0.32, PIVOT.z));
+  scene.add(placeLabel(makeLabel(tr('холод', 'суық', 'cold'), { scale: 0.0009, color: '#81d4fa' }), PIVOT.x - 0.42, PIVOT.y + 0.32, PIVOT.z));
+  scene.add(placeLabel(makeLabel(tr('жара', 'ыстық', 'hot'), { scale: 0.0009, color: '#ff8a80' }), PIVOT.x + 0.42, PIVOT.y + 0.32, PIVOT.z));
 }
 const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 20, 14), std(0xff7043, { emissive: 0xff5722, emissiveIntensity: 0.5, roughness: 0.3 }));
 scene.add(knob);
@@ -536,7 +551,7 @@ function placeKnob() {
 }
 function setLever(v) { lever = clamp(v, 0, 1); placeKnob(); }
 placeKnob();
-lab.hover(knob, () => `Рычаг потепления\n+${(lever * DT_MAX).toFixed(1)} °C — тяните вправо`);
+lab.hover(knob, () => tr(`Рычаг потепления\n+${(lever * DT_MAX).toFixed(1)} °C — тяните вправо`, `Жылыну тұтқасы\n+${(lever * DT_MAX).toFixed(1)} °C — оңға тартыңыз`, `Warming lever\n+${(lever * DT_MAX).toFixed(1)} °C — pull right`));
 lab.grab(knob, {
   onMove: (o) => {
     const p = new THREE.Vector3(); o.getWorldPosition(p);
@@ -549,19 +564,30 @@ lab.grab(knob, {
 });
 const warmer = () => setLever(lever + 1 / DT_MAX);
 const colder = () => setLever(lever - 1 / DT_MAX);
-lab.hud.action('Холоднее −1 °C', colder, S2);
-lab.hud.action('Теплее +1 °C', warmer, S2);
+lab.hud.action(tr('Холоднее −1 °C', 'Суығырақ −1 °C', 'Colder −1 °C'), colder, S2);
+lab.hud.action(tr('Теплее +1 °C', 'Жылырақ +1 °C', 'Warmer +1 °C'), warmer, S2);
 lab.button3d('−1 °C', [PIVOT.x + 0.55, TOP + 0.09, PIVOT.z], colder, { width: 0.3, color: 0x0288d1 });
 lab.button3d('+1 °C', [PIVOT.x + 0.9, TOP + 0.09, PIVOT.z], warmer, { width: 0.3, color: 0xe64a19 });
 
 const thermo2 = thermometer(X0 + 2.05, Z2 + 0.1, 0, 7, [0, 2, 4, 6], ' °C');
-lab.hover(thermo2.tube, () => `Потепление: +${dTtotal.toFixed(1)} °C\n(рычаг +${(lever * DT_MAX).toFixed(1)}, альбедо +${feedback.toFixed(1)})`);
+lab.hover(thermo2.tube, () => tr(
+  `Потепление: +${dTtotal.toFixed(1)} °C\n(рычаг +${(lever * DT_MAX).toFixed(1)}, альбедо +${feedback.toFixed(1)})`,
+  `Жылыну: +${dTtotal.toFixed(1)} °C\n(тұтқа +${(lever * DT_MAX).toFixed(1)}, альбедо +${feedback.toFixed(1)})`,
+  `Warming: +${dTtotal.toFixed(1)} °C\n(lever +${(lever * DT_MAX).toFixed(1)}, albedo +${feedback.toFixed(1)})`));
 const state2Board = lab.board(' ', [X0 + 0.5, 1.95, Z2 - 1.0], { scale: 0.0022 });
-scene.add(placeLabel(makeLabel(
+scene.add(placeLabel(makeLabel(tr(
   'Альбедо — доля отражённого света.\n' +
   'Лёд ≈ 0.8 — отражает почти всё, вода ≈ 0.06 — почти всё поглощает.\n' +
   'Меньше льда → темнее поверхность → ещё теплее (обратная связь).\n' +
-  'Море растёт от талой воды с суши и теплового расширения.', { scale: 0.0019 }), X0 - 0.9, 2.42, Z2 - 1.0));
+  'Море растёт от талой воды с суши и теплового расширения.',
+  'Альбедо — шағылысқан жарықтың үлесі.\n' +
+  'Мұз ≈ 0.8 — түгелге жуық шағылыстырады, су ≈ 0.06 — түгелге жуық жұтады.\n' +
+  'Мұз азаяды → жер беті қараяды → одан әрі жылынады (кері байланыс).\n' +
+  'Теңіз құрлықтың еріген суы мен судың жылулық ұлғаюынан көтеріледі.',
+  'Albedo is the fraction of light reflected.\n' +
+  'Ice ≈ 0.8 reflects almost everything, water ≈ 0.06 absorbs almost everything.\n' +
+  'Less ice → darker surface → even warmer (a feedback loop).\n' +
+  'The sea rises from land meltwater and thermal expansion.'), { scale: 0.0019 }), X0 - 0.9, 2.42, Z2 - 1.0));
 
 let ice = 1, dTtotal = 0, feedback = 0, level = LEVEL0, flooded = 0;
 const photons2 = createPhotons(THREE, scene, 160);
@@ -725,9 +751,14 @@ lab.setFrame((dt, t) => {
   }
   lighthouse.material.color.setHSL(0.14, 1, 0.5 + 0.3 * Math.max(0, Math.sin(t * 3)));
   if (!at1 && Math.floor(t * 3) !== Math.floor((t - dt) * 3)) {
-    state2Board.set(`Потепление +${dTtotal.toFixed(1)} °C · лёд ${Math.round(ice * 100)} % · альбедо ${surfaceAlbedo(ice).toFixed(2)}\n` +
-      `Уровень моря +${rise.toFixed(1)} м · затоплено домов: ${flooded} из ${houses.length}`);
+    state2Board.set(tr(
+      `Потепление +${dTtotal.toFixed(1)} °C · лёд ${Math.round(ice * 100)} % · альбедо ${surfaceAlbedo(ice).toFixed(2)}\n` +
+      `Уровень моря +${rise.toFixed(1)} м · затоплено домов: ${flooded} из ${houses.length}`,
+      `Жылыну +${dTtotal.toFixed(1)} °C · мұз ${Math.round(ice * 100)} % · альбедо ${surfaceAlbedo(ice).toFixed(2)}\n` +
+      `Теңіз деңгейі +${rise.toFixed(1)} м · су басқан үйлер: ${houses.length} үйдің ${flooded}`,
+      `Warming +${dTtotal.toFixed(1)} °C · ice ${Math.round(ice * 100)} % · albedo ${surfaceAlbedo(ice).toFixed(2)}\n` +
+      `Sea level +${rise.toFixed(1)} m · houses flooded: ${flooded} of ${houses.length}`));
   }
-  if (!demoDone && !at1) { demoDone = true; state2Board.set('Тяните рычаг вправо — станет теплее'); }
+  if (!demoDone && !at1) { demoDone = true; state2Board.set(tr('Тяните рычаг вправо — станет теплее', 'Тұтқаны оңға тартыңыз — жылырақ болады', 'Pull the lever right — it will get warmer')); }
 });
 drawChart();

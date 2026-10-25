@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { guardAdmin } from '@/lib/http/guards';
 import { badRequest, INVALID_BODY_MESSAGE, notFound, readBody, type IdParams } from '@/lib/http/route-kit';
-import { getUserCard, setPlatformRole } from '@/lib/admin/users';
+import { getUserCard, setPlatformRole, setUserLimits } from '@/lib/admin/users';
 import { logAdminAction } from '@/lib/admin/actions';
 import { onUserDisabled } from '@/lib/telegram/community';
 import { disableUser, enableUser, setTemporaryPassword } from '@/lib/auth/users';
@@ -45,6 +45,15 @@ export async function POST(req: Request, { params }: IdParams) {
       await setPlatformRole(card.id, 'user');
       await logAdminAction(admin.id, 'user.revoke_admin', target);
       return NextResponse.json({ ok: true });
+    case 'set-limits': {
+      const limit = (v: unknown) => (v === null ? null : Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 100000 ? v as number : undefined);
+      const generationLimit = 'generationLimit' in body ? limit(body.generationLimit) : undefined;
+      const aiDailyLimit = 'aiDailyLimit' in body ? limit(body.aiDailyLimit) : undefined;
+      if (generationLimit === undefined && aiDailyLimit === undefined) return badRequest(INVALID_BODY_MESSAGE);
+      await setUserLimits(card.id, { generationLimit, aiDailyLimit });
+      await logAdminAction(admin.id, 'user.limits', `${target}: тренажёры ${generationLimit ?? '—'}, ИИ ${aiDailyLimit ?? '—'}`);
+      return NextResponse.json({ ok: true });
+    }
     default:
       return badRequest('Неизвестное действие.');
   }

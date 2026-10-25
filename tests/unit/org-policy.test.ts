@@ -44,10 +44,14 @@ describe('лимит генераций', () => {
   it('платформенный админ — без лимита', () => {
     expect(generationLimit(ADMIN, [member('teacher')])).toBeNull();
   });
-  it('без членств и ученик — пробные 10', () => {
-    expect(TRIAL_LIMIT).toBe(10);
-    expect(generationLimit(USER, [])).toBe(10);
-    expect(generationLimit(USER, [member('student', { studentsCanGenerate: true })])).toBe(10);
+  it('без членств и ученик — пробный лимит', () => {
+    expect(TRIAL_LIMIT).toBe(1);
+    expect(generationLimit(USER, [])).toBe(1);
+    expect(generationLimit(USER, [], 5)).toBe(5);
+    expect(generationLimit(USER, [member('student', { studentsCanGenerate: true })])).toBe(1);
+  });
+  it('руководство в своей песочнице — всё равно пробный лимит', () => {
+    expect(generationLimit(USER, [{ ...member('org_admin', { teacherGenerationLimit: 999 }), sandbox: true }])).toBe(1);
   });
   it('учитель — лимит организации, по умолчанию 100', () => {
     expect(generationLimit(USER, [member('teacher')])).toBe(100);

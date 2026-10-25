@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { guardUser } from '@/lib/http/guards';
 import { badRequest, INVALID_BODY_MESSAGE, notFound, readBody, type IdParams } from '@/lib/http/route-kit';
 import { acquire, throttled, THROTTLE_MESSAGE } from '@/lib/http/throttle';
+import { chargeAi } from '@/lib/quota';
 import { getArticle } from '@/lib/research/articles-store';
 import { figureOrder, normalizeArticleDoc, type ArticleLang } from '@/lib/research/article';
 import { getItem, listItems, ResearchError, type ResearchItem } from '@/lib/research/store';
@@ -28,6 +29,8 @@ export async function POST(req: Request, { params }: IdParams) {
   if (!body || typeof body.action !== 'string') return badRequest(INVALID_BODY_MESSAGE);
   const article = await getArticle(user.id, (await params).id);
   if (!article) return notFound();
+  const over = await chargeAi(user, 'write');
+  if (over) return over;
   // Документ присылает редактор, и он целиком уходит в запрос к модели — ограничиваем, как и сохранение статьи.
   if (body.doc !== undefined && JSON.stringify(body.doc).length > MAX_DOC) return badRequest('Статья слишком большая для помощника.');
   const doc = body.doc ? normalizeArticleDoc(body.doc) : article.doc;

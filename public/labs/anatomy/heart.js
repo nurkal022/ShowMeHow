@@ -5,7 +5,7 @@
  * Координаты локальные: сердце ≈ 2.8 единицы в высоту, наружу масштабируется группой.
  */
 import * as THREE from 'three';
-import { makeLabel } from '../common.js';
+import { makeLabel, tr } from '../common.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const noRay = () => {};
@@ -155,13 +155,13 @@ export function buildHeart(lab) {
     return m;
   };
   const [pA, pB, pC, pD] = paths;
-  vessel(pA, 0, pA.marks.atrium + 0.02, 0.12, 0x3f63d6, 'Верхняя полая вена\nНесёт венозную кровь от головы и рук в правое предсердие');
-  vessel(pB, 0, pB.marks.atrium + 0.02, 0.13, 0x3f63d6, 'Нижняя полая вена\nВенозная кровь от ног и внутренних органов');
-  vessel(pA, pA.marks.out - 0.02, 1, 0.12, 0x4a6fe0, 'Лёгочный ствол → левая лёгочная артерия\nВенозная кровь из правого желудочка идёт в лёгкие');
-  vessel(pB, 0.72, 1, 0.1, 0x4a6fe0, 'Правая лёгочная артерия\nПроходит под дугой аорты к правому лёгкому');
-  vessel(pC, 0, pC.marks.atrium + 0.02, 0.075, 0xd8434c, 'Лёгочные вены (левые)\nНесут насыщенную кислородом кровь из лёгких');
-  vessel(pD, 0, pD.marks.atrium + 0.02, 0.075, 0xd8434c, 'Лёгочные вены (правые)\nАртериальная кровь в левое предсердие');
-  const aorta = vessel(pC, pC.marks.out - 0.02, 1, 0.14, 0xd8434c, 'Аорта\nСамая крупная артерия: из левого желудочка в большой круг');
+  vessel(pA, 0, pA.marks.atrium + 0.02, 0.12, 0x3f63d6, tr('Верхняя полая вена\nНесёт венозную кровь от головы и рук в правое предсердие', 'Жоғарғы қуыс вена\nБас пен қолдан веналық қанды оң жүрекшеге әкеледі', 'Superior vena cava\nCarries venous blood from the head and arms to the right atrium'));
+  vessel(pB, 0, pB.marks.atrium + 0.02, 0.13, 0x3f63d6, tr('Нижняя полая вена\nВенозная кровь от ног и внутренних органов', 'Төменгі қуыс вена\nАяқтар мен ішкі ағзалардан келетін веналық қан', 'Inferior vena cava\nVenous blood from the legs and internal organs'));
+  vessel(pA, pA.marks.out - 0.02, 1, 0.12, 0x4a6fe0, tr('Лёгочный ствол → левая лёгочная артерия\nВенозная кровь из правого желудочка идёт в лёгкие', 'Өкпе діңі → сол өкпе артериясы\nОң қарыншадан веналық қан өкпеге барады', 'Pulmonary trunk → left pulmonary artery\nVenous blood from the right ventricle goes to the lungs'));
+  vessel(pB, 0.72, 1, 0.1, 0x4a6fe0, tr('Правая лёгочная артерия\nПроходит под дугой аорты к правому лёгкому', 'Оң өкпе артериясы\nҚолқа доғасының астынан оң өкпеге өтеді', 'Right pulmonary artery\nRuns under the aortic arch to the right lung'));
+  vessel(pC, 0, pC.marks.atrium + 0.02, 0.075, 0xd8434c, tr('Лёгочные вены (левые)\nНесут насыщенную кислородом кровь из лёгких', 'Өкпе веналары (сол жақ)\nӨкпеден оттекке қаныққан қанды әкеледі', 'Pulmonary veins (left)\nCarry oxygen-rich blood from the lungs'));
+  vessel(pD, 0, pD.marks.atrium + 0.02, 0.075, 0xd8434c, tr('Лёгочные вены (правые)\nАртериальная кровь в левое предсердие', 'Өкпе веналары (оң жақ)\nАртериялық қан сол жүрекшеге құйылады', 'Pulmonary veins (right)\nArterial blood into the left atrium'));
+  const aorta = vessel(pC, pC.marks.out - 0.02, 1, 0.14, 0xd8434c, tr('Аорта\nСамая крупная артерия: из левого желудочка в большой круг', 'Қолқа\nЕң ірі артерия: сол қарыншадан үлкен шеңберге', 'Aorta\nThe largest artery: from the left ventricle into the systemic circuit'));
   // Ветви дуги аорты.
   const arch = pC.curve.getPointAt(pC.marks.out + (1 - pC.marks.out) * 0.3);
   [[-0.12, 0.06], [0.02, 0.03], [0.14, -0.04]].forEach(([dx, dz], i) => {
@@ -186,10 +186,10 @@ export function buildHeart(lab) {
     m.userData.label = lbl;
     return m;
   };
-  const RA = chamber('Правое предсердие', 'Собирает венозную кровь из полых вен', V(-0.6, 0.48, 0.12), [0.28, 0.26, 0.24], -0.2, 0x3d6dff, V(-0.35, 0.2, 0.45));
-  const LA = chamber('Левое предсердие', 'Принимает из лёгочных вен кровь, богатую O₂', V(0.32, 0.58, -0.3), [0.3, 0.2, 0.22], 0.1, 0xff3d4a, V(0.4, 0.2, 0.75));
-  const RV = chamber('Правый желудочек', 'Качает кровь в лёгкие — малый круг.\nСтенка тонкая: давление ≈ 25 мм рт. ст.', V(-0.3, -0.3, 0.2), [0.26, 0.42, 0.2], VENT_TILT, 0x3d6dff, V(-0.45, -0.25, 0.45));
-  const LV = chamber('Левый желудочек', 'Главный насос большого круга.\nСтенка толще всех: давление ≈ 120 мм рт. ст.', V(0.26, -0.44, -0.1), [0.25, 0.52, 0.24], VENT_TILT, 0xff3d4a, V(0.55, -0.35, 0.75));
+  const RA = chamber(tr('Правое предсердие', 'Оң жүрекше', 'Right atrium'), tr('Собирает венозную кровь из полых вен', 'Қуыс веналардан веналық қанды жинайды', 'Collects venous blood from the venae cavae'), V(-0.6, 0.48, 0.12), [0.28, 0.26, 0.24], -0.2, 0x3d6dff, V(-0.35, 0.2, 0.45));
+  const LA = chamber(tr('Левое предсердие', 'Сол жүрекше', 'Left atrium'), tr('Принимает из лёгочных вен кровь, богатую O₂', 'Өкпе веналарынан O₂-ге бай қанды қабылдайды', 'Receives O₂-rich blood from the pulmonary veins'), V(0.32, 0.58, -0.3), [0.3, 0.2, 0.22], 0.1, 0xff3d4a, V(0.4, 0.2, 0.75));
+  const RV = chamber(tr('Правый желудочек', 'Оң қарынша', 'Right ventricle'), tr('Качает кровь в лёгкие — малый круг.\nСтенка тонкая: давление ≈ 25 мм рт. ст.', 'Қанды өкпеге айдайды — кіші шеңбер.\nҚабырғасы жұқа: қысымы ≈ 25 мм сын. бағ.', 'Pumps blood to the lungs — the pulmonary circuit.\nThin wall: pressure ≈ 25 mmHg'), V(-0.3, -0.3, 0.2), [0.26, 0.42, 0.2], VENT_TILT, 0x3d6dff, V(-0.45, -0.25, 0.45));
+  const LV = chamber(tr('Левый желудочек', 'Сол қарынша', 'Left ventricle'), tr('Главный насос большого круга.\nСтенка толще всех: давление ≈ 120 мм рт. ст.', 'Үлкен шеңбердің басты сорғысы.\nҚабырғасы ең қалың: қысымы ≈ 120 мм сын. бағ.', 'The main pump of the systemic circuit.\nThickest wall: pressure ≈ 120 mmHg'), V(0.26, -0.44, -0.1), [0.25, 0.52, 0.24], VENT_TILT, 0xff3d4a, V(0.55, -0.35, 0.75));
 
   // ---------- Клапаны ----------
   const valves = [];
@@ -225,10 +225,10 @@ export function buildHeart(lab) {
     return v;
   };
   const ptA = (p, i) => V(...PATHS[p].pts[i].slice(0, 3));
-  valve('Трёхстворчатый клапан', 'Между правым предсердием и желудочком.\nЗакрывается в начале систолы — первый тон «лаб»', ptA(0, 4), ptA(0, 3), ptA(0, 5), 0.17, 'av');
-  valve('Митральный клапан', 'Две створки между левым предсердием и желудочком.\nНе пускает кровь назад в лёгкие', ptA(2, 4), ptA(2, 3), ptA(2, 5), 0.17, 'av');
-  valve('Клапан лёгочного ствола', 'Три полулунные створки. Открыт только в систолу желудочков', ptA(0, 8), ptA(0, 7), ptA(0, 9), 0.12, 'sl');
-  valve('Аортальный клапан', 'Три полулунные створки. Захлопывается в начале диастолы — второй тон «даб»', ptA(2, 8), ptA(2, 7), ptA(2, 9), 0.13, 'sl');
+  valve(tr('Трёхстворчатый клапан', 'Үшжармалы қақпақша', 'Tricuspid valve'), tr('Между правым предсердием и желудочком.\nЗакрывается в начале систолы — первый тон «лаб»', 'Оң жүрекше мен қарыншаның арасында.\nСистола басында жабылады — бірінші тон «лаб»', 'Between the right atrium and ventricle.\nCloses at the start of systole — the first sound, "lub"'), ptA(0, 4), ptA(0, 3), ptA(0, 5), 0.17, 'av');
+  valve(tr('Митральный клапан', 'Митралды қақпақша', 'Mitral valve'), tr('Две створки между левым предсердием и желудочком.\nНе пускает кровь назад в лёгкие', 'Сол жүрекше мен қарыншаның арасындағы екі жарма.\nҚанды өкпеге кері жібермейді', 'Two leaflets between the left atrium and ventricle.\nKeeps blood from flowing back to the lungs'), ptA(2, 4), ptA(2, 3), ptA(2, 5), 0.17, 'av');
+  valve(tr('Клапан лёгочного ствола', 'Өкпе діңінің қақпақшасы', 'Pulmonary valve'), tr('Три полулунные створки. Открыт только в систолу желудочков', 'Үш жарты ай тәрізді жарма. Тек қарыншалар систоласында ашық', 'Three semilunar cusps. Open only during ventricular systole'), ptA(0, 8), ptA(0, 7), ptA(0, 9), 0.12, 'sl');
+  valve(tr('Аортальный клапан', 'Қолқа қақпақшасы', 'Aortic valve'), tr('Три полулунные створки. Захлопывается в начале диастолы — второй тон «даб»', 'Үш жарты ай тәрізді жарма. Диастола басында жабылады — екінші тон «даб»', 'Three semilunar cusps. Snaps shut at the start of diastole — the second sound, "dub"'), ptA(2, 8), ptA(2, 7), ptA(2, 9), 0.13, 'sl');
 
   // ---------- Частицы крови ----------
   const PER = 80;

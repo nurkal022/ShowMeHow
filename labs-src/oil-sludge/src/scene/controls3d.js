@@ -5,6 +5,7 @@ import { DataUtils } from 'three';
 import { LAYOUT, Display } from './lab.js';
 import { axisDrag } from '../interaction.js';
 import { sampleField, PROBE_COLORS } from './probes.js';
+import { tr } from '../i18n.js';
 
 const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -88,7 +89,7 @@ export class SceneControls {
     this.power.userData.handler = { down: () => actions.setRunning(!state.running) };
     scene.add(this.power);
     interaction.add(this.power);
-    const pl = label('ПУСК', 0.04, 0.016, '#ffd0d0');
+    const pl = label(tr('ПУСК', 'ҚОСУ', 'START'), 0.04, 0.016, '#ffd0d0');
     pl.position.set(this.power.position.x, ny - 0.045, zf + 0.002);
     scene.add(pl);
 
@@ -169,14 +170,14 @@ export class SceneControls {
       c.strokeStyle = '#3dc3ff'; c.lineWidth = 4; c.strokeRect(2, 2, W - 4, H - 4);
       c.fillStyle = '#ffffff'; c.font = '700 54px Inter, Roboto, sans-serif';
       c.fillText(`${f.T.toFixed(1)} °C`, 20, 66);
-      if (this.state.replay !== null) { c.fillStyle = '#ffcc4d'; c.font = '700 24px Inter, Roboto, sans-serif'; c.fillText('ПОВТОР', W - 130, 52); }
+      if (this.state.replay !== null) { c.fillStyle = '#ffcc4d'; c.font = '700 24px Inter, Roboto, sans-serif'; c.fillText(tr('ПОВТОР', 'ҚАЙТАЛАУ', 'REPLAY'), W - 130, 52); }
       c.font = '600 27px Inter, Roboto, sans-serif';
-      const items = [['#7fbfff', `вода ${(f.w * 100).toFixed(0)}%`], ['#ffc266', `нефть ${(f.o * 100).toFixed(0)}%`], ['#b0b0b0', `кокс ${(f.k * 100).toFixed(0)}%`]];
+      const items = [['#7fbfff', `${tr('вода', 'су', 'water')} ${(f.w * 100).toFixed(0)}%`], ['#ffc266', `${tr('нефть', 'мұнай', 'oil')} ${(f.o * 100).toFixed(0)}%`], ['#b0b0b0', `${tr('кокс', 'кокс', 'coke')} ${(f.k * 100).toFixed(0)}%`]];
       let x = 20;
       for (const [col, s] of items) { c.fillStyle = col; c.fillText(s, x, 116); x += c.measureText(s).width + 22; }
       c.font = '500 24px Inter, Roboto, sans-serif';
       c.fillStyle = PROBE_COLORS[next];
-      c.fillText(this.flash ?? `высота ${(l.y * 100).toFixed(0)}% · клик — поставить T${next + 1}`, 20, 156);
+      c.fillText(this.flash ?? tr(`высота ${(l.y * 100).toFixed(0)}% · клик — поставить T${next + 1}`, `биіктігі ${(l.y * 100).toFixed(0)}% · басу — T${next + 1} қою`, `height ${(l.y * 100).toFixed(0)}% · click to place T${next + 1}`), 20, 156);
     });
   }
   hideTip() { this.tip.mesh.visible = false; this.marker.visible = false; }
@@ -187,7 +188,7 @@ export class SceneControls {
     const i = this.state.view.nextProbe ?? 0;
     this.probes[i].group.position.copy(p);
     this.state.view.nextProbe = (i + 1) % this.probes.length;
-    this.flash = `T${i + 1} установлена сюда`;
+    this.flash = tr(`T${i + 1} установлена сюда`, `T${i + 1} осы жерге қойылды`, `T${i + 1} placed here`);
     clearTimeout(this._ft);
     this._ft = setTimeout(() => { this.flash = null; }, 1200);
     this.showTip(h);

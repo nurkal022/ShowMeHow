@@ -1,3 +1,4 @@
+import { tr } from '../i18n.js';
 // Физические параметры модели. Значения — ориентировочные литературные (реальных образцов пока нет).
 // Источники диапазонов: Hu, Li, Zeng (2013) J. Hazard. Mater. — обзор переработки нефтешламов;
 // Калменова, Балакаева, Phillips (2023) IJOGCT 34(2); Вестник КазНПУ №4(84) 2023.
@@ -13,11 +14,11 @@ const trouton = (TbC) => 10.6 * (TbC + T0K);
 
 // Жидкие компоненты (псевдокомпоненты). B = L·M/R [K] — для уравнения Клапейрона–Клаузиуса.
 export const COMPONENTS = [
-  { id: 'water',  name: 'Вода',               color: '#5aa9ff', TbC: 100,  L: 2.257e6, M: 0.018, rho: 1000, c: 4186, lambda: 0.60, B: 2.257e6 * 0.018 / R },
-  { id: 'light',  name: 'Лёгкие УВ (C5–C10)', color: '#7fe0c0', TbC: 150,  L: 3.4e5,   M: 0.11,  rho: 750,  c: 2100, lambda: 0.13, B: trouton(150) },
-  { id: 'medium', name: 'Средние (C11–C20)',  color: '#ffd166', TbC: 290,  L: 2.7e5,   M: 0.20,  rho: 850,  c: 2200, lambda: 0.13, B: trouton(290) },
-  { id: 'heavy',  name: 'Тяжёлые (C21–C35)',  color: '#f08a4b', TbC: 430,  L: 2.2e5,   M: 0.35,  rho: 920,  c: 2300, lambda: 0.13, B: trouton(430) },
-  { id: 'resid',  name: 'Смолы и асфальтены', color: '#9b6b4a', TbC: null, L: 0,       M: 0.60,  rho: 1050, c: 1900, lambda: 0.15, B: 0 },
+  { id: 'water',  name: tr('Вода', 'Су', 'Water'), color: '#5aa9ff', TbC: 100,  L: 2.257e6, M: 0.018, rho: 1000, c: 4186, lambda: 0.60, B: 2.257e6 * 0.018 / R },
+  { id: 'light',  name: tr('Лёгкие УВ (C5–C10)', 'Жеңіл КС (C5–C10)', 'Light HC (C5–C10)'), color: '#7fe0c0', TbC: 150,  L: 3.4e5,   M: 0.11,  rho: 750,  c: 2100, lambda: 0.13, B: trouton(150) },
+  { id: 'medium', name: tr('Средние (C11–C20)', 'Орташа (C11–C20)', 'Medium (C11–C20)'), color: '#ffd166', TbC: 290,  L: 2.7e5,   M: 0.20,  rho: 850,  c: 2200, lambda: 0.13, B: trouton(290) },
+  { id: 'heavy',  name: tr('Тяжёлые (C21–C35)', 'Ауыр (C21–C35)', 'Heavy (C21–C35)'), color: '#f08a4b', TbC: 430,  L: 2.2e5,   M: 0.35,  rho: 920,  c: 2300, lambda: 0.13, B: trouton(430) },
+  { id: 'resid',  name: tr('Смолы и асфальтены', 'Шайырлар мен асфальтендер', 'Resins and asphaltenes'), color: '#9b6b4a', TbC: null, L: 0,       M: 0.60,  rho: 1050, c: 1900, lambda: 0.15, B: 0 },
 ];
 export const NC = COMPONENTS.length;
 export const OIL = [1, 2, 3, 4];
@@ -64,17 +65,17 @@ export const air = {
 // Пресеты образцов: массовые доли (вода/нефть/твёрдое), состав нефти, проницаемость
 export const PRESETS = [
   {
-    id: 'pit', name: 'Нефтешлам из амбара',
+    id: 'pit', name: tr('Нефтешлам из амбара', 'Амбардағы мұнай шламы', 'Pit oil sludge'),
     water: 0.25, oil: 0.30, solid: 0.45,
     oilFrac: [0.10, 0.25, 0.30, 0.35], k: 2e-11, sulfur: 0.015,
   },
   {
-    id: 'tank', name: 'Резервуарный (обводнённый)',
+    id: 'tank', name: tr('Резервуарный (обводнённый)', 'Резервуарлық (суланған)', 'Tank sludge (watered)'),
     water: 0.55, oil: 0.35, solid: 0.10,
     oilFrac: [0.15, 0.30, 0.30, 0.25], k: 5e-11, sulfur: 0.012,
   },
   {
-    id: 'soil', name: 'Почва после разлива',
+    id: 'soil', name: tr('Почва после разлива', 'Топырақ (төгілгеннен кейін)', 'Soil after a spill'),
     water: 0.12, oil: 0.12, solid: 0.76,
     oilFrac: [0.20, 0.30, 0.25, 0.25], k: 1e-11, sulfur: 0.01,
   },

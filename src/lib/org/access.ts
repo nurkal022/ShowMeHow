@@ -27,17 +27,18 @@ interface MembershipRow {
   kind: OrgKind;
   role: OrgRole;
   settings: unknown;
+  sandbox?: boolean;
 }
 
 function toMembership(r: MembershipRow): Membership {
   return {
     orgId: r.org_id, orgSlug: r.slug, orgName: r.name, orgKind: r.kind,
-    role: r.role, settings: resolveOrgSettings(r.settings),
+    role: r.role, settings: resolveOrgSettings(r.settings), sandbox: r.sandbox === true,
   };
 }
 
 const MEMBERSHIP_SELECT = `
-  SELECT o.id AS org_id, o.slug, o.name, o.kind, m.role, o.settings
+  SELECT o.id AS org_id, o.slug, o.name, o.kind, m.role, o.settings, o.sandbox_owner IS NOT NULL AS sandbox
   FROM memberships m JOIN organizations o ON o.id = m.org_id
   WHERE o.archived_at IS NULL`;
 
@@ -68,7 +69,7 @@ export async function requireOrgRole(
   if (isPlatformAdmin(user)) {
     // Админ платформы видит любую организацию, в том числе архивную, — как её админ.
     const { rows } = await db().query<MembershipRow>(
-      `SELECT id AS org_id, slug, name, kind, 'org_admin' AS role, settings
+      `SELECT id AS org_id, slug, name, kind, 'org_admin' AS role, settings, sandbox_owner IS NOT NULL AS sandbox
        FROM organizations WHERE id = $1`, [orgId]);
     return rows[0] ? toMembership(rows[0]) : null;
   }

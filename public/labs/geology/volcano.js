@@ -4,6 +4,7 @@
  * по склонам, облако пепла.
  */
 import { softDot } from './noise.js';
+import { tr } from '../common.js';
 
 const Y0 = 0.5, RIM = 1.55, CR = 1.43, BASE_R = 1.15, TOPR = 0.13;
 const prof = (y) => TOPR + (BASE_R - TOPR) * Math.pow(Math.max(0, (RIM - y) / (RIM - Y0)), 1.5);
@@ -86,7 +87,7 @@ export function buildVolcano(lab, O, stationName) {
   section.material.emissiveMap = section.material.map;
   section.position.set(0, SH / 2, 0.003);
   body.add(section);
-  lab.hover(section, 'Стратовулкан в разрезе\nСлои пепла чередуются со слоями застывшей лавы');
+  lab.hover(section, tr('Стратовулкан в разрезе\nСлои пепла чередуются со слоями застывшей лавы', 'Стратожанартаудың кесігі\nКүл қабаттары қатқан лава қабаттарымен кезектеседі', 'Stratovolcano in section\nAsh layers alternate with layers of solidified lava'));
 
   // Светящиеся очаг и столб магмы
   const chamber = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshBasicMaterial({ color: 0xff6a1a, transparent: true,
@@ -94,7 +95,7 @@ export function buildVolcano(lab, O, stationName) {
   chamber.scale.set(CH_RX, CH_RY, 1);
   chamber.position.set(0, CH_Y, 0.007);
   body.add(chamber);
-  lab.hover(chamber, 'Магматический очаг\nРасплав 900–1200 °C, газы давят на кровлю');
+  lab.hover(chamber, tr('Магматический очаг\nРасплав 900–1200 °C, газы давят на кровлю', 'Магмалық ошақ\nБалқыма 900–1200 °C, газдар жабынға қысым түсіреді', 'Magma chamber\nMelt at 900–1200 °C, gases press on the roof'));
   const columnGeo = new THREE.PlaneGeometry(0.075, 1);
   columnGeo.translate(0, 0.5, 0);
   const column = new THREE.Mesh(columnGeo, new THREE.MeshBasicMaterial({ color: 0xffa040, toneMapped: false }));
@@ -103,11 +104,11 @@ export function buildVolcano(lab, O, stationName) {
   const ventHit = new THREE.Mesh(new THREE.BoxGeometry(0.1, CR - CH_Y, 0.02), new THREE.MeshBasicMaterial({ visible: false }));
   ventHit.position.set(0, (CR + CH_Y) / 2 + 0.06, 0.02);
   body.add(ventHit);
-  lab.hover(ventHit, 'Жерло\nПо нему магма поднимается к кратеру');
+  lab.hover(ventHit, tr('Жерло\nПо нему магма поднимается к кратеру', 'Жанартау өңеші\nОл арқылы магма кратерге көтеріледі', 'Conduit\nMagma rises through it to the crater'));
   const craterHit = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), new THREE.MeshBasicMaterial({ visible: false }));
   craterHit.position.set(0, RIM, -0.05);
   body.add(craterHit);
-  lab.hover(craterHit, 'Кратер\nСюда выходят лава, газы и пепел');
+  lab.hover(craterHit, tr('Кратер\nСюда выходят лава, газы и пепел', 'Кратер\nМұнда лава, газдар мен күл шығады', 'Crater\nLava, gases and ash come out here'));
 
   const light = new THREE.PointLight(0xff6a2a, 0, 5);
   light.position.set(0, RIM + 0.2, 0.1);
@@ -127,8 +128,8 @@ export function buildVolcano(lab, O, stationName) {
   const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: 0x43a047, toneMapped: false }));
   fill.position.set(gx, 0.5, -0.3);
   root.add(fill);
-  lab.hover(tube, () => `Давление в очаге: ${Math.round(pressure * 100)} %`);
-  const board = lab.board('Давление в очаге: 0 %\nНагнетайте — на 100 % вулкан проснётся', [O[0], 2.2, O[2] - 0.9], { scale: 0.0025 });
+  lab.hover(tube, () => tr(`Давление в очаге: ${Math.round(pressure * 100)} %`, `Ошақтағы қысым: ${Math.round(pressure * 100)} %`, `Chamber pressure: ${Math.round(pressure * 100)} %`));
+  const board = lab.board(tr('Давление в очаге: 0 %', 'Ошақтағы қысым: 0 %', 'Chamber pressure: 0 %') + '\n' + tr('Нагнетайте — на 100 % вулкан проснётся', 'Қысымды арттырыңыз — 100 %-да жанартау оянады', 'Keep pumping — at 100 % the volcano wakes up'), [O[0], 2.2, O[2] - 0.9], { scale: 0.0025 });
 
   let pressure = 0, shown = 0, erupt = 0, level = 0;
   function pump() {
@@ -136,11 +137,11 @@ export function buildVolcano(lab, O, stationName) {
     pressure = Math.min(1, pressure + 0.2);
     if (pressure >= 0.999) {
       erupt = 7;
-      board.set('Извержение!\nГазы вырываются, лава льётся по склонам');
-    } else board.set(`Давление в очаге: ${Math.round(pressure * 100)} %\n${pressure >= 0.6 ? 'Магма поднимается по жерлу…' : 'Нагнетайте — на 100 % вулкан проснётся'}`);
+      board.set(tr('Извержение!\nГазы вырываются, лава льётся по склонам', 'Атқылау!\nГаздар атқылап шығады, лава беткейлермен ағады', 'Eruption!\nGases burst out, lava pours down the slopes'));
+    } else board.set(`${tr('Давление в очаге', 'Ошақтағы қысым', 'Chamber pressure')}: ${Math.round(pressure * 100)} %\n${pressure >= 0.6 ? tr('Магма поднимается по жерлу…', 'Магма өңеш бойымен көтерілуде…', 'Magma is rising up the conduit…') : tr('Нагнетайте — на 100 % вулкан проснётся', 'Қысымды арттырыңыз — 100 %-да жанартау оянады', 'Keep pumping — at 100 % the volcano wakes up')}`);
   }
-  lab.button3d('Нагнетать давление', [O[0] + 1.25, 1.0, O[2] + 0.45], pump, { width: 0.8, color: 0xe53935, rotY: -0.3 });
-  lab.hud.action('Нагнетать давление', pump, stationName);
+  lab.button3d(tr('Нагнетать давление', 'Қысымды арттыру', 'Build pressure'), [O[0] + 1.25, 1.0, O[2] + 0.45], pump, { width: 0.8, color: 0xe53935, rotY: -0.3 });
+  lab.hud.action(tr('Нагнетать давление', 'Қысымды арттыру', 'Build pressure'), pump, stationName);
 
   // Лава: фонтан из кратера, потом поток по склону
   const dot = softDot(THREE);
@@ -240,7 +241,7 @@ export function buildVolcano(lab, O, stationName) {
       light.intensity = 3 + Math.random() * 1.5;
       if (erupt <= 0) {
         erupt = 0; pressure = 0; body.position.set(0, 0, 0);
-        board.set('Давление в очаге: 0 %\nОчаг опустел. Нагнетайте снова');
+        board.set(tr('Давление в очаге: 0 %\nОчаг опустел. Нагнетайте снова', 'Ошақтағы қысым: 0 %\nОшақ босады. Қысымды қайта арттырыңыз', 'Chamber pressure: 0 %\nThe chamber is empty. Pump again'));
       }
     } else {
       light.intensity = Math.max(0, light.intensity - dt * 3) + pressure * 0.6 * (0.8 + 0.2 * Math.sin(t * 5));

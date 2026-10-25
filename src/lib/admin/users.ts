@@ -75,6 +75,17 @@ export async function getUserCard(id: string): Promise<UserCard | null> {
   };
 }
 
+/** Персональные лимиты; null — по общему правилу платформы и организации. */
+export async function setUserLimits(userId: string, limits: { generationLimit?: number | null; aiDailyLimit?: number | null }): Promise<void> {
+  if (!isUuid(userId)) return;
+  if (limits.generationLimit !== undefined) {
+    await db().query('UPDATE users SET generation_limit = $2 WHERE id = $1', [userId, limits.generationLimit]);
+  }
+  if (limits.aiDailyLimit !== undefined) {
+    await db().query('UPDATE users SET ai_daily_limit = $2 WHERE id = $1', [userId, limits.aiDailyLimit]);
+  }
+}
+
 export async function setPlatformRole(userId: string, role: Role): Promise<boolean> {
   if (!isUuid(userId)) return false;
   const r = await db().query('UPDATE users SET role = $2 WHERE id = $1', [userId, role]);

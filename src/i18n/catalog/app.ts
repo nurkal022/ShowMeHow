@@ -76,6 +76,16 @@ export const catalog: CatalogEntry[] = [
     kk: 'Сынақ нұсқасының лимиті таусылды: {limit} генерацияның {limit}-і пайдаланылды. Бұрын жасалған симуляцияларды жетілдіру әлі де қолжетімді.',
     en: 'The trial limit is used up: {limit} of {limit} generations used. You can still refine simulations you have already created.',
   },
+  {
+    ru: 'Ваш лимит генераций исчерпан: использовано {limit} из {limit}. Доработка уже созданных симуляций по-прежнему доступна.',
+    kk: 'Генерация лимитіңіз таусылды: {limit} ішінен {limit} пайдаланылды. Бұрын жасалған симуляцияларды жетілдіру әлі де қолжетімді.',
+    en: 'Your generation limit is used up: {limit} of {limit} used. You can still refine simulations you have already created.',
+  },
+  {
+    ru: 'Лимит ИИ-запросов на сутки исчерпан: использовано {limit} из {limit}. Попробуйте завтра или попросите администратора увеличить лимит.',
+    kk: 'Тәуліктік ЖИ-сұраулар лимиті таусылды: {limit} ішінен {limit} пайдаланылды. Ертең қайталаңыз немесе әкімшіден лимитті ұлғайтуды сұраңыз.',
+    en: 'The daily AI request limit is used up: {limit} of {limit} used. Try again tomorrow or ask an administrator to raise the limit.',
+  },
 
   // Ответы роутов без перевода в коде и ошибки клиентских запросов
   { ru: 'not found', kk: 'Табылмады', en: 'Not found' },

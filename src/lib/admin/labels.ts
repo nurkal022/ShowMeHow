@@ -1,7 +1,7 @@
 /** Названия действий админки для журнала. Модуль чистый — его рендерит страница. */
 export type AdminActionName =
   | 'org.create' | 'org.archive' | 'org.restore' | 'org.settings'
-  | 'user.reset_password' | 'user.disable' | 'user.enable' | 'user.make_admin' | 'user.revoke_admin' | 'user.impersonate' | 'platform.registration'
+  | 'user.reset_password' | 'user.disable' | 'user.enable' | 'user.make_admin' | 'user.revoke_admin' | 'user.impersonate' | 'platform.registration' | 'platform.limit' | 'user.limits'
   | 'catalog.add' | 'catalog.remove' | 'community.announce' | 'community.revoke';
 
 export const ADMIN_ACTION_LABELS: Record<AdminActionName, string> = {
@@ -16,6 +16,8 @@ export const ADMIN_ACTION_LABELS: Record<AdminActionName, string> = {
   'user.revoke_admin': 'снял права админа платформы',
   'user.impersonate': 'вошёл от имени',
   'platform.registration': 'изменил регистрацию',
+  'platform.limit': 'изменил лимит',
+  'user.limits': 'изменил лимиты',
   'catalog.add': 'добавил в общий каталог',
   'catalog.remove': 'убрал из общего каталога',
   'community.announce': 'опубликовал анонс в сообществе',

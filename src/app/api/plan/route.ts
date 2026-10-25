@@ -13,6 +13,7 @@ import { makeCtx } from '@/lib/pipeline/run';
 import { plan, replan } from '@/lib/pipeline/stages';
 import { isLevel, normalizeSpec } from '@/lib/pipeline/spec';
 import { throttled } from '@/lib/http/throttle';
+import { chargeAi } from '@/lib/quota';
 import { localeFromRequest, type Locale } from '@/i18n/config';
 
 export const maxDuration = 120;
@@ -35,6 +36,8 @@ export async function POST(req: Request) {
   const body = await readJsonObject(req);
   if (!body) return NextResponse.json({ error: INVALID_REQUEST_MESSAGE }, { status: 400 });
   if (!activeProvider()) return NextResponse.json({ error: NO_PROVIDER_MESSAGE }, { status: 400 });
+  const over = await chargeAi(user, 'plan');
+  if (over) return over;
   // Квоту план не тратит, поэтому его сдерживает предохранитель: один запрос за раз и не чаще лимита.
   return throttled(user.id, 'plan', () => runPlan(body, localeFromRequest(req)));
 }

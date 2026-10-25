@@ -1,11 +1,17 @@
-import { createLab, makeLabel, placeLabel, pulse } from '../common.js';
+import { createLab, makeLabel, placeLabel, pulse, tr } from '../common.js';
 
+const ST_CELL = tr('Клетка изнутри', 'Жасуша іштен', 'The cell from inside');
+const ST_DNA = tr('Двойная спираль', 'Қос спираль', 'Double helix');
+const TITLE = tr('Внутри клетки', 'Жасушаның ішінде', 'Inside the cell');
+document.title = TITLE + ' — Tesseract';
 const lab = createLab({
-  title: 'Внутри клетки',
-  hint: 'Наведите на органеллу — подпись; нажмите — подлетите к ней. Следите за мРНК: она выходит из ядра, рибосома собирает белок, везикула уносит его к мембране.',
+  title: TITLE,
+  hint: tr('Наведите на органеллу — подпись; нажмите — подлетите к ней. Следите за мРНК: она выходит из ядра, рибосома собирает белок, везикула уносит его к мембране.',
+    'Органеллаға меңзерді апарыңыз — атауы шығады; басыңыз — оған ұшып барасыз. мРНҚ-ны бақылаңыз: ол ядродан шығады, рибосома ақуыз құрастырады, везикула оны мембранаға жеткізеді.',
+    'Hover over an organelle to see its name; click to fly to it. Watch the mRNA: it leaves the nucleus, a ribosome builds a protein, and a vesicle carries it to the membrane.'),
   stations: [
-    { name: 'Клетка изнутри', at: [0, 1.7, 4.5], look: [0, 2.2, -4] },
-    { name: 'Двойная спираль', at: [22, 1.6, 0.5], look: [22, 1.8, -3] },
+    { name: ST_CELL, at: [0, 1.7, 4.5], look: [0, 2.2, -4] },
+    { name: ST_DNA, at: [22, 1.6, 0.5], look: [22, 1.8, -3] },
   ],
   sky: 0x070b14, fogFar: 36,
 });
@@ -18,7 +24,7 @@ const membrane = new THREE.Mesh(new THREE.SphereGeometry(CELL_R, 64, 48),
   new THREE.MeshPhysicalMaterial({ color: 0x1b3f6b, transparent: true, opacity: 0.22, side: THREE.BackSide, roughness: 0.4, emissive: 0x0d2f55, emissiveIntensity: 0.35 }));
 membrane.position.copy(CENTER);
 scene.add(membrane);
-lab.hover(membrane, 'Клеточная мембрана\nДва слоя липидов: головки наружу, хвосты внутрь');
+lab.hover(membrane, tr('Клеточная мембрана\nДва слоя липидов: головки наружу, хвосты внутрь', 'Жасуша мембранасы\nЛипидтердің екі қабаты: бастары сыртқа, құйрықтары ішке', 'Cell membrane\nTwo layers of lipids: heads out, tails in'));
 {
   const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.085, 8, 6),
     new THREE.MeshStandardMaterial({ color: 0x4a90d9, emissive: 0x1e5fa8, emissiveIntensity: 0.25, transparent: true, opacity: 0.55 }), 2200);
@@ -31,7 +37,7 @@ lab.hover(membrane, 'Клеточная мембрана\nДва слоя лип
   }
   heads.count = k;
   scene.add(heads);
-  lab.hover(heads, 'Липидный бислой\nГидрофильные головки смотрят в воду, хвосты спрятаны');
+  lab.hover(heads, tr('Липидный бислой\nГидрофильные головки смотрят в воду, хвосты спрятаны', 'Липидті қос қабат\nГидрофильді бастары суға қарайды, құйрықтары ішке жасырылған', 'Lipid bilayer\nHydrophilic heads face the water, tails are hidden inside'));
 }
 // Белковые каналы
 {
@@ -42,7 +48,7 @@ lab.hover(membrane, 'Клеточная мембрана\nДва слоя лип
     c.position.randomDirection().multiplyScalar(CELL_R - 0.1).add(CENTER);
     if (c.position.y < 0.6) { i--; continue; }
     c.lookAt(CENTER); scene.add(c);
-    lab.hover(c, 'Белковый канал\nПропускает ионы и воду сквозь мембрану');
+    lab.hover(c, tr('Белковый канал\nПропускает ионы и воду сквозь мембрану', 'Ақуыз арнасы\nМембрана арқылы иондар мен суды өткізеді', 'Protein channel\nLets ions and water pass through the membrane'));
   }
 }
 
@@ -66,7 +72,7 @@ const pores = [];
     const p = new THREE.Mesh(poreGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xd1c4e9, emissiveIntensity: 0.6 }));
     p.position.randomDirection().multiplyScalar(2.1); p.lookAt(0, 0, 0); nucleus.add(p);
     if (p.position.z > 0.5) pores.push(p);
-    lab.hover(p, 'Ядерная пора\nЧерез неё мРНК выходит в цитоплазму');
+    lab.hover(p, tr('Ядерная пора\nЧерез неё мРНК выходит в цитоплазму', 'Ядролық пора\nОл арқылы мРНҚ цитоплазмаға шығады', 'Nuclear pore\nmRNA exits into the cytoplasm through it'));
   }
 }
 
@@ -80,13 +86,13 @@ const erCurve = new THREE.CatmullRomCurve3(erPts);
 const er = new THREE.Mesh(new THREE.TubeGeometry(erCurve, 300, 0.16, 8, false),
   new THREE.MeshStandardMaterial({ color: 0x4fc3f7, emissive: 0x0288d1, emissiveIntensity: 0.5, roughness: 0.35 }));
 scene.add(er);
-lab.hover(er, 'Шероховатая ЭПР\nМембранные каналы, усыпанные рибосомами');
+lab.hover(er, tr('Шероховатая ЭПР\nМембранные каналы, усыпанные рибосомами', 'Түйіршікті ЭПТ\nРибосомалар қаптаған мембраналы өзекшелер', 'Rough ER\nMembrane channels studded with ribosomes'));
 {
   const rib = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xbbdefb, emissiveIntensity: 0.6 }), 260);
   const m = new THREE.Matrix4();
   for (let i = 0; i < 260; i++) { const p = erCurve.getPoint(Math.random()).add(new THREE.Vector3().randomDirection().multiplyScalar(0.2)); m.makeTranslation(p.x, p.y, p.z); rib.setMatrixAt(i, m); }
   scene.add(rib);
-  lab.hover(rib, 'Рибосомы\nЧитают мРНК по три буквы и собирают белок');
+  lab.hover(rib, tr('Рибосомы\nЧитают мРНК по три буквы и собирают белок', 'Рибосомалар\nмРНҚ-ны үш әріптен оқып, ақуыз құрастырады', 'Ribosomes\nRead mRNA three letters at a time and build a protein'));
 }
 
 // ---------- Митохондрии с искрами АТФ ----------
@@ -108,8 +114,8 @@ for (let i = 0; i < 7; i++) {
   g.rotation.set(Math.random(), Math.random() * 3, Math.random());
   g.userData.phase = Math.random() * 6;
   scene.add(g); mitos.push(g);
-  lab.hover(body, 'Митохондрия\nСжигает глюкозу и выпускает АТФ — искры энергии');
-  lab.click(body, () => focus(g, 'Митохондрия', 'Внутренняя мембрана сложена в кристы: больше площадь — больше АТФ. У клетки их сотни.'));
+  lab.hover(body, tr('Митохондрия\nСжигает глюкозу и выпускает АТФ — искры энергии', 'Митохондрия\nГлюкозаны тотықтырып, АТФ бөледі — энергия ұшқындары', 'Mitochondrion\nBurns glucose and releases ATP — sparks of energy'));
+  lab.click(body, () => focus(g, tr('Митохондрия', 'Митохондрия', 'Mitochondrion'), tr('Внутренняя мембрана сложена в кристы: больше площадь — больше АТФ. У клетки их сотни.', 'Ішкі мембранасы кристаларға бүктелген: аудан үлкен болған сайын АТФ көп түзіледі. Жасушада олар жүздеп саналады.', 'The inner membrane is folded into cristae: more area means more ATP. A cell has hundreds of them.')));
 }
 
 // ---------- Аппарат Гольджи ----------
@@ -118,8 +124,8 @@ const golgi = new THREE.Group(); golgi.position.copy(GOLGI); golgi.rotation.z = 
 for (let k = 0; k < 6; k++) {
   const d = new THREE.Mesh(new THREE.SphereGeometry(1.1 - k * 0.08, 32, 8), new THREE.MeshStandardMaterial({ color: 0xffd54f, emissive: 0xffa000, emissiveIntensity: 0.45 }));
   d.scale.y = 0.12; d.position.y = k * 0.24; golgi.add(d);
-  lab.hover(d, 'Аппарат Гольджи\nСортирует белки и упаковывает в везикулы');
-  lab.click(d, () => focus(golgi, 'Аппарат Гольджи', 'Стопка мембранных цистерн: белок из ЭПР доделывается, подписывается адресом и отправляется в везикуле.'));
+  lab.hover(d, tr('Аппарат Гольджи\nСортирует белки и упаковывает в везикулы', 'Гольджи аппараты\nАқуыздарды сұрыптап, везикулаларға орайды', 'Golgi apparatus\nSorts proteins and packs them into vesicles'));
+  lab.click(d, () => focus(golgi, tr('Аппарат Гольджи', 'Гольджи аппараты', 'Golgi apparatus'), tr('Стопка мембранных цистерн: белок из ЭПР доделывается, подписывается адресом и отправляется в везикуле.', 'Мембраналы цистерналар бумасы: ЭПТ-дан келген ақуыз жетіледі, мекенжай белгісін алады да, везикуламен жөнелтіледі.', 'A stack of membrane cisternae: protein from the ER is finished, tagged with an address and shipped off in a vesicle.')));
 }
 
 // ---------- Лизосомы, везикулы, цитоскелет, взвесь ----------
@@ -131,7 +137,7 @@ for (let i = 0; i < 12; i++) {
   v.position.set((Math.random() - 0.5) * 12, 0.8 + Math.random() * 3.5, (Math.random() - 0.5) * 12);
   v.userData.vel = new THREE.Vector3().randomDirection().multiplyScalar(0.15);
   scene.add(v); drifters.push(v);
-  lab.hover(v, lyso ? 'Лизосома\nКислый пузырёк с ферментами: переваривает отработанное' : 'Везикула\nПузырёк-курьер с грузом');
+  lab.hover(v, lyso ? tr('Лизосома\nКислый пузырёк с ферментами: переваривает отработанное', 'Лизосома\nФерменттері бар қышқыл көпіршік: қажетсіз заттарды қорытады', 'Lysosome\nAn acidic bubble of enzymes that digests worn-out material') : tr('Везикула\nПузырёк-курьер с грузом', 'Везикула\nЖүк тасымалдайтын көпіршік', 'Vesicle\nA courier bubble carrying cargo'));
 }
 {
   const pts = [];
@@ -149,11 +155,11 @@ const dust = new THREE.Points(new THREE.BufferGeometry().setAttribute('position'
 dust.position.y = 3; scene.add(dust);
 
 // ---------- Фокус на органелле ----------
-const infoBoard = lab.board('Клетка живёт: следите за красной нитью мРНК', [0, 4.6, -1.5], { scale: 0.0028 });
-lab.hover(nucMesh, 'Ядро\nХранит ДНК; здесь пишется мРНК');
-lab.click(nucMesh, () => focus(nucleus, 'Ядро', 'Внутри — два метра ДНК, смотанных в хроматин. Ядрышко собирает рибосомы, поры выпускают мРНК.'));
-lab.hover(nucleolus, 'Ядрышко\nЗдесь собираются рибосомы');
-lab.click(er, () => focus(er, 'Эндоплазматическая сеть', 'Лабиринт мембран: на шероховатой ЭПР рибосомы собирают белки, гладкая делает липиды.'));
+const infoBoard = lab.board(tr('Клетка живёт: следите за красной нитью мРНК', 'Жасуша тіршілік етіп жатыр: мРНҚ-ның қызыл жібін бақылаңыз', 'The cell is alive: follow the red thread of mRNA'), [0, 4.6, -1.5], { scale: 0.0028 });
+lab.hover(nucMesh, tr('Ядро\nХранит ДНК; здесь пишется мРНК', 'Ядро\nДНҚ-ны сақтайды; мРНҚ осында жазылады', 'Nucleus\nStores DNA; mRNA is written here'));
+lab.click(nucMesh, () => focus(nucleus, tr('Ядро', 'Ядро', 'Nucleus'), tr('Внутри — два метра ДНК, смотанных в хроматин. Ядрышко собирает рибосомы, поры выпускают мРНК.', 'Ішінде — хроматинге оралған екі метр ДНҚ. Ядрошық рибосомаларды құрастырады, поралар мРНҚ-ны сыртқа шығарады.', 'Inside are two metres of DNA wound into chromatin. The nucleolus assembles ribosomes, and the pores let mRNA out.')));
+lab.hover(nucleolus, tr('Ядрышко\nЗдесь собираются рибосомы', 'Ядрошық\nРибосомалар осында құрастырылады', 'Nucleolus\nRibosomes are assembled here'));
+lab.click(er, () => focus(er, tr('Эндоплазматическая сеть', 'Эндоплазмалық тор', 'Endoplasmic reticulum'), tr('Лабиринт мембран: на шероховатой ЭПР рибосомы собирают белки, гладкая делает липиды.', 'Мембраналар лабиринті: түйіршікті ЭПТ-да рибосомалар ақуыз құрастырады, тегіс ЭПТ липидтер түзеді.', 'A maze of membranes: ribosomes on the rough ER build proteins, while the smooth ER makes lipids.')));
 function focus(obj, title, text) {
   const box = new THREE.Box3().setFromObject(obj); const c = box.getCenter(new THREE.Vector3()); const r = box.getSize(new THREE.Vector3()).length();
   const dir = c.clone().sub(CENTER).setY(0).normalize().negate();
@@ -174,7 +180,7 @@ function spawnCargo() {
   const start = pore.getWorldPosition(new THREE.Vector3());
   const ribo = erCurve.getPoint(Math.random()).add(new THREE.Vector3(0, 0.22, 0));
   const mrna = beadChain(9, 0xff5252, 0.07); mrna.position.copy(start); scene.add(mrna);
-  lab.hover(mrna, 'мРНК\nКопия гена, идёт из ядра к рибосоме');
+  lab.hover(mrna, tr('мРНК\nКопия гена, идёт из ядра к рибосоме', 'мРНҚ\nГеннің көшірмесі, ядродан рибосомаға қарай жүреді', 'mRNA\nA copy of a gene, travelling from the nucleus to a ribosome'));
   cargos.push({ phase: 'mrna', t: 0, mrna, from: start, to: ribo, ribo });
 }
 function stepCargo(c, dt) {
@@ -182,7 +188,7 @@ function stepCargo(c, dt) {
   if (c.phase === 'mrna') {
     const k = Math.min(1, c.t / 4);
     c.mrna.position.lerpVectors(c.from, c.to, k); c.mrna.position.y += Math.sin(k * Math.PI) * 0.6; c.mrna.rotation.y += dt;
-    if (k >= 1) { c.phase = 'translate'; c.t = 0; c.protein = beadChain(0, 0x69f0ae, 0.08); c.protein.position.copy(c.ribo); scene.add(c.protein); lab.hover(c.protein, 'Белок\nЦепочка аминокислот, собранная по мРНК'); }
+    if (k >= 1) { c.phase = 'translate'; c.t = 0; c.protein = beadChain(0, 0x69f0ae, 0.08); c.protein.position.copy(c.ribo); scene.add(c.protein); lab.hover(c.protein, tr('Белок\nЦепочка аминокислот, собранная по мРНК', 'Ақуыз\nмРНҚ бойынша құрастырылған амин қышқылдарының тізбегі', 'Protein\nA chain of amino acids assembled from mRNA')); }
   } else if (c.phase === 'translate') {
     const want = Math.min(12, Math.floor(c.t / 0.3));
     while (c.protein.children.length < want) {
@@ -198,7 +204,7 @@ function stepCargo(c, dt) {
       c.phase = 'vesicle'; c.t = 0; scene.remove(c.protein);
       c.ves = new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 14), new THREE.MeshPhysicalMaterial({ color: 0xfff59d, transparent: true, opacity: 0.75, emissive: 0xffd600, emissiveIntensity: 0.6 }));
       c.ves.add(beadChain(5, 0x69f0ae, 0.05)); c.ves.position.copy(GOLGI).add(new THREE.Vector3(0, 1.1, 0)); scene.add(c.ves);
-      lab.hover(c.ves, 'Везикула с белком\nОтпочковалась от Гольджи, идёт к мембране');
+      lab.hover(c.ves, tr('Везикула с белком\nОтпочковалась от Гольджи, идёт к мембране', 'Ақуызы бар везикула\nГольджиден бөлініп шығып, мембранаға бара жатыр', 'Vesicle with protein\nBudded off the Golgi, heading to the membrane'));
       c.from = c.ves.position.clone(); c.to = new THREE.Vector3().randomDirection().setY(Math.abs(Math.random()) * 0.6 + 0.2).normalize().multiplyScalar(CELL_R - 0.5).add(CENTER);
     }
   } else if (c.phase === 'vesicle') {
@@ -221,7 +227,7 @@ let spawnTimer = 1;
 const DNA = new THREE.Group(); DNA.position.set(22, 0.2, -3); scene.add(DNA);
 const H = 3.2, TURNS = 3.2, N = 42, R = 0.42;
 const BASES = { A: 0x66bb6a, T: 0xef5350, G: 0x42a5f5, C: 0xffee58, U: 0xff9800 };
-const NAMES = { A: 'аденин', T: 'тимин', G: 'гуанин', C: 'цитозин' };
+const NAMES = { A: tr('аденин', 'аденин', 'adenine'), T: tr('тимин', 'тимин', 'thymine'), G: tr('гуанин', 'гуанин', 'guanine'), C: tr('цитозин', 'цитозин', 'cytosine') };
 const PAIR = { A: 'T', T: 'A', G: 'C', C: 'G' };
 const RNA = { A: 'U', T: 'A', G: 'C', C: 'G' };
 const rungs = []; const strandA = []; const strandB = [];
@@ -237,7 +243,7 @@ for (let i = 0; i < N; i++) {
   DNA.add(a, b, r1, r2); strandA.push(a); strandB.push(b);
   rungs.push({ i, a, b, r1, r2, b1, b2 });
   const bonds = b1 === 'A' || b1 === 'T' ? 2 : 3;
-  const txt = `${b1}–${b2}: ${NAMES[b1]}–${NAMES[b2]}\n${bonds} водородные связи`;
+  const txt = tr(`${b1}–${b2}: ${NAMES[b1]}–${NAMES[b2]}\n${bonds} водородные связи`, `${b1}–${b2}: ${NAMES[b1]}–${NAMES[b2]}\n${bonds} сутектік байланыс`, `${b1}–${b2}: ${NAMES[b1]}–${NAMES[b2]}\n${bonds} hydrogen bonds`);
   lab.hover(r1, txt); lab.hover(r2, txt);
 }
 const bbLinks = [];
@@ -261,22 +267,22 @@ function layoutDNA() {
   }
 }
 layoutDNA();
-const legend = makeLabel('А аденин · Т тимин · Г гуанин · Ц цитозин\nА–Т двумя связями, Г–Ц тремя. В РНК вместо Т — урацил (U)', { scale: 0.002 });
+const legend = makeLabel(tr('А аденин · Т тимин · Г гуанин · Ц цитозин\nА–Т двумя связями, Г–Ц тремя. В РНК вместо Т — урацил (U)', 'А аденин · Т тимин · Г гуанин · Ц цитозин\nА–Т екі байланыспен, Г–Ц үш байланыспен жалғасады. РНҚ-да Т орнына — урацил (U)', 'A adenine · T thymine · G guanine · C cytosine\nA–T pair by two bonds, G–C by three. In RNA, uracil (U) replaces T'), { scale: 0.002 });
 legend.position.set(23.9, 2.9, -3); scene.add(legend);
-const dnaBoard = lab.board('Расплетите спираль и запустите транскрипцию', [22, 3.9, -3], { scale: 0.0026 });
-const unzipBtn = lab.button3d('Расплести', [20.9, 0.7, -2.2], toggleUnzip, { width: 0.6 });
-lab.button3d('Транскрипция', [22, 0.7, -2.2], transcribe, { width: 0.8, color: 0xef6c00 });
-lab.button3d('Вращение', [23.1, 0.7, -2.2], () => { spin = !spin; }, { width: 0.6, color: 0x5c6bc0 });
-lab.hud.action('Расплести / собрать', toggleUnzip, 'Двойная спираль');
-lab.hud.action('Транскрипция', transcribe, 'Двойная спираль');
-lab.hud.action('Вращение', () => { spin = !spin; }, 'Двойная спираль');
-function toggleUnzip() { unzipTarget = unzipTarget ? 0 : 1; unzipBtn.setText(unzipTarget ? 'Собрать' : 'Расплести'); }
+const dnaBoard = lab.board(tr('Расплетите спираль и запустите транскрипцию', 'Спиральды тарқатып, транскрипцияны іске қосыңыз', 'Unzip the helix and start transcription'), [22, 3.9, -3], { scale: 0.0026 });
+const unzipBtn = lab.button3d(tr('Расплести', 'Тарқату', 'Unzip'), [20.9, 0.7, -2.2], toggleUnzip, { width: 0.6 });
+lab.button3d(tr('Транскрипция', 'Транскрипция', 'Transcription'), [22, 0.7, -2.2], transcribe, { width: 0.8, color: 0xef6c00 });
+lab.button3d(tr('Вращение', 'Айналдыру', 'Rotate'), [23.1, 0.7, -2.2], () => { spin = !spin; }, { width: 0.6, color: 0x5c6bc0 });
+lab.hud.action(tr('Расплести / собрать', 'Тарқату / жинау', 'Unzip / zip'), toggleUnzip, ST_DNA);
+lab.hud.action(tr('Транскрипция', 'Транскрипция', 'Transcription'), transcribe, ST_DNA);
+lab.hud.action(tr('Вращение', 'Айналдыру', 'Rotate'), () => { spin = !spin; }, ST_DNA);
+function toggleUnzip() { unzipTarget = unzipTarget ? 0 : 1; unzipBtn.setText(unzipTarget ? tr('Собрать', 'Жинау', 'Zip') : tr('Расплести', 'Тарқату', 'Unzip')); }
 
 // Полимераза ползёт по нити A сверху вниз и строит мРНК из комплементарных букв.
 let tx = null;
 const polymerase = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 18), new THREE.MeshPhysicalMaterial({ color: 0xce93d8, transparent: true, opacity: 0.7, emissive: 0x8e24aa, emissiveIntensity: 0.8 }));
 polymerase.visible = false; DNA.add(polymerase);
-lab.hover(polymerase, 'РНК-полимераза\nЧитает нить и подбирает комплементарные буквы');
+lab.hover(polymerase, tr('РНК-полимераза\nЧитает нить и подбирает комплементарные буквы', 'РНҚ-полимераза\nТізбекті оқып, комплементар әріптерді іріктейді', 'RNA polymerase\nReads the strand and picks complementary letters'));
 let mrnaGroup = null;
 function transcribe() {
   if (tx) return;
@@ -285,7 +291,7 @@ function transcribe() {
   spin = false;
   mrnaGroup = new THREE.Group(); DNA.add(mrnaGroup);
   tx = { i: N - 1, t: 0, letters: [], waitUnzip: true };
-  dnaBoard.set('Полимераза ждёт, пока нить раскроется…');
+  dnaBoard.set(tr('Полимераза ждёт, пока нить раскроется…', 'Полимераза тізбектің ашылуын күтіп тұр…', 'The polymerase is waiting for the strand to open…'));
 }
 function stepTranscribe(dt) {
   if (!tx) return;
@@ -300,12 +306,12 @@ function stepTranscribe(dt) {
     const ang = rangeAngle(tx.i);
     bead.position.set(Math.cos(ang) * (R + 0.55 + 0.3), r.a.position.y, Math.sin(ang) * (R + 0.55 + 0.3));
     mrnaGroup.add(bead); tx.letters.push(letter);
-    dnaBoard.set(`Транскрипция: ${r.b1} → ${letter}\nмРНК: ${tx.letters.join('')}`);
+    dnaBoard.set(tr(`Транскрипция: ${r.b1} → ${letter}\nмРНК: ${tx.letters.join('')}`, `Транскрипция: ${r.b1} → ${letter}\nмРНҚ: ${tx.letters.join('')}`, `Transcription: ${r.b1} → ${letter}\nmRNA: ${tx.letters.join('')}`));
     tx.i--;
     if (tx.i < 0) {
       polymerase.visible = false;
-      dnaBoard.set(`Готово: мРНК из ${N} букв уходит к рибосомам\n${tx.letters.join('')}`);
-      lab.hover(mrnaGroup, 'мРНК\nКопия гена: U вместо T');
+      dnaBoard.set(tr(`Готово: мРНК из ${N} букв уходит к рибосомам\n${tx.letters.join('')}`, `Дайын: ${N} әріптен тұратын мРНҚ рибосомаларға аттанды\n${tx.letters.join('')}`, `Done: an mRNA of ${N} letters heads off to the ribosomes\n${tx.letters.join('')}`));
+      lab.hover(mrnaGroup, tr('мРНК\nКопия гена: U вместо T', 'мРНҚ\nГеннің көшірмесі: T орнына U', 'mRNA\nA copy of the gene: U instead of T'));
       tx = null; mrnaGroup.userData.drift = 0;
     }
   }

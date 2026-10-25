@@ -12,7 +12,7 @@ import { activeProvider, resolveMode, NO_PROVIDER_MESSAGE } from '@/lib/settings
 import { currentUserFromRequest } from '@/lib/auth/session';
 import { unauthorized } from '@/lib/auth/guard';
 import { listMemberships } from '@/lib/org/access';
-import { canGenerate, hasStaffRole, GENERATION_FORBIDDEN_MESSAGE } from '@/lib/org/policy';
+import { canGenerate, GENERATION_FORBIDDEN_MESSAGE } from '@/lib/org/policy';
 import { isLevel, normalizeSpec } from '@/lib/pipeline/spec';
 import { localeFromRequest } from '@/i18n/config';
 
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   const quota = await quotaStatus(user, memberships);
   if (quota.limit !== null && quota.remaining !== null && quota.remaining <= 0) {
     return NextResponse.json(
-      { error: quotaExhaustedMessage(quota.limit, hasStaffRole(memberships)) }, { status: 403 });
+      { error: quotaExhaustedMessage(quota.limit, quota.source) }, { status: 403 });
   }
   try {
     const job = await getJobStore().create({

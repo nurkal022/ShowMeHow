@@ -2,6 +2,7 @@ import { requireAdminPage } from '@/lib/http/page-guards';
 import { getPlatformSettings, usageByOrg } from '@/lib/platform-settings';
 import CabinetHeader from '@/components/cabinet/CabinetHeader';
 import RegistrationToggle from '@/components/admin/RegistrationToggle';
+import LimitFields from '@/components/admin/LimitFields';
 import { getLocale } from '@/i18n/server';
 import { formatNumber, translator } from '@/i18n/core';
 import { localizeMessage } from '@/i18n/catalog';
@@ -22,6 +23,13 @@ export default async function AdminSettingsPage() {
       <section className="panel">
         <h2>{t('access')}</h2>
         <RegistrationToggle open={settings.registrationOpen} />
+      </section>
+      <section className="panel">
+        <h2>{t('limitsTitle')}</h2>
+        <LimitFields endpoint="/api/admin/settings" method="PATCH" fields={[
+          { key: 'trialGenerations', label: t('limTrial'), hint: t('limTrialHint'), value: settings.trialGenerations },
+          { key: 'aiDailyLimit', label: t('limAi'), hint: t('limAiHint'), value: settings.aiDailyLimit },
+        ]} />
       </section>
       <section className="cab-card">
         <header className="cab-card-head">

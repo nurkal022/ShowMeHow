@@ -1,12 +1,13 @@
 // Куб образца: поля модели в 3D-текстуре, режимы отображения, секущая плоскость.
 import * as THREE from 'three';
+import { tr } from '../i18n.js';
 
 export const MODES = [
-  { id: 'real', name: 'Реальный' },
-  { id: 'thermal', name: 'Тепловизор' },
-  { id: 'water', name: 'Вода' },
-  { id: 'oil', name: 'Нефть' },
-  { id: 'coke', name: 'Кокс' },
+  { id: 'real', name: tr('Реальный', 'Нақты', 'Realistic') },
+  { id: 'thermal', name: tr('Тепловизор', 'Жылулық бейне', 'Thermal') },
+  { id: 'water', name: tr('Вода', 'Су', 'Water') },
+  { id: 'oil', name: tr('Нефть', 'Мұнай', 'Oil') },
+  { id: 'coke', name: tr('Кокс', 'Кокс', 'Coke') },
 ];
 
 const vert = /* glsl */ `

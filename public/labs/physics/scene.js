@@ -1,12 +1,19 @@
-import { createLab, makeLabel, placeLabel } from '../common.js';
+import { createLab, makeLabel, placeLabel, tr } from '../common.js';
 import { refract, reflect, indexFor, SPECTRUM } from './optics.js';
 
+const ST_OPTICS = tr('Оптический стол', 'Оптикалық үстел', 'Optical bench');
+const ST_GRAVITY = tr('Гравитационная комната', 'Гравитация бөлмесі', 'Gravity room');
+const M = tr('м', 'м', 'm');
+const MS2 = tr('м/с²', 'м/с²', 'm/s²');
+document.title = ST_OPTICS + ' — Tesseract';
 const lab = createLab({
-  title: 'Оптический стол',
-  hint: 'Призму, линзу и зеркало можно двигать по столу. Луч лазера виден в воздухе; призма раскладывает белый свет в спектр.',
+  title: ST_OPTICS,
+  hint: tr('Призму, линзу и зеркало можно двигать по столу. Луч лазера виден в воздухе; призма раскладывает белый свет в спектр.',
+    'Призманы, линзаны және айнаны үстел бойымен жылжытуға болады. Лазер сәулесі ауада көрінеді; призма ақ жарықты спектрге жіктейді.',
+    'The prism, lens and mirror can be moved around the table. The laser beam is visible in the air; the prism splits white light into a spectrum.'),
   stations: [
-    { name: 'Оптический стол', at: [0, 1.7, 1.9], look: [0, 0.95, -0.2] },
-    { name: 'Гравитационная комната', at: [25.2, 2.0, 1.4], look: [22, 1.2, -3.5] },
+    { name: ST_OPTICS, at: [0, 1.7, 1.9], look: [0, 0.95, -0.2] },
+    { name: ST_GRAVITY, at: [25.2, 2.0, 1.4], look: [22, 1.2, -3.5] },
   ],
 });
 const { THREE, scene } = lab;
@@ -42,7 +49,7 @@ laser.add(laserTip);
 laser.position.set(-1.35, TABLE_Y + 0.06, -0.2);
 scene.add(laser);
 laser.userData.kind = 'laser';
-lab.hover(laserBody, 'Лазер\nБелый луч — семь длин волн сразу');
+lab.hover(laserBody, tr('Лазер\nБелый луч — семь длин волн сразу', 'Лазер\nАқ сәуле — бірден жеті толқын ұзындығы', 'Laser\nA white beam — seven wavelengths at once'));
 lab.grab(laser, { onMove: clampToTable });
 
 function clampToTable(o) {
@@ -71,7 +78,7 @@ function snapAfterGrab(o) { o.rotation.x = 0; o.rotation.z = 0; o.userData.heldB
   prism.userData.kind = 'prism';
   prism.userData.poly = pts.map(([x, z]) => [x, z]);
   elements.push(prism);
-  lab.hover(prism, 'Призма\nСиний преломляется сильнее красного — спектр');
+  lab.hover(prism, tr('Призма\nСиний преломляется сильнее красного — спектр', 'Призма\nКөк сәуле қызылдан күштірек сынады — спектр шығады', 'Prism\nBlue refracts more than red — hence the spectrum'));
   lab.grab(prism, { onMove: clampToTable, onRelease: snapAfterGrab });
 }
 // Линза: эллипс 0.36 × 0.12
@@ -82,7 +89,7 @@ function snapAfterGrab(o) { o.rotation.x = 0; o.rotation.z = 0; o.userData.heldB
   scene.add(lens);
   lens.userData.kind = 'lens'; lens.userData.rx = 0.063; lens.userData.rz = 0.18;
   elements.push(lens);
-  lab.hover(lens, 'Собирающая линза\nСводит лучи в фокус');
+  lab.hover(lens, tr('Собирающая линза\nСводит лучи в фокус', 'Жинағыш линза\nСәулелерді фокусқа жинайды', 'Converging lens\nBrings rays to a focus'));
   lab.grab(lens, { onMove: (o) => { clampToTable(o); o.position.y = TABLE_Y + 0.15; }, onRelease: (o) => { snapAfterGrab(o); o.position.y = TABLE_Y + 0.15; } });
 }
 // Зеркало: отрезок длиной 0.4
@@ -96,20 +103,20 @@ function snapAfterGrab(o) { o.rotation.x = 0; o.rotation.z = 0; o.userData.heldB
   scene.add(mirror);
   mirror.userData.kind = 'mirror'; mirror.userData.len = 0.4;
   elements.push(mirror);
-  lab.hover(glass, 'Зеркало\nУгол падения равен углу отражения');
+  lab.hover(glass, tr('Зеркало\nУгол падения равен углу отражения', 'Айна\nТүсу бұрышы шағылу бұрышына тең', 'Mirror\nThe angle of incidence equals the angle of reflection'));
   lab.grab(mirror, { onMove: clampToTable, onRelease: snapAfterGrab });
 }
 // Экран, на который ложится спектр
 const screen = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.5, 1.4), new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 1 }));
 screen.position.set(1.58, TABLE_Y + 0.25, -0.2);
 scene.add(screen);
-lab.hover(screen, 'Экран\nСюда ложится спектр');
+lab.hover(screen, tr('Экран\nСюда ложится спектр', 'Экран\nСпектр осында түседі', 'Screen\nThe spectrum lands here'));
 const screenSeg = { kind: 'absorb', seg: [[1.57, -0.9], [1.57, 0.5]] };
 
 let prismRot = 0;
 function rotatePrism() { prismRot += Math.PI / 18; const p = elements.find((e) => e.userData.kind === 'prism'); p.rotation.y = prismRot; }
-lab.hud.action('Повернуть призму', rotatePrism);
-lab.button3d('Повернуть призму', [-1.0, TABLE_Y + 0.12, -1.05], rotatePrism, { width: 0.8 });
+lab.hud.action(tr('Повернуть призму', 'Призманы бұру', 'Rotate prism'), rotatePrism);
+lab.button3d(tr('Повернуть призму', 'Призманы бұру', 'Rotate prism'), [-1.0, TABLE_Y + 0.12, -1.05], rotatePrism, { width: 0.8 });
 
 // --- Трассировка лучей на плоскости стола ---
 const beamPool = [];
@@ -214,16 +221,16 @@ const smoke = new THREE.Points(new THREE.BufferGeometry().setAttribute('position
   new THREE.PointsMaterial({ color: 0x8ab4f8, size: 0.02, transparent: true, opacity: 0.35 }));
 smoke.position.z = -0.2;
 scene.add(smoke);
-scene.add(placeLabel(makeLabel('n(синий) > n(красный): sin θ₁ = n·sin θ₂', { scale: 0.0024 }), 0, TABLE_Y + 0.85, -1.2));
+scene.add(placeLabel(makeLabel(tr('n(синий) > n(красный): sin θ₁ = n·sin θ₂', 'n(көк) > n(қызыл): sin θ₁ = n·sin θ₂', 'n(blue) > n(red): sin θ₁ = n·sin θ₂'), { scale: 0.0024 }), 0, TABLE_Y + 0.85, -1.2));
 
 // ---------- Станция 2: гравитационная комната ----------
 const PLANETS = [
-  { name: 'Земля', g: 9.81, color: 0x42a5f5 },
-  { name: 'Луна', g: 1.62, color: 0xbdbdbd },
-  { name: 'Юпитер', g: 24.8, color: 0xffb74d },
+  { name: tr('Земля', 'Жер', 'Earth'), g: 9.81, color: 0x42a5f5 },
+  { name: tr('Луна', 'Ай', 'Moon'), g: 1.62, color: 0xbdbdbd },
+  { name: tr('Юпитер', 'Юпитер', 'Jupiter'), g: 24.8, color: 0xffb74d },
 ];
 let planet = PLANETS[0];
-const gBoard = lab.board('Земля · g = 9.81 м/с²', [22, 3.4, -5], { scale: 0.0036 });
+const gBoard = lab.board(`${tr('Земля', 'Жер', 'Earth')} · g = 9.81 ${MS2}`, [22, 3.4, -5], { scale: 0.0036 });
 const launcher = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.5, 16), new THREE.MeshStandardMaterial({ color: 0x546e7a, metalness: 0.5 }));
 launcher.position.set(22, 1.1, 1.2);
 launcher.rotation.x = -Math.PI / 4;
@@ -243,11 +250,11 @@ function throwBall() {
   balls.push(m);
 }
 PLANETS.forEach((p, i) => {
-  lab.button3d(p.name, [20.4, 1.0, 1.2 - i * 0.7], () => { planet = p; gBoard.set(`${p.name} · g = ${p.g} м/с²`); }, { width: 0.6, color: p.color, rotY: Math.PI / 2 });
-  lab.hud.action(p.name, () => { planet = p; gBoard.set(`${p.name} · g = ${p.g} м/с²`); });
+  lab.button3d(p.name, [20.4, 1.0, 1.2 - i * 0.7], () => { planet = p; gBoard.set(`${p.name} · g = ${p.g} ${MS2}`); }, { width: 0.6, color: p.color, rotY: Math.PI / 2 });
+  lab.hud.action(p.name, () => { planet = p; gBoard.set(`${p.name} · g = ${p.g} ${MS2}`); });
 });
-lab.button3d('Бросить', [20.4, 1.0, -1.1], throwBall, { width: 0.6, color: 0x43a047, rotY: Math.PI / 2 });
-lab.hud.action('Бросить', throwBall);
+lab.button3d(tr('Бросить', 'Лақтыру', 'Throw'), [20.4, 1.0, -1.1], throwBall, { width: 0.6, color: 0x43a047, rotY: Math.PI / 2 });
+lab.hud.action(tr('Бросить', 'Лақтыру', 'Throw'), throwBall);
 // Стена-фон и отметки дальности
 {
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(9, 4.5), new THREE.MeshStandardMaterial({ color: 0x18213a, roughness: 0.9, emissive: 0x0f1a33, emissiveIntensity: 0.5 }));
@@ -256,14 +263,14 @@ lab.hud.action('Бросить', throwBall);
   const strip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 15.6), new THREE.MeshBasicMaterial({ color: 0x8ab4f8 }));
   strip.position.set(22, 0.012, 1.0 - 7.8);
   scene.add(strip);
-  const hint = makeLabel('Одинаковый бросок — разная планета.\nСравните высоту и дальность.', { scale: 0.003 });
+  const hint = makeLabel(tr('Одинаковый бросок — разная планета.\nСравните высоту и дальность.', 'Лақтыру бірдей — планета әртүрлі.\nБиіктігі мен ұшу қашықтығын салыстырыңыз.', 'Same throw, different planet.\nCompare the height and the range.'), { scale: 0.003 });
   hint.position.set(22, 3.0, -14.4);
   scene.add(hint);
 }
 let demoThrown = false;
 // Стена-мишень с отметками дальности
 for (let d = 2; d <= 14; d += 2) {
-  const mark = makeLabel(`${d} м`, { scale: 0.0016 });
+  const mark = makeLabel(`${d} ${M}`, { scale: 0.0016 });
   mark.position.set(22.6, 0.25, 1.0 - d);
   scene.add(mark);
   const tick = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.01, 0.03), new THREE.MeshBasicMaterial({ color: 0x8ab4f8 }));
@@ -273,7 +280,7 @@ for (let d = 2; d <= 14; d += 2) {
 
 lab.setFrame((dt, t) => {
   trace();
-  if (!demoThrown && lab.hud.current?.name === 'Гравитационная комната') { demoThrown = true; setTimeout(throwBall, 700); }
+  if (!demoThrown && lab.hud.current?.name === ST_GRAVITY) { demoThrown = true; setTimeout(throwBall, 700); }
   smoke.rotation.y += dt * 0.02;
   for (let i = balls.length - 1; i >= 0; i--) {
     const b = balls[i], u = b.userData;
@@ -289,7 +296,7 @@ lab.setFrame((dt, t) => {
     else if (u.life < 7.5 && !u.reported && Math.abs(u.vel.y) < 0.2 && b.position.y < 0.12) {
       u.reported = true;
       const range = u.start.distanceTo(b.position);
-      gBoard.set(`${planet.name} · g = ${planet.g} м/с²\nВысота ${u.top.toFixed(1)} м · дальность ${range.toFixed(1)} м`);
+      gBoard.set(`${planet.name} · g = ${planet.g} ${MS2}\n` + tr(`Высота ${u.top.toFixed(1)} м · дальность ${range.toFixed(1)} м`, `Биіктігі ${u.top.toFixed(1)} м · қашықтығы ${range.toFixed(1)} м`, `Height ${u.top.toFixed(1)} m · range ${range.toFixed(1)} m`));
     }
   }
 });

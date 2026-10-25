@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { guardUser } from '@/lib/http/guards';
+import { chargeAi } from '@/lib/quota';
 import { badRequest, INVALID_BODY_MESSAGE, notFound, readBody, withUserErrors } from '@/lib/http/route-kit';
 import { staffBlock, staffCourse, staffTopic } from '@/lib/lms/access';
 import { createTopic, listTopics, setTopicFormat } from '@/lib/lms/courses';
@@ -40,6 +41,8 @@ export async function POST(req: Request) {
   if (user instanceof Response) return user;
   const body = await readBody(req);
   if (!body) return badRequest(INVALID_BODY_MESSAGE);
+  const over = await chargeAi(user, 'teach');
+  if (over) return over;
   const locale = localeFromRequest(req);
   return withUserErrors(async () => {
     switch (body.action) {

@@ -17,6 +17,7 @@ import { unauthorized } from '@/lib/auth/guard';
 import { listMemberships } from '@/lib/org/access';
 import { canGenerate, GENERATION_FORBIDDEN_MESSAGE } from '@/lib/org/policy';
 import { pickNote } from '@/lib/jobs/pick';
+import { chargeAi } from '@/lib/quota';
 
 function isInvalidSegment(e: unknown): boolean {
   return e instanceof Error && e.message.includes('invalid path segment');
@@ -65,6 +66,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!activeProvider()) {
     return NextResponse.json({ error: NO_PROVIDER_MESSAGE }, { status: 400 });
   }
+  // Доработка квоту генераций не тратит, но каждая — запрос к модели: её держит суточный лимит.
+  const over = await chargeAi(user, 'refine');
+  if (over) return over;
   if (body.clarified !== true) {
     const meta = await getMeta(user.id, id);
     const clarify = await clarifyRefine({

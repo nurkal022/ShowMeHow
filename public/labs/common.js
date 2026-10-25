@@ -9,6 +9,24 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
+/**
+ * Язык сцены: ?lang= в адресе, иначе cookie интерфейса tesseract-lang, иначе русский.
+ * Тексты сцен пишутся как tr('по-русски', 'қазақша', 'in English').
+ */
+export const LANG = (() => {
+  const q = new URLSearchParams(location.search).get('lang');
+  const c = document.cookie.match(/(?:^|;\s*)tesseract-lang=(ru|kk|en)/)?.[1];
+  const l = q ?? c ?? 'ru';
+  return l === 'kk' || l === 'en' ? l : 'ru';
+})();
+document.documentElement.lang = LANG;
+
+export function tr(ru, kk, en) {
+  if (LANG === 'kk') return kk ?? ru;
+  if (LANG === 'en') return en ?? ru;
+  return ru;
+}
+
 const FONT = "500 44px Inter, system-ui, -apple-system, 'Segoe UI', sans-serif";
 
 /** Спрайт с текстом на canvas: кириллица рисуется штатно, шрифт не нужен. */
@@ -56,6 +74,7 @@ function roundRect(ctx, x, y, w, h, r) {
  * точка на полу, куда встаёт зритель; look — куда он смотрит с ноутбука.
  */
 export function createLab({ title, hint, stations, floor = 30, sky = 0x0b0f17, fogFar = 40 }) {
+  document.title = `${title} — Tesseract`;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(sky);
   scene.fog = new THREE.Fog(sky, 8, fogFar);
@@ -305,7 +324,8 @@ export function createLab({ title, hint, stations, floor = 30, sky = 0x0b0f17, f
   let last = performance.now();
   let onFrame = () => {};
   renderer.setAnimationLoop((now) => {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    // Первый кадр XR приходит с меткой раньше performance.now() — dt не бывает отрицательным.
+    const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
     last = now;
     if (fly) fly(now);
     if (renderer.xr.isPresenting) {
@@ -395,7 +415,7 @@ function buildHud({ title, hint, stations, renderer }) {
   const root = document.createElement('div');
   root.className = 'hud';
   root.innerHTML = `
-    <a class="hud-back" href="/labs">← Лаборатории</a>
+    <a class="hud-back" href="/labs">← ${tr('Лаборатории', 'Зертханалар', 'Labs')}</a>
     <div class="hud-title">${title}</div>
     <div class="hud-hint">${hint}</div>
     <div class="hud-stations"></div>
@@ -416,8 +436,9 @@ function buildHud({ title, hint, stations, renderer }) {
     vrBtn.className = 'hud-vrbtn';
     vrBox.appendChild(vrBtn);
     // VRButton пишет по-английски; переводим, не мешая ему обновлять текст.
-    const ru = { 'ENTER VR': 'Войти в VR', 'EXIT VR': 'Выйти из VR', 'VR NOT SUPPORTED': 'VR недоступен',
-      'VR NOT ALLOWED': 'VR запрещён', 'WEBXR NOT AVAILABLE': 'Нужен HTTPS для VR', 'WEBXR NEEDS HTTPS': 'Нужен HTTPS для VR' };
+    const ru = { 'ENTER VR': tr('Войти в VR', 'VR-ға кіру', 'Enter VR'), 'EXIT VR': tr('Выйти из VR', 'VR-дан шығу', 'Exit VR'),
+      'VR NOT SUPPORTED': tr('VR недоступен', 'VR қолжетімсіз', 'VR not supported'), 'VR NOT ALLOWED': tr('VR запрещён', 'VR тыйым салынған', 'VR not allowed'),
+      'WEBXR NOT AVAILABLE': tr('Нужен HTTPS для VR', 'VR үшін HTTPS қажет', 'VR needs HTTPS'), 'WEBXR NEEDS HTTPS': tr('Нужен HTTPS для VR', 'VR үшін HTTPS қажет', 'VR needs HTTPS') };
     new MutationObserver(() => {
       const t = vrBtn.textContent.trim();
       if (ru[t]) vrBtn.textContent = ru[t];

@@ -1,13 +1,26 @@
-import { createLab, makeLabel, placeLabel, pulse } from '../common.js';
+import { createLab, makeLabel, placeLabel, pulse, tr } from '../common.js';
 import { bandsTexture, rockyTexture, earthTexture, sunTexture, glowTexture, ringTexture, ringGeometry } from './textures.js';
 import { classify, unitCone } from './eclipse.js';
 
+const ST_PLAN = tr('Планетарий', 'Планетарий', 'Planetarium');
+const ST_ECL = tr('Затмения', 'Тұтылулар', 'Eclipses');
+const PAUSE = tr('Пауза', 'Үзіліс', 'Pause');
+const PLAY = tr('Пуск', 'Жүргізу', 'Play');
+const SLOWER = tr('Медленнее', 'Баяуырақ', 'Slower');
+const FASTER = tr('Быстрее', 'Жылдамырақ', 'Faster');
+const MOON_STOP = tr('Луна: стоп', 'Ай: тоқтату', 'Moon: stop');
+const MOON_AUTO = tr('Луна: сама', 'Ай: өздігінен', 'Moon: auto');
+const TILT_BTN = tr('Наклон орбиты', 'Орбита көлбеулігі', 'Orbit tilt');
+const NODES_BTN = tr('Повернуть узлы', 'Түйіндерді бұру', 'Turn nodes');
+
 const lab = createLab({
-  title: 'Солнечная система',
-  hint: 'Планеты на столе идут по орбитам с настоящими периодами (третий закон Кеплера). Возьмите планету — рядом появятся её данные; отпустите — она продолжит путь с нового места. Кнопки у края стола меняют скорость времени. На второй станции двигайте Луну и ищите затмения.',
+  title: tr('Солнечная система', 'Күн жүйесі', 'Solar System'),
+  hint: tr('Планеты на столе идут по орбитам с настоящими периодами (третий закон Кеплера). Возьмите планету — рядом появятся её данные; отпустите — она продолжит путь с нового места. Кнопки у края стола меняют скорость времени. На второй станции двигайте Луну и ищите затмения.',
+    'Үстелдегі планеталар орбиталар бойымен нақты периодтарымен қозғалады (Кеплердің үшінші заңы). Планетаны алыңыз — жанында оның деректері шығады; жіберсеңіз — ол жаңа орнынан жолын жалғастырады. Үстел шетіндегі батырмалар уақыт жылдамдығын өзгертеді. Екінші станцияда Айды жылжытып, тұтылуларды іздеңіз.',
+    'The planets on the table move along their orbits with their real periods (Kepler\'s third law). Pick up a planet to see its data; release it and it continues from the new spot. The buttons at the table edge change the speed of time. At the second station, move the Moon and look for eclipses.'),
   stations: [
-    { name: 'Планетарий', at: [0, 1.75, 1.95], look: [0, 1.0, -0.3] },
-    { name: 'Затмения', at: [7.0, 1.5, 0.95], look: [7.0, 1.18, -0.35] },
+    { name: ST_PLAN, at: [0, 1.75, 1.95], look: [0, 1.0, -0.3] },
+    { name: ST_ECL, at: [7.0, 1.5, 0.95], look: [7.0, 1.18, -0.35] },
   ],
   sky: 0x03050b, fogFar: 46,
 });
@@ -103,24 +116,29 @@ scene.add(sunGlow2);
 const sunLight = new THREE.PointLight(0xfff0d0, 3.2, 3.2, 0.6);
 sunLight.position.copy(SUN_C);
 scene.add(sunLight);
-lab.hover(sun, 'Солнце\nРадиус 696 000 км — в 109 раз больше Земли\nВ нём 99,86 % массы Солнечной системы');
+lab.hover(sun, tr('Солнце\nРадиус 696 000 км — в 109 раз больше Земли\nВ нём 99,86 % массы Солнечной системы',
+  'Күн\nРадиусы 696 000 км — Жерден 109 есе үлкен\nКүн жүйесі массасының 99,86 %-ы осында',
+  'Sun\nRadius 696,000 km — 109 times that of Earth\nHolds 99.86 % of the Solar System\'s mass'));
 
 // Данные: радиус (км), период (лет), большая полуось (а.е.), сутки — для подписи.
 const PLANETS = [
-  { id: 'mercury', name: 'Меркурий', r: 2440, T: 0.2408, a: 0.387, mkm: 57.9, size: 0.013, orbit: 0.2, color: 0x9e9a94, extra: 'Сутки длиннее года: 176 земных суток' },
-  { id: 'venus', name: 'Венера', r: 6052, T: 0.6152, a: 0.723, mkm: 108.2, size: 0.021, orbit: 0.28, color: 0xe3c58a, extra: 'Самая горячая: +465 °C под облаками' },
-  { id: 'earth', name: 'Земля', r: 6371, T: 1.0, a: 1.0, mkm: 149.6, size: 0.022, orbit: 0.37, color: 0x3a78d0, extra: 'Ось наклонена на 23,4° — поэтому есть времена года' },
-  { id: 'mars', name: 'Марс', r: 3390, T: 1.8808, a: 1.524, mkm: 227.9, size: 0.016, orbit: 0.46, color: 0xc1552e, extra: 'Гора Олимп — 22 км в высоту' },
-  { id: 'jupiter', name: 'Юпитер', r: 69911, T: 11.862, a: 5.203, mkm: 778.5, size: 0.052, orbit: 0.63, color: 0xd2b48c, extra: 'Большое красное пятно — шторм больше Земли' },
-  { id: 'saturn', name: 'Сатурн', r: 58232, T: 29.457, a: 9.537, mkm: 1432, size: 0.043, orbit: 0.79, color: 0xe6d3a3, extra: 'Кольца — лёд и камни, толщина около 10 м' },
-  { id: 'uranus', name: 'Уран', r: 25362, T: 84.011, a: 19.19, mkm: 2867, size: 0.03, orbit: 0.93, color: 0x9fd8e0, extra: 'Лежит на боку: ось наклонена на 98°' },
-  { id: 'neptune', name: 'Нептун', r: 24622, T: 164.79, a: 30.07, mkm: 4515, size: 0.029, orbit: 1.05, color: 0x3f63d8, extra: 'Ветры до 2 100 км/ч — самые быстрые' },
+  { id: 'mercury', name: tr('Меркурий', 'Меркурий', 'Mercury'), r: 2440, T: 0.2408, a: 0.387, mkm: 57.9, size: 0.013, orbit: 0.2, color: 0x9e9a94, extra: tr('Сутки длиннее года: 176 земных суток', 'Тәулігі жылынан ұзақ: 176 жер тәулігі', 'A day is longer than its year: 176 Earth days') },
+  { id: 'venus', name: tr('Венера', 'Шолпан', 'Venus'), r: 6052, T: 0.6152, a: 0.723, mkm: 108.2, size: 0.021, orbit: 0.28, color: 0xe3c58a, extra: tr('Самая горячая: +465 °C под облаками', 'Ең ыстық планета: бұлттар астында +465 °C', 'The hottest: +465 °C beneath the clouds') },
+  { id: 'earth', name: tr('Земля', 'Жер', 'Earth'), r: 6371, T: 1.0, a: 1.0, mkm: 149.6, size: 0.022, orbit: 0.37, color: 0x3a78d0, extra: tr('Ось наклонена на 23,4° — поэтому есть времена года', 'Осі 23,4°-қа көлбеу — сондықтан жыл мезгілдері бар', 'Axis tilted 23.4° — that is why there are seasons') },
+  { id: 'mars', name: tr('Марс', 'Марс', 'Mars'), r: 3390, T: 1.8808, a: 1.524, mkm: 227.9, size: 0.016, orbit: 0.46, color: 0xc1552e, extra: tr('Гора Олимп — 22 км в высоту', 'Олимп тауының биіктігі — 22 км', 'Olympus Mons is 22 km high') },
+  { id: 'jupiter', name: tr('Юпитер', 'Юпитер', 'Jupiter'), r: 69911, T: 11.862, a: 5.203, mkm: 778.5, size: 0.052, orbit: 0.63, color: 0xd2b48c, extra: tr('Большое красное пятно — шторм больше Земли', 'Үлкен қызыл дақ — Жерден үлкен дауыл', 'The Great Red Spot is a storm larger than Earth') },
+  { id: 'saturn', name: tr('Сатурн', 'Сатурн', 'Saturn'), r: 58232, T: 29.457, a: 9.537, mkm: 1432, size: 0.043, orbit: 0.79, color: 0xe6d3a3, extra: tr('Кольца — лёд и камни, толщина около 10 м', 'Сақиналары — мұз бен тас, қалыңдығы шамамен 10 м', 'Rings of ice and rock, about 10 m thick') },
+  { id: 'uranus', name: tr('Уран', 'Уран', 'Uranus'), r: 25362, T: 84.011, a: 19.19, mkm: 2867, size: 0.03, orbit: 0.93, color: 0x9fd8e0, extra: tr('Лежит на боку: ось наклонена на 98°', 'Қырынан жатыр: осі 98°-қа көлбеу', 'Lies on its side: axis tilted 98°') },
+  { id: 'neptune', name: tr('Нептун', 'Нептун', 'Neptune'), r: 24622, T: 164.79, a: 30.07, mkm: 4515, size: 0.029, orbit: 1.05, color: 0x3f63d8, extra: tr('Ветры до 2 100 км/ч — самые быстрые', 'Желдің жылдамдығы 2 100 км/сағ-қа дейін — ең жылдам', 'Winds up to 2,100 km/h — the fastest') },
 ];
 const fmt = (x, d = 2) => x.toFixed(d).replace('.', ',');
 const fmtInt = (x) => String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-function periodText(p) { return p.T < 2 ? `${fmtInt(p.T * 365.25)} сут` : `${fmt(p.T, 1)} года`; }
+function periodText(p) { return p.T < 2 ? `${fmtInt(p.T * 365.25)} ${tr('сут', 'тәул.', 'days')}` : `${fmt(p.T, 1)} ${tr('года', 'жыл', 'yr')}`; }
 function factsText(p) {
-  return `${p.name}\nРадиус ${fmtInt(p.r)} км\nПериод ${periodText(p)}\nОрбита ${fmt(p.a)} а.е. = ${fmtInt(p.mkm)} млн км\nT² / a³ = ${fmt((p.T * p.T) / (p.a ** 3))}  (закон Кеплера)\n${p.extra}`;
+  return tr(
+    `${p.name}\nРадиус ${fmtInt(p.r)} км\nПериод ${periodText(p)}\nОрбита ${fmt(p.a)} а.е. = ${fmtInt(p.mkm)} млн км\nT² / a³ = ${fmt((p.T * p.T) / (p.a ** 3))}  (закон Кеплера)\n${p.extra}`,
+    `${p.name}\nРадиусы ${fmtInt(p.r)} км\nПериоды ${periodText(p)}\nОрбитасы ${fmt(p.a)} а.б. = ${fmtInt(p.mkm)} млн км\nT² / a³ = ${fmt((p.T * p.T) / (p.a ** 3))}  (Кеплер заңы)\n${p.extra}`,
+    `${p.name}\nRadius ${fmtInt(p.r)} km\nPeriod ${periodText(p)}\nOrbit ${fmt(p.a)} AU = ${fmtInt(p.mkm)} million km\nT² / a³ = ${fmt((p.T * p.T) / (p.a ** 3))}  (Kepler\'s law)\n${p.extra}`);
 }
 
 function texFor(p) {
@@ -187,7 +205,7 @@ for (const [i, p] of PLANETS.entries()) {
   p.angle = (i * 2.399) % (Math.PI * 2); // золотой угол — планеты не выстраиваются в линию
   placePlanet(p);
 
-  lab.hover(g, () => `${p.name}\nПериод ${periodText(p)} · ${fmt(p.a)} а.е.`);
+  lab.hover(g, () => tr(`${p.name}\nПериод ${periodText(p)} · ${fmt(p.a)} а.е.`, `${p.name}\nПериоды ${periodText(p)} · ${fmt(p.a)} а.б.`, `${p.name}\nPeriod ${periodText(p)} · ${fmt(p.a)} AU`));
   lab.grab(g, {
     onGrab: () => select(p),
     onMove: (o) => { if (o.userData.heldBy === 'mouse') o.position.y = PLANE_Y; },
@@ -220,7 +238,9 @@ function placePlanet(p) {
 }
 
 // Табло с данными выбранной планеты — над дальним краем стола.
-const DEFAULT_INFO = 'Возьмите планету — здесь появятся её данные\nT² / a³ = 1 для всех планет: третий закон Кеплера\n(T — период в годах, a — орбита в а.е.)';
+const DEFAULT_INFO = tr('Возьмите планету — здесь появятся её данные\nT² / a³ = 1 для всех планет: третий закон Кеплера\n(T — период в годах, a — орбита в а.е.)',
+  'Планетаны алыңыз — мұнда оның деректері шығады\nБарлық планета үшін T² / a³ = 1: Кеплердің үшінші заңы\n(T — жылмен период, a — а.б.-мен орбита)',
+  'Pick up a planet — its data will appear here\nT² / a³ = 1 for every planet: Kepler\'s third law\n(T — period in years, a — orbit in AU)');
 const info = lab.board(DEFAULT_INFO, [SUN_C.x, 1.72, SUN_C.z - 1.45], { scale: 0.0022 });
 function setBoard(b, text) {
   const old = b.sprite.material.map;
@@ -246,7 +266,11 @@ let timeText = '';
 function speedText() {
   const s = SPEEDS[speedIdx];
   const year = 1 / s;
-  return `${paused ? 'Пауза' : `Скорость: ${fmt(s, s < 0.1 ? 2 : s < 1 ? 2 : 0)} года/с`}\nГод Земли = ${fmt(year, year < 10 ? 1 : 0)} с · прошло ${fmt(simYears, 1)} лет`;
+  const sp = fmt(s, s < 0.1 ? 2 : s < 1 ? 2 : 0), yr = fmt(year, year < 10 ? 1 : 0), past = fmt(simYears, 1);
+  return tr(
+    `${paused ? PAUSE : `Скорость: ${sp} года/с`}\nГод Земли = ${yr} с · прошло ${past} лет`,
+    `${paused ? PAUSE : `Жылдамдық: ${sp} жыл/с`}\nЖер жылы = ${yr} с · өткені ${past} жыл`,
+    `${paused ? PAUSE : `Speed: ${sp} yr/s`}\nEarth year = ${yr} s · elapsed ${past} yr`);
 }
 function refreshTime() {
   const t = speedText();
@@ -254,10 +278,10 @@ function refreshTime() {
 }
 function slower() { paused = false; speedIdx = Math.max(0, speedIdx - 1); refreshTime(); }
 function faster() { paused = false; speedIdx = Math.min(SPEEDS.length - 1, speedIdx + 1); refreshTime(); }
-function togglePause() { paused = !paused; pauseBtn.setText(paused ? 'Пуск' : 'Пауза'); refreshTime(); }
-lab.button3d('Медленнее', conAt(-0.4), slower, { width: 0.36, color: 0x3949ab, });
-const pauseBtn = lab.button3d('Пауза', conAt(0), togglePause, { width: 0.36, color: 0xf9a825, });
-lab.button3d('Быстрее', conAt(0.4), faster, { width: 0.36, color: 0x3949ab, });
+function togglePause() { paused = !paused; pauseBtn.setText(paused ? PLAY : PAUSE); refreshTime(); }
+lab.button3d(SLOWER, conAt(-0.4), slower, { width: 0.36, color: 0x3949ab, });
+const pauseBtn = lab.button3d(PAUSE, conAt(0), togglePause, { width: 0.36, color: 0xf9a825, });
+lab.button3d(FASTER, conAt(0.4), faster, { width: 0.36, color: 0x3949ab, });
 {
   const stand = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, 0.14), new THREE.MeshStandardMaterial({ color: 0x1b2333, metalness: 0.5, roughness: 0.5 }));
   stand.position.set(CON.x, CON.y - 0.1, CON.z - 0.01);
@@ -268,9 +292,9 @@ lab.button3d('Быстрее', conAt(0.4), faster, { width: 0.36, color: 0x3949a
     scene.add(post);
   }
 }
-lab.hud.action('Медленнее', slower, 'Планетарий');
-const pauseHud = lab.hud.action('Пауза', () => { togglePause(); pauseHud.textContent = paused ? 'Пуск' : 'Пауза'; }, 'Планетарий');
-lab.hud.action('Быстрее', faster, 'Планетарий');
+lab.hud.action(SLOWER, slower, ST_PLAN);
+const pauseHud = lab.hud.action(PAUSE, () => { togglePause(); pauseHud.textContent = paused ? PLAY : PAUSE; }, ST_PLAN);
+lab.hud.action(FASTER, faster, ST_PLAN);
 refreshTime();
 
 // ---------- Станция 2: затмения ----------
@@ -304,13 +328,15 @@ scene.add(lampGlow);
 const lampLight = new THREE.PointLight(0xfff0d0, 3.5, 3.4, 0.6);
 lampLight.position.copy(S_POS);
 scene.add(lampLight);
-lab.hover(lamp, 'Солнце-лампа\nВ модели размеры условные: настоящее Солнце\nв 400 раз больше Луны и в 400 раз дальше');
+lab.hover(lamp, tr('Солнце-лампа\nВ модели размеры условные: настоящее Солнце\nв 400 раз больше Луны и в 400 раз дальше',
+  'Күн-шам\nМодельде өлшемдер шартты: нақты Күн\nАйдан 400 есе үлкен және 400 есе алыс',
+  'Sun lamp\nSizes in the model are not to scale: the real Sun\nis 400 times larger than the Moon and 400 times farther'));
 
 const earth2 = new THREE.Mesh(new THREE.SphereGeometry(RE, 40, 24), new THREE.MeshStandardMaterial({ map: earthTexture(), roughness: 0.8 }));
 earth2.rotation.z = THREE.MathUtils.degToRad(23.4);
 earth2.position.copy(E_POS);
 scene.add(earth2);
-lab.hover(earth2, 'Земля\nДневная сторона смотрит на лампу');
+lab.hover(earth2, tr('Земля\nДневная сторона смотрит на лампу', 'Жер\nКүндізгі жағы шамға қарап тұр', 'Earth\nThe day side faces the lamp'));
 
 // Орбита Луны: группа в центре Земли; node — поворот линии узлов, tilt — наклон.
 const nodeG = new THREE.Group();
@@ -343,9 +369,9 @@ function moonAngleFromWorld() {
   const l = tiltG.worldToLocal(moon2.position.clone());
   return Math.atan2(l.z, l.x);
 }
-lab.hover(moon2, 'Луна\nВозьмите и ведите по орбите');
+lab.hover(moon2, tr('Луна\nВозьмите и ведите по орбите', 'Ай\nАлып, орбита бойымен жүргізіңіз', 'Moon\nGrab it and move it along the orbit'));
 lab.grab(moon2, {
-  onGrab: () => { moonAuto = false; autoBtn.setText('Луна: сама'); autoHud.textContent = 'Луна: сама'; },
+  onGrab: () => { moonAuto = false; autoBtn.setText(MOON_AUTO); autoHud.textContent = MOON_AUTO; },
   onMove: (o) => { if (o.userData.heldBy === 'mouse') { moonAngle = moonAngleFromWorld(); placeMoon(); } },
   onRelease: () => { moonAngle = moonAngleFromWorld(); moon2.rotation.set(0, 0, 0); placeMoon(); },
 });
@@ -388,22 +414,22 @@ function setCap(mesh, r, scaleR, key) {
 }
 
 const ECL_TEXT = {
-  none: 'Затмения нет\nЛуна не на линии Солнце — Земля.\nВедите её к пунктирной линии.',
-  'solar-total': 'Полное солнечное затмение\nНоволуние: Луна между Солнцем и Землёй.\nТам, где чёрное пятно, Солнце закрыто целиком.',
-  'solar-annular': 'Кольцеобразное солнечное затмение\nКонус тени Луны не достаёт до Земли —\nвокруг Луны видно огненное кольцо Солнца.',
-  'solar-partial': 'Частное солнечное затмение\nНа Землю падает только полутень Луны —\nСолнце закрыто лишь частично.',
-  'lunar-total': 'Полное лунное затмение\nПолнолуние: Земля между Солнцем и Луной.\nЛуна краснеет — атмосфера Земли пропускает к ней красный свет.',
-  'lunar-partial': 'Частное лунное затмение\nЛуна вошла в тень Земли только частью.',
-  'lunar-penumbral': 'Полутеневое лунное затмение\nЛуна в полутени Земли и темнеет едва заметно.',
+  none: tr('Затмения нет\nЛуна не на линии Солнце — Земля.\nВедите её к пунктирной линии.', 'Тұтылу жоқ\nАй Күн — Жер сызығында емес.\nОны пунктир сызыққа қарай жүргізіңіз.', 'No eclipse\nThe Moon is not on the Sun — Earth line.\nMove it toward the dashed line.'),
+  'solar-total': tr('Полное солнечное затмение\nНоволуние: Луна между Солнцем и Землёй.\nТам, где чёрное пятно, Солнце закрыто целиком.', 'Күннің толық тұтылуы\nЖаңа ай: Ай Күн мен Жердің арасында.\nҚара дақ түскен жерде Күн толық жабылған.', 'Total solar eclipse\nNew moon: the Moon is between the Sun and Earth.\nWhere the black spot is, the Sun is fully covered.'),
+  'solar-annular': tr('Кольцеобразное солнечное затмение\nКонус тени Луны не достаёт до Земли —\nвокруг Луны видно огненное кольцо Солнца.', 'Күннің сақиналы тұтылуы\nАй көлеңкесінің конусы Жерге жетпейді —\nАйды Күннің отты сақинасы қоршап тұрады.', 'Annular solar eclipse\nThe Moon\'s shadow cone does not reach Earth —\na fiery ring of the Sun shows around the Moon.'),
+  'solar-partial': tr('Частное солнечное затмение\nНа Землю падает только полутень Луны —\nСолнце закрыто лишь частично.', 'Күннің жартылай тұтылуы\nЖерге Айдың тек жартылай көлеңкесі түседі —\nКүн ішінара ғана жабылған.', 'Partial solar eclipse\nOnly the Moon\'s penumbra falls on Earth —\nthe Sun is only partly covered.'),
+  'lunar-total': tr('Полное лунное затмение\nПолнолуние: Земля между Солнцем и Луной.\nЛуна краснеет — атмосфера Земли пропускает к ней красный свет.', 'Айдың толық тұтылуы\nТолған ай: Жер Күн мен Айдың арасында.\nАй қызарады — Жер атмосферасы оған қызыл жарықты өткізеді.', 'Total lunar eclipse\nFull moon: Earth is between the Sun and the Moon.\nThe Moon turns red — Earth\'s atmosphere lets red light through to it.'),
+  'lunar-partial': tr('Частное лунное затмение\nЛуна вошла в тень Земли только частью.', 'Айдың жартылай тұтылуы\nАй Жер көлеңкесіне тек бір бөлігімен кірді.', 'Partial lunar eclipse\nOnly part of the Moon has entered Earth\'s shadow.'),
+  'lunar-penumbral': tr('Полутеневое лунное затмение\nЛуна в полутени Земли и темнеет едва заметно.', 'Айдың жартылай көлеңкелі тұтылуы\nАй Жердің жартылай көлеңкесінде, сәл ғана күңгірттенеді.', 'Penumbral lunar eclipse\nThe Moon is in Earth\'s penumbra and dims only slightly.'),
 };
 const eclBoard = lab.board(ECL_TEXT.none, [EC.x, 1.86, EC.z - 0.6], { scale: 0.0019 });
 let eclKind = '';
 let tilted = false;
-const TILT_TEXT = '\nОрбита наклонена: Луна проходит выше или ниже тени,\nпоэтому затмения бывают не каждый месяц.';
+const TILT_TEXT = tr('\nОрбита наклонена: Луна проходит выше или ниже тени,\nпоэтому затмения бывают не каждый месяц.', '\nОрбита көлбеу: Ай көлеңкенің үстінен не астынан өтеді,\nсондықтан тұтылу әр ай сайын бола бермейді.', '\nThe orbit is tilted: the Moon passes above or below the shadow,\nso eclipses do not happen every month.');
 
 function toggleAuto() {
   moonAuto = !moonAuto;
-  const t = moonAuto ? 'Луна: стоп' : 'Луна: сама';
+  const t = moonAuto ? MOON_STOP : MOON_AUTO;
   autoBtn.setText(t); autoHud.textContent = t;
 }
 function toggleTilt() {
@@ -424,13 +450,13 @@ const BX = EC.x - 0.66, BZ = EC.z - 0.5, BY = 1.52;
     scene.add(leg);
   }
 }
-const autoBtn = lab.button3d('Луна: стоп', [BX, BY, BZ], toggleAuto, { width: 0.56, color: 0x546e7a });
-lab.button3d('Наклон орбиты', [BX + 0.66, BY, BZ], toggleTilt, { width: 0.6, color: 0x3949ab });
-lab.button3d('Повернуть узлы', [BX + 1.32, BY, BZ], turnNodes, { width: 0.6, color: 0x3949ab });
-const autoHud = lab.hud.action('Луна: стоп', toggleAuto, 'Затмения');
-lab.hud.action('Наклон орбиты', toggleTilt, 'Затмения');
-lab.hud.action('Повернуть узлы', turnNodes, 'Затмения');
-scene.add(placeLabel(makeLabel('Наклон орбиты Луны в модели увеличен (18° вместо 5°)', { scale: 0.0011 }), EC.x, BY - 0.21, BZ));
+const autoBtn = lab.button3d(MOON_STOP, [BX, BY, BZ], toggleAuto, { width: 0.56, color: 0x546e7a });
+lab.button3d(TILT_BTN, [BX + 0.66, BY, BZ], toggleTilt, { width: 0.6, color: 0x3949ab });
+lab.button3d(NODES_BTN, [BX + 1.32, BY, BZ], turnNodes, { width: 0.6, color: 0x3949ab });
+const autoHud = lab.hud.action(MOON_STOP, toggleAuto, ST_ECL);
+lab.hud.action(TILT_BTN, toggleTilt, ST_ECL);
+lab.hud.action(NODES_BTN, turnNodes, ST_ECL);
+scene.add(placeLabel(makeLabel(tr('Наклон орбиты Луны в модели увеличен (18° вместо 5°)', 'Модельде Ай орбитасының көлбеулігі үлкейтілген (5° орнына 18°)', 'The Moon\'s orbital tilt is exaggerated in the model (18° instead of 5°)'), { scale: 0.0011 }), EC.x, BY - 0.21, BZ));
 placeMoon();
 // Для автопроверки скриншотами: поставить Луну под нужным углом (π — новолуние, 0 — полнолуние).
 window.__astro = { setMoon(a) { moonAuto = false; moonAngle = a; placeMoon(); } };

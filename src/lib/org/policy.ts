@@ -7,7 +7,8 @@ import type { Membership, OrgRole } from './types';
  * Модуль без базы: его зовут роуты, layout и юнит-тесты.
  */
 
-export const TRIAL_LIMIT = 10;
+/** Пробный лимит по умолчанию; действующий админ меняет в настройках платформы. */
+export const TRIAL_LIMIT = 1;
 
 export const GENERATION_FORBIDDEN_MESSAGE = 'Генерация недоступна для студентов вашей организации.';
 
@@ -73,11 +74,14 @@ export function sessionKind(user: PolicyUser, memberships: Membership[]): Sessio
   return 'short';
 }
 
-/** null — без лимита. Преподавателю — наибольший лимит среди организаций, где он преподаватель или админ. */
-export function generationLimit(user: PolicyUser, memberships: Membership[]): number | null {
+/**
+ * null — без лимита. Преподавателю — наибольший лимит среди организаций, где он преподаватель или админ.
+ * Песочница не в счёт: её «руководство» — сам новичок, и он мог бы выдать себе любой лимит.
+ */
+export function generationLimit(user: PolicyUser, memberships: Membership[], trialLimit = TRIAL_LIMIT): number | null {
   if (isPlatformAdmin(user)) return null;
-  const staff = memberships.filter(isStaff);
-  if (staff.length === 0) return TRIAL_LIMIT;
+  const staff = memberships.filter((m) => isStaff(m) && !m.sandbox);
+  if (staff.length === 0) return trialLimit;
   return Math.max(...staff.map((m) => m.settings.teacherGenerationLimit));
 }
 

@@ -15,6 +15,31 @@ import { wristPanel, updateWrist } from './ui/wrist.js';
 import { buildDock } from './ui/dock.js';
 import { labTick } from './labs.js';
 import { presetDensities } from './physics/params.js';
+import { tr } from './i18n.js';
+
+// ---------- тексты страницы (index.html) на языке интерфейса ----------
+document.title = tr('Термообработка нефтешлама — Tesseract', 'Мұнай шламын термиялық өңдеу — Tesseract', 'Oil sludge thermal treatment — Tesseract');
+document.getElementById('hud').innerHTML = `
+    <a id="back" href="/labs">← ${tr('Лаборатории', 'Зертханалар', 'Labs')}</a>
+    <h1>${tr('VR-лаборатория: термическая обработка нефтешлама', 'VR-зертхана: мұнай шламын термиялық өңдеу', 'VR lab: thermal treatment of oil sludge')}</h1>
+    <p>${tr('Наведите на куб — увидите T и состав; клик по кубу ставит термопару. Крутите ручку T₀ и двигайте рычаг U₀ на фене. Справка — <b>?</b>',
+    'Текшеге меңзерді апарыңыз — T мен құрамы көрінеді; текшені басса, термопара қойылады. Фендегі T₀ тұтқасын бұрап, U₀ иінтірегін жылжытыңыз. Анықтама — <b>?</b>',
+    'Hover over the cube to see T and composition; click the cube to place a thermocouple. Turn the T₀ knob and move the U₀ lever on the heat gun. Help — <b>?</b>')}</p>`;
+document.querySelector('#help .card').innerHTML = `
+      <h2>${tr('Управление', 'Басқару', 'Controls')}</h2>
+      <div class="cols">
+        <div><kbd>${tr('Пробел', 'Бос орын', 'Space')}</kbd> ${tr('пуск / пауза', 'іске қосу / кідірту', 'run / pause')}</div><div><kbd>R</kbd> ${tr('сброс образца', 'үлгіні қайта бастау', 'reset sample')}</div>
+        <div><kbd>1</kbd>–<kbd>5</kbd> ${tr('режим вида', 'көрініс режимі', 'view mode')}</div><div><kbd>S</kbd> ${tr('сечение', 'қима', 'section')}, <kbd>[</kbd> <kbd>]</kbd> ${tr('сдвиг', 'жылжыту', 'shift')}</div>
+        <div><kbd>↑</kbd> <kbd>↓</kbd> T₀ ± 25 °C</div><div><kbd>←</kbd> <kbd>→</kbd> ${tr('перемотка', 'кері айналдыру', 'rewind')}, <kbd>L</kbd> live</div>
+        <div><kbd>+</kbd> <kbd>−</kbd> ${tr('ускорение', 'жеделдету', 'speed-up')}</div><div><kbd>?</kbd> ${tr('эта справка', 'осы анықтама', 'this help')}</div>
+      </div>
+      <p>${tr('<b>Мышь:</b> вращение — левая кнопка по фону, панорама — правая, масштаб — колесо. Наведение на куб — значения в точке, клик — поставить следующую термопару (на срезе — внутрь). Ручку T₀ тяните вверх/вниз, рычаг U₀ — вбок, красная кнопка на фене — пуск. Панели переносятся за заголовок (⠿).',
+      '<b>Тінтуір:</b> айналдыру — фонда сол жақ батырма, панорама — оң жақ, масштаб — дөңгелек. Текшеге меңзеу — нүктедегі мәндер, басу — келесі термопараны қою (қимада — ішке). T₀ тұтқасын жоғары/төмен, U₀ иінтірегін бүйірге тартыңыз, фендегі қызыл батырма — іске қосу. Панельдер тақырыбынан (⠿) ұстап жылжытылады.',
+      '<b>Mouse:</b> rotate — left button on the background, pan — right, zoom — wheel. Hover over the cube — values at the point, click — place the next thermocouple (inside, on a section). Drag the T₀ knob up/down, the U₀ lever sideways; the red button on the heat gun starts the run. Panels are moved by their title bar (⠿).')}</p>
+      <p>${tr('<b>Quest:</b> лазер + курок или щипок пальцами. Посмотрите на левую руку — появится меню (пуск, T₀, U₀, вид, «Панели ко мне»). Левый стик — ходьба, правый — поворот на 30°.',
+      '<b>Quest:</b> лазер + шүріппе немесе саусақпен шымшу. Сол қолыңызға қараңыз — мәзір шығады (іске қосу, T₀, U₀, көрініс, «Панельдер маған»). Сол стик — жүру, оң стик — 30°-қа бұрылу.',
+      '<b>Quest:</b> laser + trigger or finger pinch. Look at your left hand to open the menu (run, T₀, U₀, view, “Panels to me”). Left stick — walk, right stick — turn by 30°.')}</p>
+      <p style="color:#93a1b3">${tr('Нажмите в любом месте, чтобы закрыть.', 'Жабу үшін кез келген жерді басыңыз.', 'Click anywhere to close.')}</p>`;
 
 // ---------- рендер ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -70,7 +95,7 @@ scaleLabel.mesh.rotation.x = -0.5;
 scene.add(scaleLabel.mesh);
 const drawScaleLabel = () => scaleLabel.draw((c, w, h) => {
   c.fillStyle = '#cfe8ff'; c.font = '600 34px Inter, Roboto, sans-serif'; c.textAlign = 'center';
-  c.fillText(`куб L = ${(state.cfg.L * 100).toFixed(1)} см · показан ×${(LAYOUT.sampleSize / state.cfg.L).toFixed(1)}  →  поток`, w / 2, h / 2 + 15);
+  c.fillText(tr(`куб L = ${(state.cfg.L * 100).toFixed(1)} см · показан ×${(LAYOUT.sampleSize / state.cfg.L).toFixed(1)}  →  поток`, `текше L = ${(state.cfg.L * 100).toFixed(1)} см · ×${(LAYOUT.sampleSize / state.cfg.L).toFixed(1)} үлкейтілген  →  ағын`, `cube L = ${(state.cfg.L * 100).toFixed(1)} cm · shown ×${(LAYOUT.sampleSize / state.cfg.L).toFixed(1)}  →  flow`), w / 2, h / 2 + 15);
 });
 drawScaleLabel();
 
@@ -142,13 +167,13 @@ function flyTo(pos, target) {
   Object.assign(tween, { t: 0, p0: camera.position.clone(), q0: controls.target.clone(), p1: pos, q1: target });
 }
 const views = [
-  ['Установка', () => flyTo(new THREE.Vector3(0.12, 1.62, 0.02), LAYOUT.sampleCenter.clone().add(new THREE.Vector3(0, 0.08, 0)))],
-  ['Лабораторные работы', () => panelView(panels.guide)],
-  ['Эксперимент', () => panelView(panels.control)],
-  ['Вид и сечение', () => panelView(panels.view)],
-  ['Приборы', () => panelView(panels.instr)],
-  ['Графики', () => panelView(panels.graph)],
-  ['Модель и уравнения', () => panelView(panels.model)],
+  [tr('Установка', 'Қондырғы', 'Setup'), () => flyTo(new THREE.Vector3(0.12, 1.62, 0.02), LAYOUT.sampleCenter.clone().add(new THREE.Vector3(0, 0.08, 0)))],
+  [tr('Лабораторные работы', 'Зертханалық жұмыстар', 'Lab assignments'), () => panelView(panels.guide)],
+  [tr('Эксперимент', 'Тәжірибе', 'Experiment'), () => panelView(panels.control)],
+  [tr('Вид и сечение', 'Көрініс және қима', 'View and section'), () => panelView(panels.view)],
+  [tr('Приборы', 'Аспаптар', 'Instruments'), () => panelView(panels.instr)],
+  [tr('Графики', 'Графиктер', 'Charts'), () => panelView(panels.graph)],
+  [tr('Модель и уравнения', 'Модель және теңдеулер', 'Model and equations'), () => panelView(panels.model)],
 ];
 function panelView(p) {
   const n = new THREE.Vector3(0, 0, 1).applyQuaternion(p.mesh.quaternion);
@@ -199,7 +224,7 @@ async function enter(mode) {
     });
   } catch (e) {
     console.warn('XR session failed', e);
-    showNote(`Не удалось войти (${mode}): ${e.name}: ${e.message}`, false);
+    showNote(tr(`Не удалось войти (${mode}): ${e.name}: ${e.message}`, `Кіру мүмкін болмады (${mode}): ${e.name}: ${e.message}`, `Could not enter (${mode}): ${e.name}: ${e.message}`), false);
     entering = false;
     return;
   }
@@ -239,19 +264,19 @@ async function setupButtons() {
   const vr = await navigator.xr?.isSessionSupported('immersive-vr').catch(() => false);
   const ar = await navigator.xr?.isSessionSupported('immersive-ar').catch(() => false);
   const mk = (label, cls, fn) => { const b = document.createElement('button'); b.textContent = label; b.className = cls; b.onclick = fn; ui.appendChild(b); return b; };
-  if (vr) mk('Войти в VR', 'primary', () => enter('immersive-vr'));
-  if (ar) mk('Смешанная реальность (MR)', '', () => enter('immersive-ar'));
+  if (vr) mk(tr('Войти в VR', 'VR-ға кіру', 'Enter VR'), 'primary', () => enter('immersive-vr'));
+  if (ar) mk(tr('Смешанная реальность (MR)', 'Аралас шындық (MR)', 'Mixed reality (MR)'), '', () => enter('immersive-ar'));
   if (!vr && !ar) {
     const headset = /OculusBrowser|Quest/i.test(navigator.userAgent);
     if (navigator.xr) {
       // isSessionSupported может ответить false (например, при самоподписанном сертификате) — даём попробовать вручную
-      mk('Попробовать войти в VR', 'primary', () => enter('immersive-vr'));
-      if (headset) mk('Попробовать MR', '', () => enter('immersive-ar'));
+      mk(tr('Попробовать войти в VR', 'VR-ға кіріп көру', 'Try entering VR'), 'primary', () => enter('immersive-vr'));
+      if (headset) mk(tr('Попробовать MR', 'MR-ды байқап көру', 'Try MR'), '', () => enter('immersive-ar'));
     }
-    const why = !window.isSecureContext ? 'страница не считается защищённой (нужен HTTPS)'
-      : !navigator.xr ? 'в браузере нет WebXR (navigator.xr отсутствует)'
-      : 'браузер ответил, что VR-сессия не поддерживается';
-    showNote(`VR недоступен: ${why}. Режим ПК (мышь).`, !headset);
+    const why = !window.isSecureContext ? tr('страница не считается защищённой (нужен HTTPS)', 'бет қорғалған деп саналмайды (HTTPS қажет)', 'the page is not a secure context (HTTPS required)')
+      : !navigator.xr ? tr('в браузере нет WebXR (navigator.xr отсутствует)', 'браузерде WebXR жоқ (navigator.xr табылмады)', 'the browser has no WebXR (navigator.xr is missing)')
+      : tr('браузер ответил, что VR-сессия не поддерживается', 'браузер VR-сессияға қолдау жоқ екенін хабарлады', 'the browser reports that VR sessions are not supported');
+    showNote(tr(`VR недоступен: ${why}. Режим ПК (мышь).`, `VR қолжетімсіз: ${why}. ДК режимі (тінтуір).`, `VR unavailable: ${why}. PC mode (mouse).`), !headset);
   }
 }
 setupButtons();

@@ -5,7 +5,7 @@ import { quotaStatus, quotaExhaustedMessage } from '@/lib/quota';
 import { getProfile, updateProfile } from '@/lib/auth/users';
 import { sanitizeDisplayName } from '@/lib/auth/prefs';
 import { listMemberships } from '@/lib/org/access';
-import { canGenerate, hasStaffRole } from '@/lib/org/policy';
+import { canGenerate } from '@/lib/org/policy';
 
 export async function GET(req: Request) {
   // Разрешающий вариант: форма смены временного пароля узнаёт о флаге отсюда.
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   // импорт 'pg') — клиентский компонент не может импортировать его напрямую, поэтому
   // строку отдаём в ответе, и только когда остаток действительно нулевой.
   const quotaMessage = quota.limit !== null && quota.remaining === 0
-    ? quotaExhaustedMessage(quota.limit, hasStaffRole(memberships))
+    ? quotaExhaustedMessage(quota.limit, quota.source)
     : undefined;
   return NextResponse.json({
     user,

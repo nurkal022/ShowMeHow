@@ -109,7 +109,7 @@ describe.skipIf(!pool)('генерация и квота в организаци
 
   it('учитель получает лимит организации и текст с этим числом', async () => {
     expect(await quotaStatus(teacher, await listMemberships(teacher.id)))
-      .toEqual({ limit: 100, used: 0, remaining: 100 });
+      .toEqual({ limit: 100, used: 0, remaining: 100, source: 'org' });
 
     await updateOrgSettings(org.id, { teacherGenerationLimit: 3 });
     await addDoneJobs(teacher.id, 3);
@@ -120,18 +120,18 @@ describe.skipIf(!pool)('генерация и квота в организаци
     expect(quotaExhaustedMessage(3, true)).toContain('3 из 3');
 
     const body = await (await me(new Request('http://t', { headers: { cookie } }))).json();
-    expect(body.quota).toEqual({ limit: 3, used: 3, remaining: 0 });
+    expect(body.quota).toEqual({ limit: 3, used: 3, remaining: 0, source: 'org' });
     expect(body.quotaMessage).toBe(quotaExhaustedMessage(3, true));
   });
 
-  it('пользователь без членств — прежние 10 и прежний текст', async () => {
+  it('пользователь без членств — пробный лимит и прежний текст', async () => {
     const b2c = await createUser('b2c@example.com', 'пароль123');
     await addDoneJobs(b2c.id, TRIAL_LIMIT);
     const res = await generate(await cookieFor(b2c));
     expect(res.status).toBe(403);
     expect((await res.json()).error).toBe(QUOTA_EXHAUSTED_MESSAGE);
     expect(QUOTA_EXHAUSTED_MESSAGE).toBe(
-      'Лимит пробной версии исчерпан: использовано 10 из 10 генераций. '
+      'Лимит пробной версии исчерпан: использовано 1 из 1 генераций. '
       + 'Доработка уже созданных симуляций по-прежнему доступна.');
   });
 });

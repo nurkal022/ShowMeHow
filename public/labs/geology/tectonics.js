@@ -3,19 +3,19 @@
  * схождение (растут горы), расхождение (раскрывается рифт с лавой) или сдвиг
  * (напряжение срывается землетрясением). Толчки пишет барабанный сейсмограф.
  */
-import { makeLabel } from '../common.js';
+import { makeLabel, tr } from '../common.js';
 import { fbm2, softDot } from './noise.js';
 
 const W = 2.4, D = 1.3, NX = 84, NZ = 44;
 const TY = 0.8;          // крышка стола
 const BASE = TY + 0.3;   // средний уровень поверхности
 const MODES = {
-  divergent: { angle: -0.55, name: 'Расхождение',
-    text: 'Расхождение плит\nРифт раскрывается, снизу поднимается магма\n(Исландия, Восточно-Африканский рифт)' },
-  transform: { angle: 0, name: 'Сдвиг',
-    text: 'Трансформный сдвиг\nПлиты скользят вдоль разлома, напряжение\nсрывается толчком (разлом Сан-Андреас)' },
-  convergent: { angle: 0.55, name: 'Схождение',
-    text: 'Схождение плит\nКора сминается в складки — растут горы\n(Гималаи, Альпы, Тянь-Шань)' },
+  divergent: { angle: -0.55, name: tr('Расхождение', 'Алшақтау', 'Divergent'),
+    text: tr('Расхождение плит\nРифт раскрывается, снизу поднимается магма\n(Исландия, Восточно-Африканский рифт)', 'Плиталардың алшақтауы\nРифт ашылады, астынан магма көтеріледі\n(Исландия, Шығыс Африка рифті)', 'Divergent plates\nA rift opens and magma rises from below\n(Iceland, East African Rift)') },
+  transform: { angle: 0, name: tr('Сдвиг', 'Ығысу', 'Transform'),
+    text: tr('Трансформный сдвиг\nПлиты скользят вдоль разлома, напряжение\nсрывается толчком (разлом Сан-Андреас)', 'Трансформды ығысу\nПлиталар жарылым бойымен сырғиды, кернеу\nсілкініспен босайды (Сан-Андреас жарылымы)', 'Transform fault\nPlates slide along the fault; stress\nis released as a quake (San Andreas Fault)') },
+  convergent: { angle: 0.55, name: tr('Схождение', 'Жақындасу', 'Convergent'),
+    text: tr('Схождение плит\nКора сминается в складки — растут горы\n(Гималаи, Альпы, Тянь-Шань)', 'Плиталардың жақындасуы\nҚыртыс қатпарланады — таулар өседі\n(Гималай, Альпі, Тянь-Шань)', 'Convergent plates\nThe crust crumples into folds — mountains rise\n(Himalayas, Alps, Tian Shan)') },
 };
 
 export function buildTectonics(lab, O, stationName) {
@@ -281,7 +281,7 @@ export function buildTectonics(lab, O, stationName) {
   }
 
   const board = lab.board(MODES[mode].text, [O[0], 2.25, O[2] + CZ - 0.95], { scale: 0.0024 });
-  const quakeBoard = lab.board('Сейсмограф ждёт толчка', [O[0] + 1.3, 1.32, O[2] + 0.7], { scale: 0.0015 });
+  const quakeBoard = lab.board(tr('Сейсмограф ждёт толчка', 'Сейсмограф сілкіністі күтуде', 'Seismograph awaiting a tremor'), [O[0] + 1.3, 1.32, O[2] + 0.7], { scale: 0.0015 });
 
   function quake(M) {
     const z = (Math.random() - 0.5) * D * 0.6;
@@ -294,7 +294,7 @@ export function buildTectonics(lab, O, stationName) {
     epi.position.set(0, BASE + 0.13, z);
     epi.visible = true;
     epi.userData.t = 2.5;
-    quakeBoard.set(`Землетрясение · M ${M.toFixed(1)}\nсиние кольца — волны P, оранжевые — S`);
+    quakeBoard.set(tr(`Землетрясение · M ${M.toFixed(1)}\nсиние кольца — волны P, оранжевые — S`, `Жер сілкінісі · M ${M.toFixed(1)}\nкөк сақиналар — P толқындары, қызғылт сарылары — S`, `Earthquake · M ${M.toFixed(1)}\nblue rings — P waves, orange — S waves`));
     if (mode === 'transform') slipLeft += 0.025 * (M - 4);
   }
 
@@ -343,7 +343,7 @@ export function buildTectonics(lab, O, stationName) {
     for (const [k, m] of Object.entries(MODES)) { const d = Math.abs(m.angle - a); if (d < bd) { bd = d; best = k; } }
     return best;
   }
-  lab.hover(knob, 'Рычаг движения плит\nПотяните влево, в центр или вправо');
+  lab.hover(knob, tr('Рычаг движения плит\nПотяните влево, в центр или вправо', 'Плиталар қозғалысының тұтқасы\nСолға, ортаға немесе оңға тартыңыз', 'Plate motion lever\nPull it left, to the centre or right'));
   lab.grab(knob, {
     onMove(o) {
       o.getWorldPosition(kp).sub(pivot);
@@ -363,7 +363,7 @@ export function buildTectonics(lab, O, stationName) {
     },
   });
   for (const key of ['divergent', 'transform', 'convergent']) lab.hud.action(MODES[key].name, () => setMode(key), stationName);
-  lab.hud.action('Толчок', () => quake(5 + Math.random() * 1.5), stationName);
+  lab.hud.action(tr('Толчок', 'Сілкініс', 'Tremor'), () => quake(5 + Math.random() * 1.5), stationName);
 
   // ---- Сейсмограф ----
   const seisAt = new THREE.Vector3(O[0] + 1.3, 0, O[2] + 0.7);
@@ -406,7 +406,7 @@ export function buildTectonics(lab, O, stationName) {
   pen.add(needle, penArm);
   pen.position.set(seisAt.x, 1.0, seisAt.z);
   scene.add(pen);
-  lab.hover(drum, 'Сейсмограф\nБарабан крутится, перо пишет колебания почвы');
+  lab.hover(drum, tr('Сейсмограф\nБарабан крутится, перо пишет колебания почвы', 'Сейсмограф\nБарабан айналады, қалам топырақ тербелістерін жазады', 'Seismograph\nThe drum turns and the pen records ground motion'));
   let head = 0, lastY = PH / 2;
 
   function updateSeismo(dt, t) {

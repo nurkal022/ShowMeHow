@@ -14,6 +14,8 @@ export interface Membership {
   orgKind: OrgKind;
   role: OrgRole;
   settings: OrgSettings;
+  /** Личный демо-университет: права руководства в нём не дают лимитов организации. */
+  sandbox?: boolean;
 }
 
 /** Отказ с текстом для человека: скрипт печатает его как есть. */

@@ -1,6 +1,7 @@
 // Установка: термовоздуходувка (фен), решётка на лабораторных весах, поддон для стекающей нефти.
 import * as THREE from 'three';
 import { LAYOUT, Display } from './lab.js';
+import { tr } from '../i18n.js';
 
 const M = {
   steel: new THREE.MeshStandardMaterial({ color: 0xc3c9cf, roughness: 0.3, metalness: 0.9 }),
@@ -140,7 +141,7 @@ export class Apparatus {
       c.font = '700 92px "Roboto Mono", monospace';
       c.fillText(`${Math.round(state.cfg.Tf)}°C`, 24, 110);
       c.font = '600 60px "Roboto Mono", monospace';
-      c.fillText(`${state.cfg.U.toFixed(2)} м/с`, 24, 200);
+      c.fillText(`${state.cfg.U.toFixed(2)} ${tr('м/с', 'м/с', 'm/s')}`, 24, 200);
       c.fillStyle = state.running ? '#ff7a2a' : '#553322';
       c.beginPath(); c.arc(w - 50, 60, 22, 0, 7); c.fill();
     });

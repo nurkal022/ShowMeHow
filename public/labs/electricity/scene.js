@@ -1,13 +1,21 @@
-import { createLab, makeLabel, pulse } from '../common.js';
+import { createLab, makeLabel, pulse, tr } from '../common.js';
+
+// Единицы измерения на табло и приборах.
+const uV = tr('В', 'В', 'V'), uA = tr('А', 'А', 'A'), uOhm = tr('Ом', 'Ом', 'Ω'), uW = tr('Вт', 'Вт', 'W'), uMWb = tr('мВб', 'мВб', 'mWb');
+const MAG_STOP = tr('Магнит: стоп', 'Магнит: тоқтату', 'Magnet: stop');
+const MAG_SWING = tr('Магнит: качать', 'Магнит: тербелту', 'Magnet: swing');
+const MAG_FLIP = tr('Перевернуть магнит', 'Магнитті аудару', 'Flip magnet');
 import { makeGrid, solve, classify } from './circuit.js';
 import { coilFlux, fieldLines } from './induction.js';
 import { canvasPanel, glowTexture } from './panel.js';
 
-const ST1 = 'Электрический стол';
-const ST2 = 'Индукция';
+const ST1 = tr('Электрический стол', 'Электр үстелі', 'Electric bench');
+const ST2 = tr('Индукция', 'Индукция', 'Induction');
 const lab = createLab({
-  title: 'Электрический стол',
-  hint: 'Берите детали с подноса и кладите в гнёзда платы — цепь считается сразу, лампы горят по мощности. Щелчок по рычажку — ключ. Мультиметр показывает деталь, которую вы трогали последней. На второй станции проведите магнит сквозь катушку.',
+  title: tr('Электрический стол', 'Электр үстелі', 'Electric bench'),
+  hint: tr('Берите детали с подноса и кладите в гнёзда платы — цепь считается сразу, лампы горят по мощности. Щелчок по рычажку — ключ. Мультиметр показывает деталь, которую вы трогали последней. На второй станции проведите магнит сквозь катушку.',
+    'Науадан бөлшектерді алып, тақтаның ұяларына салыңыз — тізбек бірден есептеледі, шамдар қуатына қарай жанады. Тұтқаны басу — кілт. Мультиметр сіз соңғы ұстаған бөлшекті көрсетеді. Екінші станцияда магнитті катушка арқылы өткізіңіз.',
+    'Take parts from the tray and place them in the board sockets — the circuit is solved instantly and bulbs glow by their power. Click the lever to toggle the switch. The multimeter shows the last part you touched. At the second station, pass the magnet through the coil.'),
   stations: [
     { name: ST1, at: [-0.15, 1.55, 1.1], look: [-0.2, 0.95, -0.35] },
     { name: ST2, at: [22, 1.5, 1.05], look: [22.05, 1.15, -0.4] },
@@ -66,7 +74,7 @@ const slotByKey = Object.fromEntries(grid.slots.map((s) => [s.key, s]));
     tr.rotation.y = s.yaw;
     scene.add(tr);
   }
-  const lbl = makeLabel('Макетная плата · 12 узлов, 17 гнёзд', { scale: 0.0011 });
+  const lbl = makeLabel(tr('Макетная плата · 12 узлов, 17 гнёзд', 'Макеттік тақта · 12 түйін, 17 ұя', 'Breadboard · 12 nodes, 17 sockets'), { scale: 0.0011 });
   lbl.position.set(X0 + 1.5 * S, BY + 0.03, Z0 - 0.2);
   scene.add(lbl);
 }
@@ -94,7 +102,7 @@ const TRAY = { x: [0.36, 0.74, 1.12], z: [-0.72, -0.52, -0.32, -0.12, 0.08] };
   const tray = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.012, 1.08), new THREE.MeshStandardMaterial({ color: 0x232c3d, roughness: 0.9 }));
   tray.position.set(0.74, TY + 0.006, -0.32);
   scene.add(tray);
-  const lbl = makeLabel('Детали', { scale: 0.0009 });
+  const lbl = makeLabel(tr('Детали', 'Бөлшектер', 'Parts'), { scale: 0.0009 });
   lbl.position.set(0.74, TY + 0.03, 0.24);
   scene.add(lbl);
 }
@@ -185,7 +193,7 @@ const BUILD = {
     lead(g, 0.1, 0.17); lead(g, -0.1, -0.17);
     p.pivot = pivot;
     lab.click(leverHit, () => { p.closed = !p.closed; dirty = true; selected = p; });
-    lab.hover(leverHit, () => (p.closed ? 'Ключ замкнут\nЩёлкните — разомкнуть' : 'Ключ разомкнут\nЩёлкните — замкнуть'));
+    lab.hover(leverHit, () => (p.closed ? tr('Ключ замкнут\nЩёлкните — разомкнуть', 'Кілт тұйықталған\nАжырату үшін басыңыз', 'Switch closed\nClick to open') : tr('Ключ разомкнут\nЩёлкните — замкнуть', 'Кілт ажыратылған\nТұйықтау үшін басыңыз', 'Switch open\nClick to close')));
     return g;
   },
   wire(p) {
@@ -202,11 +210,11 @@ const BUILD = {
   },
 };
 const SPEC = {
-  battery: { name: 'Батарейка', E: 6, r: 0.3, path: [0.088, 0] },
-  bulb: { name: 'Лампа', R: 6, Pnom: 5, path: [0.012, 0.085] },
-  resistor: { name: 'Резистор', path: [0.048, 0] },
-  switch: { name: 'Ключ', path: [0.062, 0] },
-  wire: { name: 'Провод', path: [0.012, 0.03] },
+  battery: { name: tr('Батарейка', 'Батарея', 'Battery'), E: 6, r: 0.3, path: [0.088, 0] },
+  bulb: { name: tr('Лампа', 'Шам', 'Bulb'), R: 6, Pnom: 5, path: [0.012, 0.085] },
+  resistor: { name: tr('Резистор', 'Резистор', 'Resistor'), path: [0.048, 0] },
+  switch: { name: tr('Ключ', 'Кілт', 'Switch'), path: [0.062, 0] },
+  wire: { name: tr('Провод', 'Сым', 'Wire'), path: [0.012, 0.03] },
 };
 
 const parts = [];
@@ -219,9 +227,9 @@ const inventory = [
 ];
 inventory.forEach(([type, arg], i) => {
   const p = { type, slot: null, flip: false, closed: true };
-  if (type === 'bulb') p.label = `Лампа ${arg}`;
-  else if (type === 'resistor') { p.R = arg; p.label = `Резистор ${arg} Ом`; }
-  else if (type === 'wire') { p.color = arg; p.label = 'Провод'; }
+  if (type === 'bulb') p.label = `${tr('Лампа', 'Шам', 'Bulb')} ${arg}`;
+  else if (type === 'resistor') { p.R = arg; p.label = `${tr('Резистор', 'Резистор', 'Resistor')} ${arg} ${uOhm}`; }
+  else if (type === 'wire') { p.color = arg; p.label = tr('Провод', 'Сым', 'Wire'); }
   else p.label = SPEC[type].name;
   const g = BUILD[type](p);
   hitBox(g, type === 'bulb' ? 0.15 : type === 'switch' ? 0.035 : 0.1);
@@ -312,9 +320,9 @@ function flipBattery() {
   selected = b;
 }
 const PRESET_BTNS = [
-  ['Последовательно', () => applyPreset('series')], ['Параллельно', () => applyPreset('parallel')],
-  ['Смешанно', () => applyPreset('mixed')], ['Убрать всё', () => applyPreset('none')],
-  ['Перевернуть батарейку', flipBattery],
+  [tr('Последовательно', 'Тізбектей', 'Series'), () => applyPreset('series')], [tr('Параллельно', 'Параллель', 'Parallel'), () => applyPreset('parallel')],
+  [tr('Смешанно', 'Аралас', 'Mixed'), () => applyPreset('mixed')], [tr('Убрать всё', 'Бәрін алу', 'Clear all'), () => applyPreset('none')],
+  [tr('Перевернуть батарейку', 'Батареяны аудару', 'Flip battery'), flipBattery],
 ];
 PRESET_BTNS.forEach(([t, fn], i) => {
   lab.hud.action(t, fn, ST1);
@@ -382,9 +390,9 @@ function recompute() {
 
 function partLabel(p) {
   const r = p.slot && circuit.res ? circuit.res.el.get(p) : null;
-  if (!r) return `${p.label}\n${p.slot ? (p.type === 'switch' ? 'разомкнут' : 'тока нет') : 'не в цепи'}`;
-  if (p.type === 'wire' || p.type === 'switch') return `${p.label}\nI = ${fmt(Math.abs(r.I))} А`;
-  return `${p.label}\nU = ${fmt(Math.abs(r.U))} В\nI = ${fmt(Math.abs(r.I))} А`;
+  if (!r) return `${p.label}\n${p.slot ? (p.type === 'switch' ? tr('разомкнут', 'ажыратылған', 'open') : tr('тока нет', 'ток жоқ', 'no current')) : tr('не в цепи', 'тізбекте емес', 'not in circuit')}`;
+  if (p.type === 'wire' || p.type === 'switch') return `${p.label}\nI = ${fmt(Math.abs(r.I))} ${uA}`;
+  return `${p.label}\nU = ${fmt(Math.abs(r.U))} ${uV}\nI = ${fmt(Math.abs(r.I))} ${uA}`;
 }
 function fmt(x) { return x >= 10 ? x.toFixed(1) : x >= 1 ? x.toFixed(2) : x.toFixed(3); }
 
@@ -427,7 +435,13 @@ scene.add(schem.mesh);
     scene.add(leg);
   }
 }
-const KIND = { none: 'ток не идёт', single: 'одна нагрузка', series: 'последовательное', parallel: 'параллельное', mixed: 'смешанное' };
+const KIND = {
+  none: tr('ток не идёт', 'ток жүрмейді', 'no current'),
+  single: tr('одна нагрузка', 'бір жүктеме', 'single load'),
+  series: tr('последовательное', 'тізбектей', 'series'),
+  parallel: tr('параллельное', 'параллель', 'parallel'),
+  mixed: tr('смешанное', 'аралас', 'mixed'),
+};
 function drawSchematic() {
   schem.draw((c, W, H) => {
     c.fillStyle = '#0f1622'; c.fillRect(0, 0, W, H);
@@ -435,7 +449,7 @@ function drawSchematic() {
     for (let x = 0; x < W; x += 32) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
     for (let y = 0; y < H; y += 32) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
     c.fillStyle = '#8ab4f8'; c.font = '600 30px Inter, system-ui, sans-serif';
-    c.fillText('Схема собирается сама', 28, 44);
+    c.fillText(tr('Схема собирается сама', 'Сұлба өздігінен құрастырылады', 'The diagram draws itself'), 28, 44);
     const np = (i) => [190 + (i % COLS) * 220, 120 + Math.floor(i / COLS) * 150];
     for (const s of grid.slots) {
       const p = s.occupant;
@@ -477,9 +491,9 @@ function drawSchematic() {
         c.font = '500 22px Inter, system-ui, sans-serif';
         c.textAlign = s.horiz ? 'center' : 'left';
         c.fillStyle = '#b7c0cf';
-        const name = p.type === 'battery' ? '6 В' : p.type === 'bulb' ? `Л${p.label.slice(-1)}` : p.type === 'resistor' ? `${p.R} Ом` : 'K';
+        const name = p.type === 'battery' ? `6 ${uV}` : p.type === 'bulb' ? `${tr('Л', 'Ш', 'L')}${p.label.slice(-1)}` : p.type === 'resistor' ? `${p.R} ${uOhm}` : 'K';
         c.fillText(name, tx, ty - 6);
-        if (live && p.type !== 'switch') { c.fillStyle = '#84ffff'; c.fillText(`${fmt(Math.abs(r.I))} А`, tx, ty + 20); }
+        if (live && p.type !== 'switch') { c.fillStyle = '#84ffff'; c.fillText(`${fmt(Math.abs(r.I))} ${uA}`, tx, ty + 20); }
         c.textAlign = 'left';
       }
     }
@@ -491,20 +505,20 @@ function drawSchematic() {
     c.fillStyle = 'rgba(14,18,28,.9)'; c.fillRect(0, H - 130, W, 130);
     c.font = '500 28px Inter, system-ui, sans-serif';
     const b = circuit.bat;
-    if (!b) { c.fillStyle = '#b7c0cf'; c.fillText('Положите батарейку в гнездо платы', 28, H - 78); return; }
+    if (!b) { c.fillStyle = '#b7c0cf'; c.fillText(tr('Положите батарейку в гнездо платы', 'Батареяны тақтаның ұясына салыңыз', 'Put the battery into a board socket'), 28, H - 78); return; }
     if (circuit.short) {
       c.fillStyle = '#ff5252';
-      c.fillText(`Короткое замыкание! I = ${fmt(Math.abs(b.I))} А — ток ограничивает только r = 0,3 Ом`, 28, H - 78);
+      c.fillText(tr(`Короткое замыкание! I = ${fmt(Math.abs(b.I))} А — ток ограничивает только r = 0,3 Ом`, `Қысқа тұйықталу! I = ${fmt(Math.abs(b.I))} А — токты тек r = 0,3 Ом шектейді`, `Short circuit! I = ${fmt(Math.abs(b.I))} A — only r = 0.3 Ω limits the current`), 28, H - 78);
       c.fillStyle = '#b7c0cf';
-      c.fillText('Уберите провод, идущий в обход нагрузки', 28, H - 32);
+      c.fillText(tr('Уберите провод, идущий в обход нагрузки', 'Жүктемені айналып өтетін сымды алыңыз', 'Remove the wire that bypasses the load'), 28, H - 32);
       return;
     }
     const I = Math.abs(b.I);
     const R = I > 1e-3 ? Math.abs(b.U) / I : Infinity;
     c.fillStyle = '#eef2f7';
-    c.fillText(`E = 6 В · r = 0,3 Ом · I = ${fmt(I)} А · U = ${fmt(Math.abs(b.U))} В · R = ${R === Infinity ? '∞' : fmt(R)} Ом`, 28, H - 78);
+    c.fillText(`E = 6 ${uV} · r = ${tr('0,3', '0,3', '0.3')} ${uOhm} · I = ${fmt(I)} ${uA} · U = ${fmt(Math.abs(b.U))} ${uV} · R = ${R === Infinity ? '∞' : fmt(R)} ${uOhm}`, 28, H - 78);
     c.fillStyle = '#ffd180';
-    c.fillText(`Соединение: ${KIND[circuit.kind]}   ·   закон Ома: I = E / (R + r)`, 28, H - 32);
+    c.fillText(tr(`Соединение: ${KIND[circuit.kind]}   ·   закон Ома: I = E / (R + r)`, `Жалғау: ${KIND[circuit.kind]}   ·   Ом заңы: I = E / (R + r)`, `Connection: ${KIND[circuit.kind]}   ·   Ohm\'s law: I = E / (R + r)`), 28, H - 32);
   });
 }
 
@@ -526,7 +540,7 @@ const meter = new THREE.Group();
   meter.position.set(-0.55, TY, 0.3);
   meter.rotation.x = 0;
   scene.add(meter);
-  lab.hover(body, 'Мультиметр\nпоследняя деталь');
+  lab.hover(body, tr('Мультиметр\nпоследняя деталь', 'Мультиметр\nсоңғы бөлшек', 'Multimeter\nlast part touched'));
   // Щупы — декоративные провода к краю платы.
   for (const [x, col] of [[0.06, 0xe53935], [0.095, 0x212121]]) {
     const pts = [new V3(-0.55 + x, TY + 0.05, 0.36), new V3(-0.55 + x + 0.05, TY + 0.03, 0.42), new V3(-0.2 + x, TY + 0.012, 0.36), new V3(-0.1 + x * 2, TY + 0.012, 0.22)];
@@ -545,14 +559,14 @@ function drawMeter() {
     const p = selected;
     const r = p && p.slot && circuit.res ? circuit.res.el.get(p) : null;
     c.font = '600 28px Inter, system-ui, sans-serif';
-    c.fillText(p ? p.label : 'Мультиметр', 14, 34);
+    c.fillText(p ? p.label : tr('Мультиметр', 'Мультиметр', 'Multimeter'), 14, 34);
     c.font = '700 40px ui-monospace, Menlo, monospace';
-    if (!r) { c.fillText('U ---- В', 14, 96); c.fillText('I ---- А', 14, 150); }
+    if (!r) { c.fillText(`U ---- ${uV}`, 14, 96); c.fillText(`I ---- ${uA}`, 14, 150); }
     else {
-      c.fillText(`U ${fmt(Math.abs(r.U)).padStart(6)} В`, 14, 96);
-      c.fillText(`I ${fmt(Math.abs(r.I)).padStart(6)} А`, 14, 150);
+      c.fillText(`U ${fmt(Math.abs(r.U)).padStart(6)} ${uV}`, 14, 96);
+      c.fillText(`I ${fmt(Math.abs(r.I)).padStart(6)} ${uA}`, 14, 150);
       c.font = '600 26px Inter, system-ui, sans-serif';
-      c.fillText(`P = ${fmt(r.P)} Вт`, 14, 196);
+      c.fillText(`P = ${fmt(r.P)} ${uW}`, 14, 196);
     }
   });
 }
@@ -584,7 +598,7 @@ const copper = new THREE.MeshStandardMaterial({ color: 0xc8793f, metalness: 0.8,
     stand.position.set(C.x + dx * (COIL.length / 2 + 0.02), TY + (C.y - COIL.radius - TY) / 2, C.z);
     scene.add(stand);
   }
-  const lbl = makeLabel('Катушка · N = 200 витков', { scale: 0.0011 });
+  const lbl = makeLabel(tr('Катушка · N = 200 витков', 'Катушка · N = 200 орам', 'Coil · N = 200 turns'), { scale: 0.0011 });
   lbl.position.set(C.x, C.y + 0.42, C.z - 0.1);
   scene.add(lbl);
   // Направляющие для магнита
@@ -610,7 +624,7 @@ const needle = new THREE.Group();
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, 0.12), new THREE.MeshStandardMaterial({ color: 0x2b3a55, roughness: 0.5, metalness: 0.2 }));
   body.position.y = 0.17;
   galv.add(body);
-  lab.hover(body, () => `Гальванометр\nε = ${emf.toFixed(3)} В`);
+  lab.hover(body, () => `${tr('Гальванометр', 'Гальванометр', 'Galvanometer')}\nε = ${emf.toFixed(3)} ${uV}`);
   const dial = canvasPanel(0.36, 0.22, 512);
   dial.mesh.position.set(0, 0.2, 0.061);
   galv.add(dial.mesh);
@@ -630,7 +644,7 @@ const needle = new THREE.Group();
     }
     c.fillStyle = '#c62828'; c.fillRect(cx - 3, cy - R - 4, 6, 14);
     c.font = '600 20px Inter, system-ui, sans-serif'; c.fillStyle = '#546e7a';
-    c.fillText('ЭДС, В', cx, cy - 34);
+    c.fillText(tr('ЭДС, В', 'ЭҚК, В', 'EMF, V'), cx, cy - 34);
   });
   // Ось стрелки совпадает с центром шкалы: 30 px от низа canvas высотой 313 px.
   needle.position.set(0, 0.2 - 0.11 + (30 / 313) * 0.22, 0.066);
@@ -710,7 +724,7 @@ magnet.position.set(MAG_HOME_X, C.y, C.z);
 scene.add(magnet);
 let auto = true;
 let magFlip = false;
-lab.hover(magnet, () => `Полосовой магнит\nΦ = ${(flux * 1000).toFixed(1)} мВб · ε = ${emf.toFixed(2)} В`);
+lab.hover(magnet, () => `${tr('Полосовой магнит', 'Жолақ магнит', 'Bar magnet')}\nΦ = ${(flux * 1000).toFixed(1)} ${uMWb} · ε = ${emf.toFixed(2)} ${uV}`);
 lab.grab(magnet, {
   onGrab: () => { setAuto(false); },
   onMove: (o) => {
@@ -724,12 +738,12 @@ lab.grab(magnet, {
     o.rotation.set(0, magFlip ? Math.PI : 0, 0);
   },
 });
-function setAuto(v) { auto = v; autoBtn.textContent = auto ? 'Магнит: стоп' : 'Магнит: качать'; autoBtn3d.setText(auto ? 'Магнит: стоп' : 'Магнит: качать'); }
+function setAuto(v) { auto = v; autoBtn.textContent = auto ? MAG_STOP : MAG_SWING; autoBtn3d.setText(auto ? MAG_STOP : MAG_SWING); }
 function flipMagnet() { magFlip = !magFlip; magnet.rotation.set(0, magFlip ? Math.PI : 0, 0); }
-const autoBtn = lab.hud.action('Магнит: стоп', () => setAuto(!auto), ST2);
-lab.hud.action('Перевернуть магнит', flipMagnet, ST2);
-const autoBtn3d = lab.button3d('Магнит: стоп', [X2 - 1.0, TY + 0.36, -0.55], () => setAuto(!auto), { width: 0.6, rotY: 0.35 });
-lab.button3d('Перевернуть магнит', [X2 - 1.0, TY + 0.15, -0.55], flipMagnet, { width: 0.75, color: 0x546e7a, rotY: 0.35 });
+const autoBtn = lab.hud.action(MAG_STOP, () => setAuto(!auto), ST2);
+lab.hud.action(MAG_FLIP, flipMagnet, ST2);
+const autoBtn3d = lab.button3d(MAG_STOP, [X2 - 1.0, TY + 0.36, -0.55], () => setAuto(!auto), { width: 0.6, rotY: 0.35 });
+lab.button3d(MAG_FLIP, [X2 - 1.0, TY + 0.15, -0.55], flipMagnet, { width: 0.75, color: 0x546e7a, rotY: 0.35 });
 
 // График ε(t) и Φ(t)
 const plot = canvasPanel(1.5, 0.62, 768);
@@ -766,15 +780,15 @@ function drawPlot() {
     curve(histF, 0.16, '#82b1ff');
     curve(histE, 1.2, '#ffab40');
     c.font = '600 24px Inter, system-ui, sans-serif';
-    c.fillStyle = '#ffab40'; c.fillText(`ε = −N·ΔΦ/Δt = ${emf >= 0 ? '+' : '−'}${Math.abs(emf).toFixed(3)} В`, 20, 34);
-    c.fillStyle = '#82b1ff'; c.fillText(`Φ = ${(flux * 1000).toFixed(1)} мВб`, 470, 34);
+    c.fillStyle = '#ffab40'; c.fillText(`ε = −N·ΔΦ/Δt = ${emf >= 0 ? '+' : '−'}${Math.abs(emf).toFixed(3)} ${uV}`, 20, 34);
+    c.fillStyle = '#82b1ff'; c.fillText(`Φ = ${(flux * 1000).toFixed(1)} ${uMWb}`, 470, 34);
     c.fillStyle = '#7d8aa0'; c.font = '500 17px Inter, system-ui, sans-serif';
-    c.fillText('ЭДС есть, пока поток меняется: магнит стоит — стрелка на нуле', 20, 60);
+    c.fillText(tr('ЭДС есть, пока поток меняется: магнит стоит — стрелка на нуле', 'Ағын өзгергенде ғана ЭҚК бар: магнит тұрса — тіл нөлде', 'EMF exists only while the flux changes: magnet still — needle at zero'), 20, 60);
   });
   readout.draw((c, W, H) => {
     c.fillStyle = '#10161f'; c.fillRect(0, 0, W, H);
     c.fillStyle = '#ffab40'; c.font = '700 34px ui-monospace, Menlo, monospace';
-    c.textAlign = 'center'; c.fillText(`ε ${emf >= 0 ? '+' : '−'}${Math.abs(emf).toFixed(3)} В`, W / 2, H / 2 + 12);
+    c.textAlign = 'center'; c.fillText(`ε ${emf >= 0 ? '+' : '−'}${Math.abs(emf).toFixed(3)} ${uV}`, W / 2, H / 2 + 12);
   });
 }
 let histI = 0;

@@ -1,5 +1,6 @@
 // Помещение лаборатории: пол, стены, столы, вытяжной шкаф, плакаты.
 import * as THREE from 'three';
+import { tr } from '../i18n.js';
 
 export const LAYOUT = {
   benchY: 0.92,
@@ -123,7 +124,7 @@ export function buildLab(scene) {
       c.fillStyle = '#ffcc00'; c.fillRect(0, 0, w, h);
       c.fillStyle = '#111'; c.font = '700 64px Inter, Roboto, sans-serif';
       c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText('⚠  H₂S · ЛОС · РАБОТАТЬ ПОД ТЯГОЙ', w / 2, h / 2 + 4);
+      c.fillText(tr('⚠  H₂S · ЛОС · РАБОТАТЬ ПОД ТЯГОЙ', '⚠  H₂S · ҰОҚ · СОРУМЕН ЖҰМЫС ІСТЕУ', '⚠  H₂S · VOC · WORK UNDER EXHAUST'), w / 2, h / 2 + 4);
     }), toneMapped: false,
   }));
   sign.position.set(0, top - 0.14, hood.zFront + 0.035);
@@ -156,8 +157,8 @@ export function buildLab(scene) {
     map: canvasTex(840, 120, (c, w, h) => {
       c.fillStyle = '#2b2f36'; c.fillRect(0, 0, w, h);
       c.fillStyle = '#fff'; c.font = '600 36px Inter, Roboto, sans-serif';
-      c.fillText('Исходная постановка: куб нефтешлама,', 16, 48);
-      c.fillStyle = '#ffb27a'; c.fillText('нагрев потоком (U₀, T₀, ε₀) снизу', 16, 96);
+      c.fillText(tr('Исходная постановка: куб нефтешлама,', 'Бастапқы қойылым: мұнай шламы текшесі,', 'Original setup: a cube of oil sludge,'), 16, 48);
+      c.fillStyle = '#ffb27a'; c.fillText(tr('нагрев потоком (U₀, T₀, ε₀) снизу', 'астынан ағынмен (U₀, T₀, ε₀) қыздыру', 'heated from below by a flow (U₀, T₀, ε₀)'), 16, 96);
     }), toneMapped: false,
   }));
   cap.position.set(-2.2, 0.97, -1.573);
