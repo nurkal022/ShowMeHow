@@ -52,6 +52,7 @@ export async function POST(req: Request) {
       stepText: stepTextOf(step.map((b) => b.body)),
       assignment: taskBody ? { prompt: taskBody.prompt, points: taskBody.points, type: ASSIGNMENT_TYPE_LABELS[taskBody.spec.type] } : null,
       draftAnswer: str(body.draftAnswer, 1500),
+      simState: str(body.simState, 1500),
     },
   })));
 }

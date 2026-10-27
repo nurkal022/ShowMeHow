@@ -130,7 +130,7 @@ export default function LiveStage({ events, jobId, onKeep, keeping }: {
       <div className="live-center">
         <div className="live-status"><span className="live-pulse" aria-hidden="true" /><span>{activity}…</span></div>
         {plan ? <Blueprint plan={plan} /> : <Thinking />}
-        {progress && <CodeTicker chars={progress.chars} tail={progress.tail} />}
+        {progress && <CodeTicker chars={progress.chars} tail={progress.tail} sections={progress.sections ?? []} />}
       </div>
     </div>
   );
@@ -174,7 +174,11 @@ function Blueprint({ plan }: { plan: PlanSummary }) {
   );
 }
 
-function CodeTicker({ chars, tail }: { chars: number; tail: string }) {
+const SECTION_TEXT: Record<string, WbKey> = {
+  physics: 'secPhysics', state: 'secState', scene: 'secScene', controls: 'secControls', instruments: 'secInstruments', main: 'secMain',
+};
+
+function CodeTicker({ chars, tail, sections }: { chars: number; tail: string; sections: { name: string; done: boolean }[] }) {
   const t = useT(workbench);
   const locale = useLocale();
   const box = useRef<HTMLPreElement>(null);
@@ -183,6 +187,16 @@ function CodeTicker({ chars, tail }: { chars: number; tail: string }) {
   return (
     <div className="live-code">
       <div className="live-code-head"><span>{t('codeWriting')}</span><span>{t('codeChars', { n: formatNumber(chars / 1000, locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })}</span></div>
+      {sections.length > 0 && (
+        <ol className="live-sections" aria-label={t('secAria')}>
+          {sections.map((sec) => (
+            <li key={sec.name} className={sec.done ? 'done' : 'now'}>
+              {sec.done ? <IconCheck size={12} /> : <span className="live-pulse" aria-hidden="true" />}
+              {SECTION_TEXT[sec.name] ? t(SECTION_TEXT[sec.name]) : sec.name}
+            </li>
+          ))}
+        </ol>
+      )}
       <pre ref={box}>{lines}<span className="live-caret" /></pre>
     </div>
   );

@@ -19,9 +19,10 @@ import SlideDeck from './SlideDeck';
 import ExamTimer from './ExamTimer';
 import Discussion from './Discussion';
 import Tutor from './Tutor';
+import { pickInSim } from '@/lib/lms/sim-bridge';
 import StepNotes from './StepNotes';
 import {
-  IconBack, IconCheck, IconChevron, IconLab, IconPlay, IconTask, IconText,
+  IconBack, IconCheck, IconChevron, IconDownload, IconLab, IconPlay, IconTask, IconText,
 } from '@/components/icons';
 import { IconList } from '@/components/cabinet/icons';
 
@@ -135,6 +136,48 @@ export default function LessonView({
     setTutorSeed({ mode, question, at: Date.now() });
   }
 
+  // «Покажи и спроси»: студент тычет в ползунок или прибор, вопрос наставнику начинается с него.
+  const [picking, setPicking] = useState<string | null>(null);
+  async function pointAndAsk(blockId: string, frame: HTMLIFrameElement | null) {
+    if (picking) return;
+    setPicking(blockId);
+    const target = await pickInSim(frame);
+    setPicking(null);
+    if (target) askTutor('ask', t('askPicked', { target }));
+  }
+
+  // Выделил фразу в материалах — рядом всплывают «Объяснить» и «Спросить»: наставник получает цитату.
+  const blocksRef = useRef<HTMLDivElement | null>(null);
+  const [quote, setQuote] = useState<{ text: string; x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (preview || exam) return;
+    const read = () => {
+      const sel = window.getSelection();
+      const box = blocksRef.current;
+      if (!sel || sel.isCollapsed || !box || sel.rangeCount === 0) return setQuote(null);
+      const range = sel.getRangeAt(0);
+      const node = range.commonAncestorContainer;
+      const el = node instanceof Element ? node : node.parentElement;
+      if (!el || !box.contains(el) || el.closest('input, textarea, [contenteditable="true"], .learn-task form')) return setQuote(null);
+      const text = sel.toString().replace(/\s+/g, ' ').trim();
+      if (text.length < 3) return setQuote(null);
+      const r = range.getBoundingClientRect();
+      setQuote({ text: text.length > 200 ? `${text.slice(0, 199)}…` : text, x: r.left + r.width / 2, y: r.top });
+    };
+    let timer = 0;
+    const later = () => { window.clearTimeout(timer); timer = window.setTimeout(read, 180); };
+    const hide = () => setQuote(null);
+    document.addEventListener('selectionchange', later);
+    window.addEventListener('scroll', hide, true);
+    return () => { document.removeEventListener('selectionchange', later); window.removeEventListener('scroll', hide, true); window.clearTimeout(timer); };
+  }, [preview, exam]);
+  function askQuote(explain: boolean) {
+    if (!quote) return;
+    askTutor(explain ? 'explain' : 'ask', t(explain ? 'askQuoteExplain' : 'askQuote', { quote: quote.text }));
+    window.getSelection()?.removeAllRanges();
+    setQuote(null);
+  }
+
   return (
     <div className={`lv${tutorOpen ? ' with-tutor' : ''}${nav ? ' nav-open' : ''}`}>
       <aside className="lv-side" aria-label={t('sideAria')}>
@@ -197,6 +240,12 @@ export default function LessonView({
                 <b>{doneCount}/{steps.length}</b>
               </span>
             )}
+            {!exam && (
+              <a className="btn btn-sm btn-ghost lv-offline" href={`/api/learn/topics/${topic.id}/offline${preview ? '?preview=1' : ''}`}
+                download title={t('offlineHint')}>
+                <IconDownload size={15} /><span>{t('offlineDownload')}</span>
+              </a>
+            )}
           </div>
           {!exam && steps.length > 1 && (
             <ol className="lv-strip" aria-label={t('stepsAria')}>
@@ -232,12 +281,29 @@ export default function LessonView({
 
           {blocks.length === 0 && <p className="empty-state">{t('noMaterials')}</p>}
 
-          <div className="lv-blocks" key={exam ? 'exam' : step?.id}>
+          {quote && (
+            <div className="lv-quote-ask" role="toolbar" aria-label={t('quoteAria')} style={{ left: quote.x, top: quote.y }}
+              onMouseDown={(e) => e.preventDefault()}>
+              <button type="button" onClick={() => askQuote(true)}>{t('quoteExplain')}</button>
+              <button type="button" onClick={() => askQuote(false)}>{t('quoteAsk')}</button>
+            </div>
+          )}
+          <div className="lv-blocks" key={exam ? 'exam' : step?.id} ref={blocksRef}>
             {topic.format === 'slides' && !exam
               ? <SlideDeck>{shown.map((b) => <LessonBlock key={b.id} blockId={b.id} body={b.body} preview={preview} missing={b.missing} submission={b.submission} />)}</SlideDeck>
               : shown.map((b) => (
                 <div key={b.id} className="lv-block-wrap">
                   <LessonBlock blockId={b.id} body={b.body} preview={preview || (exam?.over ?? false)} missing={b.missing} submission={b.submission} />
+                  {!preview && (b.body.kind === 'simulation' || b.body.kind === 'lab') && (
+                    <div className="lv-help">
+                      <button type="button" className="lv-help-btn" onClick={() => askTutor('ask', t('askSim'))}>{t('helpSim')}</button>
+                      <button type="button" className="lv-help-btn" onClick={() => askTutor('ask', t('askSimWhatIf'))}>{t('helpSimWhatIf')}</button>
+                      <button type="button" className={picking === b.id ? 'lv-help-btn on' : 'lv-help-btn'} aria-pressed={picking === b.id}
+                        onClick={(e) => void pointAndAsk(b.id, e.currentTarget.closest('.lv-block-wrap')?.querySelector('iframe') ?? null)}>
+                        {picking === b.id ? t('pickHint') : t('helpPick')}
+                      </button>
+                    </div>
+                  )}
                   {!preview && b.body.kind === 'assignment' && b.submission?.status !== 'graded' && b.submission?.status !== 'submitted' && (
                     <div className="lv-help">
                       <button type="button" className="lv-help-btn" onClick={() => askTutor('hint', '')}>{t('helpHint')}</button>

@@ -245,8 +245,19 @@ export function codeTicker(ctx: Ctx, role: Role): (chunk: string) => void {
     const now = Date.now();
     if (now - last < 2000) return;
     last = now;
-    ctx.emit({ type: 'gen-progress', role, chars: text.length, tail: text.slice(-600) });
+    ctx.emit({ type: 'gen-progress', role, chars: text.length, tail: text.slice(-600), sections: sectionsSoFar(text) });
   };
+}
+
+/** Какие секции модель уже открыла и какие закрыла — для шкалы «физика → сцена → приборы». */
+export function sectionsSoFar(text: string): { name: string; done: boolean }[] {
+  const out: { name: string; done: boolean }[] = [];
+  for (const m of text.matchAll(/\/\/ ==== @(section|end) ([a-z][a-z0-9-]*) ====/g)) {
+    const at = out.findIndex((s) => s.name === m[2]);
+    if (m[1] === 'section' && at === -1) out.push({ name: m[2], done: false });
+    else if (m[1] === 'end' && at !== -1) out[at].done = true;
+  }
+  return out;
 }
 
 /**

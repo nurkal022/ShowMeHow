@@ -157,6 +157,8 @@ export const KIT_RUN_JS = `
           return r;
         },
         reset: reset,
+        // Фраза «что сейчас происходит» для наставника ученика — если страница её дала.
+        summary: typeof o.summary === 'function' ? function () { return o.summary(observe(), P); } : undefined,
       });
     }
 

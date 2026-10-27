@@ -1,6 +1,21 @@
 /** Инжектится в каждый артефакт. Ошибки → parent через postMessage; пауза/пуск/сброс; ответ на sim-state-request. */
 export const HARNESS_JS = `
 (function () {
+  // iframe тренажёра — sandbox без same-origin: любое обращение к localStorage бросает
+  // SecurityError и роняет весь скрипт. Подменяем хранилища памятью — страница работает, просто не помнит.
+  ['localStorage', 'sessionStorage'].forEach(function (name) {
+    try { if (window[name]) window[name].getItem('smh'); return; } catch (e) {}
+    var data = {};
+    var mem = {
+      getItem: function (k) { k = String(k); return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : null; },
+      setItem: function (k, v) { data[String(k)] = String(v); },
+      removeItem: function (k) { delete data[String(k)]; },
+      clear: function () { data = {}; },
+      key: function (i) { return Object.keys(data)[i] || null; },
+    };
+    Object.defineProperty(mem, 'length', { get: function () { return Object.keys(data).length; } });
+    try { Object.defineProperty(window, name, { value: mem, configurable: true }); } catch (e2) {}
+  });
   function report(msg) {
     try { parent.postMessage({ type: 'sim-error', message: String(msg) }, '*'); } catch (e) {}
   }
@@ -59,7 +74,17 @@ export const HARNESS_JS = `
   }
   // «Взять значение из тренажёра»: показания приборов читаются прямо с экрана.
   function replyReadouts(id) {
-    var out = { type: 'sim-readouts', id: id, readouts: [] };
+    var out = { type: 'sim-readouts', id: id, readouts: [], notes: [] };
+    try {
+      // Смысловое состояние для наставника: итог от самой страницы, фаза, отклик заданий.
+      var sum = window.__smh && window.__smh.summary ? window.__smh.summary() : '';
+      if (sum) out.notes.push(String(sum).slice(0, 300));
+      var tx = document.querySelectorAll('.sim-banner, .sim-task-fb');
+      for (var j = 0; j < tx.length && j < 6; j++) {
+        var s1 = (tx[j].textContent || '').trim();
+        if (s1) out.notes.push(s1.slice(0, 160));
+      }
+    } catch (e0) {}
     try {
       var rows = document.querySelectorAll('.sim-readout');
       for (var i = 0; i < rows.length && i < 40; i++) {
@@ -77,8 +102,13 @@ export const HARNESS_JS = `
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
       if (el === skip) continue;
-      var box = el.closest ? el.closest('.sim-side-panel, .sim-panel, .sim-banner, .sim-control') : null;
+      var box = el.closest ? el.closest('.sim-readout, .sim-side-panel, .sim-panel, .sim-banner, .sim-control') : null;
       if (box) {
+        if (box.classList.contains('sim-readout')) {
+          var rl = box.querySelector('.sim-readout-label');
+          var rv = box.querySelector('.sim-readout-value');
+          return 'прибор «' + ((rl && rl.textContent) || '').trim().slice(0, 60) + '» = ' + ((rv && rv.textContent) || '').trim().slice(0, 40);
+        }
         if (box.classList.contains('sim-control')) {
           var l = box.querySelector('label');
           return 'контрол «' + ((l && l.textContent) || '').trim().slice(0, 60) + '» на панели параметров';
@@ -91,6 +121,46 @@ export const HARNESS_JS = `
       if (el.tagName === 'CANVAS') return 'сцена (canvas)';
     }
     return '';
+  }
+  // Наставник показывает, куда смотреть: контур у ползунка или прибора и короткая пометка рядом.
+  function highlight(d) {
+    var q = String(d.target || '').toLowerCase().trim();
+    var out = { type: 'sim-highlighted', id: d.id, ok: false };
+    if (q) {
+      var els = document.querySelectorAll('.sim-control, .sim-readout');
+      var hit = null;
+      for (var i = 0; i < els.length && !hit; i++) {
+        var lab = els[i].querySelector('label, .sim-readout-label');
+        var txt = ((lab && lab.textContent) || '').toLowerCase().trim();
+        if (txt && (txt === q || txt.indexOf(q) !== -1 || q.indexOf(txt) !== -1)) hit = els[i];
+      }
+      if (hit) {
+        if (!document.getElementById('smh-spot-css')) {
+          var st = document.createElement('style');
+          st.id = 'smh-spot-css';
+          st.textContent = '.smh-spot{outline:2px solid #ffd166;outline-offset:3px;border-radius:8px;animation:smh-spot .9s ease-in-out 4}' +
+            '@keyframes smh-spot{50%{outline-color:rgba(255,209,102,.15)}}' +
+            '.smh-note{position:fixed;z-index:2147483646;max-width:240px;padding:6px 10px;border-radius:8px;background:#ffd166;color:#1d2333;' +
+            'font:600 12.5px/1.35 system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:none}';
+          document.head.appendChild(st);
+        }
+        try { hit.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+        hit.classList.add('smh-spot');
+        setTimeout(function () { hit.classList.remove('smh-spot'); }, 3800);
+        if (d.note) {
+          var r = hit.getBoundingClientRect();
+          var n = document.createElement('div');
+          n.className = 'smh-note';
+          n.textContent = String(d.note).slice(0, 140);
+          n.style.left = Math.max(8, Math.min(innerWidth - 250, r.left)) + 'px';
+          n.style.top = (r.bottom + 50 < innerHeight ? r.bottom + 8 : Math.max(8, r.top - 44)) + 'px';
+          document.body.appendChild(n);
+          setTimeout(function () { if (n.parentNode) n.parentNode.removeChild(n); }, 4500);
+        }
+        out.ok = true;
+      }
+    }
+    try { parent.postMessage(out, '*'); } catch (e2) {}
   }
   var picker = null;
   function startPick() {
@@ -142,6 +212,7 @@ export const HARNESS_JS = `
       try { parent.postMessage({ type: 'sim-set-done', id: d.id, name: d.name, ok: okS }, '*'); } catch (e2) {}
     }
     if (d.type === 'sim-readouts-request') replyReadouts(d.id);
+    if (d.type === 'sim-highlight') highlight(d);
     if (d.type === 'smh-pick-start') startPick();
     if (d.type === 'smh-pick-stop') stopPick();
   });

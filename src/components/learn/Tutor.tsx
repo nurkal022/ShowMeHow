@@ -2,9 +2,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TutorMessage } from '@/lib/lms/tutor';
 import { callApi } from '@/components/cabinet/api';
+import { describeSimScreens, highlightInSims } from '@/lib/lms/sim-bridge';
 import Markup from '@/components/lms/Markup';
-import { IconChevron, IconClose, IconSend, IconSpark } from '@/components/icons';
-import { useFormat, useT } from '@/i18n/client';
+import TutorPlotView from './TutorPlotView';
+import { IconChevron, IconClose, IconSend, IconSound, IconSpark } from '@/components/icons';
+import { speak, type Speech } from '@/lib/lms/speech';
+import { useFormat, useLocale, useT } from '@/i18n/client';
 import { learnLesson } from '@/i18n/messages/learn-lesson';
 import type { TFn } from '@/i18n/core';
 
@@ -24,6 +27,8 @@ const TASK_CHIPS = (t: TFn<typeof learnLesson.ru>): Chip[] => [
   { mode: 'check', text: t('askCheck'), label: t('helpCheck') },
 ];
 
+const simFrames = () => [...document.querySelectorAll<HTMLIFrameElement>('.lv-blocks iframe')];
+
 /**
  * Наставник — часть страницы урока, а не всплывающее окно: колонка справа, которая
  * сворачивается в закладку у края. Он видит текущий шаг, к заданиям даёт лестницу
@@ -36,14 +41,29 @@ export default function Tutor({ topicId, open, initial, seed, stepTitle, stepBlo
 }) {
   const t = useT(learnLesson);
   const f = useFormat();
+  const locale = useLocale();
+  const [speaking, setSpeaking] = useState<string | null>(null);
+  const speech = useRef<Speech | null>(null);
+  useEffect(() => () => speech.current?.stop(), []);
+  function toggleSpeak(m: TutorMessage) {
+    speech.current?.stop();
+    if (speaking === m.id) { setSpeaking(null); return; }
+    setSpeaking(m.id);
+    speech.current = speak(m.text, locale, () => setSpeaking((cur) => (cur === m.id ? null : cur)));
+  }
   const [messages, setMessages] = useState<TutorMessage[]>(initial);
   const [chips, setChips] = useState<string[]>([]);
+  const [options, setOptions] = useState<string[]>([]);
+  // Последнее «посмотри сюда» наставника: подсветка в тренажёре и кнопка, чтобы повторить её.
+  const [point, setPoint] = useState<{ id: string; target: string; note: string } | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const feed = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const seedAt = useRef(0);
+  // Ответы из истории стоят сразу; только новый проявляется по абзацам.
+  const seen = useRef(new Set(initial.map((m) => m.id)));
   const hints = messages.filter((m) => m.role === 'tutor' && m.hintLevel !== null).reduce((a, m) => Math.max(a, m.hintLevel ?? 0), 0);
 
   const send = async (mode: Mode, question: string) => {
@@ -53,12 +73,19 @@ export default function Tutor({ topicId, open, initial, seed, stepTitle, stepBlo
     if (question.trim()) setMessages((m) => [...m, { id: `tmp${Date.now()}`, role: 'student', text: question.trim(), hintLevel: null, at: new Date().toISOString(), blockId: null }]);
     setText('');
     const draft = document.querySelector<HTMLTextAreaElement | HTMLInputElement>('.learn-task textarea, .learn-task input[type="text"]')?.value ?? '';
-    const res = await callApi<{ student: TutorMessage | null; tutor: TutorMessage; chips: string[] }>(
-      '/api/learn/tutor', 'POST', { topicId, mode, question, blockIds: stepBlockIds, draftAnswer: draft });
+    // Наставник видит не только текст шага, но и то, что студент сейчас выставил в тренажёре.
+    const simState = await describeSimScreens(simFrames());
+    setOptions([]);
+    const res = await callApi<{ student: TutorMessage | null; tutor: TutorMessage; chips: string[]; options: string[]; point: { target: string; note: string } | null }>(
+      '/api/learn/tutor', 'POST', { topicId, mode, question, blockIds: stepBlockIds, draftAnswer: draft, simState });
     setBusy(false);
     if (!res.ok) return setError(res.error);
     setMessages((m) => [...m.filter((x) => !x.id.startsWith('tmp')), ...(res.data.student ? [res.data.student] : []), res.data.tutor]);
     setChips(res.data.chips);
+    setOptions(res.data.options ?? []);
+    const p = res.data.point ? { id: res.data.tutor.id, ...res.data.point } : null;
+    setPoint(p);
+    if (p) void highlightInSims(simFrames(), p.target, p.note);
   };
 
   // Кнопки в самом уроке («Объясни проще», «Подскажи») открывают наставника и спрашивают за студента.
@@ -101,14 +128,32 @@ export default function Tutor({ topicId, open, initial, seed, stepTitle, stepBlo
           </div>
         )}
         {messages.map((m) => (
-          <div key={m.id} className={m.role === 'student' ? 'tutor-msg me' : 'tutor-msg'}>
+          <div key={m.id} className={m.role === 'student' ? 'tutor-msg me' : seen.current.has(m.id) ? 'tutor-msg' : 'tutor-msg fresh'}>
             {m.role === 'tutor' && m.hintLevel !== null && <span className="tutor-hint-badge">{t('hintBadge', { n: m.hintLevel })}</span>}
             {m.role === 'tutor' ? <Markup text={m.text} /> : <p>{m.text}</p>}
+            {m.plot && <TutorPlotView plot={m.plot} />}
+            {m.role === 'tutor' && (
+              <button type="button" className={speaking === m.id ? 'tutor-speak on' : 'tutor-speak'} onClick={() => toggleSpeak(m)}
+                aria-pressed={speaking === m.id} title={t(speaking === m.id ? 'speakStop' : 'speak')} aria-label={t(speaking === m.id ? 'speakStop' : 'speak')}>
+                <IconSound size={14} />
+              </button>
+            )}
+            {point?.id === m.id && (
+              <button type="button" className="tutor-point" onClick={() => void highlightInSims(simFrames(), point.target, point.note)}>
+                {t('showInSim', { target: point.target })}
+              </button>
+            )}
           </div>
         ))}
         {busy && <div className="tutor-msg typing"><span /><span /><span /></div>}
         {error && <p className="error-box" role="alert">{f.message(error)}</p>}
       </div>
+
+      {options.length > 0 && !busy && (
+        <div className="tutor-options" role="group" aria-label={t('answerOptions')}>
+          {options.map((o) => <button key={o} type="button" className="tutor-option" onClick={() => void send('check', o)}>{o}</button>)}
+        </div>
+      )}
 
       <div className="tutor-chips">
         {(chips.length ? chips.map((c) => ({ mode: 'ask' as Mode, text: c, label: c })) : suggestions)

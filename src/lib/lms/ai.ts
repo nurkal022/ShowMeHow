@@ -129,6 +129,12 @@ export async function draftVariants(p: AssignmentPayload, count: number, locale:
   return toBlocks(raw, false).filter((b) => b.kind === 'assignment' && b.payload.spec.type === p.spec.type);
 }
 
+const GRADE_HEADS: Record<Locale, { pros: string; cons: string }> = {
+  ru: { pros: 'Верно', cons: 'Поправить' },
+  kk: { pros: 'Дұрыс', cons: 'Түзету керек' },
+  en: { pros: 'Correct', cons: 'To fix' },
+};
+
 export interface GradeSuggestion { score: number; comment: string; marks: Record<string, number> }
 
 /** Черновик оценки развёрнутого ответа. Балл зажат в пределы задания; решение — за преподавателем. */
@@ -142,15 +148,28 @@ ${p.explanation ? `Пояснение преподавателя: ${p.explanatio
 Ответ студента:
 """${answerText.slice(0, 5000)}"""
 
-Верни {"score": число, "comment": "2–3 предложения студенту: что верно и что поправить", "marks": {"id критерия": баллы}}.
-Если критериев нет — marks пустой объект.`, SYSTEM, locale) as Partial<GradeSuggestion>;
+Правила проверки:
+- Оценивай только то, что спрашивает задание; не снимай баллы за то, чего в нём не просили.
+- Каждый плюс и минус — про конкретное место ответа (процитируй или перескажи его), без общих похвал вроде «хорошая работа».
+- Если в ответе ошибка в физике или в расчёте — назови шаг, где она появилась, но правильный итог не пиши.
+
+Верни {"score": число, "strengths": ["что верно, 1–3 пункта"], "improvements": ["что поправить, 1–3 пункта"],
+"comment": "1–2 предложения студенту: общий вывод", "marks": {"id критерия": баллы}}.
+Если критериев нет — marks пустой объект.`, SYSTEM, locale) as Partial<GradeSuggestion> & { strengths?: unknown; improvements?: unknown };
+  const list = (v: unknown) => (Array.isArray(v) ? v : []).filter((x): x is string => typeof x === 'string' && !!x.trim()).slice(0, 3).map((x) => x.trim());
+  const pros = list(raw.strengths);
+  const cons = list(raw.improvements);
+  const summary = typeof raw.comment === 'string' ? raw.comment.trim() : '';
+  const head = GRADE_HEADS[locale] ?? GRADE_HEADS.ru;
+  const comment = [summary, pros.length ? `${head.pros}:\n${pros.map((x) => `• ${x}`).join('\n')}` : '',
+    cons.length ? `${head.cons}:\n${cons.map((x) => `• ${x}`).join('\n')}` : ''].filter(Boolean).join('\n\n');
   const clamp = (n: unknown, max: number) => Math.max(0, Math.min(max, Math.round((Number(n) || 0) * 2) / 2));
   const marks: Record<string, number> = {};
   for (const r of p.rubric) if (raw.marks && r.id in raw.marks) marks[r.id] = clamp(raw.marks[r.id], r.points);
   return {
     score: p.rubric.length && Object.keys(marks).length === p.rubric.length
       ? Math.min(p.points, Object.values(marks).reduce((a, v) => a + v, 0)) : clamp(raw.score, p.points),
-    comment: typeof raw.comment === 'string' ? raw.comment.slice(0, 1500) : '',
+    comment: comment.slice(0, 1500),
     marks,
   };
 }

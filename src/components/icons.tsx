@@ -42,6 +42,7 @@ export const IconLibrary = svg(<>
   <rect x="14" y="13" width="7" height="7" rx="1.5" />
 </>);
 export const IconPlay = svg(<><path d="M8 5.6v12.8l10-6.4z" /></>);
+export const IconSound = svg(<><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></>);
 export const IconDownload = svg(<><path d="M12 4v11m0 0 4-4m-4 4-4-4" /><path d="M4 18h16" /></>);
 export const IconTrash = svg(<>
   <path d="M4 7h16M9.5 7V5h5v2" /><path d="M6.5 7 7.4 20h9.2L17.5 7" /><path d="M10 11v5M14 11v5" />

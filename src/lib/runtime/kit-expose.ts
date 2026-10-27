@@ -27,6 +27,11 @@ export const KIT_EXPOSE_JS = `
 
   window.__smh = {
     hasExpose: function () { return typeof api.getState === 'function'; },
+    // Необязательная фраза «что сейчас происходит» — её читает наставник ученика.
+    summary: function () {
+      if (typeof api.summary !== 'function') return '';
+      try { return String(api.summary() || ''); } catch (e) { return ''; }
+    },
     state: function () {
       if (typeof api.getState !== 'function') return null;
       try { return JSON.parse(JSON.stringify(api.getState())); } catch (e) { return null; }

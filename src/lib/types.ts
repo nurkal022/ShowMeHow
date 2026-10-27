@@ -151,7 +151,11 @@ export interface JudgeVerdict {
   winnerIndex: number;
   scores: RubricScores[];  // по кандидату
   feedback: string;        // что улучшить победителю
+  /** Красные линии: брак, который чинится обязательно, какими бы ни были оценки. */
+  redLines?: RedLine[];
 }
+
+export interface RedLine { code: string; detail: string }
 
 export interface CandidateResult {
   html: string;
@@ -192,7 +196,9 @@ export type PipelineEvent =
       winnerIndex: number; feedback: string }
   | { type: 'refine-round'; round: number; before: RubricScores; after: RubricScores | null }
   /** Модель пишет код: сколько символов уже есть и хвост написанного — для живой ленты. */
-  | { type: 'gen-progress'; role: Role; chars: number; tail: string }
+  | { type: 'gen-progress'; role: Role; chars: number; tail: string;
+      /** Секции кода (@section), которые модель уже начала, по порядку; последняя без @end — пишется сейчас. */
+      sections?: { name: string; done: boolean }[] }
   /** Готова версия, которую можно открыть и пробовать; HTML лежит в черновиках задания. */
   | { type: 'draft'; version: number; label: string }
   /**

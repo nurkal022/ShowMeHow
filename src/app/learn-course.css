@@ -113,6 +113,8 @@
 .lv-crumb .muted { font-size: 11.5px; }
 .lv-crumb b { font-size: 14.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lv-progress { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+.lv-offline { flex: none; }
+@media (max-width: 640px) { .lv-offline span { display: none; } }
 .lv-progress .lv-bar { width: 80px; }
 .lv-progress b { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--text-2); }
 .lv-strip { list-style: none; margin: 0; padding: 0 0 2px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
@@ -185,6 +187,11 @@
 .tutor-msg p { margin: 0 0 6px; }
 .tutor-msg p:last-child { margin: 0; }
 .tutor-msg.me { align-self: flex-end; border-radius: 14px 14px 4px 14px; background: var(--accent); color: var(--accent-ink); }
+.tutor-speak { display: grid; place-items: center; width: 26px; height: 26px; margin: 6px 0 -2px auto; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.tutor-speak:hover { background: var(--surface-3, rgba(127,127,127,.15)); color: var(--text); }
+.tutor-speak.on { color: var(--accent); animation: tutor-speak-pulse 1.2s ease-in-out infinite; }
+@keyframes tutor-speak-pulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .tutor-speak.on { animation: none; } }
 .tutor-hint-badge {
   display: inline-block; margin-bottom: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 650;
   background: var(--warn-soft); color: var(--warn);
@@ -292,3 +299,42 @@ html[data-theme='dark'] .avatar-chip { color: color-mix(in srgb, var(--av) 55%, 
 .lv-stepnav .btn svg, .lc-hero-actions .btn svg, .lc-topic a > svg { transform: rotate(-90deg); }
 .lv-stepnav .btn svg.rot-left { transform: rotate(90deg); }
 .tutor-foot .muted svg { transform: rotate(-90deg); }
+
+/* Живой график в ответе наставника: SVG рисуется светлым (как в «Исследованиях»), поэтому на белой карточке. */
+.tutor-plot { margin: 10px 0 0; padding: 8px; border-radius: 12px; background: #fff; color: #1d2333; }
+.tutor-plot-svg svg { display: block; width: 100%; height: auto; }
+.tutor-plot-param { display: grid; grid-template-columns: minmax(0, 1fr) 110px 44px; align-items: center; gap: 8px; padding: 4px 4px 0; font-size: 12.5px; }
+.tutor-plot-param input { width: 100%; accent-color: #0072B2; }
+.tutor-plot-param output { text-align: right; font-variant-numeric: tabular-nums; }
+.tutor-plot-steps { display: flex; align-items: center; gap: 10px; padding: 6px 4px 2px; font-size: 13px; }
+.tutor-plot-steps p { flex: 1; margin: 0; }
+.tutor-plot-nav { display: flex; gap: 6px; flex: none; }
+.tutor-plot .tp-new { animation: tp-pop .45s var(--ease-out) backwards; transform-box: fill-box; transform-origin: center; }
+@keyframes tp-pop { from { opacity: 0; transform: scale(.6); } }
+@media (prefers-reduced-motion: reduce) { .tutor-plot .tp-new { animation: none; } }
+/* Новый ответ наставника проявляется по абзацам, а не падает стеной текста. */
+.tutor-msg.fresh .markup > *, .tutor-msg.fresh .tutor-plot { animation: m-rise-sm .35s var(--ease-out) backwards; }
+.tutor-msg.fresh .markup > :nth-child(2) { animation-delay: 140ms; }
+.tutor-msg.fresh .markup > :nth-child(3) { animation-delay: 280ms; }
+.tutor-msg.fresh .markup > :nth-child(n+4) { animation-delay: 420ms; }
+.tutor-msg.fresh .tutor-plot { animation-delay: 500ms; }
+/* Варианты ответа на вопрос наставника и «посмотри сюда» в тренажёре. */
+.tutor-options { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 8px; }
+.tutor-option {
+  min-height: 32px; padding: 4px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface)); font: inherit; font-size: 13px; color: var(--text); cursor: pointer;
+  animation: m-rise-sm .3s var(--ease-out) backwards; transition: background .15s var(--ease-out);
+}
+.tutor-option:hover { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
+.tutor-point { margin-top: 8px; padding: 3px 10px; border-radius: 999px; border: 1px solid rgba(255, 209, 102, .5); background: rgba(255, 209, 102, .12); color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.lv-help-btn.on { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.tutor-speak-btn.on { color: var(--accent); }
+.lv-quote-ask {
+  position: fixed; z-index: 40; display: flex; gap: 2px; padding: 3px; transform: translate(-50%, calc(-100% - 8px));
+  border-radius: 10px; background: var(--text, #1d2333); box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+  animation: lv-quote-in .16s var(--ease-out);
+}
+.lv-quote-ask button { border: 0; border-radius: 7px; padding: 5px 10px; background: transparent; color: var(--bg, #fff); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.lv-quote-ask button:hover { background: rgba(255, 255, 255, .14); }
+@keyframes lv-quote-in { from { opacity: 0; transform: translate(-50%, calc(-100% - 2px)); } }
+@media (prefers-reduced-motion: reduce) { .lv-quote-ask { animation: none; } }

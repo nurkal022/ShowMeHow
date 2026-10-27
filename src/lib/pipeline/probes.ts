@@ -199,6 +199,17 @@ export async function runProbes(s: RenderSession): Promise<ProbeReport> {
     false,
   );
 
+  // --- 0. Задания не решены сами ---
+  // Задание, засчитанное до первого действия ученика, — сломанная проверка (сравнивает
+  // не то или вызывается при загрузке). Смотрим сразу, пока пробы ничего не трогали.
+  const solvedAtLoad = await safe(() => s.evaluate<string[]>(
+    "(window.__smh ? window.__smh.controls() : []).filter(function (c) { return c.kind === 'task' && c.value === 1; })" +
+    '.map(function (c) { return c.label; })'), [] as string[]);
+  if (solvedAtLoad.length > 0) {
+    add('tasks', 'Задания не решены без ученика', 'fail',
+      'засчитано при загрузке, до любого ответа: ' + solvedAtLoad.slice(0, 3).map((l) => `«${l.slice(0, 60)}»`).join(', '));
+  }
+
   // --- 1. Анимация идёт ---
   const a1 = await s.shot();
   await s.wait(1200);

@@ -83,6 +83,7 @@ export const workbench = defineMessages({
     thinking1: 'Разбираю запрос: какое явление, какие величины менять, что измерять.',
     thinking2: 'Первая рабочая версия появится здесь же — с ней можно будет работать, не дожидаясь конца.',
     codeWriting: 'пишется код', codeChars: '{n} тыс. символов',
+    secAria: 'Части тренажёра', secPhysics: 'физика', secState: 'состояние', secScene: 'сцена', secControls: 'ползунки', secInstruments: 'приборы', secMain: 'запуск',
 
     // Карточка плана
     planKicker: 'План тренажёра', planTitleAria: 'Название', planLevel: 'Уровень',
@@ -200,6 +201,7 @@ export const workbench = defineMessages({
     thinking1: 'Сұрауды талдап жатырмын: қандай құбылыс, қандай шамаларды өзгерту, нені өлшеу керек.',
     thinking2: 'Алғашқы жұмыс нұсқасы осында пайда болады — соңын күтпей-ақ онымен жұмыс істеуге болады.',
     codeWriting: 'код жазылуда', codeChars: '{n} мың таңба',
+    secAria: 'Тренажёр бөліктері', secPhysics: 'физика', secState: 'күй', secScene: 'сахна', secControls: 'жүгірткілер', secInstruments: 'аспаптар', secMain: 'іске қосу',
 
     planKicker: 'Тренажер жоспары', planTitleAria: 'Атауы', planLevel: 'Деңгей',
     planGoals: 'Неге үйретеді', planGoalsAria: 'Оқу мақсаттары, әр жолда біреуден',
@@ -313,6 +315,7 @@ export const workbench = defineMessages({
     thinking1: 'Analysing the request: which phenomenon, what quantities to vary, what to measure.',
     thinking2: 'The first working version will appear right here — you can use it without waiting for the end.',
     codeWriting: 'writing code', codeChars: '{n}k characters',
+    secAria: 'Simulator parts', secPhysics: 'physics', secState: 'state', secScene: 'scene', secControls: 'sliders', secInstruments: 'instruments', secMain: 'launch',
 
     planKicker: 'Simulator plan', planTitleAria: 'Title', planLevel: 'Level',
     planGoals: 'What it teaches', planGoalsAria: 'Learning goals, one per line',

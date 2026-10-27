@@ -325,6 +325,7 @@ export async function runPipeline(
       // judge может вернуть массив scores короче числа кандидатов (сломанный JSON от модели);
       // подстраховываемся нулевым объектом, чтобы minScore() ниже не упал на undefined.
       let current = verdict.scores[verdict.winnerIndex] ?? { ...ZERO_SCORES };
+      let redCount = verdict.redLines?.length ?? 0;
 
       if (mode.maxRefine > 0) {
         emitStage(ctx, 'refining', 'start');
@@ -340,7 +341,8 @@ export async function runPipeline(
             }
             const belowThreshold = mode.threshold > 0 && minScore(current) < mode.threshold;
             const firstStandardRound = mode.threshold === 0 && round === 0 && !!feedback;
-            if (!belowThreshold && !firstStandardRound) break;
+            // Красная линия — повод доводить даже при хороших оценках.
+            if (!belowThreshold && !firstStandardRound && redCount === 0) break;
             checkCancelled();
             const before = current;
             try {
@@ -355,7 +357,9 @@ export async function runPipeline(
               ctx.emit({ type: 'refine-round', round: round + 1, before, after: re.scores });
               // Доводка обязана улучшать: хуже по оценкам — оставляем прежнюю версию и
               // заканчиваем. Раньше принималась любая, и доводка могла снизить все оценки.
-              if (!improved(before, re.scores)) {
+              // Меньше красных линий — уже улучшение; больше — откат, какими бы ни были оценки.
+              const fewerRed = re.redLines.length < redCount;
+              if (re.redLines.length > redCount || (!fewerRed && !improved(before, re.scores))) {
                 const msg = 'Доводка не улучшила оценки — оставил версию до неё.';
                 warnings.push(msg);
                 ctx.emit({ type: 'warning', message: msg });
@@ -364,6 +368,7 @@ export async function runPipeline(
               best = verified;
               current = re.scores;
               feedback = re.feedback;
+              redCount = re.redLines.length;
             } catch (e) {
               if (e instanceof CancelledError) throw e;
               // рефайн или пересуд упал (например, судья вернул не-JSON) — не валим пайплайн,

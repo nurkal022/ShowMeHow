@@ -1,5 +1,6 @@
 import vm from 'node:vm';
 import { getSection, putSection } from './sections';
+import { CDN_WHITELIST, allowedPrefixes } from '../cdn';
 
 /**
  * Механическая починка частых ошибок слабых моделей — до рендера и без модели.
@@ -10,6 +11,9 @@ import { getSection, putSection } from './sections';
  * - секция physics без обёртки `var PHYS = (function () {…})()`: её `return {init, step, observe}`
  *   оказывается на верхнем уровне IIFE страницы и молча обрывает весь код ниже — ни панели,
  *   ни ошибки в консоли.
+ *
+ * - ссылка на разрешённую библиотеку, но другой версии или с другого CDN: сеть рендера её
+ *   блокирует, проба cdn проваливается — а это переписывается на закреплённый адрес.
  *
  * Чинится только то, что опознано наверняка; остальное уходит фиксеру как раньше.
  */
@@ -84,9 +88,57 @@ function repairPhysics(html: string): { html: string; fixed: string[] } {
   return next ? { html: next, fixed: ['секция physics без обёртки PHYS — убран обрывающий страницу return'] } : { html, fixed: [] };
 }
 
+const CDN_URL = /(["'])(https?:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com|cdnjs\.cloudflare\.com\/ajax\/libs)\/[^"'\s]+)\1/g;
+const CDNJS_NAMES: Record<string, string> = { 'three.js': 'three', 'p5.js': 'p5', 'matter-js': 'matter-js', KaTeX: 'katex' };
+
+/** Пакет, версия и файл из адреса jsdelivr/unpkg/cdnjs; null — не разобрали. */
+function cdnParts(url: string): { pkg: string; file: string } | null {
+  if (/[?#%\\]|\.\./.test(url)) return null;
+  const npm = /^https?:\/\/(?:cdn\.jsdelivr\.net\/npm|unpkg\.com)\/((?:@[^/]+\/)?[^/@]+)(?:@[^/]+)?\/(.+)$/.exec(url);
+  if (npm) return { pkg: npm[1], file: npm[2] };
+  const js = /^https?:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/([^/]+)\/[^/]+\/(.+)$/.exec(url);
+  return js && CDNJS_NAMES[js[1]] ? { pkg: CDNJS_NAMES[js[1]], file: js[2] } : null;
+}
+
+/** Закреплённый адрес той же сборки. Глобальную three.min.js на модульную не меняем — код ждёт window.THREE. */
+export function pinnedCdnUrl(url: string): string | null {
+  const p = cdnParts(url);
+  if (!p) return null;
+  const file = p.file.replace(/^dist\//, '');
+  switch (p.pkg) {
+    case 'three':
+      if (/^(?:build\/)?three\.module(?:\.min)?\.js$/.test(p.file)) return CDN_WHITELIST.three;
+      if (p.file.startsWith('examples/jsm/')) return CDN_WHITELIST.threeAddons + p.file.slice('examples/jsm/'.length);
+      return null;
+    case 'p5': return /^(?:lib\/)?p5(?:\.min)?\.js$/.test(p.file) ? CDN_WHITELIST.p5 : null;
+    case 'matter-js': return /^(?:build\/)?matter(?:\.min)?\.js$/.test(p.file) ? CDN_WHITELIST.matter : null;
+    case 'katex':
+      if (/^katex(?:\.min)?\.js$/.test(file)) return CDN_WHITELIST.katexJs;
+      if (/^katex(?:\.min)?\.css$/.test(file)) return CDN_WHITELIST.katexCss;
+      return null;
+    default: return null;
+  }
+}
+
+/** Неразрешённые адреса известных библиотек → закреплённые; integrity у переписанных снимаем, иначе браузер их отвергнет. */
+export function repairCdn(html: string): { html: string; fixed: string[] } {
+  const allowed = allowedPrefixes();
+  const fixed: string[] = [];
+  let out = html.replace(CDN_URL, (all, q: string, url: string) => {
+    if (allowed.some((a) => url.startsWith(a))) return all;
+    const pinned = pinnedCdnUrl(url);
+    if (!pinned) return all;
+    fixed.push(`адрес ${url} → ${pinned}`);
+    return q + pinned + q;
+  });
+  if (fixed.length) out = out.replace(/<(script|link)\b([^>]*?)\s+integrity\s*=\s*(["'])[^"']*\3([^>]*)>/gi, '<$1$2$4>');
+  return { html: out, fixed };
+}
+
 /** Все механические починки по очереди. fixed — что сделано (для ленты и отладки). */
 export function repairArtifact(html: string): { html: string; fixed: string[] } {
   const a = repairPhysics(html);
   const b = repairSyntax(a.html);
-  return { html: b.html, fixed: [...a.fixed, ...b.fixed] };
+  const c = repairCdn(b.html);
+  return { html: c.html, fixed: [...a.fixed, ...b.fixed, ...c.fixed] };
 }

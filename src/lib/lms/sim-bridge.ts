@@ -93,12 +93,61 @@ export function readoutNumber(text: string): number | null {
 }
 
 /** Всё, что можно «взять из тренажёра»: показания приборов и текущие значения ползунков. */
-export async function requestSimValues(frame: HTMLIFrameElement | null): Promise<SimReadout[]> {
+export async function requestSimValues(frame: HTMLIFrameElement | null, timeoutMs = BRIDGE_TIMEOUT_MS): Promise<SimReadout[]> {
   const [readouts, state] = await Promise.all([
-    ask<{ readouts: { label: string; text: string }[] }>(frame, { type: 'sim-readouts-request' }, 'sim-readouts', BRIDGE_TIMEOUT_MS),
-    requestSimState(frame),
+    ask<{ readouts: { label: string; text: string }[] }>(frame, { type: 'sim-readouts-request' }, 'sim-readouts', timeoutMs),
+    requestSimState(frame, timeoutMs),
   ]);
   const out: SimReadout[] = (readouts?.readouts ?? []).map((r) => ({ label: r.label, text: r.text, value: readoutNumber(r.text) }));
   for (const c of state.controls) out.push({ label: c.label, text: String(c.value), value: c.value });
   return out.filter((r) => r.value !== null);
+}
+
+/**
+ * Что сейчас на экране тренажёров шага — строками «подпись: значение» для наставника,
+ * плюс текстовое состояние (фаза, отклик задания). Тренажёр, который не ответил быстро,
+ * просто пропускаем: вопрос важнее контекста.
+ */
+export async function describeSimScreens(frames: HTMLIFrameElement[], timeoutMs = 900): Promise<string> {
+  const screens = await Promise.all(frames.slice(0, 3).map(async (f) => {
+    const [r, state] = await Promise.all([
+      ask<{ readouts: { label: string; text: string }[]; notes?: string[] }>(f, { type: 'sim-readouts-request' }, 'sim-readouts', timeoutMs),
+      requestSimState(f, timeoutMs),
+    ]);
+    const lines = [
+      ...(r?.notes ?? []).map((n) => `Сейчас: ${n}`),
+      ...state.controls.map((c) => `${c.label}: ${c.value}`),
+      ...(r?.readouts ?? []).slice(0, 24).map((x) => `${x.label}: ${x.text}`),
+    ];
+    return lines.join('\n');
+  }));
+  const shown = screens.filter(Boolean);
+  const text = shown.length > 1 ? shown.map((s, i) => `Тренажёр ${i + 1}:\n${s}`).join('\n\n') : shown[0] ?? '';
+  return text.slice(0, 1500);
+}
+
+/** Подсветить ползунок или прибор по подписи во всех тренажёрах шага; true — нашёлся хотя бы в одном. */
+export async function highlightInSims(frames: HTMLIFrameElement[], target: string, note: string): Promise<boolean> {
+  const replies = await Promise.all(frames.map((f) =>
+    ask<{ ok: boolean }>(f, { type: 'sim-highlight', target, note }, 'sim-highlighted', 900)));
+  return replies.some((r) => r?.ok);
+}
+
+/**
+ * «Покажи и спроси»: следующий клик по тренажёру не уходит в него, а возвращает, что там лежит
+ * («контрол «Масса» на панели параметров», «сцена»). null — студент передумал (Esc) или тренажёр молчит.
+ */
+export function pickInSim(frame: HTMLIFrameElement | null, timeoutMs = 60_000): Promise<string | null> {
+  return new Promise((resolve) => {
+    const target = frame?.contentWindow;
+    if (!target) return resolve(null);
+    const done = (v: string | null) => { clearTimeout(timer); window.removeEventListener('message', onMessage); resolve(v); };
+    function onMessage(e: MessageEvent) {
+      if (e.source !== target || e.data?.type !== 'smh-pick') return;
+      done(e.data.cancelled ? null : String(e.data.target || ''));
+    }
+    const timer = setTimeout(() => { target.postMessage({ type: 'smh-pick-stop' }, '*'); done(null); }, timeoutMs);
+    window.addEventListener('message', onMessage);
+    target.postMessage({ type: 'smh-pick-start' }, '*');
+  });
 }
